@@ -75,7 +75,7 @@ export function NavigationProgressBar() {
     <div
       aria-hidden
       data-pending={pending || undefined}
-      className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-hidden opacity-0 transition-opacity data-pending:opacity-100 data-pending:delay-150"
+      className="pointer-events-none fixed inset-x-0 top-0 z-50 h-0.5 overflow-hidden opacity-0 transition-opacity data-pending:opacity-100 data-pending:delay-150"
     >
       <div className="h-full w-1/3 bg-primary motion-safe:animate-progress" />
     </div>
