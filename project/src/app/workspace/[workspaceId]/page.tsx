@@ -368,7 +368,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
             <CardDescription>
               {money(weekTotal.real.grossCents)} realizados de {money(weekTotal.forecast.grossCents)} previstos
             </CardDescription>
-            <CardLink href={`${base}/appointments`}>Atendimentos</CardLink>
+            <CardLink href={`${base}/unit`}>Ver unidades</CardLink>
           </CardHeader>
           <CardContent className="gap-4">
             <WeekChart buckets={weekBucketsTotal} today={today} />

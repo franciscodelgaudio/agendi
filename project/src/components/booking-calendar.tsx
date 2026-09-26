@@ -585,7 +585,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
               }}
             />
           )}
-          {sheet?.mode === "done" && <DoneSummary workspaceId={workspaceId} booking={sheet.booking} inUnit={!!unitId} />}
+          {sheet?.mode === "done" && <DoneSummary workspaceId={workspaceId} booking={sheet.booking} />}
         </SheetContent>
       </Sheet>
 
@@ -630,8 +630,8 @@ const doneDateFormat = new Intl.DateTimeFormat("pt-BR", {
 })
 
 // Agendamento que já virou atendimento: só leitura, com atalho para Atendimentos filtrado pelo dia
-// (o da unidade, quando o calendário é de uma unidade).
-function DoneSummary({ workspaceId, booking, inUnit }: { workspaceId: string; booking: BookingRow; inUnit: boolean }) {
+// na unidade do agendamento.
+function DoneSummary({ workspaceId, booking }: { workspaceId: string; booking: BookingRow }) {
   const date = booking.startsAt.slice(0, 10)
   return (
     <div className="flex flex-1 flex-col">
@@ -662,9 +662,7 @@ function DoneSummary({ workspaceId, booking, inUnit }: { workspaceId: string; bo
           render={
             <Link
               href={
-                inUnit
-                  ? `/workspace/${workspaceId}/unit/${booking.unitId}/appointments?${new URLSearchParams({ from: date, to: date })}`
-                  : `/workspace/${workspaceId}/appointments?${new URLSearchParams({ unit: booking.unitId, from: date, to: date })}`
+                `/workspace/${workspaceId}/unit/${booking.unitId}/appointments?${new URLSearchParams({ from: date, to: date })}`
               }
             />
           }

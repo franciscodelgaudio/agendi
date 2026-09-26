@@ -2,7 +2,6 @@ import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
 import { NavigationProgressBar, NavigationProgressProvider } from "@/components/navigation-progress"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { Separator } from "@/components/ui/separator"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { Workspace } from "@/models/Workspace"
 
@@ -21,7 +20,7 @@ export default async function WorkspaceLayout({
 
   const [workspace] = await Workspace.aggregate<{ name: string }>([
     ...access,
-    { $project: { _id: 0, name: 1 } },
+    { $project: { _id: 1 } },
   ])
   if (!workspace) notFound()
 
@@ -33,12 +32,8 @@ export default async function WorkspaceLayout({
       <SidebarProvider defaultOpen={defaultOpen}>
         {sidebar}
         <SidebarInset>
-          <header className="relative flex h-16 shrink-0 items-center gap-2 border-b px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 data-vertical:h-4 data-vertical:self-center" />
-            <h1 className="truncate text-sm font-medium">{workspace.name}</h1>
-            <NavigationProgressBar />
-          </header>
+          <SidebarTrigger className="fixed bottom-4 left-4 z-20 bg-background shadow-sm md:hidden" />
+          <NavigationProgressBar />
           {children}
         </SidebarInset>
       </SidebarProvider>

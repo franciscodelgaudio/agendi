@@ -53,9 +53,7 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
 
   // Já atendido: não é mais editável; o atalho leva a Atendimentos filtrado pelo dia.
   const day = booking.startsAt.slice(0, 10)
-  const appointmentsHref = options.units
-    ? `/workspace/${workspaceId}/appointments?${new URLSearchParams({ unit: booking.unitId, from: day, to: day })}`
-    : `/workspace/${workspaceId}/unit/${booking.unitId}/appointments?${new URLSearchParams({ from: day, to: day })}`
+  const appointmentsHref = `/workspace/${workspaceId}/unit/${booking.unitId}/appointments?${new URLSearchParams({ from: day, to: day })}`
 
   return (
     <>

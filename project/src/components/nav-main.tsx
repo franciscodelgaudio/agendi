@@ -5,11 +5,9 @@ import { usePathname } from "next/navigation"
 import {
   MapPinIcon,
   CalendarIcon,
-  CircleCheckIcon,
   HomeIcon,
   MessagesSquareIcon,
   RadioTowerIcon,
-  ShieldCheckIcon,
   UsersIcon,
   type LucideIcon,
 } from "lucide-react"
@@ -24,7 +22,7 @@ import { WORKSPACE_PAGE_PATHS, type WorkspacePage } from "@/lib/page-access"
 
 type NavItem = { title: string; href: string; icon: LucideIcon }
 
-// pages: páginas do sistema liberadas para a função do usuário; Permissões e Canais são só de
+// pages: páginas do sistema liberadas para a função do usuário; Canais é só de
 // quem gerencia. inbox: a função atende clientes pelas Conversas.
 export function NavMain({
   workspaceId,
@@ -47,7 +45,6 @@ export function NavMain({
       label: "Geral",
       items: [
         ...item("units", "Unidades", MapPinIcon),
-        ...item("appointments", "Atendimentos", CircleCheckIcon),
         ...item("calendar", "Calendário", CalendarIcon),
         ...(inbox ? [{ title: "Conversas", href: `${base}/inbox`, icon: MessagesSquareIcon }] : []),
       ],
@@ -58,7 +55,6 @@ export function NavMain({
         ...item("users", "Usuários", UsersIcon),
         ...(canManage
           ? [
-              { title: "Permissões", href: `${base}/permissions`, icon: ShieldCheckIcon },
               { title: "Canais", href: `${base}/channels`, icon: RadioTowerIcon },
             ]
           : []),

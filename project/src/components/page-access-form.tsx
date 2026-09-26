@@ -19,7 +19,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 const workspacePageLabels: Record<WorkspacePage, string> = {
   home: "Início",
   units: "Unidades",
-  appointments: "Atendimentos",
   calendar: "Calendário",
   users: "Usuários",
 }
