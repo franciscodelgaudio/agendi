@@ -37,12 +37,15 @@ type Props = {
   pathname: string
   // Com uma visão só, a troca de visão some.
   views?: readonly CashFlowView[]
+  // Busca, filtros e ordenação da lista seguem ao trocar de período (sem a página).
+  preserve?: Record<string, string>
 }
 
 // Troca de visão (semana, mês, ano) e navegação entre períodos.
-export function CashFlowNav({ query, range, isCurrent, today, pathname, views = CASH_FLOW_VIEWS }: Props) {
+export function CashFlowNav({ query, range, isCurrent, today, pathname, views = CASH_FLOW_VIEWS, preserve }: Props) {
   function href(next: CashFlowQuery) {
-    return `${pathname}?${new URLSearchParams(next)}`
+    const params = new URLSearchParams(Object.entries({ ...preserve, ...next }).filter(([, value]) => value))
+    return `${pathname}?${params}`
   }
   const [previousLabel, nextLabel] = stepLabels[query.view]
 

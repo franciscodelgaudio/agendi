@@ -1,7 +1,8 @@
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { FolderIcon, ReceiptIcon } from "lucide-react"
 import { cashFlowBuckets, parseCashFlowQuery } from "@/lib/cash-flow"
+import { CASH_FLOW_PAGE_SIZE, expenseListPage, parseExpenseListQuery } from "@/lib/cash-flow-list"
 import { canManageMembers, type WorkspaceRole } from "@/lib/member"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
@@ -9,9 +10,12 @@ import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Workspace } from "@/models/Workspace"
 import Link from "@/components/link"
+import { ExpenseGroupFilter, ExpenseStatusFilter } from "@/components/cash-flow-filters"
 import { CashFlowNav } from "@/components/cash-flow-nav"
 import { CreateExpenseSheet } from "@/components/expense-sheets"
 import { ExpensesTable } from "@/components/expenses-table"
+import { ListPagination } from "@/components/list-pagination"
+import { ListSearch } from "@/components/list-search"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 
@@ -22,7 +26,10 @@ export default async function ExpensesPage({
 }: PageProps<"/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses">) {
   const { workspaceId, unitId } = await params
   const now = new Date()
-  const query = { ...parseCashFlowQuery(await searchParams, now), view: "month" as const }
+  const search = await searchParams
+  const query = { ...parseCashFlowQuery(search, now), view: "month" as const }
+  // Filtros mudam sem levar a página junto, então a lista volta para a primeira.
+  const { page, ...filters } = parseExpenseListQuery(search)
   const user = await requireUser()
   await requirePage(workspaceId, user.id, { unit: "cash_flow", unitId })
   const access = workspaceAccessStages(workspaceId, user.id)
@@ -74,6 +81,17 @@ export default async function ExpensesPage({
   const today = parseCashFlowQuery({}, now).date
   const isCurrent = month.from <= today && today <= month.to
   const base = `/workspace/${workspaceId}/unit/${unitId}/cash-flow`
+  const pathname = `${base}/expenses`
+  const listQuery = { date: query.date, ...filters }
+  const result = expenseListPage(expenses, { ...filters, page })
+  // Página além da última (ex.: depois de excluir a última despesa dela) vai para a última.
+  const pages = Math.ceil(result.total / CASH_FLOW_PAGE_SIZE)
+  if (pages > 0 && page > pages) {
+    const params = new URLSearchParams(
+      Object.entries({ ...listQuery, page: pages > 1 ? String(pages) : "" }).filter(([, v]) => v),
+    )
+    redirect(`${pathname}?${params}`)
+  }
   const create = canManage && groups.length > 0 && (
     <CreateExpenseSheet
       workspaceId={workspaceId}
@@ -91,8 +109,9 @@ export default async function ExpensesPage({
           range={month}
           isCurrent={isCurrent}
           today={today}
-          pathname={`${base}/expenses`}
+          pathname={pathname}
           views={["month"]}
+          preserve={filters}
         />
         {expenses.length > 0 && create}
       </div>
@@ -123,13 +142,32 @@ export default async function ExpensesPage({
           {create && <EmptyContent>{create}</EmptyContent>}
         </Empty>
       ) : (
-        <ExpensesTable
-          expenses={expenses}
-          groups={groups}
-          workspaceId={workspaceId}
-          unitId={unitId}
-          canManage={canManage}
-        />
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <ListSearch query={listQuery} placeholder="Buscar descrição..." />
+            <ExpenseGroupFilter query={listQuery} groups={groups} />
+            <ExpenseStatusFilter query={listQuery} />
+          </div>
+          <ExpensesTable
+            expenses={result.rows}
+            totalCents={result.totalCents}
+            paidCents={result.paidCents}
+            query={listQuery}
+            pathname={pathname}
+            groups={groups}
+            workspaceId={workspaceId}
+            unitId={unitId}
+            canManage={canManage}
+          />
+          <ListPagination
+            query={listQuery}
+            page={page}
+            pageSize={CASH_FLOW_PAGE_SIZE}
+            total={result.total}
+            pathname={pathname}
+            itemLabel="despesas"
+          />
+        </>
       )}
     </div>
   )

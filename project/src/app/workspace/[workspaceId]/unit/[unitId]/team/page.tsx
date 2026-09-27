@@ -28,6 +28,14 @@ import {
 
 const percentFormat = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 
+function payParts({ commissionPercent, salaryCents, bonuses }: UnitTeamListItem) {
+  const parts: string[] = []
+  if (commissionPercent !== null) parts.push(`${percentFormat.format(commissionPercent)}% de comissão`)
+  if (salaryCents !== null) parts.push(`${currencyFormat.format(salaryCents / 100)}/mês`)
+  if (bonuses.length > 0) parts.push(bonuses.length === 1 ? "1 bônus" : `${bonuses.length} bônus`)
+  return parts
+}
+
 // Layout e página podem renderizar em paralelo, então a página refaz a verificação de acesso.
 export default async function UnitTeamPage({
   params,
@@ -93,6 +101,7 @@ export default async function UnitTeamPage({
               pending: { $eq: [{ $ifNull: ["$userId", null] }, null] },
               commissionPercent: { $ifNull: ["$link.commissionPercent", null] },
               salaryCents: { $ifNull: ["$link.salaryCents", null] },
+              bonuses: { $ifNull: ["$link.bonuses", []] },
             },
           },
         ],
@@ -183,13 +192,7 @@ export default async function UnitTeamPage({
                       </div>
                     </TableCell>
                     <TableCell className="px-4 text-right tabular-nums @max-xl:hidden">
-                      {member.commissionPercent !== null ? (
-                        `${percentFormat.format(member.commissionPercent)}% de comissão`
-                      ) : member.salaryCents !== null ? (
-                        `${currencyFormat.format(member.salaryCents / 100)}/mês`
-                      ) : (
-                        <span className="text-muted-foreground">Não definida</span>
-                      )}
+                      {payParts(member).join(" + ") || <span className="text-muted-foreground">Não definida</span>}
                     </TableCell>
                     {canManage && (
                       <TableCell className="px-4 text-right">
@@ -204,6 +207,7 @@ export default async function UnitTeamPage({
                               role: member.role,
                               commissionPercent: member.commissionPercent,
                               salaryCents: member.salaryCents,
+                              bonuses: member.bonuses,
                             }}
                           />
                         )}

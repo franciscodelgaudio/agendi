@@ -2,8 +2,10 @@ import { canManageMembers, type MemberRole, type WorkspaceRole } from "@/lib/mem
 import { parsePercent } from "@/lib/revenue-share";
 import { parsePriceCents } from "@/lib/service";
 
-// Remuneração de quem trabalha na unidade: comissão (%) ou salário mensal, nunca os dois.
-// Só o proprietário define a de massagistas.
+// Remuneração de quem trabalha na unidade: comissão (%), salário mensal e bônus fixos
+// mensais, combináveis e todos opcionais. Só o proprietário define a de massagistas.
+
+export const MAX_BONUS_DESCRIPTION_LENGTH = 80;
 
 export type UpdateUnitMemberPayError =
   | "workspace_not_found"
@@ -11,11 +13,13 @@ export type UpdateUnitMemberPayError =
   | "member_not_found"
   | "invalid_input"
   | "invalid_commission"
-  | "invalid_salary";
+  | "invalid_salary"
+  | "invalid_bonus";
 
 export type UpdateUnitMemberPayResult = { ok: true } | { ok: false; error: UpdateUnitMemberPayError };
 
-export type UnitMemberPay = { commissionPercent: number | null; salaryCents: number | null };
+export type UnitMemberBonus = { description: string; amountCents: number };
+export type UnitMemberPay = { commissionPercent: number | null; salaryCents: number | null; bonuses: UnitMemberBonus[] };
 
 type UpdateUnitMemberPayDeps = {
   // null quando o membro não existe, não é do workspace ou não está vinculado à unidade.
@@ -23,8 +27,21 @@ type UpdateUnitMemberPayDeps = {
   update: (memberId: string, data: UnitMemberPay) => Promise<void>;
 };
 
-function parse(value: unknown, parser: (value: string) => number | null) {
-  return typeof value === "string" ? parser(value.trim()) : null;
+// Campo ausente ou vazio vale null; undefined quando preenchido mas inválido.
+function parseOptional(value: unknown, parser: (value: string) => number | null) {
+  if (value == null || (typeof value === "string" && !value.trim())) return null;
+  if (typeof value !== "string") return undefined;
+  return parser(value.trim()) ?? undefined;
+}
+
+function parseBonus(value: unknown): UnitMemberBonus | null {
+  if (value == null || typeof value !== "object") return null;
+  const { description, amount } = value as Record<string, unknown>;
+  if (typeof description !== "string" || typeof amount !== "string") return null;
+  const trimmed = description.trim();
+  const amountCents = parsePriceCents(amount.trim());
+  if (!trimmed || trimmed.length > MAX_BONUS_DESCRIPTION_LENGTH || !amountCents) return null;
+  return { description: trimmed, amountCents };
 }
 
 export async function updateUnitMemberPay(
@@ -38,22 +55,24 @@ export async function updateUnitMemberPay(
   if (!memberId) return { ok: false, error: "member_not_found" };
 
   if (input == null || typeof input !== "object") return { ok: false, error: "invalid_input" };
-  const { pay, commissionPercent, salary } = input as Record<string, unknown>;
-  if (pay !== "commission" && pay !== "salary") return { ok: false, error: "invalid_input" };
+  const { commissionPercent, salary, bonuses = [] } = input as Record<string, unknown>;
+  if (!Array.isArray(bonuses)) return { ok: false, error: "invalid_input" };
 
   const member = await deps.findMember(memberId);
   if (!member) return { ok: false, error: "member_not_found" };
   if (member.role === "massage_therapist" && ctx.actorRole !== "owner") return { ok: false, error: "forbidden" };
 
-  if (pay === "commission") {
-    const percent = parse(commissionPercent, parsePercent);
-    if (percent === null) return { ok: false, error: "invalid_commission" };
-    await deps.update(memberId, { commissionPercent: percent, salaryCents: null });
-    return { ok: true };
-  }
+  const percent = parseOptional(commissionPercent, parsePercent);
+  if (percent === undefined) return { ok: false, error: "invalid_commission" };
+  const salaryCents = parseOptional(salary, (value) => parsePriceCents(value) || null);
+  if (salaryCents === undefined) return { ok: false, error: "invalid_salary" };
+  const parsedBonuses = bonuses.map(parseBonus);
+  if (parsedBonuses.some((bonus) => !bonus)) return { ok: false, error: "invalid_bonus" };
 
-  const salaryCents = parse(salary, parsePriceCents);
-  if (!salaryCents) return { ok: false, error: "invalid_salary" };
-  await deps.update(memberId, { commissionPercent: null, salaryCents });
+  await deps.update(memberId, {
+    commissionPercent: percent,
+    salaryCents,
+    bonuses: parsedBonuses as UnitMemberBonus[],
+  });
   return { ok: true };
 }

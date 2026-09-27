@@ -1,5 +1,8 @@
 import { ExpenseActions, ExpensePaidToggle, type ExpenseGroupOption, type ExpenseRow } from "@/components/expense-sheets"
 import { currencyFormat } from "@/components/service-format"
+import { SortableHead } from "@/components/sortable-head"
+import type { ExpenseSortField } from "@/lib/cash-flow-list"
+import type { SortDir } from "@/lib/unit-list"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
@@ -16,7 +19,13 @@ function money(cents: number) {
 }
 
 type Props = {
+  // Só a página exibida; os totais são de todas as despesas filtradas.
   expenses: ExpenseRow[]
+  totalCents: number
+  paidCents: number
+  // Busca, filtros e ordenação atuais, preservados nos links de ordenação.
+  query: { q: string; sort: ExpenseSortField; dir: SortDir } & Record<string, string>
+  pathname: string
   groups: ExpenseGroupOption[]
   workspaceId: string
   unitId: string
@@ -24,10 +33,18 @@ type Props = {
   canManage: boolean
 }
 
-export function ExpensesTable({ expenses, groups, workspaceId, unitId, canManage }: Props) {
+export function ExpensesTable({
+  expenses,
+  totalCents,
+  paidCents,
+  query,
+  pathname,
+  groups,
+  workspaceId,
+  unitId,
+  canManage,
+}: Props) {
   const groupNames = new Map(groups.map((group) => [group.id, group.name]))
-  const totalCents = expenses.reduce((sum, expense) => sum + expense.amountCents, 0)
-  const paidCents = expenses.reduce((sum, expense) => sum + (expense.paid ? expense.amountCents : 0), 0)
 
   return (
     <div className="border">
@@ -35,14 +52,21 @@ export function ExpensesTable({ expenses, groups, workspaceId, unitId, canManage
         <TableHeader>
           <TableRow>
             <TableHead className="w-0 px-4">Paga</TableHead>
-            <TableHead className="px-4">Dia</TableHead>
-            <TableHead className="w-full px-4">Descrição</TableHead>
+            <SortableHead field="date" label="Dia" query={query} pathname={pathname} />
+            <SortableHead field="description" label="Descrição" query={query} pathname={pathname} className="w-full" />
             <TableHead className="px-4 @max-md:hidden">Grupo</TableHead>
-            <TableHead className="px-4 text-right">Valor</TableHead>
+            <SortableHead field="amount" label="Valor" query={query} pathname={pathname} className="text-right" />
             {canManage && <TableHead className="w-0 px-4" />}
           </TableRow>
         </TableHeader>
         <TableBody>
+          {expenses.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={canManage ? 6 : 5} className="h-24 px-4 text-center text-muted-foreground">
+                Nenhuma despesa encontrada.
+              </TableCell>
+            </TableRow>
+          )}
           {expenses.map((expense) => (
             <TableRow key={expense.id}>
               <TableCell className="px-4">

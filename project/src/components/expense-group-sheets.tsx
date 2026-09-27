@@ -8,8 +8,10 @@ import {
   updateExpenseGroupAction,
   type ExpenseActionState,
 } from "@/lib/actions/expense"
+import type { ExpenseGroupIcon } from "@/lib/expense-group-icon"
 
 import { AmountInput } from "@/components/amount-input"
+import { ExpenseGroupIconPicker } from "@/components/expense-group-icon"
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -39,15 +41,16 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 
-type Group = { id: string; name: string; monthlyLimitCents: number | null }
+type Group = { id: string; name: string; monthlyLimitCents: number | null; icon: ExpenseGroupIcon | null }
 
-type Props = { workspaceId: string; unitId: string }
+type Props = { workspaceId: string; unitId: string; icons: ExpenseGroupIcon[] }
 
 function ExpenseGroupForm({
   title,
   description,
   submitLabel,
   group,
+  icons,
   action,
   onDone,
 }: {
@@ -55,6 +58,7 @@ function ExpenseGroupForm({
   description: string
   submitLabel: [string, string]
   group?: Group
+  icons: ExpenseGroupIcon[]
   action: (prev: ExpenseActionState, formData: FormData) => Promise<ExpenseActionState>
   onDone: () => void
 }) {
@@ -98,6 +102,15 @@ function ExpenseGroupForm({
             defaultValue={group?.monthlyLimitCents}
           />
         </Field>
+        <Field>
+          <FieldLabel id={`${idPrefix}-icon`}>Ícone</FieldLabel>
+          <ExpenseGroupIconPicker
+            icons={icons}
+            name="iconId"
+            defaultValue={group?.icon?.id}
+            labelledBy={`${idPrefix}-icon`}
+          />
+        </Field>
       </FieldGroup>
       <SheetFooter>
         <Button type="submit" loading={pending}>
@@ -108,7 +121,7 @@ function ExpenseGroupForm({
   )
 }
 
-export function CreateExpenseGroupSheet({ workspaceId, unitId }: Props) {
+export function CreateExpenseGroupSheet({ workspaceId, unitId, icons }: Props) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -122,6 +135,7 @@ export function CreateExpenseGroupSheet({ workspaceId, unitId }: Props) {
           title="Cadastrar grupo"
           description="Grupo para organizar as despesas da unidade."
           submitLabel={["Cadastrar", "Cadastrando..."]}
+          icons={icons}
           action={(prev, formData) => createExpenseGroupAction(workspaceId, unitId, prev, formData)}
           onDone={() => setOpen(false)}
         />
@@ -130,7 +144,7 @@ export function CreateExpenseGroupSheet({ workspaceId, unitId }: Props) {
   )
 }
 
-export function ExpenseGroupActions({ workspaceId, unitId, group }: Props & { group: Group }) {
+export function ExpenseGroupActions({ workspaceId, unitId, icons, group }: Props & { group: Group }) {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
@@ -175,9 +189,10 @@ export function ExpenseGroupActions({ workspaceId, unitId, group }: Props & { gr
           <ExpenseGroupForm
             key={editKey}
             title="Editar grupo"
-            description="Altere o nome e o limite deste grupo."
+            description="Altere o nome, o limite e o ícone deste grupo."
             submitLabel={["Salvar", "Salvando..."]}
             group={group}
+            icons={icons}
             action={(prev, formData) => updateExpenseGroupAction(workspaceId, unitId, group.id, prev, formData)}
             onDone={() => setEditOpen(false)}
           />

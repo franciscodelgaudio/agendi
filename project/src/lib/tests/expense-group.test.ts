@@ -3,66 +3,91 @@ import { createExpenseGroup, deleteExpenseGroup, updateExpenseGroup } from "@/li
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const GROUP_ID = "64b7f0c2a1b2c3d4e5f60740";
+const ICON_ID = "64b7f0c2a1b2c3d4e5f60760";
 
 // Como chega do FormData: o limite vem do AmountInput ("1500.00") ou vazio.
-const validInput = { name: "Impostos", monthlyLimit: "1500.00" };
+const validInput = { name: "Impostos", monthlyLimit: "1500.00", iconId: ICON_ID };
 
 describe("createExpenseGroup", () => {
-  function makeDeps({ taken = false } = {}) {
+  function makeDeps({ taken = false, iconExists = true } = {}) {
     return {
       insert: vi.fn().mockResolvedValue({ id: GROUP_ID }),
       isNameTaken: vi.fn().mockResolvedValue(taken),
+      iconExists: vi.fn().mockResolvedValue(iconExists),
     };
   }
 
-  it("cria o grupo na unidade com o limite mensal em centavos", async () => {
+  it("cria o grupo na unidade com o ícone escolhido e o limite mensal em centavos", async () => {
     const deps = makeDeps();
 
     const result = await createExpenseGroup(validInput, UNIT_ID, deps);
 
     expect(result).toEqual({ ok: true, groupId: GROUP_ID });
-    expect(deps.insert).toHaveBeenCalledWith({ name: "Impostos", monthlyLimitCents: 150_000, unitId: UNIT_ID });
+    expect(deps.iconExists).toHaveBeenCalledWith(ICON_ID);
+    expect(deps.insert).toHaveBeenCalledWith({
+      name: "Impostos",
+      monthlyLimitCents: 150_000,
+      iconId: ICON_ID,
+      unitId: UNIT_ID,
+    });
   });
 
   it("sem limite, o grupo fica sem limite mensal", async () => {
     const deps = makeDeps();
 
-    await createExpenseGroup({ name: "Insumos", monthlyLimit: "" }, UNIT_ID, deps);
+    await createExpenseGroup({ name: "Insumos", monthlyLimit: "", iconId: ICON_ID }, UNIT_ID, deps);
 
-    expect(deps.insert).toHaveBeenCalledWith({ name: "Insumos", monthlyLimitCents: null, unitId: UNIT_ID });
+    expect(deps.insert).toHaveBeenCalledWith({ name: "Insumos", monthlyLimitCents: null, iconId: ICON_ID, unitId: UNIT_ID });
   });
 
   it("remove espaços das pontas do nome e confere se ele já existe na unidade", async () => {
     const deps = makeDeps();
 
-    await createExpenseGroup({ name: "  Aluguel  ", monthlyLimit: " 3000.00 " }, UNIT_ID, deps);
+    await createExpenseGroup({ name: "  Aluguel  ", monthlyLimit: " 3000.00 ", iconId: ICON_ID }, UNIT_ID, deps);
 
     expect(deps.isNameTaken).toHaveBeenCalledWith(UNIT_ID, "Aluguel", null);
-    expect(deps.insert).toHaveBeenCalledWith({ name: "Aluguel", monthlyLimitCents: 300_000, unitId: UNIT_ID });
+    expect(deps.insert).toHaveBeenCalledWith({
+      name: "Aluguel",
+      monthlyLimitCents: 300_000,
+      iconId: ICON_ID,
+      unitId: UNIT_ID,
+    });
   });
 
   it("aceita nome com exatamente 40 caracteres", async () => {
     const deps = makeDeps();
     const name = "a".repeat(40);
 
-    const result = await createExpenseGroup({ name, monthlyLimit: "" }, UNIT_ID, deps);
+    const result = await createExpenseGroup({ name, monthlyLimit: "", iconId: ICON_ID }, UNIT_ID, deps);
 
     expect(result).toEqual({ ok: true, groupId: GROUP_ID });
   });
 
   it.each([
-    ["nome ausente", { monthlyLimit: "" }, "invalid_input"],
-    ["limite que não é texto", { name: "Impostos", monthlyLimit: 10 }, "invalid_input"],
-    ["nome vazio", { name: "   ", monthlyLimit: "" }, "invalid_name"],
-    ["nome com mais de 40 caracteres", { name: "a".repeat(41), monthlyLimit: "" }, "name_too_long"],
-    ["limite inválido", { name: "Impostos", monthlyLimit: "abc" }, "invalid_monthly_limit"],
-    ["limite zerado", { name: "Impostos", monthlyLimit: "0.00" }, "invalid_monthly_limit"],
+    ["nome ausente", { monthlyLimit: "", iconId: ICON_ID }, "invalid_input"],
+    ["limite que não é texto", { name: "Impostos", monthlyLimit: 10, iconId: ICON_ID }, "invalid_input"],
+    ["nome vazio", { name: "   ", monthlyLimit: "", iconId: ICON_ID }, "invalid_name"],
+    ["nome com mais de 40 caracteres", { name: "a".repeat(41), monthlyLimit: "", iconId: ICON_ID }, "name_too_long"],
+    ["limite inválido", { name: "Impostos", monthlyLimit: "abc", iconId: ICON_ID }, "invalid_monthly_limit"],
+    ["limite zerado", { name: "Impostos", monthlyLimit: "0.00", iconId: ICON_ID }, "invalid_monthly_limit"],
+    ["ícone ausente", { name: "Impostos", monthlyLimit: "" }, "invalid_icon"],
+    ["ícone vazio", { name: "Impostos", monthlyLimit: "", iconId: "" }, "invalid_icon"],
+    ["ícone que não é texto", { name: "Impostos", monthlyLimit: "", iconId: 5 }, "invalid_icon"],
   ])("retorna erro sem salvar quando %s", async (_label, input, error) => {
     const deps = makeDeps();
 
     const result = await createExpenseGroup(input, UNIT_ID, deps);
 
     expect(result).toEqual({ ok: false, error });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("não cria o grupo com um ícone que não está no catálogo", async () => {
+    const deps = makeDeps({ iconExists: false });
+
+    const result = await createExpenseGroup(validInput, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "invalid_icon" });
     expect(deps.insert).not.toHaveBeenCalled();
   });
 
@@ -86,21 +111,37 @@ describe("createExpenseGroup", () => {
 });
 
 describe("updateExpenseGroup", () => {
-  function makeDeps({ found = true, taken = false } = {}) {
+  function makeDeps({ found = true, taken = false, iconExists = true } = {}) {
     return {
       update: vi.fn().mockResolvedValue(found),
       isNameTaken: vi.fn().mockResolvedValue(taken),
+      iconExists: vi.fn().mockResolvedValue(iconExists),
     };
   }
 
-  it("atualiza nome e limite, ignorando o próprio grupo ao conferir o nome", async () => {
+  it("atualiza nome, limite e ícone, ignorando o próprio grupo ao conferir o nome", async () => {
     const deps = makeDeps();
 
-    const result = await updateExpenseGroup({ name: "Impostos", monthlyLimit: "" }, UNIT_ID, GROUP_ID, deps);
+    const result = await updateExpenseGroup(
+      { name: "Impostos", monthlyLimit: "", iconId: ICON_ID },
+      UNIT_ID,
+      GROUP_ID,
+      deps,
+    );
 
     expect(result).toEqual({ ok: true });
     expect(deps.isNameTaken).toHaveBeenCalledWith(UNIT_ID, "Impostos", GROUP_ID);
-    expect(deps.update).toHaveBeenCalledWith(GROUP_ID, { name: "Impostos", monthlyLimitCents: null });
+    expect(deps.iconExists).toHaveBeenCalledWith(ICON_ID);
+    expect(deps.update).toHaveBeenCalledWith(GROUP_ID, { name: "Impostos", monthlyLimitCents: null, iconId: ICON_ID });
+  });
+
+  it("não troca para um ícone que não está no catálogo", async () => {
+    const deps = makeDeps({ iconExists: false });
+
+    const result = await updateExpenseGroup(validInput, UNIT_ID, GROUP_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "invalid_icon" });
+    expect(deps.update).not.toHaveBeenCalled();
   });
 
   it("não troca para o nome de outro grupo da unidade", async () => {
@@ -115,7 +156,12 @@ describe("updateExpenseGroup", () => {
   it("não salva quando o limite é inválido", async () => {
     const deps = makeDeps();
 
-    const result = await updateExpenseGroup({ name: "Impostos", monthlyLimit: "-5" }, UNIT_ID, GROUP_ID, deps);
+    const result = await updateExpenseGroup(
+      { name: "Impostos", monthlyLimit: "-5", iconId: ICON_ID },
+      UNIT_ID,
+      GROUP_ID,
+      deps,
+    );
 
     expect(result).toEqual({ ok: false, error: "invalid_monthly_limit" });
     expect(deps.update).not.toHaveBeenCalled();

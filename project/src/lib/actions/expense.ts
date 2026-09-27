@@ -21,6 +21,7 @@ import {
   type DeleteExpenseGroupResult,
   type UpdateExpenseGroupError,
 } from "@/lib/expense-group"
+import { expenseGroupIconExists } from "@/lib/expense-group-icon-store"
 import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
 
@@ -34,6 +35,7 @@ const groupErrorMessages: Record<GroupError | "unauthenticated", string> = {
   invalid_name: "Informe o nome do grupo.",
   name_too_long: "O nome pode ter no máximo 40 caracteres.",
   invalid_monthly_limit: "Informe um limite maior que zero, de até R$ 1.000.000,00.",
+  invalid_icon: "Escolha um ícone da lista.",
   duplicate_group_name: "Já existe um grupo com esse nome nesta unidade.",
   group_has_expenses: "Este grupo tem despesas lançadas. Exclua ou mova as despesas antes.",
   unit_not_found: "Unidade não encontrada ou sem permissão.",
@@ -91,7 +93,7 @@ async function scopeFilter(unitId: string, expenseId: string, scope: ExpenseScop
 }
 
 function groupInput(formData: FormData) {
-  return { name: formData.get("name"), monthlyLimit: formData.get("monthlyLimit") }
+  return { name: formData.get("name"), monthlyLimit: formData.get("monthlyLimit"), iconId: formData.get("iconId") }
 }
 
 function expenseInput(formData: FormData) {
@@ -120,6 +122,7 @@ export async function createExpenseGroupAction(
   const result = await createExpenseGroup(groupInput(formData), target.unitId, {
     insert: async (data) => ({ id: (await ExpenseGroup.create(data))._id.toString() }),
     isNameTaken: isGroupNameTaken,
+    iconExists: expenseGroupIconExists,
   })
   if (!result.ok) return { error: groupErrorMessages[result.error] }
 
@@ -143,6 +146,7 @@ export async function updateExpenseGroupAction(
       return matchedCount > 0
     },
     isNameTaken: isGroupNameTaken,
+    iconExists: expenseGroupIconExists,
   })
   if (!result.ok) return { error: groupErrorMessages[result.error] }
 

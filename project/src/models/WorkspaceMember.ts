@@ -1,15 +1,26 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 import { connectOnUse } from "@/lib/mongoose";
 import { MEMBER_ROLES } from "@/lib/member-role";
+import { MAX_BONUS_DESCRIPTION_LENGTH } from "@/lib/unit-member";
 
-// Unidade em que o membro trabalha e como é pago nela: comissão ou salário mensal,
-// nunca os dois (ambos null até ser definido na Equipe). Comissão de massagista é sobre
+// Bônus fixo mensal, somado ao salário no caixa.
+const bonusSchema = new Schema(
+  {
+    description: { type: String, required: true, trim: true, maxlength: MAX_BONUS_DESCRIPTION_LENGTH },
+    amountCents: { type: Number, required: true, min: 1 },
+  },
+  { _id: false },
+);
+
+// Unidade em que o membro trabalha e como é pago nela: comissão, salário mensal e bônus,
+// combináveis (null/vazio até ser definido na Equipe). Comissão de massagista é sobre
 // os serviços que ela fez; de recepcionista, sobre o faturamento bruto da unidade.
 const unitLinkSchema = new Schema(
   {
     unitId: { type: Schema.Types.ObjectId, ref: "Unit", required: true },
     commissionPercent: { type: Number, default: null, min: 0, max: 100 },
     salaryCents: { type: Number, default: null, min: 1 },
+    bonuses: { type: [bonusSchema], default: [] },
   },
   { _id: false },
 );

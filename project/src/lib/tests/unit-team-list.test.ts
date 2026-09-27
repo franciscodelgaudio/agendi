@@ -17,6 +17,7 @@ function member(overrides: Partial<UnitTeamListItem> & { id: string }): UnitTeam
     pending: false,
     commissionPercent: null,
     salaryCents: null,
+    bonuses: [],
     ...overrides,
   };
 }
@@ -119,6 +120,16 @@ describe("unitTeamListPage", () => {
 
   it("filtra quem está sem remuneração definida", () => {
     expect(ids(unitTeamListPage(TEAM, { ...BASE, pay: "none" }).rows)).toEqual(["celia"]);
+  });
+
+  it("quem ganha comissão e salário aparece nos dois filtros; só com bônus não é 'não definida'", () => {
+    const both = member({ id: "both", commissionPercent: 20, salaryCents: 150_000 });
+    const bonusOnly = member({ id: "bonus", bonuses: [{ description: "Prêmio", amountCents: 30_000 }] });
+    const team = [both, bonusOnly, CELIA];
+
+    expect(ids(unitTeamListPage(team, { ...BASE, pay: "commission" }).rows)).toEqual(["both"]);
+    expect(ids(unitTeamListPage(team, { ...BASE, pay: "salary" }).rows)).toEqual(["both"]);
+    expect(ids(unitTeamListPage(team, { ...BASE, pay: "none" }).rows)).toEqual(["celia"]);
   });
 
   it("combina busca e filtros", () => {

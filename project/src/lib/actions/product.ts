@@ -12,6 +12,7 @@ import {
   type CreateProductError,
   type UpdateProductError,
 } from "@/lib/product"
+import { loadExpenseGroupIcons } from "@/lib/expense-group-icon-store"
 import { findUnitProducts } from "@/lib/product-lookup"
 import { PRODUCT_SEARCH_LIMIT, productSearchPipeline } from "@/lib/product-search"
 import { recordStockPurchase } from "@/lib/stock-purchase"
@@ -49,9 +50,11 @@ async function recordPurchase(change: Parameters<typeof recordStockPurchase>[0])
   if (!userId) return
   await recordStockPurchase(change, {
     ensureGroup: async (unitId, name) => {
+      const icons = await loadExpenseGroupIcons()
+      const iconId = (icons.find((icon) => icon.key === "package") ?? icons[0]).id
       const group = await ExpenseGroup.findOneAndUpdate(
         { unitId, name },
-        { $setOnInsert: { unitId, name, monthlyLimitCents: null } },
+        { $setOnInsert: { unitId, name, monthlyLimitCents: null, iconId } },
         { upsert: true, returnDocument: "after", collation: { locale: "pt", strength: 1 } },
       )
         .select({ _id: 1 })

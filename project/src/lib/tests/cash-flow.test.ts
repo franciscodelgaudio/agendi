@@ -755,6 +755,34 @@ describe("teamPayRates", () => {
     });
   });
 
+  it("comissão e salário do mesmo vínculo valem juntos", () => {
+    const team = [
+      { userId: ANA, role: "massage_therapist", units: [link(20, 150_000)] },
+      { userId: BIA, role: "receptionist", units: [link(2, 180_000)] },
+    ];
+
+    expect(teamPayRates(team, UNIT.toString())).toEqual({
+      commissionRates: { [ANA.toString()]: 20 },
+      grossCommissionPercent: 2,
+      monthlySalaryCents: 330_000,
+    });
+  });
+
+  it("bônus fixos mensais somam com os salários, mesmo com convite pendente", () => {
+    const bonus = (amountCents: number) => ({ description: "Bônus", amountCents });
+    const team = [
+      { userId: ANA, role: "massage_therapist", units: [{ ...link(30, null), bonuses: [bonus(20_000), bonus(5_000)] }] },
+      { userId: null, role: "receptionist", units: [{ ...link(null, 180_000), bonuses: [bonus(10_000)] }] },
+      { userId: BIA, role: "receptionist", units: [{ ...link(null, null, OTHER_UNIT), bonuses: [bonus(99_000)] }] },
+    ];
+
+    expect(teamPayRates(team, UNIT.toString())).toEqual({
+      commissionRates: { [ANA.toString()]: 30 },
+      grossCommissionPercent: 0,
+      monthlySalaryCents: 215_000,
+    });
+  });
+
   it("ignora comissão de massagista com convite pendente, que ainda não faz serviços", () => {
     const team = [{ userId: null, role: "massage_therapist", units: [link(30, null)] }];
 

@@ -462,14 +462,20 @@ export function applyExpenses(summary: StaffCashFlowSummary, expenses: ExpenseDa
 export type TeamPayMember = {
   userId?: { toString(): string } | null;
   role: string;
-  units: { unitId: { toString(): string }; commissionPercent?: number | null; salaryCents?: number | null }[];
+  units: {
+    unitId: { toString(): string };
+    commissionPercent?: number | null;
+    salaryCents?: number | null;
+    bonuses?: { amountCents: number }[];
+  }[];
 };
 export type TeamPayRates = Pick<StaffCosts, "grossCommissionPercent" | "monthlySalaryCents"> & {
   commissionRates: CommissionRates;
 };
 
 // Comissão de massagista vai pelo id de usuário, que identifica quem fez o serviço.
-// Comissão de recepcionista é sobre o bruto; salário vale mesmo com convite pendente.
+// Comissão de recepcionista é sobre o bruto; salário e bônus fixos mensais valem mesmo
+// com convite pendente e entram juntos no custo mensal.
 export function teamPayRates(team: TeamPayMember[], unitId: string): TeamPayRates {
   const commissionRates: CommissionRates = {};
   let grossCommissionPercent = 0;
@@ -478,6 +484,7 @@ export function teamPayRates(team: TeamPayMember[], unitId: string): TeamPayRate
     if (member.role !== "massage_therapist" && member.role !== "receptionist") continue;
     const link = member.units.find((unit) => unit.unitId.toString() === unitId);
     if (link?.salaryCents != null) monthlySalaryCents += link.salaryCents;
+    for (const bonus of link?.bonuses ?? []) monthlySalaryCents += bonus.amountCents;
     if (link?.commissionPercent == null) continue;
     if (member.role === "receptionist") grossCommissionPercent += link.commissionPercent;
     else if (member.userId) commissionRates[member.userId.toString()] = link.commissionPercent;

@@ -231,10 +231,19 @@ export function expenseGroupTotalsPipeline(range: DayRange): PipelineStage[] {
 }
 
 export type ExpenseGroupInfo = { id: string; name: string; monthlyLimitCents: number | null };
-export type ExpenseGroupSummary = ExpenseGroupInfo & { totalCents: number; paidCents: number; overLimit: boolean };
+
+export type ExpenseGroupSummary<T extends ExpenseGroupInfo = ExpenseGroupInfo> = T & {
+  totalCents: number;
+  paidCents: number;
+  overLimit: boolean;
+};
 
 // Passa do limite pelo total lançado, pago ou não: o limite é do gasto previsto no mês.
-export function summarizeExpenseGroups(groups: ExpenseGroupInfo[], totals: ExpenseGroupTotal[]): ExpenseGroupSummary[] {
+// Campos extras do grupo (como o ícone) seguem no resumo.
+export function summarizeExpenseGroups<T extends ExpenseGroupInfo>(
+  groups: T[],
+  totals: ExpenseGroupTotal[],
+): ExpenseGroupSummary<T>[] {
   const byGroup = new Map(totals.map((total) => [total.groupId, total]));
   return groups
     .map((group) => {

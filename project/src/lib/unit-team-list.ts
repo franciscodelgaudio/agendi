@@ -1,4 +1,5 @@
 import type { MemberRole } from "@/lib/member-role";
+import type { UnitMemberBonus } from "@/lib/unit-member";
 import { first, type SearchParams, type SortDir } from "@/lib/unit-list";
 
 export const UNIT_TEAM_PAGE_SIZE = 20;
@@ -6,7 +7,7 @@ export const UNIT_TEAM_PAGE_SIZE = 20;
 const ROLES = ["massage_therapist", "receptionist"] as const;
 // active: aceitou o convite; pending: convite ainda sem conta.
 const STATUSES = ["active", "pending"] as const;
-// none: sem comissão nem salário definidos nesta unidade.
+// Comissão e salário podem valer juntos; none: sem comissão, salário nem bônus nesta unidade.
 const PAYS = ["commission", "salary", "none"] as const;
 
 export type UnitTeamRole = (typeof ROLES)[number];
@@ -31,6 +32,7 @@ export type UnitTeamListItem = {
   pending: boolean;
   commissionPercent: number | null;
   salaryCents: number | null;
+  bonuses: UnitMemberBonus[];
 };
 
 function oneOf<T extends string>(values: readonly T[], value: string | undefined): T | "" {
@@ -54,10 +56,10 @@ function normalize(value: string) {
   return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 }
 
-function payOf(member: UnitTeamListItem): UnitTeamPay {
-  if (member.commissionPercent !== null) return "commission";
-  if (member.salaryCents !== null) return "salary";
-  return "none";
+function hasPay(member: UnitTeamListItem, pay: UnitTeamPay) {
+  if (pay === "commission") return member.commissionPercent !== null;
+  if (pay === "salary") return member.salaryCents !== null;
+  return member.commissionPercent === null && member.salaryCents === null && member.bonuses.length === 0;
 }
 
 // Busca, filtros e ordenação sobre a equipe da unidade (poucas pessoas), e a página pedida.
@@ -69,7 +71,7 @@ export function unitTeamListPage(members: UnitTeamListItem[], { q, dir, role, st
       (member) =>
         (!role || member.role === role) &&
         (!status || (status === "pending") === member.pending) &&
-        (!pay || payOf(member) === pay) &&
+        (!pay || hasPay(member, pay)) &&
         (!term || normalize(member.name ?? "").includes(term) || normalize(member.email).includes(term)),
     )
     .sort((a, b) => sortKey(a).localeCompare(sortKey(b), "pt-BR", { sensitivity: "base" }) * (dir === "desc" ? -1 : 1));

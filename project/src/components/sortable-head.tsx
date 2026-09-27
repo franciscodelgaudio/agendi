@@ -7,7 +7,7 @@ import type { SortDir } from "@/lib/unit-list"
 type Props<F extends string> = {
   field: F
   label: string
-  icon: LucideIcon
+  icon?: LucideIcon
   // Os demais campos da query (busca, data...) são preservados no link.
   query: { q: string; sort: F; dir: SortDir } & Record<string, string>
   pathname: string
@@ -33,7 +33,7 @@ export function SortableHead<F extends string>({ field, label, icon: LabelIcon, 
         scroll={false}
         className="inline-flex items-center gap-1 hover:text-foreground"
       >
-        <LabelIcon className="size-4 text-muted-foreground" />
+        {LabelIcon && <LabelIcon className="size-4 text-muted-foreground" />}
         {label}
         <Icon className={active ? "size-3.5" : "size-3.5 text-muted-foreground"} />
       </Link>

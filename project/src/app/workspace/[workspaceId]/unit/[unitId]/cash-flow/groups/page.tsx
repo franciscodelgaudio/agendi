@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { FolderIcon } from "lucide-react"
 import { cashFlowBuckets, parseCashFlowQuery } from "@/lib/cash-flow"
+import { loadExpenseGroupIcons } from "@/lib/expense-group-icon-store"
 import { expenseGroupTotalsPipeline, summarizeExpenseGroups, type ExpenseGroupTotal } from "@/lib/expense"
 import { canManageMembers, type WorkspaceRole } from "@/lib/member"
 import { requirePage } from "@/lib/page-guard"
@@ -48,15 +49,18 @@ export default async function ExpenseGroupsPage({
   const buckets = cashFlowBuckets(query)
   const month = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const unitObjectId = new Types.ObjectId(unitId)
-  const [groups, totals] = await Promise.all([
-    ExpenseGroup.find({ unitId: unitObjectId }).select({ name: 1, monthlyLimitCents: 1 }).lean(),
+  const [groups, totals, icons] = await Promise.all([
+    ExpenseGroup.find({ unitId: unitObjectId }).select({ name: 1, monthlyLimitCents: 1, iconId: 1 }).lean(),
     Expense.aggregate<ExpenseGroupTotal>([{ $match: { unitId: unitObjectId } }, ...expenseGroupTotalsPipeline(month)]),
+    loadExpenseGroupIcons(),
   ])
+  const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
   const summary = summarizeExpenseGroups(
     groups.map((group) => ({
       id: group._id.toString(),
       name: group.name,
       monthlyLimitCents: group.monthlyLimitCents ?? null,
+      icon: (group.iconId && iconsById.get(group.iconId.toString())) || null,
     })),
     totals,
   )
@@ -73,7 +77,7 @@ export default async function ExpenseGroupsPage({
           pathname={`/workspace/${workspaceId}/unit/${unitId}/cash-flow/groups`}
           views={["month"]}
         />
-        {canManage && summary.length > 0 && <CreateExpenseGroupSheet workspaceId={workspaceId} unitId={unitId} />}
+        {canManage && summary.length > 0 && <CreateExpenseGroupSheet workspaceId={workspaceId} unitId={unitId} icons={icons} />}
       </div>
       {summary.length === 0 ? (
         <Empty className="border">
@@ -85,12 +89,18 @@ export default async function ExpenseGroupsPage({
           </EmptyHeader>
           {canManage && (
             <EmptyContent>
-              <CreateExpenseGroupSheet workspaceId={workspaceId} unitId={unitId} />
+              <CreateExpenseGroupSheet workspaceId={workspaceId} unitId={unitId} icons={icons} />
             </EmptyContent>
           )}
         </Empty>
       ) : (
-        <ExpenseGroupsTable groups={summary} workspaceId={workspaceId} unitId={unitId} canManage={canManage} />
+        <ExpenseGroupsTable
+          groups={summary}
+          icons={icons}
+          workspaceId={workspaceId}
+          unitId={unitId}
+          canManage={canManage}
+        />
       )}
     </div>
   )

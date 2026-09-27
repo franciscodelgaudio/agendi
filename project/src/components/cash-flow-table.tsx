@@ -97,7 +97,7 @@ export function CashFlowTable({ view, summary, hasPartnerShare, hasCommission, h
         <TableHead className={cn("px-4 text-right", hide.group)}>Bruto</TableHead>
         {hasPartnerShare && <TableHead className={deduction}>Repasse</TableHead>}
         {hasCommission && <TableHead className={deduction}>Comissão</TableHead>}
-        {hasSalary && <TableHead className={deduction}>Salário</TableHead>}
+        {hasSalary && <TableHead className={deduction}>Salário e bônus</TableHead>}
         {hasExpenses && <TableHead className={deduction}>Despesas</TableHead>}
         <TableHead className={cn("px-4 text-right", hide.group)}>Líquido</TableHead>
       </>

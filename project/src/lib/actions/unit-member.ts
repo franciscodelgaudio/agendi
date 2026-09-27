@@ -12,9 +12,10 @@ const errorMessages: Record<UpdateUnitMemberPayError | "unauthenticated", string
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   forbidden: "Só o proprietário e administradores definem a remuneração; de massagistas, só o proprietário.",
   member_not_found: "Usuário não encontrado nesta unidade.",
-  invalid_input: "Escolha comissão ou salário.",
+  invalid_input: "Dados inválidos.",
   invalid_commission: "Informe uma comissão entre 0% e 100%.",
   invalid_salary: "Informe um salário mensal maior que zero.",
+  invalid_bonus: "Cada bônus precisa de descrição (até 80 caracteres) e valor maior que zero.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
@@ -40,8 +41,12 @@ export async function updateUnitMemberAction(
     ? { _id: new Types.ObjectId(memberId), workspaceId: new Types.ObjectId(access.id), "units.unitId": unitObjectId }
     : null
 
+  // Cada linha de bônus manda um par descrição/valor, na mesma ordem.
+  const amounts = formData.getAll("bonusAmount")
+  const bonuses = formData.getAll("bonusDescription").map((description, i) => ({ description, amount: amounts[i] }))
+
   const result = await updateUnitMemberPay(
-    { pay: formData.get("pay"), commissionPercent: formData.get("commissionPercent"), salary: formData.get("salary") },
+    { commissionPercent: formData.get("commissionPercent"), salary: formData.get("salary"), bonuses },
     memberId,
     { actorRole: access?.role ?? null },
     {
@@ -50,9 +55,13 @@ export async function updateUnitMemberAction(
         const member = await WorkspaceMember.findOne(filter).select("role").lean()
         return member && { id: member._id.toString(), role: member.role }
       },
-      update: async (_id, { commissionPercent, salaryCents }) => {
+      update: async (_id, { commissionPercent, salaryCents, bonuses }) => {
         await WorkspaceMember.updateOne(filter!, {
-          $set: { "units.$.commissionPercent": commissionPercent, "units.$.salaryCents": salaryCents },
+          $set: {
+            "units.$.commissionPercent": commissionPercent,
+            "units.$.salaryCents": salaryCents,
+            "units.$.bonuses": bonuses,
+          },
         })
       },
     },

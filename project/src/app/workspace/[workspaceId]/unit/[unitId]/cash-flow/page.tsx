@@ -8,14 +8,10 @@ import {
   dailyAppointmentTotalsPipeline,
   dailyBookingForecastPipeline,
   parseCashFlowQuery,
-  serviceAppointmentTotalsPipeline,
-  serviceBookingForecastPipeline,
   summarizeCashFlow,
-  summarizeServices,
   summarizeTherapists,
   teamPayRates,
   type DayTotal,
-  type ServiceTotal,
 } from "@/lib/cash-flow"
 import { dailyExpenseTotalsPipeline, type ExpenseDayTotal } from "@/lib/expense"
 import { canManageMembers, type WorkspaceRole } from "@/lib/member"
@@ -30,7 +26,6 @@ import { Workspace } from "@/models/Workspace"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 import { CashFlowNav } from "@/components/cash-flow-nav"
 import { OpeningBalanceCard } from "@/components/opening-balance-card"
-import { CashFlowServicesTable } from "@/components/cash-flow-services-table"
 import { CashFlowTable } from "@/components/cash-flow-table"
 import { CashFlowTherapistsTable } from "@/components/cash-flow-therapists-table"
 
@@ -84,12 +79,10 @@ export default async function CashFlowPage({
   const shown = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const range = cashFlowFetchRange(buckets, revenueShare?.period ?? null)
   const unitMatch = { $match: { unitId: new Types.ObjectId(unitId) } }
-  const [appointments, bookings, serviceAppointments, serviceBookings, team, balanceAppointments, expenses, balanceExpenses] =
+  const [appointments, bookings, team, balanceAppointments, expenses, balanceExpenses] =
     await Promise.all([
       Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
       Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
-      Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(shown)]),
-      Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(shown, now)]),
       // Remuneração da equipe vinculada a esta unidade (o proprietário não tem).
       WorkspaceMember.find({
         workspaceId: workspace.id,
@@ -125,7 +118,6 @@ export default async function CashFlowPage({
             balanceExpenses,
           ).total.real.netCents
         : 0)
-  const services = summarizeServices(serviceAppointments, serviceBookings)
   const therapistRows = summarizeTherapists(shown, appointments, bookings, commissionRates)
   const hasCommission = Object.keys(commissionRates).length > 0 || grossCommissionPercent > 0
   const hasSalary = monthlySalaryCents > 0
@@ -158,8 +150,6 @@ export default async function CashFlowPage({
         hasExpenses={hasExpenses}
         today={today}
       />
-      <h4 className="mt-4 font-semibold tracking-tight">Por serviço</h4>
-      <CashFlowServicesTable services={services} />
       <h4 className="mt-4 font-semibold tracking-tight">Por massagista</h4>
       <CashFlowTherapistsTable therapists={therapistRows} />
     </div>

@@ -1,14 +1,15 @@
 "use client"
 
 import { useActionState, useState } from "react"
-import { PencilIcon } from "lucide-react"
+import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
 import { updateUnitMemberAction, type UnitMemberFormState } from "@/lib/actions/unit-member"
 import type { MemberRole } from "@/lib/member-role"
+import { MAX_BONUS_DESCRIPTION_LENGTH, type UnitMemberBonus } from "@/lib/unit-member"
 
 import { AmountInput } from "@/components/amount-input"
 import { Button } from "@/components/ui/button"
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 import {
   Sheet,
   SheetContent,
@@ -18,17 +19,18 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 
-const payLabels = { commission: "Comissão (%)", salary: "Salário mensal (R$)" } as const
-type Pay = keyof typeof payLabels
-
-// Comissão ou salário, nunca os dois; ambos null enquanto não foi definido.
+// Comissão, salário e bônus combináveis; null/vazio enquanto não foi definido.
 type Member = {
   id: string
   label: string
   role: MemberRole
   commissionPercent: number | null
   salaryCents: number | null
+  bonuses: UnitMemberBonus[]
 }
+
+// Valor em centavos.
+type Bonus = { key: number; description: string; amount: number | null }
 
 type Props = { workspaceId: string; unitId: string; unitName: string; member: Member }
 
@@ -60,7 +62,9 @@ export function UnitMemberActions(props: Props) {
 }
 
 function UnitMemberForm({ workspaceId, unitId, unitName, member, onDone }: Props & { onDone: () => void }) {
-  const [pay, setPay] = useState<Pay>(member.salaryCents !== null ? "salary" : "commission")
+  const [bonuses, setBonuses] = useState<Bonus[]>(() =>
+    member.bonuses.map((bonus, key) => ({ key, description: bonus.description, amount: bonus.amountCents })),
+  )
   const [state, formAction, pending] = useActionState(
     async (prev: UnitMemberFormState, formData: FormData) => {
       const next = await updateUnitMemberAction(workspaceId, unitId, member.id, prev, formData)
@@ -69,8 +73,11 @@ function UnitMemberForm({ workspaceId, unitId, unitName, member, onDone }: Props
     },
     { error: null },
   )
-  const isTherapist = member.role === "massage_therapist"
   const idPrefix = `unit-member-${member.id}`
+
+  function updateBonus(key: number, patch: Partial<Bonus>) {
+    setBonuses((current) => current.map((bonus) => (bonus.key === key ? { ...bonus, ...patch } : bonus)))
+  }
 
   return (
     <form action={formAction} className="flex min-h-0 flex-1 flex-col">
@@ -81,58 +88,72 @@ function UnitMemberForm({ workspaceId, unitId, unitName, member, onDone }: Props
       <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
         {state.error && <FieldError>{state.error}</FieldError>}
         <Field>
-          <FieldLabel htmlFor={`${idPrefix}-pay`}>Forma de pagamento</FieldLabel>
-          <Select
-            name="pay"
-            items={Object.entries(payLabels).map(([value, label]) => ({ value, label }))}
-            value={pay}
-            onValueChange={(value) => setPay(value as Pay)}
-            required
-          >
-            <SelectTrigger id={`${idPrefix}-pay`} className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(payLabels).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <FieldLabel htmlFor={`${idPrefix}-commission`}>
+            {member.role === "massage_therapist" ? "Comissão sobre os serviços" : "Comissão sobre o bruto"}
+          </FieldLabel>
+          <AmountInput
+            id={`${idPrefix}-commission`}
+            mode="percent"
+            name="commissionPercent"
+            max={10_000}
+            placeholder="0,00%"
+            defaultValue={member.commissionPercent === null ? null : Math.round(member.commissionPercent * 100)}
+          />
         </Field>
-        {pay === "commission" ? (
-          <Field>
-            <FieldLabel htmlFor={`${idPrefix}-commission`}>Comissão</FieldLabel>
-            <AmountInput
-              id={`${idPrefix}-commission`}
-              mode="percent"
-              name="commissionPercent"
-              max={10_000}
-              placeholder="0,00%"
-              defaultValue={member.commissionPercent === null ? null : Math.round(member.commissionPercent * 100)}
-              required
-            />
-            <FieldDescription>
-              {isTherapist
-                ? "Percentual sobre o valor dos serviços que ela fizer nesta unidade."
-                : "Percentual sobre o faturamento bruto desta unidade."}{" "}
-              Sai do líquido no caixa.
-            </FieldDescription>
-          </Field>
-        ) : (
-          <Field>
-            <FieldLabel htmlFor={`${idPrefix}-salary`}>Salário mensal</FieldLabel>
-            <AmountInput
-              id={`${idPrefix}-salary`}
-              name="salary"
-              placeholder="R$ 0,00"
-              defaultValue={member.salaryCents}
-              required
-            />
-            <FieldDescription>Rateado por dia no caixa desta unidade e descontado do líquido.</FieldDescription>
-          </Field>
-        )}
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-salary`}>Salário mensal</FieldLabel>
+          <AmountInput id={`${idPrefix}-salary`} name="salary" placeholder="R$ 0,00" defaultValue={member.salaryCents} />
+        </Field>
+
+        <FieldSeparator>Bônus mensais</FieldSeparator>
+        <div className="divide-y border">
+          {bonuses.map((bonus, index) => (
+            // A ordem dos campos no FormData forma os pares descrição/valor.
+            <div key={bonus.key} className="flex items-center gap-2 p-3">
+              <Input
+                name="bonusDescription"
+                placeholder="Descrição"
+                aria-label={`Descrição do bônus ${index + 1}`}
+                maxLength={MAX_BONUS_DESCRIPTION_LENGTH}
+                value={bonus.description}
+                onChange={(event) => updateBonus(bonus.key, { description: event.target.value })}
+                required
+              />
+              <AmountInput
+                name="bonusAmount"
+                placeholder="R$ 0,00"
+                aria-label={`Valor do bônus ${index + 1}`}
+                className="w-36 shrink-0"
+                value={bonus.amount}
+                onValueChange={(amount) => updateBonus(bonus.key, { amount })}
+                required
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Remover bônus ${index + 1}`}
+                onClick={() => setBonuses((current) => current.filter((b) => b.key !== bonus.key))}
+              >
+                <Trash2Icon />
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full"
+            onClick={() =>
+              setBonuses((current) => [
+                ...current,
+                { key: Math.max(-1, ...current.map((b) => b.key)) + 1, description: "", amount: null },
+              ])
+            }
+          >
+            <PlusIcon />
+            Adicionar bônus
+          </Button>
+        </div>
       </FieldGroup>
       <SheetFooter>
         <Button type="submit" loading={pending}>

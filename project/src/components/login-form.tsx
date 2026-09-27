@@ -81,8 +81,6 @@ export function LoginForm({
           {/* formAction troca a action só deste botão; formNoValidate
               evita exigir email/senha para entrar com Google. */}
           <SubmitButton
-            name="intent"
-            value="google"
             variant="outline"
             formAction={googleAction}
             formNoValidate

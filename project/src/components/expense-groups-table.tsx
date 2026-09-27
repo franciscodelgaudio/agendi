@@ -1,4 +1,6 @@
-import type { ExpenseGroupSummary } from "@/lib/expense"
+import type { ExpenseGroupInfo, ExpenseGroupSummary } from "@/lib/expense"
+import type { ExpenseGroupIcon } from "@/lib/expense-group-icon"
+import { ExpenseGroupIconBadge } from "@/components/expense-group-icon"
 import { ExpenseGroupActions } from "@/components/expense-group-sheets"
 import { currencyFormat } from "@/components/service-format"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -9,7 +11,8 @@ function money(cents: number) {
 }
 
 type Props = {
-  groups: ExpenseGroupSummary[]
+  groups: ExpenseGroupSummary<ExpenseGroupInfo & { icon: ExpenseGroupIcon | null }>[]
+  icons: ExpenseGroupIcon[]
   workspaceId: string
   unitId: string
   // Sem permissão, a coluna de ações (editar/excluir) não aparece.
@@ -17,23 +20,41 @@ type Props = {
 }
 
 // Gasto do mês por grupo: o lançado (pago ou não) comparado ao limite mensal.
-export function ExpenseGroupsTable({ groups, workspaceId, unitId, canManage }: Props) {
+export function ExpenseGroupsTable({ groups, icons, workspaceId, unitId, canManage }: Props) {
   return (
     <div className="border">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-full px-4">Grupo</TableHead>
-            <TableHead className="px-4 text-right">Lançado</TableHead>
-            <TableHead className="px-4 text-right @max-md:hidden">Pago</TableHead>
+            <SortableHead field="name" label="Grupo" query={query} pathname={pathname} className="w-full" />
+            <SortableHead field="total" label="Lançado" query={query} pathname={pathname} className="text-right" />
+            <SortableHead
+              field="paid"
+              label="Pago"
+              query={query}
+              pathname={pathname}
+              className="text-right @max-md:hidden"
+            />
             <TableHead className="min-w-40 px-4 @max-lg:hidden">Limite por mês</TableHead>
             {canManage && <TableHead className="w-0 px-4" />}
           </TableRow>
         </TableHeader>
         <TableBody>
+          {groups.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={canManage ? 5 : 4} className="h-24 px-4 text-center text-muted-foreground">
+                Nenhum grupo encontrado.
+              </TableCell>
+            </TableRow>
+          )}
           {groups.map((group) => (
             <TableRow key={group.id}>
-              <TableCell className="max-w-0 truncate px-4 font-medium">{group.name}</TableCell>
+              <TableCell className="max-w-0 px-4 font-medium">
+                <div className="flex items-center gap-2">
+                  <ExpenseGroupIconBadge icon={group.icon} />
+                  <span className="truncate">{group.name}</span>
+                </div>
+              </TableCell>
               <TableCell className={cn("px-4 text-right tabular-nums", group.overLimit && "text-destructive")}>
                 {money(group.totalCents)}
               </TableCell>
@@ -65,7 +86,7 @@ export function ExpenseGroupsTable({ groups, workspaceId, unitId, canManage }: P
               </TableCell>
               {canManage && (
                 <TableCell className="px-4 text-right">
-                  <ExpenseGroupActions workspaceId={workspaceId} unitId={unitId} group={group} />
+                  <ExpenseGroupActions workspaceId={workspaceId} unitId={unitId} icons={icons} group={group} />
                 </TableCell>
               )}
             </TableRow>
