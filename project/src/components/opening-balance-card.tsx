@@ -1,12 +1,17 @@
 import { WalletIcon } from "lucide-react"
 import type { OpeningBalance } from "@/lib/opening-balance"
 
-import { toDate } from "@/components/day-field"
 import { currencyFormat } from "@/components/service-format"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 
-const dayFormat = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short", year: "numeric" })
+// O dia é do calendário, então é formatado em UTC para não deslocar.
+const dayFormat = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
+
+function toDate(day: string) {
+  const [year, month, date] = day.split("-").map(Number)
+  return new Date(Date.UTC(year, month - 1, date))
+}
 
 // balanceCents: saldo inicial mais o líquido real desde o dia dele (null sem saldo inicial).
 // O saldo inicial é informado no cadastro da unidade.

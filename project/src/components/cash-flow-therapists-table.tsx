@@ -21,18 +21,15 @@ function money(cents: number) {
   return currencyFormat.format(cents / 100)
 }
 
-// Com a tabela estreita, o grupo Previsto some inteiro e, depois, o percentual de comissão.
-const FORECAST = "@max-5xl:hidden"
+// Com a tabela estreita, o percentual de comissão some.
 const PERCENT = "@max-xl:hidden"
 
-function AmountCells({ amounts, className }: { amounts: TherapistAmounts; className?: string }) {
+function AmountCells({ amounts }: { amounts: TherapistAmounts }) {
   return (
     <>
-      <TableCell className={cn("border-l px-4 text-right text-muted-foreground tabular-nums", className)}>
-        {amounts.count}
-      </TableCell>
-      <TableCell className={cn("px-4 text-right tabular-nums", className)}>{money(amounts.cents)}</TableCell>
-      <TableCell className={cn("px-4 text-right font-medium tabular-nums", className)}>
+      <TableCell className="border-l px-4 text-right text-muted-foreground tabular-nums">{amounts.count}</TableCell>
+      <TableCell className="px-4 text-right tabular-nums">{money(amounts.cents)}</TableCell>
+      <TableCell className="px-4 text-right font-medium tabular-nums">
         {money(amounts.commissionCents)}
       </TableCell>
     </>
@@ -42,7 +39,7 @@ function AmountCells({ amounts, className }: { amounts: TherapistAmounts; classN
 type Props = {
   // Só a página exibida; as somas do rodapé são de todas as encontradas.
   therapists: TherapistSummary[]
-  sums: { real: TherapistAmounts; forecast: TherapistAmounts }
+  sums: { real: TherapistAmounts }
   // Busca e ordenação atuais (com visão e data), preservadas nos links de ordenação.
   query: { q: string; sort: TherapistSortField; dir: SortDir } & Record<string, string>
   pathname: string
@@ -50,21 +47,10 @@ type Props = {
 
 // Quem não tem comissão definida na unidade (inclusive o proprietário) aparece com comissão zero.
 export function CashFlowTherapistsTable({ therapists, sums, query, pathname }: Props) {
-
   return (
     <div className="border">
       <Table>
         <TableHeader>
-          <TableRow>
-            <TableHead className="px-4" colSpan={2} />
-            <TableHead className={cn("px-4", PERCENT)} />
-            <TableHead colSpan={3} className="border-l px-4 text-center">
-              Real
-            </TableHead>
-            <TableHead colSpan={3} className={cn("border-l px-4 text-center", FORECAST)}>
-              Previsto
-            </TableHead>
-          </TableRow>
           <TableRow>
             <CodeHead />
             <SortableHead field="name" label="Massagista" query={query} pathname={pathname} className="w-full" />
@@ -72,21 +58,12 @@ export function CashFlowTherapistsTable({ therapists, sums, query, pathname }: P
             <TableHead className="border-l px-4 text-right">Qtd.</TableHead>
             <SortableHead field="real" label="Bruto" query={query} pathname={pathname} className="text-right" />
             <TableHead className="px-4 text-right">Comissão</TableHead>
-            <TableHead className={cn("border-l px-4 text-right", FORECAST)}>Qtd.</TableHead>
-            <SortableHead
-              field="forecast"
-              label="Bruto"
-              query={query}
-              pathname={pathname}
-              className={cn("text-right", FORECAST)}
-            />
-            <TableHead className={cn("px-4 text-right", FORECAST)}>Comissão</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {therapists.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={9} className="px-4 py-6 text-center text-muted-foreground">
+              <TableCell colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
                 {query.q ? "Nenhuma massagista encontrada." : "Nenhum serviço no período."}
               </TableCell>
             </TableRow>
@@ -99,7 +76,6 @@ export function CashFlowTherapistsTable({ therapists, sums, query, pathname }: P
                   {therapist.commissionPercent === null ? "—" : `${percentFormat.format(therapist.commissionPercent)}%`}
                 </TableCell>
                 <AmountCells amounts={therapist.real} />
-                <AmountCells amounts={therapist.forecast} className={FORECAST} />
               </TableRow>
             ))
           )}
@@ -112,7 +88,6 @@ export function CashFlowTherapistsTable({ therapists, sums, query, pathname }: P
               </TableCell>
               <TableCell className={PERCENT} />
               <AmountCells amounts={sums.real} />
-              <AmountCells amounts={sums.forecast} className={FORECAST} />
             </TableRow>
           </TableFooter>
         )}

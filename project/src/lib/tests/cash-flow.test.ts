@@ -5,6 +5,7 @@ import {
   applyStaffCosts,
   cashFlowBuckets,
   cashFlowFetchRange,
+  costCurve,
   dailyAppointmentTotalsPipeline,
   dailyBookingForecastPipeline,
   parseCashFlowQuery,
@@ -12,6 +13,7 @@ import {
   serviceBookingForecastPipeline,
   shiftCashFlowDate,
   summarizeCashFlow,
+  summarizeCosts,
   summarizeServices,
   summarizeTherapists,
   teamPayRates,
@@ -871,5 +873,138 @@ describe("applyExpenses", () => {
     ]);
 
     expect(result.total).toEqual({ real: amounts(0, 100), forecast: amounts(0, 300) });
+  });
+});
+
+describe("summarizeCosts", () => {
+  const RENT = { id: "g1", name: "Aluguel", paidCents: 300_000 };
+  const TAXES = { id: "g2", name: "Impostos", paidCents: 50_000 };
+  const SUPPLIES = { id: "g3", name: "Insumos", paidCents: 0 };
+
+  it("junta repasse, comissão, salário e grupos, do maior para o menor, com a fatia de cada um no total", () => {
+    const result = summarizeCosts({ partnerShareCents: 100_000, commissionCents: 40_000, salaryCents: 200_000 }, [
+      RENT,
+      TAXES,
+    ]);
+
+    expect(result).toEqual({
+      totalCents: 690_000,
+      rows: [
+        { kind: "group", group: RENT, cents: 300_000, share: 300_000 / 690_000 },
+        { kind: "salary", cents: 200_000, share: 200_000 / 690_000 },
+        { kind: "partner_share", cents: 100_000, share: 100_000 / 690_000 },
+        { kind: "group", group: TAXES, cents: 50_000, share: 50_000 / 690_000 },
+        { kind: "commission", cents: 40_000, share: 40_000 / 690_000 },
+      ],
+    });
+  });
+
+  it("deixa de fora o que ficou em zero", () => {
+    const result = summarizeCosts({ partnerShareCents: 0, commissionCents: 10_000, salaryCents: 0 }, [SUPPLIES, TAXES]);
+
+    expect(result).toEqual({
+      totalCents: 60_000,
+      rows: [
+        { kind: "group", group: TAXES, cents: 50_000, share: 50_000 / 60_000 },
+        { kind: "commission", cents: 10_000, share: 10_000 / 60_000 },
+      ],
+    });
+  });
+
+  it("no empate, a equipe e o repasse vêm antes dos grupos, e os grupos na ordem recebida", () => {
+    const a = { id: "a", name: "B", paidCents: 1_000 };
+    const b = { id: "b", name: "A", paidCents: 1_000 };
+    const result = summarizeCosts({ partnerShareCents: 1_000, commissionCents: 1_000, salaryCents: 1_000 }, [a, b]);
+
+    expect(result.rows.map((row) => (row.kind === "group" ? row.group.id : row.kind))).toEqual([
+      "partner_share",
+      "commission",
+      "salary",
+      "a",
+      "b",
+    ]);
+  });
+
+  it("sem gasto nenhum, não tem linhas e o total é zero", () => {
+    expect(summarizeCosts({ partnerShareCents: 0, commissionCents: 0, salaryCents: 0 }, [SUPPLIES])).toEqual({
+      totalCents: 0,
+      rows: [],
+    });
+  });
+});
+
+describe("costCurve", () => {
+  // Custos de um mês: repasse, comissão, salário e despesas; bruto e líquido não entram na curva.
+  const costs = (partnerShareCents: number, commissionCents: number, salaryCents: number, expenseCents: number) => ({
+    grossCents: 999_999,
+    partnerShareCents,
+    commissionCents,
+    salaryCents,
+    expenseCents,
+    netCents: -1,
+  });
+  const month = (from: string, to: string, real: ReturnType<typeof costs>, forecast: ReturnType<typeof costs>) => ({
+    from,
+    to,
+    real,
+    forecast,
+  });
+  const JUL = { from: "2026-07-01", to: "2026-07-31" };
+  const AUG = { from: "2026-08-01", to: "2026-08-31" };
+  const SEP = { from: "2026-09-01", to: "2026-09-30" };
+  const OCT = { from: "2026-10-01", to: "2026-10-31" };
+
+  it("planejado vem do previsto e gasto do real, somando repasse, comissão, salário e despesas, com o acumulado", () => {
+    const result = costCurve(
+      [
+        [
+          month(JUL.from, JUL.to, costs(100, 200, 300, 400), costs(100, 200, 300, 900)),
+          month(AUG.from, AUG.to, costs(0, 50, 300, 0), costs(0, 50, 300, 150)),
+        ],
+      ],
+      "2026-09-24",
+    );
+
+    expect(result).toEqual([
+      { ...JUL, plannedCents: 1_500, spentCents: 1_000, plannedCumulativeCents: 1_500, spentCumulativeCents: 1_000 },
+      { ...AUG, plannedCents: 500, spentCents: 350, plannedCumulativeCents: 2_000, spentCumulativeCents: 1_350 },
+    ]);
+  });
+
+  it("depois do mês de hoje não tem gasto nem acumulado gasto; o planejado segue", () => {
+    const result = costCurve(
+      [
+        [
+          month(AUG.from, AUG.to, costs(0, 0, 100, 0), costs(0, 0, 100, 0)),
+          month(SEP.from, SEP.to, costs(0, 0, 80, 20), costs(0, 0, 100, 50)),
+          month(OCT.from, OCT.to, costs(0, 0, 0, 0), costs(0, 0, 100, 0)),
+        ],
+      ],
+      "2026-09-24",
+    );
+
+    expect(result).toEqual([
+      { ...AUG, plannedCents: 100, spentCents: 100, plannedCumulativeCents: 100, spentCumulativeCents: 100 },
+      { ...SEP, plannedCents: 150, spentCents: 100, plannedCumulativeCents: 250, spentCumulativeCents: 200 },
+      { ...OCT, plannedCents: 100, spentCents: null, plannedCumulativeCents: 350, spentCumulativeCents: null },
+    ]);
+  });
+
+  it("com várias unidades, soma os meses de todas", () => {
+    const result = costCurve(
+      [
+        [month(JUL.from, JUL.to, costs(100, 0, 0, 0), costs(200, 0, 0, 0))],
+        [month(JUL.from, JUL.to, costs(0, 0, 0, 30), costs(0, 0, 0, 70))],
+      ],
+      "2026-09-24",
+    );
+
+    expect(result).toEqual([
+      { ...JUL, plannedCents: 270, spentCents: 130, plannedCumulativeCents: 270, spentCumulativeCents: 130 },
+    ]);
+  });
+
+  it("sem unidades, a curva fica vazia", () => {
+    expect(costCurve([], "2026-09-24")).toEqual([]);
   });
 });

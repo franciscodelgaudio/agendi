@@ -32,20 +32,3 @@ export function parseOpeningBalance(input: unknown): OpeningBalanceResult {
 export function openingBalanceRange({ date }: OpeningBalance, today: string): DayRange | null {
   return date <= today ? { from: date, to: today } : null;
 }
-
-export type UpdateOpeningBalanceResult = { ok: true } | { ok: false; error: OpeningBalanceError | "unit_not_found" };
-
-// update devolve false quando a unidade não existe (ou não é do workspace).
-export async function updateOpeningBalance(
-  input: unknown,
-  unitId: string | null | undefined,
-  update: (unitId: string, openingBalance: OpeningBalance | null) => Promise<boolean>,
-): Promise<UpdateOpeningBalanceResult> {
-  if (!unitId) return { ok: false, error: "unit_not_found" };
-
-  const parsed = parseOpeningBalance(input);
-  if (!parsed.ok) return parsed;
-
-  const found = await update(unitId, parsed.value);
-  return found ? { ok: true } : { ok: false, error: "unit_not_found" };
-}

@@ -537,3 +537,28 @@ export function applyStaffCosts(
     },
   };
 }
+
+export type CostRow<T> = ({ kind: "partner_share" | "commission" | "salary" } | { kind: "group"; group: T }) & {
+  cents: number;
+  // Fração do total, de 0 a 1.
+  share: number;
+};
+
+// Para onde foi o dinheiro: repasse, equipe e cada grupo de despesa, do maior para o menor.
+// O sort é estável, então no empate fica a ordem de montagem (repasse, equipe, grupos).
+export function summarizeCosts<T extends { paidCents: number }>(
+  { partnerShareCents, commissionCents, salaryCents }: Pick<StaffCashFlowAmounts, "partnerShareCents" | "commissionCents" | "salaryCents">,
+  groups: T[],
+): { totalCents: number; rows: CostRow<T>[] } {
+  const items = [
+    { kind: "partner_share" as const, cents: partnerShareCents },
+    { kind: "commission" as const, cents: commissionCents },
+    { kind: "salary" as const, cents: salaryCents },
+    ...groups.map((group) => ({ kind: "group" as const, group, cents: group.paidCents })),
+  ].filter((item) => item.cents > 0);
+  const totalCents = items.reduce((sum, item) => sum + item.cents, 0);
+  return {
+    totalCents,
+    rows: items.map((item) => ({ ...item, share: item.cents / totalCents })).sort((a, b) => b.cents - a.cents),
+  };
+}

@@ -9,7 +9,7 @@ const EXPENSE_STATUSES = ["paid", "pending"] as const;
 const GROUP_SORT_FIELDS = ["name", "total", "paid"] as const;
 // over: passou do limite; within: tem limite e não passou; none: sem limite.
 const GROUP_LIMITS = ["over", "within", "none"] as const;
-const THERAPIST_SORT_FIELDS = ["name", "real", "forecast"] as const;
+const THERAPIST_SORT_FIELDS = ["name", "real"] as const;
 
 export type ExpenseSortField = (typeof EXPENSE_SORT_FIELDS)[number];
 export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number];
@@ -134,7 +134,7 @@ export function expenseGroupListPage<T extends ExpenseGroupSummary>(
 }
 
 export function parseTherapistListQuery(params: SearchParams): TherapistListQuery {
-  const sort = pick(THERAPIST_SORT_FIELDS, first(params.sort)) || "forecast";
+  const sort = pick(THERAPIST_SORT_FIELDS, first(params.sort)) || "real";
   return {
     q: parseQ(params),
     sort,
@@ -155,7 +155,7 @@ function sumAmounts(rows: TherapistAmounts[]): TherapistAmounts {
   );
 }
 
-// Recebe o resumo pelo previsto; as somas do rodapé são de todas as encontradas.
+// As somas do rodapé são de todas as encontradas.
 export function therapistListPage(therapists: TherapistSummary[], { q, sort, dir, page }: TherapistListQuery) {
   const term = normalize(q);
   const filtered = therapists.filter((therapist) => !term || normalize(therapist.therapistName).includes(term));
@@ -163,9 +163,6 @@ export function therapistListPage(therapists: TherapistSummary[], { q, sort, dir
     sort === "name" ? compareText(a.therapistName, b.therapistName) : a[sort].cents - b[sort].cents;
   return {
     ...sortAndPage(filtered, compare, dir, page),
-    sums: {
-      real: sumAmounts(filtered.map((therapist) => therapist.real)),
-      forecast: sumAmounts(filtered.map((therapist) => therapist.forecast)),
-    },
+    sums: { real: sumAmounts(filtered.map((therapist) => therapist.real)) },
   };
 }

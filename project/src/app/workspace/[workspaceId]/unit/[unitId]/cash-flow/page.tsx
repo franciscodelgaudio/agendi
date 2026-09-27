@@ -6,27 +6,34 @@ import {
   cashFlowBuckets,
   cashFlowFetchRange,
   dailyAppointmentTotalsPipeline,
-  dailyBookingForecastPipeline,
   parseCashFlowQuery,
   summarizeCashFlow,
+  summarizeCosts,
   summarizeTherapists,
   teamPayRates,
   type DayTotal,
 } from "@/lib/cash-flow"
 import { CASH_FLOW_PAGE_SIZE, parseTherapistListQuery, therapistListPage } from "@/lib/cash-flow-list"
-import { dailyExpenseTotalsPipeline, type ExpenseDayTotal } from "@/lib/expense"
+import {
+  dailyExpenseTotalsPipeline,
+  expenseGroupTotalsPipeline,
+  type ExpenseDayTotal,
+  type ExpenseGroupTotal,
+} from "@/lib/expense"
+import { loadExpenseGroupIcons } from "@/lib/expense-group-icon-store"
 import { openingBalanceRange, type OpeningBalance } from "@/lib/opening-balance"
 import type { RevenueShare } from "@/lib/revenue-share"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { Appointment } from "@/models/Appointment"
-import { Booking } from "@/models/Booking"
 import { Expense } from "@/models/Expense"
+import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Workspace } from "@/models/Workspace"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 import { CashFlowNav } from "@/components/cash-flow-nav"
 import { OpeningBalanceCard } from "@/components/opening-balance-card"
 import { CashFlowTable } from "@/components/cash-flow-table"
+import { CashFlowCostsChart } from "@/components/cash-flow-costs-chart"
 import { CashFlowTherapistsTable } from "@/components/cash-flow-therapists-table"
 import { ListPagination } from "@/components/list-pagination"
 import { ListSearch } from "@/components/list-search"
@@ -83,10 +90,9 @@ export default async function CashFlowPage({
   const shown = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const range = cashFlowFetchRange(buckets, revenueShare?.period ?? null)
   const unitMatch = { $match: { unitId: new Types.ObjectId(unitId) } }
-  const [appointments, bookings, team, balanceAppointments, expenses, balanceExpenses] =
+  const [appointments, team, balanceAppointments, expenses, balanceExpenses, groups, groupTotals, icons] =
     await Promise.all([
       Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
-      Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
       // Remuneração da equipe vinculada a esta unidade (o proprietário não tem).
       WorkspaceMember.find({
         workspaceId: workspace.id,
@@ -103,11 +109,14 @@ export default async function CashFlowPage({
         : [],
       Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(shown)]),
       balanceRange ? Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(balanceRange)]) : [],
+      ExpenseGroup.find({ unitId: new Types.ObjectId(unitId) }).select({ name: 1, iconId: 1 }).sort({ name: 1 }).lean(),
+      Expense.aggregate<ExpenseGroupTotal>([unitMatch, ...expenseGroupTotalsPipeline(shown)]),
+      loadExpenseGroupIcons(),
     ])
   const { commissionRates, grossCommissionPercent, monthlySalaryCents } = teamPayRates(team, unitId)
   const staffCosts = { grossCommissionPercent, monthlySalaryCents, today }
   const summary = applyExpenses(
-    applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, revenueShare, commissionRates), staffCosts),
+    applyStaffCosts(summarizeCashFlow(buckets, appointments, [], revenueShare, commissionRates), staffCosts),
     expenses,
   )
   const balanceCents = !openingBalance
@@ -122,10 +131,22 @@ export default async function CashFlowPage({
             balanceExpenses,
           ).total.real.netCents
         : 0)
-  const therapists = therapistListPage(summarizeTherapists(shown, appointments, bookings, commissionRates), {
+  const therapists = therapistListPage(summarizeTherapists(shown, appointments, [], commissionRates), {
     ...filters,
     page,
   })
+  // Mesmos valores reais da tabela: das despesas, só as pagas.
+  const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
+  const paidByGroup = new Map(groupTotals.map((total) => [total.groupId, total.paidCents]))
+  const costs = summarizeCosts(
+    summary.total.real,
+    groups.map((group) => ({
+      id: group._id.toString(),
+      name: group.name,
+      icon: (group.iconId && iconsById.get(group.iconId.toString())) || null,
+      paidCents: paidByGroup.get(group._id.toString()) ?? 0,
+    })),
+  )
   const hasCommission = Object.keys(commissionRates).length > 0 || grossCommissionPercent > 0
   const hasSalary = monthlySalaryCents > 0
   const hasExpenses = expenses.length > 0
@@ -161,6 +182,7 @@ export default async function CashFlowPage({
         hasExpenses={hasExpenses}
         today={today}
       />
+      {costs.rows.length > 0 && <CashFlowCostsChart rows={costs.rows} totalCents={costs.totalCents} />}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         <h4 className="font-semibold tracking-tight">Por massagista</h4>
         <ListSearch query={listQuery} placeholder="Buscar massagista..." />

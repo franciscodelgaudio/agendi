@@ -1,7 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { openingBalanceRange, parseOpeningBalance, updateOpeningBalance } from "@/lib/opening-balance";
-
-const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
+import { describe, it, expect } from "vitest";
+import { openingBalanceRange, parseOpeningBalance } from "@/lib/opening-balance";
 
 describe("parseOpeningBalance", () => {
   it.each([
@@ -71,51 +69,5 @@ describe("openingBalanceRange", () => {
 
   it("sem intervalo quando o saldo inicial é de um dia futuro", () => {
     expect(openingBalanceRange({ amountCents: 100, date: "2026-09-25" }, "2026-09-24")).toBeNull();
-  });
-});
-
-describe("updateOpeningBalance", () => {
-  it("salva o saldo inicial da unidade", async () => {
-    const update = vi.fn().mockResolvedValue(true);
-
-    const result = await updateOpeningBalance({ amount: "300.00", date: "2026-09-01" }, UNIT_ID, update);
-
-    expect(result).toEqual({ ok: true });
-    expect(update).toHaveBeenCalledWith(UNIT_ID, { amountCents: 30_000, date: "2026-09-01" });
-  });
-
-  it("sem valor, remove o saldo inicial", async () => {
-    const update = vi.fn().mockResolvedValue(true);
-
-    const result = await updateOpeningBalance({ amount: "", date: "" }, UNIT_ID, update);
-
-    expect(result).toEqual({ ok: true });
-    expect(update).toHaveBeenCalledWith(UNIT_ID, null);
-  });
-
-  it("não salva quando o saldo é inválido", async () => {
-    const update = vi.fn();
-
-    const result = await updateOpeningBalance({ amount: "abc", date: "2026-09-01" }, UNIT_ID, update);
-
-    expect(result).toEqual({ ok: false, error: "invalid_opening_balance" });
-    expect(update).not.toHaveBeenCalled();
-  });
-
-  it.each([null, undefined, ""])("unidade não encontrada quando o id é %j", async (unitId) => {
-    const update = vi.fn();
-
-    const result = await updateOpeningBalance({ amount: "300.00", date: "2026-09-01" }, unitId, update);
-
-    expect(result).toEqual({ ok: false, error: "unit_not_found" });
-    expect(update).not.toHaveBeenCalled();
-  });
-
-  it("unidade não encontrada quando ela não existe no workspace", async () => {
-    const update = vi.fn().mockResolvedValue(false);
-
-    const result = await updateOpeningBalance({ amount: "300.00", date: "2026-09-01" }, UNIT_ID, update);
-
-    expect(result).toEqual({ ok: false, error: "unit_not_found" });
   });
 });

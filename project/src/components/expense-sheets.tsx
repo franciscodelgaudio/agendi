@@ -1,7 +1,7 @@
 "use client"
 
 import { useActionState, useState, useTransition } from "react"
-import { EllipsisIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
+import { CheckIcon, ClockIcon, EllipsisIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
 import {
   createExpenseAction,
   deleteExpenseAction,
@@ -23,6 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -280,7 +281,7 @@ export function CreateExpenseSheet({ workspaceId, unitId, groups, defaultDate }:
   )
 }
 
-// Marca ou desmarca o pagamento na hora; o erro aparece num tooltip sobre a caixa até ser dispensado.
+// Badge de pagamento que alterna ao clicar; o erro aparece num tooltip sobre o badge até ser dispensado.
 export function ExpensePaidToggle({
   workspaceId,
   unitId,
@@ -297,20 +298,45 @@ export function ExpensePaidToggle({
   const [optimistic, setOptimistic] = useState<boolean | null>(null)
   const checked = optimistic ?? expense.paid
 
-  const box = (
-    <Checkbox
-      aria-label={`${expense.description} paga`}
-      checked={checked}
-      disabled={disabled || pending}
-      onCheckedChange={(next) => {
-        setOptimistic(next)
-        startTransition(async () => {
-          const result = await setExpensePaidAction(workspaceId, unitId, expense.id, next)
-          setError(result.error)
-          setOptimistic(null)
-        })
-      }}
-    />
+  const label = checked ? (
+    <>
+      <CheckIcon data-icon="inline-start" />
+      Paga
+    </>
+  ) : (
+    <>
+      <ClockIcon data-icon="inline-start" />
+      Pendente
+    </>
+  )
+  const variant = checked ? "default" : "outline"
+
+  const box = disabled ? (
+    <Badge variant={variant}>{label}</Badge>
+  ) : (
+    <Badge
+      variant={variant}
+      render={
+        <button
+          type="button"
+          aria-pressed={checked}
+          aria-label={`${expense.description}: marcar como ${checked ? "pendente" : "paga"}`}
+          disabled={pending}
+          className="cursor-pointer hover:opacity-80 disabled:cursor-default disabled:opacity-50"
+          onClick={() => {
+            const next = !checked
+            setOptimistic(next)
+            startTransition(async () => {
+              const result = await setExpensePaidAction(workspaceId, unitId, expense.id, next)
+              setError(result.error)
+              setOptimistic(null)
+            })
+          }}
+        />
+      }
+    >
+      {label}
+    </Badge>
   )
   if (!error) return box
   return (

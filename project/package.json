@@ -27,6 +27,7 @@
     "react": "19.2.8",
     "react-day-picker": "^10.0.1",
     "react-dom": "19.2.8",
+    "recharts": "^3.8.0",
     "resend": "^6.29.0",
     "shadcn": "^4.21.0",
     "temporal-polyfill": "^1.0.5",
