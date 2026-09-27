@@ -1,8 +1,11 @@
 import type { ExpenseGroupInfo, ExpenseGroupSummary } from "@/lib/expense"
 import type { ExpenseGroupIcon } from "@/lib/expense-group-icon"
+import type { GroupSortField } from "@/lib/cash-flow-list"
+import type { SortDir } from "@/lib/unit-list"
 import { ExpenseGroupIconBadge } from "@/components/expense-group-icon"
 import { ExpenseGroupActions } from "@/components/expense-group-sheets"
 import { currencyFormat } from "@/components/service-format"
+import { SortableHead } from "@/components/sortable-head"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 
@@ -13,6 +16,9 @@ function money(cents: number) {
 type Props = {
   groups: ExpenseGroupSummary<ExpenseGroupInfo & { icon: ExpenseGroupIcon | null }>[]
   icons: ExpenseGroupIcon[]
+  // Busca, filtro e ordenação atuais, preservados nos links de ordenação.
+  query: { q: string; sort: GroupSortField; dir: SortDir } & Record<string, string>
+  pathname: string
   workspaceId: string
   unitId: string
   // Sem permissão, a coluna de ações (editar/excluir) não aparece.
@@ -20,7 +26,7 @@ type Props = {
 }
 
 // Gasto do mês por grupo: o lançado (pago ou não) comparado ao limite mensal.
-export function ExpenseGroupsTable({ groups, icons, workspaceId, unitId, canManage }: Props) {
+export function ExpenseGroupsTable({ groups, icons, query, pathname, workspaceId, unitId, canManage }: Props) {
   return (
     <div className="border">
       <Table>

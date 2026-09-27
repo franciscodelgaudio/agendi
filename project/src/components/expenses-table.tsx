@@ -1,4 +1,5 @@
 import { ExpenseActions, ExpensePaidToggle, type ExpenseGroupOption, type ExpenseRow } from "@/components/expense-sheets"
+import { ExpenseGroupIconBadge } from "@/components/expense-group-icon"
 import { currencyFormat } from "@/components/service-format"
 import { SortableHead } from "@/components/sortable-head"
 import type { ExpenseSortField } from "@/lib/cash-flow-list"
@@ -44,7 +45,7 @@ export function ExpensesTable({
   unitId,
   canManage,
 }: Props) {
-  const groupNames = new Map(groups.map((group) => [group.id, group.name]))
+  const groupsById = new Map(groups.map((group) => [group.id, group]))
 
   return (
     <div className="border">
@@ -78,17 +79,22 @@ export function ExpensesTable({
                 />
               </TableCell>
               <TableCell className="px-4 tabular-nums">{dayFormat.format(toDate(expense.date))}</TableCell>
-              <TableCell className="max-w-0 truncate px-4 font-medium">
-                {expense.description}
-                {expense.series && (
-                  <span className="ml-2 text-xs font-normal text-muted-foreground tabular-nums">
-                    {expense.series.kind === "installments" ? "Parcela" : "Mês"} {expense.series.number}/
-                    {expense.series.count}
+              <TableCell className="max-w-0 px-4 font-medium">
+                <div className="flex items-center gap-2">
+                  <ExpenseGroupIconBadge icon={groupsById.get(expense.groupId)?.icon ?? null} />
+                  <span className="truncate">
+                    {expense.description}
+                    {expense.series && (
+                      <span className="ml-2 text-xs font-normal text-muted-foreground tabular-nums">
+                        {expense.series.kind === "installments" ? "Parcela" : "Mês"} {expense.series.number}/
+                        {expense.series.count}
+                      </span>
+                    )}
                   </span>
-                )}
+                </div>
               </TableCell>
               <TableCell className="px-4 @max-md:hidden">
-                <Badge variant="secondary">{groupNames.get(expense.groupId)}</Badge>
+                <Badge variant="secondary">{groupsById.get(expense.groupId)?.name}</Badge>
               </TableCell>
               <TableCell className="px-4 text-right tabular-nums">{money(expense.amountCents)}</TableCell>
               {canManage && (

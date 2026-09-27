@@ -9,9 +9,11 @@ import {
   updateExpenseAction,
   type ExpenseActionState,
 } from "@/lib/actions/expense"
+import type { ExpenseGroupIcon } from "@/lib/expense-group-icon"
 
 import { AmountInput } from "@/components/amount-input"
 import { DayField } from "@/components/day-field"
+import { ExpenseGroupLabel } from "@/components/expense-group-icon"
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -44,7 +46,7 @@ import {
 } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
-export type ExpenseGroupOption = { id: string; name: string }
+export type ExpenseGroupOption = { id: string; name: string; icon: ExpenseGroupIcon | null }
 export type ExpenseRow = {
   id: string
   groupId: string
@@ -131,12 +133,17 @@ function ExpenseForm({
             required
           >
             <SelectTrigger id={`${idPrefix}-group`} className="w-full">
-              <SelectValue placeholder="Escolha o grupo" />
+              <SelectValue placeholder="Escolha o grupo">
+                {(value: string | null) => {
+                  const group = groups.find((option) => option.id === value)
+                  return group ? <ExpenseGroupLabel group={group} /> : "Escolha o grupo"
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {groups.map((group) => (
                 <SelectItem key={group.id} value={group.id}>
-                  {group.name}
+                  <ExpenseGroupLabel group={group} />
                 </SelectItem>
               ))}
             </SelectContent>

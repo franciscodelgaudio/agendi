@@ -3,6 +3,7 @@ import { isObjectIdOrHexString, Types } from "mongoose"
 import { FolderIcon, ReceiptIcon } from "lucide-react"
 import { cashFlowBuckets, parseCashFlowQuery } from "@/lib/cash-flow"
 import { CASH_FLOW_PAGE_SIZE, expenseListPage, parseExpenseListQuery } from "@/lib/cash-flow-list"
+import { loadExpenseGroupIcons } from "@/lib/expense-group-icon-store"
 import { canManageMembers, type WorkspaceRole } from "@/lib/member"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
@@ -55,14 +56,24 @@ export default async function ExpensesPage({
   const buckets = cashFlowBuckets(query)
   const month = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const unitObjectId = new Types.ObjectId(unitId)
-  const [groupDocs, expenseDocs] = await Promise.all([
-    ExpenseGroup.find({ unitId: unitObjectId }).sort({ name: 1 }).collation({ locale: "pt" }).select({ name: 1 }).lean(),
+  const [groupDocs, expenseDocs, icons] = await Promise.all([
+    ExpenseGroup.find({ unitId: unitObjectId })
+      .sort({ name: 1 })
+      .collation({ locale: "pt" })
+      .select({ name: 1, iconId: 1 })
+      .lean(),
     Expense.find({ unitId: unitObjectId, date: { $gte: month.from, $lte: month.to } })
       .sort({ date: 1, createdAt: 1 })
       .select({ groupId: 1, description: 1, amountCents: 1, date: 1, paidAt: 1, series: 1 })
       .lean(),
+    loadExpenseGroupIcons(),
   ])
-  const groups = groupDocs.map((group) => ({ id: group._id.toString(), name: group.name }))
+  const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
+  const groups = groupDocs.map((group) => ({
+    id: group._id.toString(),
+    name: group.name,
+    icon: (group.iconId && iconsById.get(group.iconId.toString())) || null,
+  }))
   const expenses = expenseDocs.map((expense) => ({
     id: expense._id.toString(),
     groupId: expense.groupId.toString(),

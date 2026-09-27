@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import {
   applyExpenses,
@@ -13,8 +13,8 @@ import {
   teamPayRates,
   type DayTotal,
 } from "@/lib/cash-flow"
+import { CASH_FLOW_PAGE_SIZE, parseTherapistListQuery, therapistListPage } from "@/lib/cash-flow-list"
 import { dailyExpenseTotalsPipeline, type ExpenseDayTotal } from "@/lib/expense"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member"
 import { openingBalanceRange, type OpeningBalance } from "@/lib/opening-balance"
 import type { RevenueShare } from "@/lib/revenue-share"
 import { requirePage } from "@/lib/page-guard"
@@ -28,6 +28,8 @@ import { CashFlowNav } from "@/components/cash-flow-nav"
 import { OpeningBalanceCard } from "@/components/opening-balance-card"
 import { CashFlowTable } from "@/components/cash-flow-table"
 import { CashFlowTherapistsTable } from "@/components/cash-flow-therapists-table"
+import { ListPagination } from "@/components/list-pagination"
+import { ListSearch } from "@/components/list-search"
 
 // Layout e página podem renderizar em paralelo, então a página refaz a verificação de acesso.
 export default async function CashFlowPage({
@@ -36,7 +38,10 @@ export default async function CashFlowPage({
 }: PageProps<"/workspace/[workspaceId]/unit/[unitId]/cash-flow">) {
   const { workspaceId, unitId } = await params
   const now = new Date()
-  const query = parseCashFlowQuery(await searchParams, now)
+  const search = await searchParams
+  const query = parseCashFlowQuery(search, now)
+  // Busca e ordenação mudam sem levar a página junto, então a lista volta para a primeira.
+  const { page, ...filters } = parseTherapistListQuery(search)
   const user = await requireUser()
   await requirePage(workspaceId, user.id, { unit: "cash_flow", unitId })
   const access = workspaceAccessStages(workspaceId, user.id)
@@ -45,7 +50,6 @@ export default async function CashFlowPage({
   // Parte do workspace para garantir o acesso; a regra de repasse define quantos dias buscar.
   const [workspace] = await Workspace.aggregate<{
     id: string
-    role: WorkspaceRole
     unit: { revenueShare: RevenueShare | null; openingBalance: OpeningBalance | null } | null
   }>([
     ...access,
@@ -67,7 +71,7 @@ export default async function CashFlowPage({
         ],
       },
     },
-    { $project: { _id: 0, id: { $toString: "$_id" }, role: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
+    { $project: { _id: 0, id: { $toString: "$_id" }, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   if (!workspace?.unit) notFound()
   const { revenueShare, openingBalance } = workspace.unit
@@ -118,28 +122,35 @@ export default async function CashFlowPage({
             balanceExpenses,
           ).total.real.netCents
         : 0)
-  const therapistRows = summarizeTherapists(shown, appointments, bookings, commissionRates)
+  const therapists = therapistListPage(summarizeTherapists(shown, appointments, bookings, commissionRates), {
+    ...filters,
+    page,
+  })
   const hasCommission = Object.keys(commissionRates).length > 0 || grossCommissionPercent > 0
   const hasSalary = monthlySalaryCents > 0
   const hasExpenses = expenses.length > 0
 
   const pathname = `/workspace/${workspaceId}/unit/${unitId}/cash-flow`
+  const listQuery = { view: query.view, date: query.date, ...filters }
+  // Página além da última (ex.: depois de trocar de período) vai para a última.
+  const pages = Math.ceil(therapists.total / CASH_FLOW_PAGE_SIZE)
+  if (pages > 0 && page > pages) {
+    const params = new URLSearchParams(
+      Object.entries({ ...listQuery, page: pages > 1 ? String(pages) : "" }).filter(([, v]) => v),
+    )
+    redirect(`${pathname}?${params}`)
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      <OpeningBalanceCard
-        workspaceId={workspaceId}
-        unitId={unitId}
-        openingBalance={openingBalance}
-        balanceCents={balanceCents}
-        canManage={canManageMembers(workspace.role)}
-      />
+      <OpeningBalanceCard openingBalance={openingBalance} balanceCents={balanceCents} />
       <CashFlowNav
         query={query}
         range={shown}
         isCurrent={shown.from <= today && today <= shown.to}
         today={today}
         pathname={pathname}
+        preserve={filters}
       />
       <CashFlowTable
         view={query.view}
@@ -150,8 +161,24 @@ export default async function CashFlowPage({
         hasExpenses={hasExpenses}
         today={today}
       />
-      <h4 className="mt-4 font-semibold tracking-tight">Por massagista</h4>
-      <CashFlowTherapistsTable therapists={therapistRows} />
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <h4 className="font-semibold tracking-tight">Por massagista</h4>
+        <ListSearch query={listQuery} placeholder="Buscar massagista..." />
+      </div>
+      <CashFlowTherapistsTable
+        therapists={therapists.rows}
+        sums={therapists.sums}
+        query={listQuery}
+        pathname={pathname}
+      />
+      <ListPagination
+        query={listQuery}
+        page={page}
+        pageSize={CASH_FLOW_PAGE_SIZE}
+        total={therapists.total}
+        pathname={pathname}
+        itemLabel="massagistas"
+      />
     </div>
   )
 }

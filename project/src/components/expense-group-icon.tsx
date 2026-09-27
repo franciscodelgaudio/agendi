@@ -70,6 +70,16 @@ export function ExpenseGroupIconBadge({ icon, className }: { icon: ExpenseGroupI
   )
 }
 
+// Nome do grupo com o ícone pequeno na frente, para listas e seletores.
+export function ExpenseGroupLabel({ group }: { group: { name: string; icon: ExpenseGroupIcon | null } }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <ExpenseGroupIconBadge icon={group.icon} className="size-5 [&_svg]:size-3" />
+      <span className="truncate">{group.name}</span>
+    </span>
+  )
+}
+
 export function ExpenseGroupIconPicker({
   icons,
   name,

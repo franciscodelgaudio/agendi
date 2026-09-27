@@ -1,6 +1,9 @@
 import type { TherapistAmounts, TherapistSummary } from "@/lib/cash-flow"
+import type { TherapistSortField } from "@/lib/cash-flow-list"
+import type { SortDir } from "@/lib/unit-list"
 import { CodeCell, CodeHead } from "@/components/record-code"
 import { currencyFormat } from "@/components/service-format"
+import { SortableHead } from "@/components/sortable-head"
 import {
   Table,
   TableBody,
@@ -36,17 +39,17 @@ function AmountCells({ amounts, className }: { amounts: TherapistAmounts; classN
   )
 }
 
+type Props = {
+  // Só a página exibida; as somas do rodapé são de todas as encontradas.
+  therapists: TherapistSummary[]
+  sums: { real: TherapistAmounts; forecast: TherapistAmounts }
+  // Busca e ordenação atuais (com visão e data), preservadas nos links de ordenação.
+  query: { q: string; sort: TherapistSortField; dir: SortDir } & Record<string, string>
+  pathname: string
+}
+
 // Quem não tem comissão definida na unidade (inclusive o proprietário) aparece com comissão zero.
-export function CashFlowTherapistsTable({ therapists }: { therapists: TherapistSummary[] }) {
-  const sum = (key: "real" | "forecast") =>
-    therapists.reduce(
-      (total, therapist) => ({
-        count: total.count + therapist[key].count,
-        cents: total.cents + therapist[key].cents,
-        commissionCents: total.commissionCents + therapist[key].commissionCents,
-      }),
-      { count: 0, cents: 0, commissionCents: 0 },
-    )
+export function CashFlowTherapistsTable({ therapists, sums, query, pathname }: Props) {
 
   return (
     <div className="border">
@@ -64,13 +67,19 @@ export function CashFlowTherapistsTable({ therapists }: { therapists: TherapistS
           </TableRow>
           <TableRow>
             <CodeHead />
-            <TableHead className="w-full px-4">Massagista</TableHead>
+            <SortableHead field="name" label="Massagista" query={query} pathname={pathname} className="w-full" />
             <TableHead className={cn("px-4 text-right", PERCENT)}>Comissão</TableHead>
             <TableHead className="border-l px-4 text-right">Qtd.</TableHead>
-            <TableHead className="px-4 text-right">Bruto</TableHead>
+            <SortableHead field="real" label="Bruto" query={query} pathname={pathname} className="text-right" />
             <TableHead className="px-4 text-right">Comissão</TableHead>
             <TableHead className={cn("border-l px-4 text-right", FORECAST)}>Qtd.</TableHead>
-            <TableHead className={cn("px-4 text-right", FORECAST)}>Bruto</TableHead>
+            <SortableHead
+              field="forecast"
+              label="Bruto"
+              query={query}
+              pathname={pathname}
+              className={cn("text-right", FORECAST)}
+            />
             <TableHead className={cn("px-4 text-right", FORECAST)}>Comissão</TableHead>
           </TableRow>
         </TableHeader>
@@ -78,7 +87,7 @@ export function CashFlowTherapistsTable({ therapists }: { therapists: TherapistS
           {therapists.length === 0 ? (
             <TableRow>
               <TableCell colSpan={9} className="px-4 py-6 text-center text-muted-foreground">
-                Nenhum serviço no período.
+                {query.q ? "Nenhuma massagista encontrada." : "Nenhum serviço no período."}
               </TableCell>
             </TableRow>
           ) : (
@@ -102,8 +111,8 @@ export function CashFlowTherapistsTable({ therapists }: { therapists: TherapistS
                 Total
               </TableCell>
               <TableCell className={PERCENT} />
-              <AmountCells amounts={sum("real")} />
-              <AmountCells amounts={sum("forecast")} className={FORECAST} />
+              <AmountCells amounts={sums.real} />
+              <AmountCells amounts={sums.forecast} className={FORECAST} />
             </TableRow>
           </TableFooter>
         )}

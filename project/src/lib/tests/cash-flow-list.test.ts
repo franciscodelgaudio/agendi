@@ -272,7 +272,7 @@ describe("expenseGroupListPage", () => {
 
 // ------------------------------------------------------------- massagistas
 
-const THERAPIST_BASE = { q: "", sort: "forecast", dir: "desc", page: 1 } as const;
+const THERAPIST_BASE = { q: "", sort: "real", dir: "desc", page: 1 } as const;
 
 function therapist(
   id: string,
@@ -289,7 +289,7 @@ function therapist(
   return { therapistId: id, therapistName, commissionPercent, real: amounts(real), forecast: amounts(forecast) };
 }
 
-// Na ordem do resumo: pelo previsto, decrescente.
+// Na ordem do resumo: pelo previsto, decrescente (diferente da ordem pelo real).
 const BIA = therapist("bia", "Bia", 20000, 50000, 40);
 const ANA_T = therapist("ana", "Ana", 30000, 40000);
 const CAIO = therapist("caio", "caio", 10000, 10000, 50);
@@ -298,7 +298,7 @@ const THERAPISTS = [BIA, ANA_T, CAIO];
 const therapistIds = (rows: TherapistSummary[]) => rows.map((row) => row.therapistId);
 
 describe("parseTherapistListQuery", () => {
-  it("sem parâmetros, ordena pelo previsto decrescente na página 1", () => {
+  it("sem parâmetros, ordena pelo bruto real decrescente na página 1", () => {
     expect(parseTherapistListQuery({})).toEqual(THERAPIST_BASE);
   });
 
@@ -311,8 +311,12 @@ describe("parseTherapistListQuery", () => {
     });
   });
 
-  it.each(["name", "real", "forecast"])("aceita ordenar por %s", (sort) => {
+  it.each(["name", "real"])("aceita ordenar por %s", (sort) => {
     expect(parseTherapistListQuery({ sort, dir: "asc" }).sort).toBe(sort);
+  });
+
+  it("não ordena pelo previsto", () => {
+    expect(parseTherapistListQuery({ sort: "forecast" }).sort).toBe("real");
   });
 
   it("sem direção, o nome ordena crescente e os valores, decrescente", () => {
@@ -330,16 +334,15 @@ describe("parseTherapistListQuery", () => {
 });
 
 describe("therapistListPage", () => {
-  const sums = (real: [number, number, number], forecast: [number, number, number]) => ({
+  const sums = (real: [number, number, number]) => ({
     real: { count: real[0], cents: real[1], commissionCents: real[2] },
-    forecast: { count: forecast[0], cents: forecast[1], commissionCents: forecast[2] },
   });
 
-  it("sem busca, mantém a ordem pelo previsto e soma real e previsto de todas", () => {
+  it("sem busca, ordena pelo bruto real decrescente e soma o real de todas", () => {
     expect(therapistListPage(THERAPISTS, THERAPIST_BASE)).toEqual({
-      rows: THERAPISTS,
+      rows: [ANA_T, BIA, CAIO],
       total: 3,
-      sums: sums([60, 60000, 13000], [100, 100000, 25000]),
+      sums: sums([60, 60000, 13000]),
     });
   });
 
@@ -362,20 +365,12 @@ describe("therapistListPage", () => {
     ).toEqual(["caio", "bia", "ana"]);
   });
 
-  it("ordena pelo bruto previsto crescente", () => {
-    expect(therapistIds(therapistListPage(THERAPISTS, { ...THERAPIST_BASE, dir: "asc" }).rows)).toEqual([
-      "caio",
-      "ana",
-      "bia",
-    ]);
-  });
-
   it("busca no nome sem diferenciar maiúsculas nem acentos; as somas são só das encontradas", () => {
     const joao = therapist("joao", "João", 1000, 2000);
     expect(therapistListPage([...THERAPISTS, joao], { ...THERAPIST_BASE, q: "JOAO" })).toEqual({
       rows: [joao],
       total: 1,
-      sums: sums([1, 1000, 0], [2, 2000, 0]),
+      sums: sums([1, 1000, 0]),
     });
   });
 
@@ -383,7 +378,7 @@ describe("therapistListPage", () => {
     const many = Array.from({ length: 21 }, (_, i) => therapist(`t${String(i).padStart(2, "0")}`, `T${i}`, 1000, 1000));
     const page2 = therapistListPage(many, { ...THERAPIST_BASE, page: 2 });
     expect(therapistIds(therapistListPage(many, THERAPIST_BASE).rows)).toEqual(therapistIds(many.slice(0, 20)));
-    expect(page2).toEqual({ rows: many.slice(20), total: 21, sums: sums([21, 21000, 0], [21, 21000, 0]) });
+    expect(page2).toEqual({ rows: many.slice(20), total: 21, sums: sums([21, 21000, 0]) });
   });
 
   it("não altera a lista recebida", () => {

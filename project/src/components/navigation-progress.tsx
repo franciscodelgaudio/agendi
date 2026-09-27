@@ -50,7 +50,8 @@ export function useReplaceQuery() {
   return useCallback(
     (query: Record<string, string>) => {
       const params = new URLSearchParams(Object.entries(query).filter(([, value]) => value))
-      const navigate = () => router.replace(`${pathname}?${params}`)
+      // Como na ordenação, filtrar não rola a página (a lista pode estar abaixo da dobra).
+      const navigate = () => router.replace(`${pathname}?${params}`, { scroll: false })
       if (startTransition) startTransition(navigate)
       else navigate()
     },
