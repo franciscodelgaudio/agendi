@@ -1,4 +1,4 @@
-import type { CashFlowView, DayRange, StaffCashFlowAmounts, StaffCashFlowSummary } from "@/lib/cash-flow"
+import type { CashFlowView, DayRange, ExpenseCashFlowAmounts, ExpenseCashFlowSummary } from "@/lib/cash-flow"
 import { currencyFormat } from "@/components/service-format"
 import {
   Table,
@@ -35,15 +35,16 @@ function money(cents: number) {
 
 type Props = {
   view: CashFlowView
-  summary: StaffCashFlowSummary
-  // Sem repasse (espaço próprio), comissão nem salário, bruto e líquido são iguais e só o bruto aparece.
+  summary: ExpenseCashFlowSummary
+  // Sem repasse (espaço próprio), comissão, salário nem despesas, bruto e líquido são iguais e só o bruto aparece.
   hasPartnerShare: boolean
   hasCommission: boolean
   hasSalary: boolean
+  hasExpenses: boolean
   today: string
 }
 
-type Columns = { partnerShare: boolean; commission: boolean; salary: boolean }
+type Columns = { partnerShare: boolean; commission: boolean; salary: boolean; expenses: boolean }
 
 // Conforme a tabela estreita, somem as deduções do previsto, depois o previsto inteiro e por
 // último as deduções do real. Sem as deduções, o cabeçalho do grupo cobre só bruto e líquido.
@@ -64,8 +65,8 @@ function Deduction({ cents, className }: { cents: number; className: string }) {
   )
 }
 
-function AmountCells({ amounts, columns, hide }: { amounts: StaffCashFlowAmounts; columns: Columns; hide: GroupHide }) {
-  const detailed = columns.partnerShare || columns.commission || columns.salary
+function AmountCells({ amounts, columns, hide }: { amounts: ExpenseCashFlowAmounts; columns: Columns; hide: GroupHide }) {
+  const detailed = columns.partnerShare || columns.commission || columns.salary || columns.expenses
   const deduction = cn(hide.group, hide.deduction)
   return (
     <>
@@ -73,6 +74,7 @@ function AmountCells({ amounts, columns, hide }: { amounts: StaffCashFlowAmounts
       {columns.partnerShare && <Deduction cents={amounts.partnerShareCents} className={deduction} />}
       {columns.commission && <Deduction cents={amounts.commissionCents} className={deduction} />}
       {columns.salary && <Deduction cents={amounts.salaryCents} className={deduction} />}
+      {columns.expenses && <Deduction cents={amounts.expenseCents} className={deduction} />}
       {detailed && (
         <TableCell className={cn("px-4 text-right font-medium tabular-nums", hide.group)}>
           {money(amounts.netCents)}
@@ -82,11 +84,12 @@ function AmountCells({ amounts, columns, hide }: { amounts: StaffCashFlowAmounts
   )
 }
 
-// Real: atendimentos registrados. Previsto: real mais os agendamentos futuros.
-export function CashFlowTable({ view, summary, hasPartnerShare, hasCommission, hasSalary, today }: Props) {
-  const columns = { partnerShare: hasPartnerShare, commission: hasCommission, salary: hasSalary }
-  const detailed = hasPartnerShare || hasCommission || hasSalary
-  const groupSpan = 2 + Number(hasPartnerShare) + Number(hasCommission) + Number(hasSalary)
+// Real: atendimentos registrados e despesas pagas. Previsto: real mais os agendamentos
+// futuros e as despesas pendentes.
+export function CashFlowTable({ view, summary, hasPartnerShare, hasCommission, hasSalary, hasExpenses, today }: Props) {
+  const columns = { partnerShare: hasPartnerShare, commission: hasCommission, salary: hasSalary, expenses: hasExpenses }
+  const detailed = hasPartnerShare || hasCommission || hasSalary || hasExpenses
+  const groupSpan = 2 + Number(hasPartnerShare) + Number(hasCommission) + Number(hasSalary) + Number(hasExpenses)
   const amountHeads = (group: string, hide: GroupHide) => {
     const deduction = cn("px-4 text-right", hide.group, hide.deduction)
     return detailed ? (
@@ -95,6 +98,7 @@ export function CashFlowTable({ view, summary, hasPartnerShare, hasCommission, h
         {hasPartnerShare && <TableHead className={deduction}>Repasse</TableHead>}
         {hasCommission && <TableHead className={deduction}>Comissão</TableHead>}
         {hasSalary && <TableHead className={deduction}>Salário</TableHead>}
+        {hasExpenses && <TableHead className={deduction}>Despesas</TableHead>}
         <TableHead className={cn("px-4 text-right", hide.group)}>Líquido</TableHead>
       </>
     ) : (

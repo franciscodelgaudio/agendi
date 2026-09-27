@@ -51,6 +51,7 @@ export function CreateBookingSheet({ workspaceId, unitId, therapistId, defaultSt
             startsAt: defaultStartsAt,
             durationMinutes: 60,
             serviceId: null,
+            treatmentRoomId: null,
             productIds: [],
             color: null,
           }}

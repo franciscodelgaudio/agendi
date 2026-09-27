@@ -419,6 +419,72 @@ export type StaffCashFlowSummary = {
   total: { real: StaffCashFlowAmounts; forecast: StaffCashFlowAmounts };
 };
 
+// Despesas lançadas na unidade: real conta só as pagas, previsto conta todas.
+export type ExpenseCashFlowAmounts = StaffCashFlowAmounts & { expenseCents: number };
+export type ExpenseCashFlowBucket = DayRange & { real: ExpenseCashFlowAmounts; forecast: ExpenseCashFlowAmounts };
+export type ExpenseCashFlowSummary = {
+  buckets: ExpenseCashFlowBucket[];
+  total: { real: ExpenseCashFlowAmounts; forecast: ExpenseCashFlowAmounts };
+};
+export type ExpenseDayCents = { date: string; totalCents: number; paidCents: number };
+
+function withExpenses(amounts: StaffCashFlowAmounts, expenseCents: number): ExpenseCashFlowAmounts {
+  return { ...amounts, expenseCents, netCents: amounts.netCents - expenseCents };
+}
+
+// Cada despesa entra no intervalo do dia do lançamento; o total soma os intervalos.
+export function applyExpenses(summary: StaffCashFlowSummary, expenses: ExpenseDayCents[]): ExpenseCashFlowSummary {
+  const buckets = summary.buckets.map((bucket) => {
+    let paid = 0;
+    let total = 0;
+    for (const expense of expenses) {
+      if (expense.date < bucket.from || expense.date > bucket.to) continue;
+      paid += expense.paidCents;
+      total += expense.totalCents;
+    }
+    return { ...bucket, real: withExpenses(bucket.real, paid), forecast: withExpenses(bucket.forecast, total) };
+  });
+  const zero = { grossCents: 0, partnerShareCents: 0, commissionCents: 0, salaryCents: 0, expenseCents: 0, netCents: 0 };
+  const add = (a: ExpenseCashFlowAmounts, b: ExpenseCashFlowAmounts) => ({
+    ...addAmounts(a, b),
+    salaryCents: a.salaryCents + b.salaryCents,
+    expenseCents: a.expenseCents + b.expenseCents,
+  });
+  return {
+    buckets,
+    total: {
+      real: buckets.reduce((sum, row) => add(sum, row.real), zero),
+      forecast: buckets.reduce((sum, row) => add(sum, row.forecast), zero),
+    },
+  };
+}
+
+export type TeamPayMember = {
+  userId?: { toString(): string } | null;
+  role: string;
+  units: { unitId: { toString(): string }; commissionPercent?: number | null; salaryCents?: number | null }[];
+};
+export type TeamPayRates = Pick<StaffCosts, "grossCommissionPercent" | "monthlySalaryCents"> & {
+  commissionRates: CommissionRates;
+};
+
+// Comissão de massagista vai pelo id de usuário, que identifica quem fez o serviço.
+// Comissão de recepcionista é sobre o bruto; salário vale mesmo com convite pendente.
+export function teamPayRates(team: TeamPayMember[], unitId: string): TeamPayRates {
+  const commissionRates: CommissionRates = {};
+  let grossCommissionPercent = 0;
+  let monthlySalaryCents = 0;
+  for (const member of team) {
+    if (member.role !== "massage_therapist" && member.role !== "receptionist") continue;
+    const link = member.units.find((unit) => unit.unitId.toString() === unitId);
+    if (link?.salaryCents != null) monthlySalaryCents += link.salaryCents;
+    if (link?.commissionPercent == null) continue;
+    if (member.role === "receptionist") grossCommissionPercent += link.commissionPercent;
+    else if (member.userId) commissionRates[member.userId.toString()] = link.commissionPercent;
+  }
+  return { commissionRates, grossCommissionPercent, monthlySalaryCents };
+}
+
 // Salário (sem arredondar) dos dias do intervalo até `last`: cada dia vale 1/n do mês de n dias.
 function salaryForDays({ from, to }: DayRange, monthlySalaryCents: number, last = to) {
   let salary = 0;

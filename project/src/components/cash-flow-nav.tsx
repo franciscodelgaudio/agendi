@@ -35,10 +35,12 @@ type Props = {
   isCurrent: boolean
   today: string
   pathname: string
+  // Com uma visão só, a troca de visão some.
+  views?: readonly CashFlowView[]
 }
 
 // Troca de visão (semana, mês, ano) e navegação entre períodos.
-export function CashFlowNav({ query, range, isCurrent, today, pathname }: Props) {
+export function CashFlowNav({ query, range, isCurrent, today, pathname, views = CASH_FLOW_VIEWS }: Props) {
   function href(next: CashFlowQuery) {
     return `${pathname}?${new URLSearchParams(next)}`
   }
@@ -77,20 +79,22 @@ export function CashFlowNav({ query, range, isCurrent, today, pathname }: Props)
         )}
         <span className="text-sm font-medium first-letter:uppercase">{periodLabel(query, range)}</span>
       </div>
-      <div className="flex gap-1">
-        {CASH_FLOW_VIEWS.map((view) => (
-          <Button
-            key={view}
-            variant={view === query.view ? "secondary" : "ghost"}
-            size="sm"
-            aria-current={view === query.view ? "page" : undefined}
-            nativeButton={false}
-            render={<Link href={href({ view, date: query.date })} replace scroll={false} />}
-          >
-            {viewLabels[view]}
-          </Button>
-        ))}
-      </div>
+      {views.length > 1 && (
+        <div className="flex gap-1">
+          {views.map((view) => (
+            <Button
+              key={view}
+              variant={view === query.view ? "secondary" : "ghost"}
+              size="sm"
+              aria-current={view === query.view ? "page" : undefined}
+              nativeButton={false}
+              render={<Link href={href({ view, date: query.date })} replace scroll={false} />}
+            >
+              {viewLabels[view]}
+            </Button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

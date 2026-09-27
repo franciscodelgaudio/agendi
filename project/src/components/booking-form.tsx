@@ -25,6 +25,7 @@ export type BookingFormValues = {
   startsAt: string
   durationMinutes: number
   serviceId: string | null
+  treatmentRoomId: string | null
   productIds: string[]
   // null: a cor da massagista.
   color: string | null
@@ -45,6 +46,8 @@ export type BookingFormOptions = {
     durationMinutes: number
     productIds: string[]
   }[]
+  // Salas de cada unidade; o formulário só oferece as da unidade escolhida.
+  treatmentRooms: { id: string; unitId: string; name: string; beds: number }[]
 }
 
 type Props = BookingFormOptions & {
@@ -74,10 +77,17 @@ const copy = {
   },
 }
 
+// Unidade com uma sala só já vem com ela escolhida.
+function onlyRoomId(rooms: BookingFormOptions["treatmentRooms"], unitId: string | null) {
+  const unitRooms = rooms.filter((room) => room.unitId === unitId)
+  return unitRooms.length === 1 ? unitRooms[0].id : null
+}
+
 export function BookingForm({
   units,
   therapists,
   services: allServices,
+  treatmentRooms: allRooms,
   mode,
   variant = "sheet",
   defaultValues,
@@ -89,6 +99,9 @@ export function BookingForm({
   const [unitId, setUnitId] = useState(defaultValues.unitId)
   const [therapistId, setTherapistId] = useState(defaultValues.therapistId)
   const [serviceId, setServiceId] = useState(defaultValues.serviceId)
+  const [treatmentRoomId, setTreatmentRoomId] = useState(
+    () => defaultValues.treatmentRoomId ?? onlyRoomId(allRooms, defaultValues.unitId),
+  )
   const [duration, setDuration] = useState(String(defaultValues.durationMinutes))
   const [productIds, setProductIds] = useState(defaultValues.productIds)
   const [color, setColor] = useState(defaultValues.color ?? "")
@@ -105,6 +118,9 @@ export function BookingForm({
   const Description = variant === "popover" ? PopoverDescription : SheetDescription
   const services = allServices.filter((service) => service.unitId === unitId)
   const serviceItems = services.map((service) => ({ value: service.id, label: service.name }))
+  const roomItems = allRooms
+    .filter((room) => room.unitId === unitId)
+    .map((room) => ({ value: room.id, label: room.name, beds: room.beds }))
   // A opção automática mostra a cor que a massagista escolhida tem no calendário.
   const therapistIndex = therapists.findIndex((therapist) => therapist.id === therapistId)
   const colorOptions = [
@@ -155,8 +171,9 @@ export function BookingForm({
               value={unitId}
               onValueChange={(value) => {
                 setUnitId(value as string | null)
-                // Serviços e produtos são de cada unidade, então trocar a unidade limpa os escolhidos.
+                // Serviços, salas e produtos são de cada unidade, então trocar a unidade limpa os escolhidos.
                 setServiceId(null)
+                setTreatmentRoomId(onlyRoomId(allRooms, value as string | null))
                 setProductIds([])
               }}
               required
@@ -176,6 +193,31 @@ export function BookingForm({
         ) : (
           <input type="hidden" name="unitId" value={unitId ?? ""} />
         )}
+        <Field>
+          <FieldLabel htmlFor="booking-treatment-room">Sala</FieldLabel>
+          <Select
+            name="treatmentRoomId"
+            items={roomItems}
+            value={treatmentRoomId}
+            onValueChange={(value) => setTreatmentRoomId(value as string | null)}
+            disabled={!unitId}
+            required
+          >
+            <SelectTrigger id="booking-treatment-room" className="w-full">
+              <SelectValue placeholder={unitId ? "Escolha a sala" : "Escolha a unidade primeiro"} />
+            </SelectTrigger>
+            <SelectContent>
+              {roomItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                  <span className="text-muted-foreground">
+                    {item.beds === 1 ? "1 maca" : `${item.beds} macas`}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
         <Field>
           <FieldLabel htmlFor="booking-guest-name">Hóspede</FieldLabel>
           <Input

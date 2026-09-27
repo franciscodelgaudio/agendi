@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { Types } from "mongoose";
 import {
+  applyExpenses,
   applyStaffCosts,
   cashFlowBuckets,
   cashFlowFetchRange,
@@ -12,6 +14,7 @@ import {
   summarizeCashFlow,
   summarizeServices,
   summarizeTherapists,
+  teamPayRates,
 } from "@/lib/cash-flow";
 import type { RevenueShare } from "@/lib/revenue-share";
 
@@ -692,5 +695,153 @@ describe("summarizeServices", () => {
     );
 
     expect(result.map((row) => row.serviceName)).toEqual(["Drenagem", "Shiatsu"]);
+  });
+});
+
+describe("teamPayRates", () => {
+  const UNIT = new Types.ObjectId();
+  const OTHER_UNIT = new Types.ObjectId();
+  const ANA = new Types.ObjectId();
+  const BIA = new Types.ObjectId();
+  const link = (commissionPercent: number | null, salaryCents: number | null, unitId = UNIT) => ({
+    unitId,
+    commissionPercent,
+    salaryCents,
+  });
+
+  it("sem equipe, não há comissão nem salário", () => {
+    expect(teamPayRates([], UNIT.toString())).toEqual({
+      commissionRates: {},
+      grossCommissionPercent: 0,
+      monthlySalaryCents: 0,
+    });
+  });
+
+  it("comissão de massagista vai pelo id de usuário", () => {
+    const team = [
+      { userId: ANA, role: "massage_therapist", units: [link(30, null)] },
+      { userId: BIA, role: "massage_therapist", units: [link(12.5, null)] },
+    ];
+
+    expect(teamPayRates(team, UNIT.toString()).commissionRates).toEqual({
+      [ANA.toString()]: 30,
+      [BIA.toString()]: 12.5,
+    });
+  });
+
+  it("comissões de recepcionistas somam no percentual sobre o bruto", () => {
+    const team = [
+      { userId: ANA, role: "receptionist", units: [link(2, null)] },
+      { userId: null, role: "receptionist", units: [link(1.5, null)] },
+    ];
+
+    expect(teamPayRates(team, UNIT.toString())).toEqual({
+      commissionRates: {},
+      grossCommissionPercent: 3.5,
+      monthlySalaryCents: 0,
+    });
+  });
+
+  it("salários de qualquer função somam, mesmo com convite pendente", () => {
+    const team = [
+      { userId: ANA, role: "massage_therapist", units: [link(null, 250_000)] },
+      { userId: null, role: "receptionist", units: [link(null, 180_000)] },
+    ];
+
+    expect(teamPayRates(team, UNIT.toString())).toEqual({
+      commissionRates: {},
+      grossCommissionPercent: 0,
+      monthlySalaryCents: 430_000,
+    });
+  });
+
+  it("ignora comissão de massagista com convite pendente, que ainda não faz serviços", () => {
+    const team = [{ userId: null, role: "massage_therapist", units: [link(30, null)] }];
+
+    expect(teamPayRates(team, UNIT.toString()).commissionRates).toEqual({});
+  });
+
+  it("usa só o vínculo com a unidade pedida", () => {
+    const team = [
+      { userId: ANA, role: "massage_therapist", units: [link(40, null, OTHER_UNIT), link(30, null)] },
+      { userId: BIA, role: "receptionist", units: [link(5, 200_000, OTHER_UNIT)] },
+    ];
+
+    expect(teamPayRates(team, UNIT.toString())).toEqual({
+      commissionRates: { [ANA.toString()]: 30 },
+      grossCommissionPercent: 0,
+      monthlySalaryCents: 0,
+    });
+  });
+
+  it("ignora administradores", () => {
+    const team = [{ userId: ANA, role: "admin", units: [link(10, 300_000)] }];
+
+    expect(teamPayRates(team, UNIT.toString())).toEqual({
+      commissionRates: {},
+      grossCommissionPercent: 0,
+      monthlySalaryCents: 0,
+    });
+  });
+});
+
+describe("applyExpenses", () => {
+  const STAFF = { grossCommissionPercent: 0, monthlySalaryCents: 0, today: "2026-09-24" };
+  const WEEK = [day("2026-09-21"), day("2026-09-22")];
+  // Semana com R$ 100 de bruto na segunda e nada na terça, sem descontos.
+  const summary = () => applyStaffCosts(summarizeCashFlow(WEEK, [total("2026-09-21", 10_000)], [], null, {}), STAFF);
+  const amounts = (grossCents: number, expenseCents: number) => ({
+    grossCents,
+    partnerShareCents: 0,
+    commissionCents: 0,
+    salaryCents: 0,
+    expenseCents,
+    netCents: grossCents - expenseCents,
+  });
+
+  it("sem despesas, acrescenta despesa zerada", () => {
+    const result = applyExpenses(summary(), []);
+
+    expect(result.buckets.map((bucket) => bucket.real)).toEqual([amounts(10_000, 0), amounts(0, 0)]);
+    expect(result.total.forecast).toEqual(amounts(10_000, 0));
+  });
+
+  it("real desconta só o que foi pago; previsto desconta tudo, cada um no dia do lançamento", () => {
+    const result = applyExpenses(summary(), [
+      { date: "2026-09-21", totalCents: 3_000, paidCents: 1_000 },
+      { date: "2026-09-22", totalCents: 500, paidCents: 0 },
+    ]);
+
+    expect(result.buckets).toEqual([
+      { ...day("2026-09-21"), real: amounts(10_000, 1_000), forecast: amounts(10_000, 3_000) },
+      { ...day("2026-09-22"), real: amounts(0, 0), forecast: amounts(0, 500) },
+    ]);
+    expect(result.total).toEqual({ real: amounts(10_000, 1_000), forecast: amounts(10_000, 3_500) });
+  });
+
+  it("despesa maior que o bruto deixa o líquido negativo", () => {
+    const result = applyExpenses(summary(), [{ date: "2026-09-22", totalCents: 2_000, paidCents: 2_000 }]);
+
+    expect(result.buckets[1].real.netCents).toBe(-2_000);
+  });
+
+  it("ignora despesas fora dos intervalos", () => {
+    const result = applyExpenses(summary(), [
+      { date: "2026-09-20", totalCents: 700, paidCents: 700 },
+      { date: "2026-09-23", totalCents: 900, paidCents: 900 },
+    ]);
+
+    expect(result.total).toEqual({ real: amounts(10_000, 0), forecast: amounts(10_000, 0) });
+  });
+
+  it("soma no intervalo as despesas de todos os dias dele", () => {
+    const month = applyStaffCosts(summarizeCashFlow([{ from: "2026-09-21", to: "2026-09-27" }], [], [], null, {}), STAFF);
+
+    const result = applyExpenses(month, [
+      { date: "2026-09-21", totalCents: 100, paidCents: 100 },
+      { date: "2026-09-27", totalCents: 200, paidCents: 0 },
+    ]);
+
+    expect(result.total).toEqual({ real: amounts(0, 100), forecast: amounts(0, 300) });
   });
 });

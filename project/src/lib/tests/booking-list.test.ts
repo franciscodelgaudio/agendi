@@ -82,6 +82,7 @@ describe("bookingListPipeline", () => {
       endsAt: { $dateToString: { date: "$endsAt", format: "%Y-%m-%dT%H:%M", timezone: "-03:00" } },
       durationMinutes: { $dateDiff: { startDate: "$startsAt", endDate: "$endsAt", unit: "minute" } },
       service: { serviceId: { $toString: "$service.serviceId" }, serviceName: "$service.serviceName" },
+      treatmentRoom: { roomId: { $toString: "$treatmentRoom.roomId" }, roomName: "$treatmentRoom.roomName" },
       // Produtos escolhidos, para pré-marcar na edição e na conversão em atendimento.
       productIds: { $map: { input: "$products", as: "product", in: { $toString: "$$product.productId" } } },
       // Atendimento criado a partir do agendamento; null (ou ausente nos antigos) se ainda não virou.

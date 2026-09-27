@@ -22,6 +22,7 @@ export type BookingRow = {
   endsAt: string;
   durationMinutes: number;
   service: { serviceId: string; serviceName: string };
+  treatmentRoom: { roomId: string; roomName: string };
   productIds: string[];
   appointmentId: string | null;
   // Cor escolhida para o calendário; null usa a da massagista.
@@ -68,6 +69,7 @@ const BOOKING_PROJECT: PipelineStage.Project = {
     endsAt: brtDateTime("$endsAt"),
     durationMinutes: { $dateDiff: { startDate: "$startsAt", endDate: "$endsAt", unit: "minute" } },
     service: { serviceId: { $toString: "$service.serviceId" }, serviceName: "$service.serviceName" },
+    treatmentRoom: { roomId: { $toString: "$treatmentRoom.roomId" }, roomName: "$treatmentRoom.roomName" },
     // Produtos escolhidos, para pré-marcar na edição e na conversão em atendimento.
     productIds: { $map: { input: "$products", as: "product", in: { $toString: "$$product.productId" } } },
     // Atendimento criado a partir do agendamento; null (ou ausente nos antigos) se ainda não virou.

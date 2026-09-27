@@ -15,6 +15,11 @@ const PRODUCTS = [
   { id: OIL_ID, name: "Óleo de amêndoas" },
   { id: TOWEL_ID, name: "Toalha" },
 ];
+// Salas da unidade: a single atende um por vez; a casal, dois ao mesmo tempo.
+const SINGLE_ID = "64b7f0c2a1b2c3d4e5f60781";
+const COUPLE_ID = "64b7f0c2a1b2c3d4e5f60782";
+const SINGLE = { id: SINGLE_ID, name: "Sala Single", beds: 1 };
+const COUPLE = { id: COUPLE_ID, name: "Sala Casal", beds: 2 };
 
 // Como chega do FormData: início no horário de Brasília e duração em minutos (texto).
 const validInput = {
@@ -24,15 +29,33 @@ const validInput = {
   startsAt: "2026-09-24T14:30",
   durationMinutes: "60",
   serviceId: CANDLE_ID,
+  treatmentRoomId: SINGLE_ID,
 };
 
-function makeLookups({ service = CANDLE as typeof CANDLE | null, therapist = ANA as typeof ANA | null, busy = false } = {}) {
+// Horário de 24/09/2026 em Brasília ("14:30") como Date em UTC.
+function at(time: string) {
+  return new Date(`2026-09-24T${time}:00.000-03:00`);
+}
+
+type RoomBooking = { startsAt: Date; endsAt: Date };
+
+function makeLookups({
+  service = CANDLE as typeof CANDLE | null,
+  therapist = ANA as typeof ANA | null,
+  busy = false,
+  room = SINGLE as typeof SINGLE | null,
+  roomBookings = [] as readonly RoomBooking[],
+} = {}) {
   return {
     // Devolvem null quando não existe (serviço da unidade; quem pode atender no workspace).
     findService: vi.fn(async (id: string) => (service?.id === id ? service : null)),
     findTherapist: vi.fn(async (id: string) => (therapist?.id === id ? therapist : null)),
     // true quando a massagista já tem outro agendamento que se sobrepõe ao intervalo.
     hasConflict: vi.fn(async () => busy),
+    // Sala da unidade, ou null quando não existe nela.
+    findTreatmentRoom: vi.fn(async (id: string) => (room?.id === id ? room : null)),
+    // Outros agendamentos da sala que se sobrepõem ao intervalo.
+    findRoomBookings: vi.fn(async () => roomBookings),
     // Devolve só os produtos que existem na unidade.
     findProducts: vi.fn(async (ids: string[]) => PRODUCTS.filter((p) => ids.includes(p.id))),
   };
@@ -57,6 +80,7 @@ describe("createBooking", () => {
       startsAt: new Date("2026-09-24T17:30:00.000Z"),
       endsAt: new Date("2026-09-24T18:30:00.000Z"),
       service: { serviceId: CANDLE_ID, serviceName: "Massagem Candle" },
+      treatmentRoom: { roomId: SINGLE_ID, roomName: "Sala Single" },
       products: [],
       color: null,
     });
@@ -85,6 +109,7 @@ describe("createBooking", () => {
         startsAt: " 2026-09-24T14:30 ",
         durationMinutes: " 60 ",
         serviceId: ` ${CANDLE_ID} `,
+        treatmentRoomId: ` ${SINGLE_ID} `,
       },
       UNIT_ID,
       deps,
@@ -92,6 +117,7 @@ describe("createBooking", () => {
 
     expect(deps.findService).toHaveBeenCalledWith(CANDLE_ID);
     expect(deps.findTherapist).toHaveBeenCalledWith(ANA_ID);
+    expect(deps.findTreatmentRoom).toHaveBeenCalledWith(SINGLE_ID);
     expect(deps.insert).toHaveBeenCalledWith(
       expect.objectContaining({
         therapistId: ANA_ID,
@@ -139,9 +165,11 @@ describe("createBooking", () => {
     ["duração ausente", { ...validInput, durationMinutes: null }, "invalid_input"],
     ["serviço não é string", { ...validInput, serviceId: 123 }, "invalid_input"],
     ["serviço ausente (null do FormData)", { ...validInput, serviceId: null }, "invalid_input"],
+    ["sala ausente (null do FormData)", { ...validInput, treatmentRoomId: null }, "invalid_input"],
     ["massagista não escolhida", { ...validInput, therapistId: "  " }, "invalid_therapist"],
     ["serviço vazio", { ...validInput, serviceId: "" }, "invalid_service"],
     ["serviço não escolhido", { ...validInput, serviceId: "   " }, "invalid_service"],
+    ["sala não escolhida", { ...validInput, treatmentRoomId: "  " }, "invalid_treatment_room"],
     ["nome do hóspede vazio", { ...validInput, guestName: "   " }, "invalid_guest_name"],
     ["nome do hóspede com mais de 80 caracteres", { ...validInput, guestName: "a".repeat(81) }, "guest_name_too_long"],
     ["quarto vazio", { ...validInput, room: "  " }, "invalid_room"],
@@ -165,6 +193,8 @@ describe("createBooking", () => {
     expect(deps.findService).not.toHaveBeenCalled();
     expect(deps.findTherapist).not.toHaveBeenCalled();
     expect(deps.hasConflict).not.toHaveBeenCalled();
+    expect(deps.findTreatmentRoom).not.toHaveBeenCalled();
+    expect(deps.findRoomBookings).not.toHaveBeenCalled();
     expect(deps.insert).not.toHaveBeenCalled();
   });
 
@@ -194,6 +224,70 @@ describe("createBooking", () => {
 
     expect(result).toEqual({ ok: false, error: "therapist_busy" });
     expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("retorna treatment_room_not_found sem checar conflitos nem salvar quando a sala não é da unidade", async () => {
+    const deps = makeDeps({ room: null });
+
+    const result = await createBooking(validInput, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "treatment_room_not_found" });
+    expect(deps.hasConflict).not.toHaveBeenCalled();
+    expect(deps.findRoomBookings).not.toHaveBeenCalled();
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("busca os agendamentos da sala no intervalo do agendamento", async () => {
+    const deps = makeDeps();
+
+    await createBooking(validInput, UNIT_ID, deps);
+
+    expect(deps.findRoomBookings).toHaveBeenCalledWith({
+      treatmentRoomId: SINGLE_ID,
+      startsAt: at("14:30"),
+      endsAt: at("15:30"),
+    });
+  });
+
+  it("retorna therapist_busy antes de olhar a sala", async () => {
+    const deps = makeDeps({ busy: true, roomBookings: [{ startsAt: at("14:00"), endsAt: at("15:00") }] });
+
+    const result = await createBooking(validInput, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "therapist_busy" });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  // Sala ocupada: todas as macas já têm atendimento em algum momento do intervalo.
+  it.each([
+    ["sala single com outro agendamento no mesmo horário", SINGLE, [["14:30", "15:30"]]],
+    ["sala single com agendamento começando no meio", SINGLE, [["15:00", "16:00"]]],
+    ["sala single com agendamento terminando no meio", SINGLE, [["14:00", "14:45"]]],
+    ["sala casal com dois agendamentos simultâneos", COUPLE, [["14:00", "15:00"], ["14:15", "15:30"]]],
+    ["sala casal com dois agendamentos que se cruzam por um instante", COUPLE, [["14:00", "14:50"], ["14:45", "16:00"]]],
+  ])("retorna room_full sem salvar quando há %s", async (_label, room, times) => {
+    const roomBookings = times.map(([start, end]) => ({ startsAt: at(start), endsAt: at(end) }));
+    const deps = makeDeps({ room, roomBookings });
+
+    const result = await createBooking({ ...validInput, treatmentRoomId: room.id }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "room_full" });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["sala single livre", SINGLE, []],
+    ["sala single com agendamentos colados antes e depois", SINGLE, [["13:30", "14:30"], ["15:30", "16:30"]]],
+    ["sala casal com um agendamento no mesmo horário", COUPLE, [["14:30", "15:30"]]],
+    ["sala casal com dois agendamentos em sequência", COUPLE, [["14:00", "15:00"], ["15:00", "16:00"]]],
+  ])("agenda quando há %s", async (_label, room, times) => {
+    const roomBookings = times.map(([start, end]) => ({ startsAt: at(start), endsAt: at(end) }));
+    const deps = makeDeps({ room, roomBookings });
+
+    const result = await createBooking({ ...validInput, treatmentRoomId: room.id }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: true, bookingId: BOOKING_ID });
+    expect(deps.insert.mock.calls[0][0].treatmentRoom).toEqual({ roomId: room.id, roomName: room.name });
   });
 
   it("salva os produtos escolhidos com cópia do nome, sem repetição", async () => {
@@ -290,6 +384,12 @@ describe("updateBooking", () => {
       endsAt: new Date("2026-09-24T19:45:00.000Z"),
       excludeId: BOOKING_ID,
     });
+    expect(deps.findRoomBookings).toHaveBeenCalledWith({
+      treatmentRoomId: SINGLE_ID,
+      startsAt: new Date("2026-09-24T19:00:00.000Z"),
+      endsAt: new Date("2026-09-24T19:45:00.000Z"),
+      excludeId: BOOKING_ID,
+    });
     expect(deps.update).toHaveBeenCalledWith(BOOKING_ID, {
       therapistId: ANA_ID,
       therapistName: "Ana",
@@ -297,9 +397,18 @@ describe("updateBooking", () => {
       startsAt: new Date("2026-09-24T19:00:00.000Z"),
       endsAt: new Date("2026-09-24T19:45:00.000Z"),
       service: { serviceId: CANDLE_ID, serviceName: "Massagem Candle" },
+      treatmentRoom: { roomId: SINGLE_ID, roomName: "Sala Single" },
       products: [],
       color: null,
     });
+  });
+
+  it("troca a sala pela escolhida", async () => {
+    const deps = makeDeps({ room: COUPLE });
+
+    await updateBooking({ ...validInput, treatmentRoomId: COUPLE_ID }, BOOKING_ID, deps);
+
+    expect(deps.update.mock.calls[0][1].treatmentRoom).toEqual({ roomId: COUPLE_ID, roomName: "Sala Casal" });
   });
 
   // Enviar a lista vazia apaga os produtos salvos.
@@ -350,6 +459,7 @@ describe("updateBooking", () => {
     ["input nulo", null, "invalid_input"],
     ["massagista não escolhida", { ...validInput, therapistId: "" }, "invalid_therapist"],
     ["serviço não escolhido", { ...validInput, serviceId: "" }, "invalid_service"],
+    ["sala não escolhida", { ...validInput, treatmentRoomId: "" }, "invalid_treatment_room"],
     ["nome do hóspede vazio", { ...validInput, guestName: "   " }, "invalid_guest_name"],
     ["dia que não existe", { ...validInput, startsAt: "2026-02-30T10:00" }, "invalid_starts_at"],
     ["duração acima de 12 horas", { ...validInput, durationMinutes: "721" }, "invalid_duration"],
@@ -367,6 +477,8 @@ describe("updateBooking", () => {
     ["service_not_found", { service: null }],
     ["therapist_not_found", { therapist: null }],
     ["therapist_busy", { busy: true }],
+    ["treatment_room_not_found", { room: null }],
+    ["room_full", { roomBookings: [{ startsAt: at("14:00"), endsAt: at("15:00") }] }],
   ] as const)("retorna %s sem salvar", async (error, options) => {
     const deps = makeDeps(options);
 
@@ -400,11 +512,20 @@ describe("updateBooking", () => {
 describe("rescheduleBooking", () => {
   const validTimes = { startsAt: "2026-09-24T15:00", endsAt: "2026-09-24T16:30" };
 
-  function makeDeps({ booking = { therapistId: ANA_ID } as { therapistId: string } | null, busy = false, found = true } = {}) {
+  type FoundBooking = { therapistId: string; treatmentRoom: { roomId: string; beds: number } | null };
+
+  function makeDeps({
+    booking = { therapistId: ANA_ID, treatmentRoom: { roomId: SINGLE_ID, beds: 1 } } as FoundBooking | null,
+    busy = false,
+    roomBookings = [] as RoomBooking[],
+    found = true,
+  } = {}) {
     return {
-      // Devolve a massagista do agendamento, ou null se não existe (ou não é do workspace).
+      // Devolve a massagista e a sala do agendamento, ou null se não existe (ou não é do workspace).
+      // treatmentRoom null: a sala foi removida da unidade.
       findBooking: vi.fn().mockResolvedValue(booking),
       hasConflict: vi.fn().mockResolvedValue(busy),
+      findRoomBookings: vi.fn().mockResolvedValue(roomBookings),
       update: vi.fn().mockResolvedValue(found),
     };
   }
@@ -418,6 +539,12 @@ describe("rescheduleBooking", () => {
     expect(deps.findBooking).toHaveBeenCalledWith(BOOKING_ID);
     expect(deps.hasConflict).toHaveBeenCalledWith({
       therapistId: ANA_ID,
+      startsAt: new Date("2026-09-24T18:00:00.000Z"),
+      endsAt: new Date("2026-09-24T19:30:00.000Z"),
+      excludeId: BOOKING_ID,
+    });
+    expect(deps.findRoomBookings).toHaveBeenCalledWith({
+      treatmentRoomId: SINGLE_ID,
       startsAt: new Date("2026-09-24T18:00:00.000Z"),
       endsAt: new Date("2026-09-24T19:30:00.000Z"),
       excludeId: BOOKING_ID,
@@ -484,6 +611,35 @@ describe("rescheduleBooking", () => {
     const result = await rescheduleBooking(validTimes, BOOKING_ID, deps);
 
     expect(result).toEqual({ ok: false, error: "therapist_busy" });
+    expect(deps.update).not.toHaveBeenCalled();
+  });
+
+  it("retorna room_full sem salvar quando a sala está ocupada no novo horário", async () => {
+    const deps = makeDeps({ roomBookings: [{ startsAt: at("16:00"), endsAt: at("17:00") }] });
+
+    const result = await rescheduleBooking(validTimes, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "room_full" });
+    expect(deps.update).not.toHaveBeenCalled();
+  });
+
+  it("move para o horário em que a sala casal ainda tem maca livre", async () => {
+    const deps = makeDeps({
+      booking: { therapistId: ANA_ID, treatmentRoom: { roomId: COUPLE_ID, beds: 2 } },
+      roomBookings: [{ startsAt: at("15:00"), endsAt: at("16:30") }],
+    });
+
+    const result = await rescheduleBooking(validTimes, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("retorna treatment_room_not_found sem salvar quando a sala do agendamento foi removida", async () => {
+    const deps = makeDeps({ booking: { therapistId: ANA_ID, treatmentRoom: null } });
+
+    const result = await rescheduleBooking(validTimes, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "treatment_room_not_found" });
     expect(deps.update).not.toHaveBeenCalled();
   });
 

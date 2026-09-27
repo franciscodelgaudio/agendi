@@ -1,3 +1,4 @@
+import { CircleAlertIcon } from "lucide-react"
 import { Avatar, AvatarImage } from "@/components/ui/avatar"
 import { InitialFallback } from "@/components/initial-fallback"
 import { SelectValue } from "@/components/ui/select"
@@ -22,6 +23,20 @@ export function TherapistAvatar({
       {therapist.image && <AvatarImage src={therapist.image} alt={therapist.name} />}
       <InitialFallback name={therapist.name} />
     </Avatar>
+  )
+}
+
+// No lugar do avatar, em agendamentos cuja massagista não está mais entre as do workspace.
+export function MissingTherapistIcon({ className }: { className?: string }) {
+  return (
+    <span
+      role="img"
+      aria-label="Massagista não está mais no workspace"
+      title="Massagista não está mais no workspace"
+      className={cn("flex items-center justify-center rounded-full bg-amber-400 text-amber-950", className)}
+    >
+      <CircleAlertIcon className="size-[85%]" />
+    </span>
   )
 }
 

@@ -6,6 +6,7 @@ import { getSessionUserId } from "@/lib/session"
 import { canManageMembers, type WorkspaceRole } from "@/lib/member"
 import { planUnitTeam, type PlanUnitTeamError, type UnitTeamPlan } from "@/lib/unit-team"
 import { findWorkspaceAccess } from "@/lib/workspace-access"
+import type { TreatmentRoomInput } from "@/lib/treatment-room"
 import {
   createUnit,
   deleteUnit,
@@ -14,6 +15,7 @@ import {
   type UpdateUnitError,
 } from "@/lib/unit"
 import { Appointment } from "@/models/Appointment"
+import { Booking } from "@/models/Booking"
 import { Unit } from "@/models/Unit"
 import { Service } from "@/models/Service"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
@@ -28,6 +30,15 @@ const errorMessages: Record<CreateUnitError | UpdateUnitError | PlanUnitTeamErro
   too_many_tiers: "Cadastre no máximo 10 faixas.",
   invalid_tier_limit: "Os limites das faixas devem ser valores maiores que zero, em ordem crescente.",
   invalid_tier_percent: "Os percentuais devem estar entre 0 e 100, com até 2 casas decimais.",
+  no_treatment_rooms: "Cadastre pelo menos uma sala.",
+  too_many_treatment_rooms: "Cadastre no máximo 20 salas.",
+  invalid_treatment_room_name: "Informe o nome de cada sala.",
+  treatment_room_name_too_long: "O nome da sala pode ter no máximo 40 caracteres.",
+  duplicate_treatment_room_name: "Cada sala precisa de um nome diferente.",
+  invalid_treatment_room_beds: "Cada sala precisa ter de 1 a 10 macas.",
+  treatment_room_in_use: "Uma sala removida ainda tem agendamentos. Mova ou exclua os agendamentos antes.",
+  invalid_opening_balance: "Informe um saldo em caixa de até R$ 1.000.000,00.",
+  invalid_opening_balance_date: "Informe o dia do saldo em caixa.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unit_not_found: "Unidade não encontrada ou sem permissão.",
   forbidden: "Sem permissão para alterar a equipe.",
@@ -72,7 +83,12 @@ async function applyTeam(workspaceId: string, unitId: string, { link, unlink }: 
   ])
 }
 
-// A ordem dos campos no FormData forma as faixas: um limite para cada, menos a última.
+// Sala nova ganha id aqui; a que já existia mantém o seu, e com ele os agendamentos.
+function toTreatmentRoomDocs(rooms: TreatmentRoomInput[]) {
+  return rooms.map(({ id, name, beds }) => ({ _id: new Types.ObjectId(id ?? undefined), name, beds }))
+}
+
+// A ordem dos campos no FormData forma as faixas (um limite para cada, menos a última) e as salas.
 function unitInput(formData: FormData) {
   return {
     name: formData.get("name"),
@@ -83,6 +99,12 @@ function unitInput(formData: FormData) {
       limits: formData.getAll("tierLimit"),
       percents: formData.getAll("tierPercent"),
     },
+    treatmentRooms: {
+      ids: formData.getAll("treatmentRoomId"),
+      names: formData.getAll("treatmentRoomName"),
+      beds: formData.getAll("treatmentRoomBeds"),
+    },
+    openingBalance: { amount: formData.get("openingBalance"), date: formData.get("openingBalanceDate") },
   }
 }
 
@@ -103,7 +125,7 @@ export async function createUnitAction(
     unitInput(formData),
     access?.id,
     async (data) => {
-      const unit = await Unit.create(data)
+      const unit = await Unit.create({ ...data, treatmentRooms: toTreatmentRoomDocs(data.treatmentRooms) })
       const id = unit._id.toString()
       if (team) await applyTeam(data.workspaceId, id, team)
       return { id }
@@ -140,19 +162,34 @@ export async function updateUnitAction(
   const result = await updateUnit(
     unitInput(formData),
     target.unitId,
-    async (id, { name, avatarUrl, revenueShare }) => {
+    async (id, { name, avatarUrl, revenueShare, treatmentRooms }) => {
       // Campos null saem do documento em vez de ficarem gravados como null.
       const $unset = { ...(!avatarUrl && { avatarUrl: 1 }), ...(!revenueShare && { revenueShare: 1 }) }
       const { matchedCount } = await Unit.updateOne(
         { _id: id, workspaceId: target.ownedId },
         {
-          $set: { name, ...(avatarUrl && { avatarUrl }), ...(revenueShare && { revenueShare }) },
+          $set: {
+            name,
+            treatmentRooms: toTreatmentRoomDocs(treatmentRooms),
+            ...(avatarUrl && { avatarUrl }),
+            ...(revenueShare && { revenueShare }),
+          },
           ...(Object.keys($unset).length && { $unset }),
         },
       )
       if (matchedCount === 0) return false
       if (team) await applyTeam(target.ownedId!, id, team)
       return true
+    },
+    async (id, keptRoomIds) => {
+      // Unidade de outro workspace não é consultada; a escrita depois devolve unit_not_found.
+      if (!(await Unit.exists({ _id: id, workspaceId: target.ownedId }))) return false
+      const inUse = await Booking.exists({
+        unitId: id,
+        endsAt: { $gt: new Date() },
+        "treatmentRoom.roomId": { $nin: keptRoomIds.map((roomId) => new Types.ObjectId(roomId)) },
+      })
+      return inUse !== null
     },
   )
 

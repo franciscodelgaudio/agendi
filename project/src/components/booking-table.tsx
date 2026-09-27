@@ -6,7 +6,7 @@ import type { BookingFormOptions } from "@/components/booking-form"
 import { CodeCell, CodeHead } from "@/components/record-code"
 import { SortableHead } from "@/components/sortable-head"
 import { formatDuration } from "@/components/service-format"
-import { TherapistAvatar } from "@/components/therapist-avatar"
+import { MissingTherapistIcon, TherapistAvatar } from "@/components/therapist-avatar"
 import {
   Table,
   TableBody,
@@ -133,14 +133,20 @@ export function BookingTable({ bookings, query, pathname, workspaceId, options, 
                   </TableCell>
                   <TableCell className="px-4 @max-2xl:hidden">
                     <span className="flex items-center gap-2">
-                      {therapist && <TherapistAvatar therapist={therapist} className="size-6" />}
+                      {therapist ? (
+                        <TherapistAvatar therapist={therapist} className="size-6" />
+                      ) : (
+                        <MissingTherapistIcon className="size-6 shrink-0" />
+                      )}
                       {booking.therapistName}
                     </span>
                   </TableCell>
                   {/* Ocupa o que sobra da linha e corta com reticências em vez de quebrar. */}
                   <TableCell className="max-w-0 truncate px-4 @max-lg:hidden">
                     {booking.service.serviceName}{" "}
-                    <span className="text-muted-foreground">· {formatDuration(booking.durationMinutes)}</span>
+                    <span className="text-muted-foreground">
+                      · {formatDuration(booking.durationMinutes)} · {booking.treatmentRoom.roomName}
+                    </span>
                   </TableCell>
                   {canManage && (
                     <TableCell className="px-4 text-right">

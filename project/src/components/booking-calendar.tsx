@@ -45,7 +45,12 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { AppointmentForm } from "@/components/appointment-form"
 import { BookingForm, type BookingFormOptions, type BookingFormValues } from "@/components/booking-form"
 import { formatDuration } from "@/components/service-format"
-import { TherapistAvatar, TherapistLabel, TherapistSelectValue } from "@/components/therapist-avatar"
+import {
+  MissingTherapistIcon,
+  TherapistAvatar,
+  TherapistLabel,
+  TherapistSelectValue,
+} from "@/components/therapist-avatar"
 
 export type BookingOptions = Required<BookingFormOptions>
 
@@ -97,7 +102,7 @@ type Draft = { values: BookingFormValues; key: number; fallbackAnchor: Element |
 // rascunho) e o botão de novo agendamento.
 const KEEPS_DRAFT = "data-keeps-draft"
 
-export function BookingCalendar({ workspaceId, canManage, unitId, units, therapists, services }: Props) {
+export function BookingCalendar({ workspaceId, canManage, unitId, units, therapists, services, treatmentRooms }: Props) {
   const calendarRef = useRef<CalendarRef>(null)
   const [unit, setUnit] = useState(unitId ?? "")
   const [therapist, setTherapist] = useState("")
@@ -126,7 +131,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
   const colors = new Map(therapists.map((option, i) => [option.id, BOOKING_COLORS[i % BOOKING_COLORS.length].value]))
   // O proprietário sempre está entre as massagistas, então basta haver uma unidade.
   const canCreate = canManage && units.length > 0
-  const options = { units: unitId ? undefined : units, therapists, services }
+  const options = { units: unitId ? undefined : units, therapists, services, treatmentRooms }
 
   // Cada busca recria os ids internos dos eventos, e ao soltar um arraste o FullCalendar grava
   // a cópia do evento feita no início dele. Uma busca que chegasse no meio deixaria as duas
@@ -215,6 +220,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
         startsAt,
         durationMinutes,
         serviceId: null,
+        treatmentRoomId: null,
         productIds: [],
         color: null,
       },
@@ -302,10 +308,14 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
     })
   }
 
-  // Nos eventos, o avatar vem da lista de massagistas; quem saiu do workspace fica só com o nome.
+  // Nos eventos, o avatar vem da lista de massagistas; quem saiu do workspace fica com a exclamação.
   const therapistAvatar = (booking: BookingRow, className: string) => {
     const option = therapistsById.get(booking.therapistId)
-    return option && <TherapistAvatar therapist={option} className={className} />
+    return option ? (
+      <TherapistAvatar therapist={option} className={className} />
+    ) : (
+      <MissingTherapistIcon className={className} />
+    )
   }
 
   const filterSelect = (
@@ -457,7 +467,8 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
                   </div>
                   <div className="w-full truncate tabular-nums opacity-85">
                     {timeText}
-                    <span className="@max-[8rem]:hidden"> · Quarto {booking.guest.room}</span>
+                    <span className="@max-[8rem]:hidden"> · {booking.treatmentRoom.roomName}</span>
+                    <span className="@max-[12rem]:hidden"> · Quarto {booking.guest.room}</span>
                   </div>
                   <div className="w-full truncate opacity-85 @max-[8rem]:hidden">
                     {booking.service.serviceName}
@@ -500,6 +511,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
                 startsAt: booking.startsAt,
                 durationMinutes: booking.durationMinutes,
                 serviceId: booking.service.serviceId,
+                treatmentRoomId: booking.treatmentRoom.roomId,
                 productIds: booking.productIds,
                 color: booking.color,
               },
@@ -649,6 +661,8 @@ function DoneSummary({ workspaceId, booking }: { workspaceId: string; booking: B
         </dd>
         <dt className="text-muted-foreground">Massagista</dt>
         <dd>{booking.therapistName}</dd>
+        <dt className="text-muted-foreground">Sala</dt>
+        <dd>{booking.treatmentRoom.roomName}</dd>
         <dt className="text-muted-foreground">Horário</dt>
         <dd className="first-letter:uppercase">
           {doneDateFormat.format(new Date(`${booking.startsAt}:00Z`))} · {formatDuration(booking.durationMinutes)}

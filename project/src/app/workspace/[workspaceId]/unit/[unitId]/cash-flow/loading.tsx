@@ -1,10 +1,10 @@
-import { HeadingSkeleton, PageSkeleton, TableSkeleton } from "@/components/page-skeletons"
+import { PageSkeleton, TableSkeleton } from "@/components/page-skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function Loading() {
   return (
     <PageSkeleton section>
-      <HeadingSkeleton section />
+      <Skeleton className="h-20" />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Skeleton className="size-8" />

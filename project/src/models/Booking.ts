@@ -34,6 +34,17 @@ const bookingSchema = new Schema(
       ),
       required: true,
     },
+    // Sala da unidade onde acontece o atendimento; o nome é cópia do momento do agendamento.
+    treatmentRoom: {
+      type: new Schema(
+        {
+          roomId: { type: Schema.Types.ObjectId, required: true },
+          roomName: { type: String, required: true },
+        },
+        { _id: false },
+      ),
+      required: true,
+    },
     products: { type: [selectedProductSchema], default: [] },
     // Cor no calendário, uma da paleta; null usa a cor da massagista.
     color: { type: String, default: null },
@@ -47,6 +58,8 @@ const bookingSchema = new Schema(
 // O calendário filtra por unidades e intervalo; a checagem de conflito, por massagista e intervalo.
 bookingSchema.index({ unitId: 1, startsAt: 1 });
 bookingSchema.index({ therapistId: 1, startsAt: 1 });
+// A ocupação de cada sala.
+bookingSchema.index({ "treatmentRoom.roomId": 1, startsAt: 1 });
 // O uso de cada produto no estoque.
 bookingSchema.index({ "products.productId": 1 });
 

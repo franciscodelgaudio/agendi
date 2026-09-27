@@ -56,6 +56,7 @@ export default async function UnitCalendarListPage({
       bookings: BookingPage
       total: number
       services: BookingOptions["services"]
+      treatmentRooms: BookingOptions["treatmentRooms"]
     } | null
   }>([
     ...access,
@@ -112,6 +113,18 @@ export default async function UnitCalendarListPage({
               _id: 0,
               bookings: { $first: "$bookings" },
               services: 1,
+              treatmentRooms: {
+                $map: {
+                  input: "$treatmentRooms",
+                  as: "room",
+                  in: {
+                    id: { $toString: "$$room._id" },
+                    unitId: { $toString: "$_id" },
+                    name: "$$room.name",
+                    beds: "$$room.beds",
+                  },
+                },
+              },
               total: { $ifNull: [{ $first: "$total.n" }, 0] },
             },
           },
@@ -122,10 +135,10 @@ export default async function UnitCalendarListPage({
     { $project: { _id: 0, role: 1, therapists: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   if (!workspace?.unit) notFound()
-  const { bookings: result, total, services } = workspace.unit
+  const { bookings: result, total, services, treatmentRooms } = workspace.unit
   const { therapists } = workspace
   const canManage = canManageMembers(workspace.role)
-  const options = { services, therapists }
+  const options = { services, therapists, treatmentRooms }
 
   const base = `/workspace/${workspaceId}/unit/${unitId}/calendar`
   const pathname = `${base}/list`

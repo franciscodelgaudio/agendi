@@ -33,7 +33,8 @@ export function therapistOptionsStages(): PipelineStage[] {
         pipeline: [
           { $match: { role: "massage_therapist", userId: { $ne: null } } },
           { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
-          { $set: { user: { $first: "$user" } } },
+          // Membro cujo usuário não existe mais fica de fora (sem nome, não tem como aparecer).
+          { $unwind: "$user" },
           {
             $project: {
               _id: 0,

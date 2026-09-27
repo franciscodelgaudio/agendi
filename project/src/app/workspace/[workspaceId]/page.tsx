@@ -10,6 +10,7 @@ import {
   UsersIcon,
 } from "lucide-react"
 import {
+  applyStaffCosts,
   cashFlowBuckets,
   cashFlowFetchRange,
   dailyAppointmentTotalsPipeline,
@@ -20,12 +21,12 @@ import {
   summarizeCashFlow,
   summarizeServices,
   summarizeTherapists,
-  type CashFlowAmounts,
+  teamPayRates,
   type CashFlowView,
   type DayRange,
-  type CommissionRates,
   type DayTotal,
   type ServiceTotal,
+  type StaffCashFlowAmounts,
 } from "@/lib/cash-flow"
 import { canManageMembers, type WorkspaceRole } from "@/lib/member"
 import type { RevenueShare } from "@/lib/revenue-share"
@@ -79,15 +80,16 @@ function toDate(day: string) {
   return new Date(Date.UTC(year, month - 1, date))
 }
 
-const ZERO: CashFlowAmounts = { grossCents: 0, partnerShareCents: 0, commissionCents: 0, netCents: 0 }
+const ZERO: StaffCashFlowAmounts = { grossCents: 0, partnerShareCents: 0, commissionCents: 0, salaryCents: 0, netCents: 0 }
 
-// Soma dos valores já calculados por unidade (cada uma com seu repasse e suas comissões).
-function sumAmounts(list: CashFlowAmounts[]): CashFlowAmounts {
+// Soma dos valores já calculados por unidade (cada uma com seu repasse, comissões e salários).
+function sumAmounts(list: StaffCashFlowAmounts[]): StaffCashFlowAmounts {
   return list.reduce(
     (sum, amounts) => ({
       grossCents: sum.grossCents + amounts.grossCents,
       partnerShareCents: sum.partnerShareCents + amounts.partnerShareCents,
       commissionCents: sum.commissionCents + amounts.commissionCents,
+      salaryCents: sum.salaryCents + amounts.salaryCents,
       netCents: sum.netCents + amounts.netCents,
     }),
     ZERO,
@@ -189,9 +191,9 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         return { unit, appointments, bookings, services: summarizeServices(serviceAppointments, serviceBookings) }
       }),
     ),
-    // Comissão das massagistas em cada unidade (o proprietário não tem).
-    WorkspaceMember.find({ workspaceId: workspace.id, role: "massage_therapist", userId: { $ne: null } })
-      .select({ userId: 1, units: 1 })
+    // Remuneração da equipe em cada unidade (o proprietário não tem).
+    WorkspaceMember.find({ workspaceId: workspace.id, role: { $in: ["massage_therapist", "receptionist"] } })
+      .select({ userId: 1, role: 1, units: 1 })
       .lean(),
     Booking.find({ unitId: { $in: unitIds }, startsAt: { $gte: todayStart, $lt: todayEnd } })
       .sort({ startsAt: 1 })
@@ -205,18 +207,23 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
   ])
 
   const unitSummaries = perUnit.map(({ unit, appointments, bookings, services }) => {
-    const commissionRates: CommissionRates = {}
-    for (const member of members) {
-      const link = member.units.find((link) => link.unitId.equals(unit.id))
-      if (link?.commissionPercent != null) commissionRates[member.userId!.toString()] = link.commissionPercent
-    }
+    const { commissionRates, ...staffCosts } = teamPayRates(members, unit.id)
+    const summarize = (buckets: DayRange[]) =>
+      applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, unit.revenueShare, commissionRates), {
+        ...staffCosts,
+        today,
+      })
     const done = services.reduce((sum, service) => sum + service.real.count, 0)
     const all = services.reduce((sum, service) => sum + service.forecast.count, 0)
     return {
       unit,
-      hasDeductions: !!unit.revenueShare || Object.keys(commissionRates).length > 0,
-      month: summarizeCashFlow(monthBuckets, appointments, bookings, unit.revenueShare, commissionRates).total,
-      week: summarizeCashFlow(weekBuckets, appointments, bookings, unit.revenueShare, commissionRates).buckets,
+      hasDeductions:
+        !!unit.revenueShare ||
+        Object.keys(commissionRates).length > 0 ||
+        staffCosts.grossCommissionPercent > 0 ||
+        staffCosts.monthlySalaryCents > 0,
+      month: summarize(monthBuckets).total,
+      week: summarize(weekBuckets).buckets,
       services: { done, scheduled: all - done },
     }
   })
@@ -237,7 +244,8 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
   const servicesDone = unitSummaries.reduce((sum, summary) => sum + summary.services.done, 0)
   const servicesScheduled = unitSummaries.reduce((sum, summary) => sum + summary.services.scheduled, 0)
   const hasDeductions = unitSummaries.some((summary) => summary.hasDeductions)
-  const deductionsCents = monthTotal.real.partnerShareCents + monthTotal.real.commissionCents
+  const deductionsCents =
+    monthTotal.real.partnerShareCents + monthTotal.real.commissionCents + monthTotal.real.salaryCents
 
   // Massagistas somando todas as unidades em que atenderam; só os valores brutos são usados.
   const allAppointments = perUnit.flatMap((unit) => unit.appointments)
@@ -316,7 +324,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
           icon={PiggyBankIcon}
           label="Líquido do mês"
           value={money(monthTotal.real.netCents)}
-          detail={hasDeductions ? `${money(deductionsCents)} em repasse e comissões` : "Sem repasse nem comissões"}
+          detail={hasDeductions ? `${money(deductionsCents)} em repasse, comissões e salários` : "Sem repasse, comissões nem salários"}
         />
         <StatTile
           icon={LeafIcon}

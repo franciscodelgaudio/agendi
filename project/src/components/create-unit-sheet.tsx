@@ -7,6 +7,7 @@ import { createUnitAction, type CreateUnitState } from "@/lib/actions/unit"
 import { Button } from "@/components/ui/button"
 import { FieldError, FieldGroup } from "@/components/ui/field"
 import { UnitFields, type UnitTeamOptions } from "@/components/unit-fields"
+import { OpeningBalanceFields } from "@/components/opening-balance-fields"
 import {
   Sheet,
   SheetContent,
@@ -44,6 +45,7 @@ export function CreateUnitSheet({ workspaceId, team }: { workspaceId: string; te
           <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
             {state.error && <FieldError>{state.error}</FieldError>}
             <UnitFields idPrefix="create-unit" workspaceId={workspaceId} team={team} />
+            <OpeningBalanceFields idPrefix="create-unit" />
           </FieldGroup>
           <SheetFooter>
             <Button type="submit" loading={pending}>

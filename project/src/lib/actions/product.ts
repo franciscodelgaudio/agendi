@@ -14,6 +14,9 @@ import {
 } from "@/lib/product"
 import { findUnitProducts } from "@/lib/product-lookup"
 import { PRODUCT_SEARCH_LIMIT, productSearchPipeline } from "@/lib/product-search"
+import { recordStockPurchase } from "@/lib/stock-purchase"
+import { Expense } from "@/models/Expense"
+import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Product } from "@/models/Product"
 import type { ProductOption } from "@/components/product-picker"
 
@@ -40,6 +43,26 @@ async function findManagedUnitId(workspaceId: string, unitId: string) {
   return (await findManagedUnit(workspaceId, unitId, userId))?.unitId
 }
 
+// Aumento de estoque vira despesa paga no grupo de insumos, criado se a unidade ainda não tiver.
+async function recordPurchase(change: Parameters<typeof recordStockPurchase>[0]) {
+  const userId = await getSessionUserId()
+  if (!userId) return
+  await recordStockPurchase(change, {
+    ensureGroup: async (unitId, name) => {
+      const group = await ExpenseGroup.findOneAndUpdate(
+        { unitId, name },
+        { $setOnInsert: { unitId, name, monthlyLimitCents: null } },
+        { upsert: true, returnDocument: "after", collation: { locale: "pt", strength: 1 } },
+      )
+        .select({ _id: 1 })
+        .lean()
+      return group!._id.toString()
+    },
+    insert: (data) => Expense.create({ ...data, createdBy: userId }),
+    now: new Date(),
+  })
+}
+
 function productInput(formData: FormData) {
   return {
     name: formData.get("name"),
@@ -63,7 +86,9 @@ export async function createProductAction(
 
   const result = await createProduct(productInput(formData), ownedUnitId, async (data) => {
     const product = await Product.create(data)
-    return { id: product._id.toString() }
+    const id = product._id.toString()
+    await recordPurchase({ ...data, productId: id, productName: data.name, previousQuantity: 0 })
+    return { id }
   })
 
   if (!result.ok) return { error: errorMessages[result.error] }
@@ -92,8 +117,23 @@ export async function updateProductAction(
   if (!target) return { error: errorMessages.unauthenticated }
 
   const result = await updateProduct(productInput(formData), target.productId, async (id, data) => {
-    const { matchedCount } = await Product.updateOne({ _id: id, unitId: target.ownedUnitId }, { $set: data })
-    return matchedCount > 0
+    // Devolve o documento de antes para saber quanto entrou no estoque.
+    const previous = await Product.findOneAndUpdate(
+      { _id: id, unitId: target.ownedUnitId },
+      { $set: data },
+      { returnDocument: "before" },
+    )
+      .select({ quantity: 1 })
+      .lean()
+    if (!previous) return false
+    await recordPurchase({
+      ...data,
+      unitId: target.ownedUnitId!,
+      productId: id,
+      productName: data.name,
+      previousQuantity: previous.quantity,
+    })
+    return true
   })
 
   if (!result.ok) return { error: errorMessages[result.error] }

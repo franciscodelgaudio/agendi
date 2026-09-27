@@ -1,4 +1,6 @@
+import { parseOpeningBalance, type OpeningBalance, type OpeningBalanceError } from "@/lib/opening-balance";
 import { parseRevenueShare, type RevenueShare, type RevenueShareError } from "@/lib/revenue-share";
+import { parseTreatmentRooms, type TreatmentRoomError, type TreatmentRoomInput } from "@/lib/treatment-room";
 
 const MAX_NAME_LENGTH = 80;
 
@@ -9,6 +11,8 @@ export type CreateUnitError =
   | "invalid_avatar_url"
   | "invalid_ownership"
   | RevenueShareError
+  | TreatmentRoomError
+  | OpeningBalanceError
   | "workspace_not_found";
 
 export type CreateUnitResult =
@@ -24,15 +28,21 @@ export function isHttpUrl(value: string) {
   }
 }
 
-type UnitInputError = Exclude<CreateUnitError, "workspace_not_found">;
+// O saldo inicial só é informado na criação; depois ele é editado no Caixa.
+type UnitInputError = Exclude<CreateUnitError, "workspace_not_found" | Exclude<OpeningBalanceError, "invalid_input">>;
 
 // revenueShare é null quando a unidade funciona em espaço próprio.
-type UnitInput = { name: string; avatarUrl: string | null; revenueShare: RevenueShare | null };
+type UnitInput = {
+  name: string;
+  avatarUrl: string | null;
+  revenueShare: RevenueShare | null;
+  treatmentRooms: TreatmentRoomInput[];
+};
 
-// Valida e normaliza nome, avatarUrl e regra de repasse; avatarUrl vazia vira null.
+// Valida e normaliza nome, avatarUrl, regra de repasse e salas; avatarUrl vazia vira null.
 // A regra só é lida quando a unidade funciona dentro de um estabelecimento parceiro.
 function parseUnitInput(input: unknown): ({ ok: true } & UnitInput) | { ok: false; error: UnitInputError } {
-  const { name, avatarUrl, ownership, revenueShare } = (input ?? {}) as Record<string, unknown>;
+  const { name, avatarUrl, ownership, revenueShare, treatmentRooms } = (input ?? {}) as Record<string, unknown>;
   if (typeof name !== "string") return { ok: false, error: "invalid_input" };
   if (avatarUrl != null && typeof avatarUrl !== "string") return { ok: false, error: "invalid_input" };
 
@@ -45,15 +55,25 @@ function parseUnitInput(input: unknown): ({ ok: true } & UnitInput) | { ok: fals
     return { ok: false, error: "invalid_avatar_url" };
   }
 
-  if (ownership === "own") {
-    return { ok: true, name: normalizedName, avatarUrl: normalizedAvatarUrl, revenueShare: null };
+  if (ownership !== "own" && ownership !== "partner") return { ok: false, error: "invalid_ownership" };
+
+  let share: RevenueShare | null = null;
+  if (ownership === "partner") {
+    const parsed = parseRevenueShare(revenueShare);
+    if (!parsed.ok) return parsed;
+    share = parsed.value;
   }
-  if (ownership !== "partner") return { ok: false, error: "invalid_ownership" };
 
-  const share = parseRevenueShare(revenueShare);
-  if (!share.ok) return share;
+  const rooms = parseTreatmentRooms(treatmentRooms);
+  if (!rooms.ok) return rooms;
 
-  return { ok: true, name: normalizedName, avatarUrl: normalizedAvatarUrl, revenueShare: share.value };
+  return {
+    ok: true,
+    name: normalizedName,
+    avatarUrl: normalizedAvatarUrl,
+    revenueShare: share,
+    treatmentRooms: rooms.value,
+  };
 }
 
 export async function createUnit(
@@ -63,6 +83,8 @@ export async function createUnit(
     name: string;
     avatarUrl?: string;
     revenueShare?: RevenueShare;
+    treatmentRooms: TreatmentRoomInput[];
+    openingBalance?: OpeningBalance;
     workspaceId: string;
   }) => Promise<{ id: string }>,
 ): Promise<CreateUnitResult> {
@@ -70,33 +92,42 @@ export async function createUnit(
 
   const parsed = parseUnitInput(input);
   if (!parsed.ok) return parsed;
+  const balance = parseOpeningBalance((input as Record<string, unknown>).openingBalance);
+  if (!balance.ok) return balance;
 
   const unit = await insert({
     name: parsed.name,
     ...(parsed.avatarUrl && { avatarUrl: parsed.avatarUrl }),
     ...(parsed.revenueShare && { revenueShare: parsed.revenueShare }),
+    treatmentRooms: parsed.treatmentRooms,
+    ...(balance.value && { openingBalance: balance.value }),
     workspaceId,
   });
   return { ok: true, unitId: unit.id };
 }
 
-export type UpdateUnitError = UnitInputError | "unit_not_found";
+export type UpdateUnitError = UnitInputError | "treatment_room_in_use" | "unit_not_found";
 
 export type UpdateUnitResult = { ok: true } | { ok: false; error: UpdateUnitError };
 
 // update devolve false quando a unidade não existe (ou não é do workspace).
+// hasBookingsInRemovedRooms: true quando alguma sala fora de keptRoomIds ainda tem agendamento por terminar.
 export async function updateUnit(
   input: unknown,
   unitId: string | null | undefined,
   update: (unitId: string, data: UnitInput) => Promise<boolean>,
+  hasBookingsInRemovedRooms: (unitId: string, keptRoomIds: string[]) => Promise<boolean>,
 ): Promise<UpdateUnitResult> {
   if (!unitId) return { ok: false, error: "unit_not_found" };
 
   const parsed = parseUnitInput(input);
   if (!parsed.ok) return parsed;
 
-  const { name, avatarUrl, revenueShare } = parsed;
-  const found = await update(unitId, { name, avatarUrl, revenueShare });
+  const { name, avatarUrl, revenueShare, treatmentRooms } = parsed;
+  const keptRoomIds = treatmentRooms.flatMap((room) => (room.id ? [room.id] : []));
+  if (await hasBookingsInRemovedRooms(unitId, keptRoomIds)) return { ok: false, error: "treatment_room_in_use" };
+
+  const found = await update(unitId, { name, avatarUrl, revenueShare, treatmentRooms });
   return found ? { ok: true } : { ok: false, error: "unit_not_found" };
 }
 

@@ -4,6 +4,7 @@ import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { unitListPipeline, parseUnitListQuery } from "@/lib/unit-list"
 import type { RevenueShare } from "@/lib/revenue-share"
+import type { TreatmentRoomOption } from "@/components/treatment-room-fields"
 import { teamCandidatesLookup, type TeamCandidate } from "@/lib/unit-team"
 import { Workspace } from "@/models/Workspace"
 import { CreateUnitSheet } from "@/components/create-unit-sheet"
@@ -30,6 +31,7 @@ export default async function UnitsPage({
       name: string
       avatarUrl: string | null
       revenueShare: RevenueShare | null
+      treatmentRooms: TreatmentRoomOption[]
       createdAt: Date
       updatedAt: Date
     }[]

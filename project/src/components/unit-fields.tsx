@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input"
 import { RevenueShareFields } from "@/components/revenue-share-fields"
 import { UnitTeamFields } from "@/components/unit-team-fields"
 import { ImageUploadField } from "@/components/image-upload-field"
+import { TreatmentRoomFields, type TreatmentRoomOption } from "@/components/treatment-room-fields"
 import type { RevenueShare } from "@/lib/revenue-share"
 import type { TeamCandidate } from "@/lib/unit-team"
 
@@ -12,7 +13,13 @@ export type UnitTeamOptions = { candidates: TeamCandidate[]; canLinkTherapists: 
 type Props = {
   idPrefix: string
   workspaceId: string
-  defaultValues?: { id: string; name: string; avatarUrl: string | null; revenueShare: RevenueShare | null }
+  defaultValues?: {
+    id: string
+    name: string
+    avatarUrl: string | null
+    revenueShare: RevenueShare | null
+    treatmentRooms: TreatmentRoomOption[]
+  }
   team: UnitTeamOptions
 }
 
@@ -38,6 +45,7 @@ export function UnitFields({ idPrefix, workspaceId, defaultValues, team }: Props
         target="unit"
         defaultValue={defaultValues?.avatarUrl}
       />
+      <TreatmentRoomFields idPrefix={idPrefix} defaultValue={defaultValues?.treatmentRooms} />
       <UnitTeamFields
         idPrefix={idPrefix}
         team={team.candidates}

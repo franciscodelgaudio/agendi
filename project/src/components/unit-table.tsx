@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table"
 import type { UnitListQuery } from "@/lib/unit-list"
 import type { RevenueShare } from "@/lib/revenue-share"
+import type { TreatmentRoomOption } from "@/components/treatment-room-fields"
 import { dateTimeFormat } from "@/lib/utils"
 
 type Props = {
@@ -24,6 +25,7 @@ type Props = {
     name: string
     avatarUrl: string | null
     revenueShare: RevenueShare | null
+    treatmentRooms: TreatmentRoomOption[]
     createdAt: Date
     updatedAt: Date
   }[]

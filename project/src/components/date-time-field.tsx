@@ -9,19 +9,9 @@ import { Calendar } from "@/components/ui/calendar"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { toDate, toDay } from "@/components/day-field"
 
 const dateLabelFormat = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short", year: "numeric" })
-
-// O Calendar trabalha com Date no fuso do navegador; aqui só importa o dia do calendário.
-function toDate(day: string) {
-  const [year, month, date] = day.split("-").map(Number)
-  return new Date(year, month - 1, date)
-}
-
-function toDay(date: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0")
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
 
 type Props = {
   idPrefix: string

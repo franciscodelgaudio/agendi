@@ -19,9 +19,10 @@ import { Unit } from "@/models/Unit"
 import { Service } from "@/models/Service"
 
 const errorMessages: Record<BookingError | "unauthenticated", string> = {
-  invalid_input: "Preencha massagista, hóspede, quarto, início e duração.",
+  invalid_input: "Preencha massagista, sala, hóspede, quarto, início e duração.",
   invalid_therapist: "Escolha a massagista.",
   invalid_service: "Escolha o serviço.",
+  invalid_treatment_room: "Escolha a sala.",
   invalid_guest_name: "Informe o nome do hóspede.",
   guest_name_too_long: "O nome do hóspede pode ter no máximo 80 caracteres.",
   invalid_room: "Informe o quarto.",
@@ -32,6 +33,8 @@ const errorMessages: Record<BookingError | "unauthenticated", string> = {
   service_not_found: "O serviço escolhido não é desta unidade. Recarregue a página.",
   therapist_not_found: "A massagista escolhida não pode atender neste workspace. Recarregue a página.",
   therapist_busy: "A massagista já tem um agendamento nesse horário.",
+  treatment_room_not_found: "A sala escolhida não é desta unidade. Recarregue a página.",
+  room_full: "A sala já está ocupada nesse horário.",
   unit_not_found: "Escolha uma unidade válida deste workspace.",
   booking_not_found: "Agendamento não encontrado ou sem permissão.",
   too_many_products: "Escolha no máximo 20 produtos.",
@@ -49,6 +52,7 @@ function bookingInput(formData: FormData) {
     startsAt: formData.get("startsAt"),
     durationMinutes: formData.get("durationMinutes"),
     serviceId: formData.get("serviceId"),
+    treatmentRoomId: formData.get("treatmentRoomId"),
     productIds: formData.getAll("productId"),
     color: formData.get("color"),
   }
@@ -85,6 +89,42 @@ function conflictChecker(unitIds: Types.ObjectId[]) {
   }
 }
 
+// Outros agendamentos da sala que se sobrepõem ao intervalo, nas unidades dadas.
+function roomBookingsFinder(unitIds: (Types.ObjectId | string)[]) {
+  return async ({
+    treatmentRoomId,
+    startsAt,
+    endsAt,
+    excludeId,
+  }: {
+    treatmentRoomId: string
+    startsAt: Date
+    endsAt: Date
+    excludeId?: string
+  }) => {
+    if (!isObjectIdOrHexString(treatmentRoomId)) return []
+    return Booking.find({
+      "treatmentRoom.roomId": treatmentRoomId,
+      unitId: { $in: unitIds },
+      startsAt: { $lt: endsAt },
+      endsAt: { $gt: startsAt },
+      ...(excludeId && { _id: { $ne: excludeId } }),
+    })
+      .select({ _id: 0, startsAt: 1, endsAt: 1 })
+      .lean()
+  }
+}
+
+// Sala da unidade, ou null se não existe nela.
+async function findUnitTreatmentRoom(unitId: string | Types.ObjectId, roomId: string) {
+  if (!isObjectIdOrHexString(roomId)) return null
+  const unit = await Unit.findOne({ _id: unitId, "treatmentRooms._id": roomId })
+    .select({ "treatmentRooms.$": 1 })
+    .lean()
+  const room = unit?.treatmentRooms[0]
+  return room ? { id: room._id.toString(), name: room.name, beds: room.beds } : null
+}
+
 // Buscas usadas por createBooking/updateBooking, restritas à unidade e ao workspace.
 function bookingLookups(unit: { workspaceId: string; unitId: string }, unitIds: Types.ObjectId[]) {
   return {
@@ -95,6 +135,8 @@ function bookingLookups(unit: { workspaceId: string; unitId: string }, unitIds: 
     },
     findTherapist: async (id: string) => (await findWorkspaceTherapists(unit.workspaceId, [id]))[0] ?? null,
     hasConflict: conflictChecker(unitIds),
+    findTreatmentRoom: (id: string) => findUnitTreatmentRoom(unit.unitId, id),
+    findRoomBookings: roomBookingsFinder([unit.unitId]),
     findProducts: (ids: string[]) => findUnitProducts(unit.unitId, ids),
   }
 }
@@ -167,11 +209,17 @@ export async function rescheduleBookingAction(
     findBooking: async (id) => {
       // Agendamento que já virou atendimento não pode ser arrastado.
       const booking = await Booking.findOne({ _id: id, unitId: { $in: unitIds! }, appointmentId: null })
-        .select({ therapistId: 1 })
+        .select({ therapistId: 1, unitId: 1, treatmentRoom: 1 })
         .lean()
-      return booking && { therapistId: booking.therapistId.toString() }
+      if (!booking) return null
+      const room = await findUnitTreatmentRoom(booking.unitId, booking.treatmentRoom.roomId.toString())
+      return {
+        therapistId: booking.therapistId.toString(),
+        treatmentRoom: room && { roomId: room.id, beds: room.beds },
+      }
     },
     hasConflict: conflictChecker(unitIds ?? []),
+    findRoomBookings: roomBookingsFinder(unitIds ?? []),
     update: async (id, fields) => {
       const { matchedCount } = await Booking.updateOne(
         { _id: id, unitId: { $in: unitIds! }, appointmentId: null },

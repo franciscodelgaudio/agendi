@@ -43,6 +43,14 @@ export function unitListPipeline({ q, sort, dir }: UnitListQuery) {
         avatarUrl: { $ifNull: ["$avatarUrl", null] },
         // Unidades em espaço próprio não têm regra de repasse.
         revenueShare: { $ifNull: ["$revenueShare", null] },
+        // Salas para o formulário de edição, com os ids em texto.
+        treatmentRooms: {
+          $map: {
+            input: "$treatmentRooms",
+            as: "room",
+            in: { id: { $toString: "$$room._id" }, name: "$$room.name", beds: "$$room.beds" },
+          },
+        },
         createdAt: 1,
         updatedAt: 1,
       },

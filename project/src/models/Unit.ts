@@ -20,12 +20,30 @@ const revenueShareSchema = new Schema(
   { _id: false },
 );
 
+// Sala de atendimento; cada maca comporta um atendimento por vez. O _id liga os agendamentos à sala.
+const treatmentRoomSchema = new Schema({
+  name: { type: String, required: true, trim: true },
+  beds: { type: Number, required: true, min: 1, max: 10 },
+});
+
+// Valor em caixa no início do dia `date` ("2026-09-01"); o saldo soma o líquido real a partir dele.
+const openingBalanceSchema = new Schema(
+  {
+    amountCents: { type: Number, required: true, min: 0 },
+    date: { type: String, required: true },
+  },
+  { _id: false },
+);
+
 const unitSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
     avatarUrl: { type: String, trim: true },
     // Ausente quando a unidade funciona em espaço próprio.
     revenueShare: { type: revenueShareSchema },
+    treatmentRooms: { type: [treatmentRoomSchema], default: [] },
+    // Ausente enquanto o saldo em caixa não foi informado.
+    openingBalance: { type: openingBalanceSchema },
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true, index: true },
   },
   { collection: "units", timestamps: true },

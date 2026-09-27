@@ -9,6 +9,7 @@ import {
   UsersIcon,
 } from "lucide-react"
 import {
+  applyStaffCosts,
   cashFlowBuckets,
   cashFlowFetchRange,
   dailyAppointmentTotalsPipeline,
@@ -19,8 +20,8 @@ import {
   summarizeCashFlow,
   summarizeServices,
   summarizeTherapists,
+  teamPayRates,
   type CashFlowView,
-  type CommissionRates,
   type DayRange,
   type DayTotal,
   type ServiceTotal,
@@ -138,7 +139,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
 
   const unitObjectId = new Types.ObjectId(unitId)
   const unitMatch = { $match: { unitId: unitObjectId } }
-  const [appointments, bookings, serviceSummaries, therapists, todayBookings, lowStock, productCount] =
+  const [appointments, bookings, serviceSummaries, team, todayBookings, lowStock, productCount] =
     await Promise.all([
       Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
       Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
@@ -151,14 +152,13 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
           return summarizeServices(serviceAppointments, serviceBookings)
         }),
       ),
-      // Comissão das massagistas vinculadas a esta unidade (o proprietário não tem).
+      // Remuneração da equipe vinculada a esta unidade (o proprietário não tem).
       WorkspaceMember.find({
         workspaceId: workspace.id,
-        role: "massage_therapist",
-        userId: { $ne: null },
-        units: { $elemMatch: { unitId, commissionPercent: { $ne: null } } },
+        role: { $in: ["massage_therapist", "receptionist"] },
+        "units.unitId": unitId,
       })
-        .select({ userId: 1, units: 1 })
+        .select({ userId: 1, role: 1, units: 1 })
         .lean(),
       Booking.find({ unitId: unitObjectId, startsAt: { $gte: todayStart, $lt: todayEnd } })
         .sort({ startsAt: 1 })
@@ -171,21 +171,27 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
       Product.countDocuments({ unitId: unitObjectId }),
     ])
 
-  const commissionRates: CommissionRates = {}
-  for (const member of therapists) {
-    const link = member.units.find((unit) => unit.unitId.equals(unitId))
-    if (link?.commissionPercent != null) commissionRates[member.userId!.toString()] = link.commissionPercent
-  }
-  const monthTotal = summarizeCashFlow(monthBuckets, appointments, bookings, revenueShare, commissionRates).total
-  const week = summarizeCashFlow(weekBuckets, appointments, bookings, revenueShare, commissionRates)
+  const { commissionRates, ...staffCosts } = teamPayRates(team, unitId)
+  const summarize = (buckets: DayRange[]) =>
+    applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, revenueShare, commissionRates), {
+      ...staffCosts,
+      today,
+    })
+  const monthTotal = summarize(monthBuckets).total
+  const week = summarize(weekBuckets)
   const servicesByPeriod = byPeriod((view) => serviceSummaries[PERIOD_VIEWS.indexOf(view)])
   const services = servicesByPeriod.month
   const therapistImages = new Map(workspace.therapists.map((therapist) => [therapist.id, therapist.image]))
 
   const servicesDone = services.reduce((sum, service) => sum + service.real.count, 0)
   const servicesScheduled = services.reduce((sum, service) => sum + service.forecast.count, 0) - servicesDone
-  const hasDeductions = !!revenueShare || Object.keys(commissionRates).length > 0
-  const deductionsCents = monthTotal.real.partnerShareCents + monthTotal.real.commissionCents
+  const hasDeductions =
+    !!revenueShare ||
+    Object.keys(commissionRates).length > 0 ||
+    staffCosts.grossCommissionPercent > 0 ||
+    staffCosts.monthlySalaryCents > 0
+  const deductionsCents =
+    monthTotal.real.partnerShareCents + monthTotal.real.commissionCents + monthTotal.real.salaryCents
 
   const schedule: TodayBooking[] = todayBookings.map((booking) => ({
     id: booking._id.toString(),
@@ -259,8 +265,8 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
           value={money(monthTotal.real.netCents)}
           detail={
             hasDeductions
-              ? `${money(deductionsCents)} em repasse e comissões`
-              : "Sem repasse nem comissões"
+              ? `${money(deductionsCents)} em repasse, comissões e salários`
+              : "Sem repasse, comissões nem salários"
           }
         />
         <StatTile

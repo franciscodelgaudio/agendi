@@ -60,7 +60,7 @@ export default async function CalendarListPage({
         localField: "_id",
         foreignField: "workspaceId",
         as: "units",
-        pipeline: [{ $sort: { name: 1, _id: 1 } }, { $project: { name: 1 } }],
+        pipeline: [{ $sort: { name: 1, _id: 1 } }, { $project: { name: 1, treatmentRooms: 1 } }],
       },
     },
     {
@@ -112,6 +112,30 @@ export default async function CalendarListPage({
         bookings: { $first: "$bookings" },
         total: { $ifNull: [{ $first: "$total.n" }, 0] },
         services: 1,
+        // Salas de todas as unidades, cada uma com a sua unidade.
+        treatmentRooms: {
+          $reduce: {
+            input: "$units",
+            initialValue: [],
+            in: {
+              $concatArrays: [
+                "$$value",
+                {
+                  $map: {
+                    input: "$$this.treatmentRooms",
+                    as: "room",
+                    in: {
+                      id: { $toString: "$$room._id" },
+                      unitId: { $toString: "$$this._id" },
+                      name: "$$room.name",
+                      beds: "$$room.beds",
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
         therapists: 1,
       },
     },

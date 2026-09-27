@@ -29,7 +29,7 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
         localField: "_id",
         foreignField: "workspaceId",
         as: "unit",
-        pipeline: [{ $match: { _id: new Types.ObjectId(unitId) } }, { $project: { name: 1 } }],
+        pipeline: [{ $match: { _id: new Types.ObjectId(unitId) } }, { $project: { name: 1, treatmentRooms: 1 } }],
       },
     },
     {
@@ -66,6 +66,13 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
           },
         },
         services: 1,
+        treatmentRooms: {
+          $map: {
+            input: { $ifNull: [{ $first: "$unit.treatmentRooms" }, []] },
+            as: "room",
+            in: { id: { $toString: "$$room._id" }, unitId, name: "$$room.name", beds: "$$room.beds" },
+          },
+        },
         therapists: 1,
       },
     },

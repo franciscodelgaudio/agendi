@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import {
+  applyExpenses,
   applyStaffCosts,
   cashFlowBuckets,
   cashFlowFetchRange,
@@ -12,18 +13,23 @@ import {
   summarizeCashFlow,
   summarizeServices,
   summarizeTherapists,
-  type CommissionRates,
+  teamPayRates,
   type DayTotal,
   type ServiceTotal,
 } from "@/lib/cash-flow"
+import { dailyExpenseTotalsPipeline, type ExpenseDayTotal } from "@/lib/expense"
+import { canManageMembers, type WorkspaceRole } from "@/lib/member"
+import { openingBalanceRange, type OpeningBalance } from "@/lib/opening-balance"
 import type { RevenueShare } from "@/lib/revenue-share"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
+import { Expense } from "@/models/Expense"
 import { Workspace } from "@/models/Workspace"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 import { CashFlowNav } from "@/components/cash-flow-nav"
+import { OpeningBalanceCard } from "@/components/opening-balance-card"
 import { CashFlowServicesTable } from "@/components/cash-flow-services-table"
 import { CashFlowTable } from "@/components/cash-flow-table"
 import { CashFlowTherapistsTable } from "@/components/cash-flow-therapists-table"
@@ -42,7 +48,11 @@ export default async function CashFlowPage({
   if (!access || !isObjectIdOrHexString(unitId)) notFound()
 
   // Parte do workspace para garantir o acesso; a regra de repasse define quantos dias buscar.
-  const [workspace] = await Workspace.aggregate<{ id: string; unit: { revenueShare: RevenueShare | null } | null }>([
+  const [workspace] = await Workspace.aggregate<{
+    id: string
+    role: WorkspaceRole
+    unit: { revenueShare: RevenueShare | null; openingBalance: OpeningBalance | null } | null
+  }>([
     ...access,
     {
       $lookup: {
@@ -52,61 +62,86 @@ export default async function CashFlowPage({
         as: "unit",
         pipeline: [
           { $match: { _id: new Types.ObjectId(unitId) } },
-          { $project: { _id: 0, revenueShare: { $ifNull: ["$revenueShare", null] } } },
+          {
+            $project: {
+              _id: 0,
+              revenueShare: { $ifNull: ["$revenueShare", null] },
+              openingBalance: { $ifNull: ["$openingBalance", null] },
+            },
+          },
         ],
       },
     },
-    { $project: { _id: 0, id: { $toString: "$_id" }, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
+    { $project: { _id: 0, id: { $toString: "$_id" }, role: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   if (!workspace?.unit) notFound()
-  const { revenueShare } = workspace.unit
+  const { revenueShare, openingBalance } = workspace.unit
+  const today = parseCashFlowQuery({}, now).date
+  // Dias cujo líquido real soma no saldo em caixa de hoje.
+  const balanceRange = openingBalance && openingBalanceRange(openingBalance, today)
 
   const buckets = cashFlowBuckets(query)
   const shown = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const range = cashFlowFetchRange(buckets, revenueShare?.period ?? null)
   const unitMatch = { $match: { unitId: new Types.ObjectId(unitId) } }
-  const [appointments, bookings, serviceAppointments, serviceBookings, team] = await Promise.all([
-    Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
-    Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
-    Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(shown)]),
-    Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(shown, now)]),
-    // Remuneração da equipe vinculada a esta unidade (o proprietário não tem).
-    WorkspaceMember.find({
-      workspaceId: workspace.id,
-      role: { $in: ["massage_therapist", "receptionist"] },
-      "units.unitId": unitId,
-    })
-      .select({ userId: 1, role: 1, units: 1 })
-      .lean(),
-  ])
-  // Comissão de massagista vai pelo id de usuário, que identifica quem fez o serviço.
-  // Comissão de recepcionista é sobre o bruto; salário vale mesmo com convite pendente.
-  const commissionRates: CommissionRates = {}
-  let grossCommissionPercent = 0
-  let monthlySalaryCents = 0
-  for (const member of team) {
-    const link = member.units.find((unit) => unit.unitId.equals(unitId))
-    if (link?.salaryCents != null) monthlySalaryCents += link.salaryCents
-    if (link?.commissionPercent == null) continue
-    if (member.role === "receptionist") grossCommissionPercent += link.commissionPercent
-    else if (member.userId) commissionRates[member.userId.toString()] = link.commissionPercent
-  }
-  const today = parseCashFlowQuery({}, now).date
-  const summary = applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, revenueShare, commissionRates), {
-    grossCommissionPercent,
-    monthlySalaryCents,
-    today,
-  })
+  const [appointments, bookings, serviceAppointments, serviceBookings, team, balanceAppointments, expenses, balanceExpenses] =
+    await Promise.all([
+      Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
+      Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
+      Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(shown)]),
+      Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(shown, now)]),
+      // Remuneração da equipe vinculada a esta unidade (o proprietário não tem).
+      WorkspaceMember.find({
+        workspaceId: workspace.id,
+        role: { $in: ["massage_therapist", "receptionist"] },
+        "units.unitId": unitId,
+      })
+        .select({ userId: 1, role: 1, units: 1 })
+        .lean(),
+      balanceRange
+        ? Appointment.aggregate<DayTotal>([
+            unitMatch,
+            ...dailyAppointmentTotalsPipeline(cashFlowFetchRange([balanceRange], revenueShare?.period ?? null)),
+          ])
+        : [],
+      Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(shown)]),
+      balanceRange ? Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(balanceRange)]) : [],
+    ])
+  const { commissionRates, grossCommissionPercent, monthlySalaryCents } = teamPayRates(team, unitId)
+  const staffCosts = { grossCommissionPercent, monthlySalaryCents, today }
+  const summary = applyExpenses(
+    applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, revenueShare, commissionRates), staffCosts),
+    expenses,
+  )
+  const balanceCents = !openingBalance
+    ? null
+    : openingBalance.amountCents +
+      (balanceRange
+        ? applyExpenses(
+            applyStaffCosts(
+              summarizeCashFlow([balanceRange], balanceAppointments, [], revenueShare, commissionRates),
+              staffCosts,
+            ),
+            balanceExpenses,
+          ).total.real.netCents
+        : 0)
   const services = summarizeServices(serviceAppointments, serviceBookings)
   const therapistRows = summarizeTherapists(shown, appointments, bookings, commissionRates)
   const hasCommission = Object.keys(commissionRates).length > 0 || grossCommissionPercent > 0
   const hasSalary = monthlySalaryCents > 0
+  const hasExpenses = expenses.length > 0
 
   const pathname = `/workspace/${workspaceId}/unit/${unitId}/cash-flow`
 
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="text-lg font-semibold tracking-tight">Caixa</h3>
+      <OpeningBalanceCard
+        workspaceId={workspaceId}
+        unitId={unitId}
+        openingBalance={openingBalance}
+        balanceCents={balanceCents}
+        canManage={canManageMembers(workspace.role)}
+      />
       <CashFlowNav
         query={query}
         range={shown}
@@ -120,6 +155,7 @@ export default async function CashFlowPage({
         hasPartnerShare={!!revenueShare}
         hasCommission={hasCommission}
         hasSalary={hasSalary}
+        hasExpenses={hasExpenses}
         today={today}
       />
       <h4 className="mt-4 font-semibold tracking-tight">Por serviço</h4>

@@ -4,6 +4,7 @@ import { useActionState, useState, useTransition } from "react"
 import { EllipsisIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import { deleteUnitAction, updateUnitAction, type UpdateUnitState } from "@/lib/actions/unit"
 import type { RevenueShare } from "@/lib/revenue-share"
+import type { TreatmentRoomOption } from "@/components/treatment-room-fields"
 
 import {
   AlertDialog,
@@ -33,7 +34,13 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 
-type Unit = { id: string; name: string; avatarUrl: string | null; revenueShare: RevenueShare | null }
+type Unit = {
+  id: string
+  name: string
+  avatarUrl: string | null
+  revenueShare: RevenueShare | null
+  treatmentRooms: TreatmentRoomOption[]
+}
 
 export function UnitActions({ workspaceId, unit, team }: { workspaceId: string; unit: Unit; team: UnitTeamOptions }) {
   const [editOpen, setEditOpen] = useState(false)
