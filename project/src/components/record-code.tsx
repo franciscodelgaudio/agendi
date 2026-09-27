@@ -4,15 +4,11 @@ import { useState } from "react"
 import { HashIcon } from "lucide-react"
 import { cn } from "cn"
 import { TableCell, TableHead } from "@/components/ui/table"
+import { recordCode } from "@/lib/record-code"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 // Tempo que o "Copiado!" fica visível depois do clique.
 const COPIED_MS = 1500
-
-// Código curto do documento: reticências e os últimos 5 caracteres do _id que o Mongo cria.
-export function recordCode(id: string) {
-  return `…${id.slice(-5)}`
-}
 
 export function CodeHead({ className }: { className?: string }) {
   return (

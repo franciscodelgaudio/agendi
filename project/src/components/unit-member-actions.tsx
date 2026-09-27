@@ -7,6 +7,7 @@ import type { MemberRole } from "@/lib/member-role"
 import { MAX_BONUS_DESCRIPTION_LENGTH, type UnitMemberBonus } from "@/lib/unit-member"
 
 import { AmountInput } from "@/components/amount-input"
+import { DayField } from "@/components/day-field"
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -24,6 +25,9 @@ type Member = {
   id: string
   label: string
   role: MemberRole
+  // "2026-02-15"
+  startDate: string | null
+  payDay: number | null
   commissionPercent: number | null
   salaryCents: number | null
   bonuses: UnitMemberBonus[]
@@ -87,6 +91,26 @@ function UnitMemberForm({ workspaceId, unitId, unitName, member, onDone }: Props
       </SheetHeader>
       <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
         {state.error && <FieldError>{state.error}</FieldError>}
+        <DayField
+          id={`${idPrefix}-start`}
+          name="startDate"
+          label="Início na unidade"
+          placeholder="Sem data"
+          defaultValue={member.startDate ?? ""}
+        />
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-pay-day`}>Dia de pagamento</FieldLabel>
+          <Input
+            id={`${idPrefix}-pay-day`}
+            name="payDay"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={31}
+            placeholder="Ex.: 5"
+            defaultValue={member.payDay ?? ""}
+          />
+        </Field>
         <Field>
           <FieldLabel htmlFor={`${idPrefix}-commission`}>
             {member.role === "massage_therapist" ? "Comissão sobre os serviços" : "Comissão sobre o bruto"}

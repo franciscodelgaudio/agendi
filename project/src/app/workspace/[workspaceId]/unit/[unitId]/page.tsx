@@ -28,7 +28,7 @@ import {
   type DayTotal,
   type ServiceTotal,
 } from "@/lib/cash-flow"
-import { dailyExpenseTotalsPipeline, type ExpenseDayTotal } from "@/lib/expense"
+import { dailyExpenseTotalsPipeline, expenseBudgetCents, type ExpenseDayTotal } from "@/lib/expense"
 import type { RevenueShare } from "@/lib/revenue-share"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
@@ -37,10 +37,11 @@ import { BRT_OFFSET_HOURS } from "@/lib/timezone"
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
 import { Expense } from "@/models/Expense"
+import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Product } from "@/models/Product"
 import { Workspace } from "@/models/Workspace"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
-import { CostCumulativeChart, CostPhysicalChart } from "@/components/cost-curve-chart"
+import { CostCumulativeChart, CostPeriodChart } from "@/components/cost-curve-chart"
 import { timeFormat } from "@/components/service-format"
 import type { TherapistOption } from "@/components/therapist-avatar"
 import {
@@ -143,7 +144,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
 
   const unitObjectId = new Types.ObjectId(unitId)
   const unitMatch = { $match: { unitId: unitObjectId } }
-  const [appointments, bookings, serviceSummaries, team, todayBookings, lowStock, productCount, expenses] =
+  const [appointments, bookings, serviceSummaries, team, todayBookings, lowStock, productCount, expenses, groups] =
     await Promise.all([
       Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
       Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
@@ -174,6 +175,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
         .lean(),
       Product.countDocuments({ unitId: unitObjectId }),
       Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(periods.year)]),
+      ExpenseGroup.find({ unitId: unitObjectId }).select({ monthlyLimitCents: 1 }).lean(),
     ])
 
   const { commissionRates, ...staffCosts } = teamPayRates(team, unitId)
@@ -183,7 +185,10 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
       today,
     })
   const monthTotal = summarize(monthBuckets).total
-  const curve = costCurve([applyExpenses(summarize(yearBuckets), expenses).buckets], today)
+  const monthlyBudgetCents = expenseBudgetCents(
+    groups.map((group) => ({ monthlyLimitCents: group.monthlyLimitCents ?? null })),
+  )
+  const curve = costCurve([{ buckets: applyExpenses(summarize(yearBuckets), expenses).buckets, monthlyBudgetCents }], today)
   const spentCents = curve.findLast((point) => point.spentCumulativeCents !== null)?.spentCumulativeCents ?? 0
   const plannedCents = curve.at(-1)?.plannedCumulativeCents ?? 0
   const servicesByPeriod = byPeriod((view) => serviceSummaries[PERIOD_VIEWS.indexOf(view)])
@@ -196,7 +201,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
     !!revenueShare ||
     Object.keys(commissionRates).length > 0 ||
     staffCosts.grossCommissionPercent > 0 ||
-    staffCosts.monthlySalaryCents > 0
+    staffCosts.salaries.length > 0
   const deductionsCents =
     monthTotal.real.partnerShareCents + monthTotal.real.commissionCents + monthTotal.real.salaryCents
 
@@ -326,8 +331,8 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
           </CardHeader>
           <CardContent className="gap-6">
             <div className="grid gap-2">
-              <span className="text-sm font-medium">Físico</span>
-              <CostPhysicalChart points={curve} view="year" />
+              <span className="text-sm font-medium">Custo por mês</span>
+              <CostPeriodChart points={curve} view="year" />
             </div>
             <div className="grid gap-2">
               <span className="text-sm font-medium">Acumulado</span>

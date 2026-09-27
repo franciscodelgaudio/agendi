@@ -439,12 +439,12 @@ describe("summarizeCashFlow", () => {
 
 describe("applyStaffCosts", () => {
   // Setembro de 2026 tem 30 dias: R$ 3.000 por mês = R$ 100 por dia.
-  const SALARY = { grossCommissionPercent: 0, monthlySalaryCents: 300_000, today: "2026-09-24" };
+  const SALARY = { grossCommissionPercent: 0, salaries: [{ monthlyCents: 300_000, startDate: null }], today: "2026-09-24" };
 
   it("sem salário nem comissão sobre o bruto, só acrescenta salário zerado", () => {
     const summary = summarizeCashFlow([day("2026-09-21")], [total("2026-09-21", 10_000)], [], null, { ana: 10 });
 
-    const result = applyStaffCosts(summary, { grossCommissionPercent: 0, monthlySalaryCents: 0, today: "2026-09-24" });
+    const result = applyStaffCosts(summary, { grossCommissionPercent: 0, salaries: [], today: "2026-09-24" });
 
     const amounts = { grossCents: 10_000, partnerShareCents: 0, commissionCents: 1_000, salaryCents: 0, netCents: 9_000 };
     expect(result).toEqual({
@@ -505,7 +505,7 @@ describe("applyStaffCosts", () => {
       { ana: 30 },
     );
 
-    const result = applyStaffCosts(summary, { grossCommissionPercent: 5, monthlySalaryCents: 0, today: "2026-09-24" });
+    const result = applyStaffCosts(summary, { grossCommissionPercent: 5, salaries: [], today: "2026-09-24" });
 
     // Dia 21: 30% da Ana (R$ 30) + 5% do bruto (R$ 5); repasse 20% (R$ 20).
     expect(result.buckets[0].real).toEqual({
@@ -530,10 +530,49 @@ describe("applyStaffCosts", () => {
     // R$ 1,00 por mês em setembro = 3,33 centavos por dia.
     const summary = summarizeCashFlow([day("2026-09-21"), day("2026-09-22")], [], [], null, {});
 
-    const result = applyStaffCosts(summary, { grossCommissionPercent: 0, monthlySalaryCents: 100, today: "2026-09-24" });
+    const result = applyStaffCosts(summary, { grossCommissionPercent: 0, salaries: [{ monthlyCents: 100, startDate: null }], today: "2026-09-24" });
 
     expect(result.buckets.map((bucket) => bucket.real.salaryCents)).toEqual([3, 3]);
     expect(result.total.real).toEqual({ grossCents: 0, partnerShareCents: 0, commissionCents: 0, salaryCents: 6, netCents: -6 });
+  });
+
+  it("salário só conta a partir da data de início, proporcional no primeiro mês", () => {
+    const summary = summarizeCashFlow(cashFlowBuckets({ view: "year", date: "2026-09-24" }), [], [], null, {});
+
+    // Fevereiro de 2026 tem 28 dias: entrou no dia 15, conta 14 dias de R$ 3.000/28.
+    const result = applyStaffCosts(summary, { ...SALARY, salaries: [{ monthlyCents: 300_000, startDate: "2026-02-15" }] });
+
+    expect(result.buckets.slice(0, 4).map((bucket) => bucket.forecast.salaryCents)).toEqual([0, 150_000, 300_000, 300_000]);
+    expect(result.buckets[0].real.salaryCents).toBe(0);
+    expect(result.buckets[1].real.salaryCents).toBe(150_000);
+    // Fevereiro pela metade + março a dezembro.
+    expect(result.total.forecast.salaryCents).toBe(150_000 + 10 * 300_000);
+  });
+
+  it("cada salário conta a partir da própria data de início; sem data conta sempre", () => {
+    const summary = summarizeCashFlow([RANGE], [], [], null, {});
+
+    const result = applyStaffCosts(summary, {
+      ...SALARY,
+      salaries: [
+        { monthlyCents: 300_000, startDate: null },
+        { monthlyCents: 300_000, startDate: "2026-09-23" },
+        { monthlyCents: 300_000, startDate: "2026-10-01" },
+      ],
+    });
+
+    // Real (21 a 24): 4 dias do primeiro + 2 do segundo. Previsto (21 a 27): 7 + 5.
+    expect(result.buckets[0].real.salaryCents).toBe(60_000);
+    expect(result.buckets[0].forecast.salaryCents).toBe(120_000);
+  });
+
+  it("data de início no futuro: salário só no previsto a partir dela", () => {
+    const summary = summarizeCashFlow([RANGE], [], [], null, {});
+
+    const result = applyStaffCosts(summary, { ...SALARY, salaries: [{ monthlyCents: 300_000, startDate: "2026-09-26" }] });
+
+    expect(result.buckets[0].real.salaryCents).toBe(0);
+    expect(result.buckets[0].forecast.salaryCents).toBe(20_000);
   });
 });
 
@@ -705,17 +744,18 @@ describe("teamPayRates", () => {
   const OTHER_UNIT = new Types.ObjectId();
   const ANA = new Types.ObjectId();
   const BIA = new Types.ObjectId();
-  const link = (commissionPercent: number | null, salaryCents: number | null, unitId = UNIT) => ({
+  const link = (commissionPercent: number | null, salaryCents: number | null, unitId = UNIT, startDate: string | null = null) => ({
     unitId,
     commissionPercent,
     salaryCents,
+    startDate,
   });
 
   it("sem equipe, não há comissão nem salário", () => {
     expect(teamPayRates([], UNIT.toString())).toEqual({
       commissionRates: {},
       grossCommissionPercent: 0,
-      monthlySalaryCents: 0,
+      salaries: [],
     });
   });
 
@@ -740,7 +780,7 @@ describe("teamPayRates", () => {
     expect(teamPayRates(team, UNIT.toString())).toEqual({
       commissionRates: {},
       grossCommissionPercent: 3.5,
-      monthlySalaryCents: 0,
+      salaries: [],
     });
   });
 
@@ -753,7 +793,10 @@ describe("teamPayRates", () => {
     expect(teamPayRates(team, UNIT.toString())).toEqual({
       commissionRates: {},
       grossCommissionPercent: 0,
-      monthlySalaryCents: 430_000,
+      salaries: [
+        { monthlyCents: 250_000, startDate: null },
+        { monthlyCents: 180_000, startDate: null },
+      ],
     });
   });
 
@@ -766,7 +809,10 @@ describe("teamPayRates", () => {
     expect(teamPayRates(team, UNIT.toString())).toEqual({
       commissionRates: { [ANA.toString()]: 20 },
       grossCommissionPercent: 2,
-      monthlySalaryCents: 330_000,
+      salaries: [
+        { monthlyCents: 150_000, startDate: null },
+        { monthlyCents: 180_000, startDate: null },
+      ],
     });
   });
 
@@ -781,7 +827,10 @@ describe("teamPayRates", () => {
     expect(teamPayRates(team, UNIT.toString())).toEqual({
       commissionRates: { [ANA.toString()]: 30 },
       grossCommissionPercent: 0,
-      monthlySalaryCents: 215_000,
+      salaries: [
+        { monthlyCents: 25_000, startDate: null },
+        { monthlyCents: 190_000, startDate: null },
+      ],
     });
   });
 
@@ -800,8 +849,22 @@ describe("teamPayRates", () => {
     expect(teamPayRates(team, UNIT.toString())).toEqual({
       commissionRates: { [ANA.toString()]: 30 },
       grossCommissionPercent: 0,
-      monthlySalaryCents: 0,
+      salaries: [],
     });
+  });
+
+  it("cada vínculo com salário ou bônus leva a própria data de início", () => {
+    const bonus = { description: "Bônus", amountCents: 10_000 };
+    const team = [
+      { userId: ANA, role: "massage_therapist", units: [link(20, 300_000, UNIT, "2026-02-15")] },
+      { userId: BIA, role: "receptionist", units: [{ ...link(null, null, UNIT, "2026-03-01"), bonuses: [bonus] }] },
+      { userId: null, role: "receptionist", units: [link(2, null, UNIT, "2026-04-01")] },
+    ];
+
+    expect(teamPayRates(team, UNIT.toString()).salaries).toEqual([
+      { monthlyCents: 300_000, startDate: "2026-02-15" },
+      { monthlyCents: 10_000, startDate: "2026-03-01" },
+    ]);
   });
 
   it("ignora administradores", () => {
@@ -810,13 +873,13 @@ describe("teamPayRates", () => {
     expect(teamPayRates(team, UNIT.toString())).toEqual({
       commissionRates: {},
       grossCommissionPercent: 0,
-      monthlySalaryCents: 0,
+      salaries: [],
     });
   });
 });
 
 describe("applyExpenses", () => {
-  const STAFF = { grossCommissionPercent: 0, monthlySalaryCents: 0, today: "2026-09-24" };
+  const STAFF = { grossCommissionPercent: 0, salaries: [], today: "2026-09-24" };
   const WEEK = [day("2026-09-21"), day("2026-09-22")];
   // Semana com R$ 100 de bruto na segunda e nada na terça, sem descontos.
   const summary = () => applyStaffCosts(summarizeCashFlow(WEEK, [total("2026-09-21", 10_000)], [], null, {}), STAFF);
@@ -943,64 +1006,92 @@ describe("costCurve", () => {
     expenseCents,
     netCents: -1,
   });
-  const month = (from: string, to: string, real: ReturnType<typeof costs>, forecast: ReturnType<typeof costs>) => ({
-    from,
-    to,
-    real,
-    forecast,
-  });
+  // O previsto dos intervalos não entra na curva: o planejado vem do orçamento dos grupos.
+  const IGNORED = costs(9_999, 9_999, 9_999, 9_999);
+  const month = (from: string, to: string, real: ReturnType<typeof costs>) => ({ from, to, real, forecast: IGNORED });
   const JUL = { from: "2026-07-01", to: "2026-07-31" };
   const AUG = { from: "2026-08-01", to: "2026-08-31" };
   const SEP = { from: "2026-09-01", to: "2026-09-30" };
   const OCT = { from: "2026-10-01", to: "2026-10-31" };
 
-  it("planejado vem do previsto e gasto do real, somando repasse, comissão, salário e despesas, com o acumulado", () => {
+  it("planejado é o orçamento mensal e gasto soma repasse, comissão, salário e despesas reais, com o acumulado", () => {
     const result = costCurve(
       [
-        [
-          month(JUL.from, JUL.to, costs(100, 200, 300, 400), costs(100, 200, 300, 900)),
-          month(AUG.from, AUG.to, costs(0, 50, 300, 0), costs(0, 50, 300, 150)),
-        ],
+        {
+          monthlyBudgetCents: 1_500,
+          buckets: [month(JUL.from, JUL.to, costs(100, 200, 300, 400)), month(AUG.from, AUG.to, costs(0, 50, 300, 0))],
+        },
       ],
       "2026-09-24",
     );
 
     expect(result).toEqual([
       { ...JUL, plannedCents: 1_500, spentCents: 1_000, plannedCumulativeCents: 1_500, spentCumulativeCents: 1_000 },
-      { ...AUG, plannedCents: 500, spentCents: 350, plannedCumulativeCents: 2_000, spentCumulativeCents: 1_350 },
+      { ...AUG, plannedCents: 1_500, spentCents: 350, plannedCumulativeCents: 3_000, spentCumulativeCents: 1_350 },
     ]);
   });
 
   it("depois do mês de hoje não tem gasto nem acumulado gasto; o planejado segue", () => {
     const result = costCurve(
       [
-        [
-          month(AUG.from, AUG.to, costs(0, 0, 100, 0), costs(0, 0, 100, 0)),
-          month(SEP.from, SEP.to, costs(0, 0, 80, 20), costs(0, 0, 100, 50)),
-          month(OCT.from, OCT.to, costs(0, 0, 0, 0), costs(0, 0, 100, 0)),
-        ],
+        {
+          monthlyBudgetCents: 100,
+          buckets: [
+            month(AUG.from, AUG.to, costs(0, 0, 100, 0)),
+            month(SEP.from, SEP.to, costs(0, 0, 80, 20)),
+            month(OCT.from, OCT.to, costs(0, 0, 0, 0)),
+          ],
+        },
       ],
       "2026-09-24",
     );
 
     expect(result).toEqual([
       { ...AUG, plannedCents: 100, spentCents: 100, plannedCumulativeCents: 100, spentCumulativeCents: 100 },
-      { ...SEP, plannedCents: 150, spentCents: 100, plannedCumulativeCents: 250, spentCumulativeCents: 200 },
-      { ...OCT, plannedCents: 100, spentCents: null, plannedCumulativeCents: 350, spentCumulativeCents: null },
+      { ...SEP, plannedCents: 100, spentCents: 100, plannedCumulativeCents: 200, spentCumulativeCents: 200 },
+      { ...OCT, plannedCents: 100, spentCents: null, plannedCumulativeCents: 300, spentCumulativeCents: null },
     ]);
   });
 
-  it("com várias unidades, soma os meses de todas", () => {
+  it("com várias unidades, soma os orçamentos e os gastos de todas", () => {
     const result = costCurve(
       [
-        [month(JUL.from, JUL.to, costs(100, 0, 0, 0), costs(200, 0, 0, 0))],
-        [month(JUL.from, JUL.to, costs(0, 0, 0, 30), costs(0, 0, 0, 70))],
+        { monthlyBudgetCents: 200, buckets: [month(JUL.from, JUL.to, costs(100, 0, 0, 0))] },
+        { monthlyBudgetCents: 70, buckets: [month(JUL.from, JUL.to, costs(0, 0, 0, 30))] },
       ],
       "2026-09-24",
     );
 
     expect(result).toEqual([
       { ...JUL, plannedCents: 270, spentCents: 130, plannedCumulativeCents: 270, spentCumulativeCents: 130 },
+    ]);
+  });
+
+  it("intervalos menores que o mês recebem o orçamento pelos dias, com cada mês dividido pelos próprios dias", () => {
+    // Setembro tem 30 dias: R$ 3.000 = R$ 100 por dia. Outubro tem 31 dias.
+    const result = costCurve(
+      [
+        {
+          monthlyBudgetCents: 300_000,
+          buckets: [
+            month("2026-09-21", "2026-09-27", costs(0, 0, 0, 0)),
+            month("2026-09-28", "2026-10-04", costs(0, 0, 0, 0)),
+          ],
+        },
+      ],
+      "2026-09-24",
+    );
+
+    // 3 dias de setembro (30.000) + 4 de outubro (4 × 300.000/31 = 38.709,68).
+    expect(result.map((point) => point.plannedCents)).toEqual([70_000, 68_710]);
+    expect(result[1].plannedCumulativeCents).toBe(138_710);
+  });
+
+  it("sem orçamento, o planejado fica zerado", () => {
+    const result = costCurve([{ monthlyBudgetCents: 0, buckets: [month(JUL.from, JUL.to, costs(0, 0, 0, 10))] }], "2026-09-24");
+
+    expect(result).toEqual([
+      { ...JUL, plannedCents: 0, spentCents: 10, plannedCumulativeCents: 0, spentCumulativeCents: 10 },
     ]);
   });
 

@@ -13,7 +13,7 @@ import { CashFlowNav } from "@/components/cash-flow-nav"
 import { OpeningBalanceCard } from "@/components/opening-balance-card"
 import { CashFlowTable } from "@/components/cash-flow-table"
 import { CashFlowCostsChart } from "@/components/cash-flow-costs-chart"
-import { CostCumulativeChart, CostPhysicalChart } from "@/components/cost-curve-chart"
+import { CostCumulativeChart, CostPeriodChart } from "@/components/cost-curve-chart"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CashFlowTherapistsTable } from "@/components/cash-flow-therapists-table"
 import { ListPagination } from "@/components/list-pagination"
@@ -66,11 +66,18 @@ export default async function CashFlowPage({
   const today = parseCashFlowQuery({}, now).date
   const buckets = cashFlowBuckets(query)
   const shown = { from: buckets[0].from, to: buckets.at(-1)!.to }
+  const unit = { id: unitId, ...workspace.unit }
+  // Os gráficos de custo são sempre do ano da data exibida, mês a mês.
+  const yearQuery = { view: "year", date: query.date } as const
   const [
-    { summary, balanceCents, appointments, commissionRates, groups, hasCommission, hasSalary, hasExpenses },
+    { summary, balanceCents, appointments, commissionRates, groups, monthlyBudgetCents, hasCommission, hasSalary, hasExpenses },
+    yearSummary,
     icons,
   ] = await Promise.all([
-    loadUnitCashFlow(workspace.id, { id: unitId, ...workspace.unit }, buckets, today),
+    loadUnitCashFlow(workspace.id, unit, buckets, today),
+    query.view === "year"
+      ? null
+      : loadUnitCashFlow(workspace.id, unit, cashFlowBuckets(yearQuery), today).then(({ summary }) => summary),
     loadExpenseGroupIcons(),
   ])
   const therapists = therapistListPage(summarizeTherapists(shown, appointments, [], commissionRates), {
@@ -83,7 +90,7 @@ export default async function CashFlowPage({
     groups.map(({ iconId, ...group }) => ({ ...group, icon: (iconId && iconsById.get(iconId)) || null })),
   )
 
-  const curve = costCurve([summary.buckets], today)
+  const curve = costCurve([{ buckets: (yearSummary ?? summary).buckets, monthlyBudgetCents }], today)
 
   const pathname = `/workspace/${workspaceId}/unit/${unitId}/cash-flow`
   const listQuery = { view: query.view, date: query.date, ...filters }
@@ -119,18 +126,18 @@ export default async function CashFlowPage({
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Custos físico</CardTitle>
+            <CardTitle>Custo por mês</CardTitle>
           </CardHeader>
           <CardContent>
-            <CostPhysicalChart points={curve} view={query.view} />
+            <CostPeriodChart points={curve} view="year" />
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Custos acumulado</CardTitle>
+            <CardTitle>Custo acumulado</CardTitle>
           </CardHeader>
           <CardContent>
-            <CostCumulativeChart points={curve} view={query.view} />
+            <CostCumulativeChart points={curve} view="year" />
           </CardContent>
         </Card>
       </div>

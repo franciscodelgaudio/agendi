@@ -33,6 +33,8 @@ export type UnitTeamListItem = {
   commissionPercent: number | null;
   salaryCents: number | null;
   bonuses: UnitMemberBonus[];
+  startDate: string | null;
+  payDay: number | null;
 };
 
 function oneOf<T extends string>(values: readonly T[], value: string | undefined): T | "" {

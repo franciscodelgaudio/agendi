@@ -11,6 +11,7 @@ import {
 } from "@/lib/cash-flow";
 import {
   dailyExpenseTotalsPipeline,
+  expenseBudgetCents,
   expenseGroupTotalsPipeline,
   type ExpenseDayTotal,
   type ExpenseGroupTotal,
@@ -51,11 +52,14 @@ export async function loadUnitCashFlow(workspaceId: string, unit: CashFlowUnit, 
       : [],
     Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(shown)]),
     balanceRange ? Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(balanceRange)]) : [],
-    ExpenseGroup.find({ unitId: new Types.ObjectId(unit.id) }).select({ name: 1, iconId: 1 }).sort({ name: 1 }).lean(),
+    ExpenseGroup.find({ unitId: new Types.ObjectId(unit.id) })
+      .select({ name: 1, iconId: 1, monthlyLimitCents: 1 })
+      .sort({ name: 1 })
+      .lean(),
     Expense.aggregate<ExpenseGroupTotal>([unitMatch, ...expenseGroupTotalsPipeline(shown)]),
   ]);
-  const { commissionRates, grossCommissionPercent, monthlySalaryCents } = teamPayRates(team, unit.id);
-  const staffCosts = { grossCommissionPercent, monthlySalaryCents, today };
+  const { commissionRates, grossCommissionPercent, salaries } = teamPayRates(team, unit.id);
+  const staffCosts = { grossCommissionPercent, salaries, today };
   const summary = applyExpenses(
     applyStaffCosts(summarizeCashFlow(buckets, appointments, [], revenueShare, commissionRates), staffCosts),
     expenses,
@@ -86,8 +90,9 @@ export async function loadUnitCashFlow(workspaceId: string, unit: CashFlowUnit, 
       iconId: group.iconId?.toString() ?? null,
       paidCents: paidByGroup.get(group._id.toString()) ?? 0,
     })),
+    monthlyBudgetCents: expenseBudgetCents(groups.map((group) => ({ monthlyLimitCents: group.monthlyLimitCents ?? null }))),
     hasCommission: Object.keys(commissionRates).length > 0 || grossCommissionPercent > 0,
-    hasSalary: monthlySalaryCents > 0,
+    hasSalary: salaries.length > 0,
     hasExpenses: expenses.length > 0,
   };
 }

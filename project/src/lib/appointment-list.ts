@@ -1,8 +1,8 @@
 import { Types, type PipelineStage } from "mongoose";
 import { escapeRegex, first, type SearchParams, type SortDir } from "@/lib/unit-list";
-import { BRT_OFFSET_HOURS } from "@/lib/timezone";
+import { BRT_OFFSET_HOURS, parseDay } from "@/lib/timezone";
 
-export { BRT_OFFSET_HOURS };
+export { BRT_OFFSET_HOURS, parseDay };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -25,16 +25,6 @@ export type AppointmentListQuery = {
 
 function isSortField(value: string | undefined): value is AppointmentSortField {
   return value !== undefined && Object.hasOwn(SORT_PATHS, value);
-}
-
-// "2026-09-24" -> [2026, 9, 24]; null se o formato for outro ou o dia não existir.
-export function parseDay(value: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return null;
-  const [year, month, day] = match.slice(1).map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
-  return [year, month, day] as const;
 }
 
 function dayOrEmpty(value: string | undefined) {

@@ -411,7 +411,9 @@ export function summarizeTherapists(
 
 // Custos da equipe que não dependem de quem fez o serviço: comissão sobre o bruto
 // (recepcionistas) e salários mensais, que somados à equipe toda saem do líquido.
-export type StaffCosts = { grossCommissionPercent: number; monthlySalaryCents: number; today: string };
+// Cada salário (com os bônus) conta a partir da data de início; sem ela, conta sempre.
+export type StaffSalary = { monthlyCents: number; startDate: string | null };
+export type StaffCosts = { grossCommissionPercent: number; salaries: StaffSalary[]; today: string };
 export type StaffCashFlowAmounts = CashFlowAmounts & { salaryCents: number };
 export type StaffCashFlowBucket = DayRange & { real: StaffCashFlowAmounts; forecast: StaffCashFlowAmounts };
 export type StaffCashFlowSummary = {
@@ -467,37 +469,43 @@ export type TeamPayMember = {
     commissionPercent?: number | null;
     salaryCents?: number | null;
     bonuses?: { amountCents: number }[];
+    startDate?: string | null;
   }[];
 };
-export type TeamPayRates = Pick<StaffCosts, "grossCommissionPercent" | "monthlySalaryCents"> & {
+export type TeamPayRates = Pick<StaffCosts, "grossCommissionPercent" | "salaries"> & {
   commissionRates: CommissionRates;
 };
 
 // Comissão de massagista vai pelo id de usuário, que identifica quem fez o serviço.
 // Comissão de recepcionista é sobre o bruto; salário e bônus fixos mensais valem mesmo
-// com convite pendente e entram juntos no custo mensal.
+// com convite pendente e entram juntos no custo mensal de cada vínculo.
 export function teamPayRates(team: TeamPayMember[], unitId: string): TeamPayRates {
   const commissionRates: CommissionRates = {};
   let grossCommissionPercent = 0;
-  let monthlySalaryCents = 0;
+  const salaries: StaffSalary[] = [];
   for (const member of team) {
     if (member.role !== "massage_therapist" && member.role !== "receptionist") continue;
     const link = member.units.find((unit) => unit.unitId.toString() === unitId);
-    if (link?.salaryCents != null) monthlySalaryCents += link.salaryCents;
-    for (const bonus of link?.bonuses ?? []) monthlySalaryCents += bonus.amountCents;
+    let monthlyCents = link?.salaryCents ?? 0;
+    for (const bonus of link?.bonuses ?? []) monthlyCents += bonus.amountCents;
+    if (monthlyCents > 0) salaries.push({ monthlyCents, startDate: link?.startDate ?? null });
     if (link?.commissionPercent == null) continue;
     if (member.role === "receptionist") grossCommissionPercent += link.commissionPercent;
     else if (member.userId) commissionRates[member.userId.toString()] = link.commissionPercent;
   }
-  return { commissionRates, grossCommissionPercent, monthlySalaryCents };
+  return { commissionRates, grossCommissionPercent, salaries };
 }
 
-// Salário (sem arredondar) dos dias do intervalo até `last`: cada dia vale 1/n do mês de n dias.
-function salaryForDays({ from, to }: DayRange, monthlySalaryCents: number, last = to) {
+// Valores mensais (sem arredondar) dos dias do intervalo até `last`, cada um a partir da data de
+// início: cada dia vale 1/n do mês de n dias.
+function monthlyForDays({ from, to }: DayRange, salaries: StaffSalary[], last = to) {
   let salary = 0;
   for (let date = from; date <= to && date <= last; date = addDays(date, 1)) {
     const [year, month] = parseDay(date)!;
-    salary += monthlySalaryCents / Number(utcDay(year, month + 1, 0).slice(8));
+    const daysInMonth = Number(utcDay(year, month + 1, 0).slice(8));
+    for (const { monthlyCents, startDate } of salaries) {
+      if (!startDate || startDate <= date) salary += monthlyCents / daysInMonth;
+    }
   }
   return salary;
 }
@@ -517,12 +525,12 @@ function withStaffCosts(amounts: CashFlowAmounts, grossCommissionPercent: number
 // total soma os intervalos arredondados.
 export function applyStaffCosts(
   summary: CashFlowSummary,
-  { grossCommissionPercent, monthlySalaryCents, today }: StaffCosts,
+  { grossCommissionPercent, salaries, today }: StaffCosts,
 ): StaffCashFlowSummary {
   const buckets = summary.buckets.map((bucket) => ({
     ...bucket,
-    real: withStaffCosts(bucket.real, grossCommissionPercent, salaryForDays(bucket, monthlySalaryCents, today)),
-    forecast: withStaffCosts(bucket.forecast, grossCommissionPercent, salaryForDays(bucket, monthlySalaryCents)),
+    real: withStaffCosts(bucket.real, grossCommissionPercent, monthlyForDays(bucket, salaries, today)),
+    forecast: withStaffCosts(bucket.forecast, grossCommissionPercent, monthlyForDays(bucket, salaries)),
   }));
   const zero = { grossCents: 0, partnerShareCents: 0, commissionCents: 0, salaryCents: 0, netCents: 0 };
   const add = (a: StaffCashFlowAmounts, b: StaffCashFlowAmounts) => ({
@@ -563,8 +571,8 @@ export function summarizeCosts<T extends { paidCents: number }>(
   };
 }
 
-// Um mês da curva S: planejado (previsto) e gasto (real), no mês e acumulados. Depois do mês
-// de hoje ainda não há gasto, então fica null para a linha parar no mês atual.
+// Um intervalo da curva S: planejado (orçamento dos grupos) e gasto (real), no intervalo e
+// acumulados. Depois de hoje ainda não há gasto, então fica null para a linha parar no atual.
 export type CostCurvePoint = DayRange & {
   plannedCents: number;
   spentCents: number | null;
@@ -576,13 +584,19 @@ function costsOf({ partnerShareCents, commissionCents, salaryCents, expenseCents
   return partnerShareCents + commissionCents + salaryCents + expenseCents;
 }
 
-// Recebe os mesmos intervalos de cada unidade e soma as unidades mês a mês.
-export function costCurve(units: ExpenseCashFlowBucket[][], today: string): CostCurvePoint[] {
+// Recebe os mesmos intervalos de cada unidade e soma as unidades intervalo a intervalo. O
+// orçamento mensal é rateado pelos dias, como o salário; arredonda por intervalo.
+export function costCurve(
+  units: { buckets: ExpenseCashFlowBucket[]; monthlyBudgetCents: number }[],
+  today: string,
+): CostCurvePoint[] {
+  const monthlyBudgetCents = units.reduce((sum, unit) => sum + unit.monthlyBudgetCents, 0);
+  const budget = [{ monthlyCents: monthlyBudgetCents, startDate: null }];
   let planned = 0;
   let spent = 0;
-  return (units[0] ?? []).map(({ from, to }, index) => {
-    const plannedCents = units.reduce((sum, buckets) => sum + costsOf(buckets[index].forecast), 0);
-    const spentCents = units.reduce((sum, buckets) => sum + costsOf(buckets[index].real), 0);
+  return (units[0]?.buckets ?? []).map(({ from, to }, index) => {
+    const plannedCents = Math.round(monthlyForDays({ from, to }, budget));
+    const spentCents = units.reduce((sum, unit) => sum + costsOf(unit.buckets[index].real), 0);
     planned += plannedCents;
     spent += spentCents;
     const started = from <= today;

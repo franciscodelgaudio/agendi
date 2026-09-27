@@ -25,7 +25,7 @@ describe("updateUnitMemberPay", () => {
 
     expect(result).toEqual({ ok: true });
     expect(deps.findMember).toHaveBeenCalledWith(MEMBER_ID);
-    expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, { commissionPercent: 40.25, salaryCents: null, bonuses: [] });
+    expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, { startDate: null, payDay: null, commissionPercent: 40.25, salaryCents: null, bonuses: [] });
   });
 
   it("dono define só salário mensal para uma massagista", async () => {
@@ -34,7 +34,7 @@ describe("updateUnitMemberPay", () => {
     const result = await updateUnitMemberPay({ salary: " 2500.50 " }, MEMBER_ID, { actorRole: "owner" }, deps);
 
     expect(result).toEqual({ ok: true });
-    expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, { commissionPercent: null, salaryCents: 250_050, bonuses: [] });
+    expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, { startDate: null, payDay: null, commissionPercent: null, salaryCents: 250_050, bonuses: [] });
   });
 
   it("comissão e salário juntos, com bônus fixos mensais", async () => {
@@ -56,6 +56,8 @@ describe("updateUnitMemberPay", () => {
 
     expect(result).toEqual({ ok: true });
     expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, {
+      startDate: null,
+      payDay: null,
       commissionPercent: 20,
       salaryCents: 150_000,
       bonuses: [
@@ -77,6 +79,8 @@ describe("updateUnitMemberPay", () => {
 
     expect(result).toEqual({ ok: true });
     expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, {
+      startDate: null,
+      payDay: null,
       commissionPercent: null,
       salaryCents: null,
       bonuses: [{ description: "Prêmio", amountCents: 30_000 }],
@@ -89,7 +93,7 @@ describe("updateUnitMemberPay", () => {
     const result = await updateUnitMemberPay({ commissionPercent: " ", salary: "" }, MEMBER_ID, { actorRole: "owner" }, deps);
 
     expect(result).toEqual({ ok: true });
-    expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, { commissionPercent: null, salaryCents: null, bonuses: [] });
+    expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, { startDate: null, payDay: null, commissionPercent: null, salaryCents: null, bonuses: [] });
   });
 
   it("admin define comissão e salário para uma recepcionista", async () => {
@@ -98,7 +102,7 @@ describe("updateUnitMemberPay", () => {
     const result = await updateUnitMemberPay({ commissionPercent: "5", salary: "1800" }, MEMBER_ID, { actorRole: "admin" }, deps);
 
     expect(result).toEqual({ ok: true });
-    expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, { commissionPercent: 5, salaryCents: 180_000, bonuses: [] });
+    expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, { startDate: null, payDay: null, commissionPercent: 5, salaryCents: 180_000, bonuses: [] });
   });
 
   it.each(["0", "100", "35.5"])("aceita comissão %s", async (commissionPercent) => {
@@ -108,6 +112,8 @@ describe("updateUnitMemberPay", () => {
 
     expect(result).toEqual({ ok: true });
     expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, {
+      startDate: null,
+      payDay: null,
       commissionPercent: Number(commissionPercent),
       salaryCents: null,
       bonuses: [],
@@ -166,10 +172,69 @@ describe("updateUnitMemberPay", () => {
 
     expect(result).toEqual({ ok: true });
     expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, {
+      startDate: null,
+      payDay: null,
       commissionPercent: null,
       salaryCents: null,
       bonuses: [{ description, amountCents: 100 }],
     });
+  });
+
+  it("data de início na unidade vai junto com a remuneração", async () => {
+    const deps = makeDeps();
+
+    const result = await updateUnitMemberPay({ salary: "3000", startDate: " 2026-02-15 " }, MEMBER_ID, { actorRole: "owner" }, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, {
+      startDate: "2026-02-15",
+      payDay: null,
+      commissionPercent: null,
+      salaryCents: 300_000,
+      bonuses: [],
+    });
+  });
+
+  it.each(["", "   ", null])("data de início %j fica sem data", async (startDate) => {
+    const deps = makeDeps();
+
+    const result = await updateUnitMemberPay({ salary: "3000", startDate }, MEMBER_ID, { actorRole: "owner" }, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, expect.objectContaining({ startDate: null }));
+  });
+
+  it.each(["15/02/2026", "2026-02-30", "2026-2-15", "abc", 20260215])("data de início %j → invalid_start_date", async (startDate) => {
+    const deps = makeDeps();
+
+    const result = await updateUnitMemberPay({ salary: "3000", startDate }, MEMBER_ID, { actorRole: "owner" }, deps);
+
+    expect(result).toEqual({ ok: false, error: "invalid_start_date" });
+    expect(deps.update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["5", 5],
+    [" 31 ", 31],
+    ["1", 1],
+    ["", null],
+    [null, null],
+  ])("dia de pagamento %j → %j", async (payDay, expected) => {
+    const deps = makeDeps();
+
+    const result = await updateUnitMemberPay({ salary: "3000", payDay }, MEMBER_ID, { actorRole: "owner" }, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, expect.objectContaining({ payDay: expected }));
+  });
+
+  it.each(["0", "32", "5.5", "abc", 5])("dia de pagamento %j → invalid_pay_day", async (payDay) => {
+    const deps = makeDeps();
+
+    const result = await updateUnitMemberPay({ salary: "3000", payDay }, MEMBER_ID, { actorRole: "owner" }, deps);
+
+    expect(result).toEqual({ ok: false, error: "invalid_pay_day" });
+    expect(deps.update).not.toHaveBeenCalled();
   });
 
   it("admin não define a remuneração de massagista", async () => {

@@ -23,10 +23,11 @@ type Props = {
   unitId: string
   // Sem permissão, a coluna de ações (editar/excluir) não aparece.
   canManage: boolean
+  limitLabel: string
 }
 
-// Gasto do mês por grupo: o lançado (pago ou não) comparado ao limite mensal.
-export function ExpenseGroupsTable({ groups, icons, query, pathname, workspaceId, unitId, canManage }: Props) {
+// Gasto do período por grupo: o lançado (pago ou não) comparado ao limite do período.
+export function ExpenseGroupsTable({ groups, icons, query, pathname, workspaceId, unitId, canManage, limitLabel }: Props) {
   return (
     <div className="border">
       <Table>
@@ -41,7 +42,7 @@ export function ExpenseGroupsTable({ groups, icons, query, pathname, workspaceId
               pathname={pathname}
               className="text-right @max-md:hidden"
             />
-            <TableHead className="min-w-40 px-4 @max-lg:hidden">Limite por mês</TableHead>
+            <TableHead className="min-w-40 px-4 @max-lg:hidden">{limitLabel}</TableHead>
             {canManage && <TableHead className="w-0 px-4" />}
           </TableRow>
         </TableHeader>
@@ -68,23 +69,23 @@ export function ExpenseGroupsTable({ groups, icons, query, pathname, workspaceId
                 {money(group.paidCents)}
               </TableCell>
               <TableCell className="px-4 @max-lg:hidden">
-                {group.monthlyLimitCents === null ? (
+                {group.limitCents === null ? (
                   <span className="text-muted-foreground">Sem limite</span>
                 ) : (
                   <div className="grid gap-1">
                     <span className="text-xs text-muted-foreground tabular-nums">
-                      {money(group.monthlyLimitCents)}
+                      {money(group.limitCents)}
                       {group.overLimit && (
                         <span className="text-destructive">
                           {" "}
-                          · {money(group.totalCents - group.monthlyLimitCents)} acima
+                          · {money(group.totalCents - group.limitCents)} acima
                         </span>
                       )}
                     </span>
                     <div className="h-1.5 overflow-hidden bg-muted">
                       <div
                         className={cn("h-full", group.overLimit ? "bg-destructive" : "bg-primary")}
-                        style={{ width: `${Math.min(group.totalCents / group.monthlyLimitCents, 1) * 100}%` }}
+                        style={{ width: `${Math.min(group.totalCents / group.limitCents, 1) * 100}%` }}
                       />
                     </div>
                   </div>

@@ -15,12 +15,16 @@ const bonusSchema = new Schema(
 // Unidade em que o membro trabalha e como é pago nela: comissão, salário mensal e bônus,
 // combináveis (null/vazio até ser definido na Equipe). Comissão de massagista é sobre
 // os serviços que ela fez; de recepcionista, sobre o faturamento bruto da unidade.
+// Salário e bônus contam a partir de startDate ("2026-02-15"); null conta sempre. O mês
+// de trabalho é pago no payDay (1 a 31) do mês seguinte.
 const unitLinkSchema = new Schema(
   {
     unitId: { type: Schema.Types.ObjectId, ref: "Unit", required: true },
     commissionPercent: { type: Number, default: null, min: 0, max: 100 },
     salaryCents: { type: Number, default: null, min: 1 },
     bonuses: { type: [bonusSchema], default: [] },
+    startDate: { type: String, default: null },
+    payDay: { type: Number, default: null, min: 1, max: 31 },
   },
   { _id: false },
 );

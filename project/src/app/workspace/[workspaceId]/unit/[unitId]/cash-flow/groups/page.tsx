@@ -26,9 +26,11 @@ export default async function ExpenseGroupsPage({
 }: PageProps<"/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups">) {
   const { workspaceId, unitId } = await params
   const now = new Date()
-  // O limite é mensal, então a aba sempre mostra um mês.
+  // O limite é mensal: no ano, vale 12 vezes. A visão semanal não se aplica aos grupos.
   const search = await searchParams
-  const query = { ...parseCashFlowQuery(search, now), view: "month" as const }
+  const parsed = parseCashFlowQuery(search, now)
+  const query = { ...parsed, view: parsed.view === "year" ? ("year" as const) : ("month" as const) }
+  const months = query.view === "year" ? 12 : 1
   // Filtros mudam sem levar a página junto, então a lista volta para a primeira.
   const { page, ...filters } = parseExpenseGroupListQuery(search)
   const user = await requireUser()
@@ -54,11 +56,11 @@ export default async function ExpenseGroupsPage({
   const canManage = canManageMembers(workspace.role)
 
   const buckets = cashFlowBuckets(query)
-  const month = { from: buckets[0].from, to: buckets.at(-1)!.to }
+  const period = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const unitObjectId = new Types.ObjectId(unitId)
   const [groups, totals, icons] = await Promise.all([
     ExpenseGroup.find({ unitId: unitObjectId }).select({ name: 1, monthlyLimitCents: 1, iconId: 1 }).lean(),
-    Expense.aggregate<ExpenseGroupTotal>([{ $match: { unitId: unitObjectId } }, ...expenseGroupTotalsPipeline(month)]),
+    Expense.aggregate<ExpenseGroupTotal>([{ $match: { unitId: unitObjectId } }, ...expenseGroupTotalsPipeline(period)]),
     loadExpenseGroupIcons(),
   ])
   const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
@@ -70,10 +72,11 @@ export default async function ExpenseGroupsPage({
       icon: (group.iconId && iconsById.get(group.iconId.toString())) || null,
     })),
     totals,
+    months,
   )
   const today = parseCashFlowQuery({}, now).date
   const pathname = `/workspace/${workspaceId}/unit/${unitId}/cash-flow/groups`
-  const listQuery = { date: query.date, ...filters }
+  const listQuery = { view: query.view, date: query.date, ...filters }
   const result = expenseGroupListPage(summary, { ...filters, page })
   // Página além da última (ex.: depois de excluir o último grupo dela) vai para a última.
   const pages = Math.ceil(result.total / CASH_FLOW_PAGE_SIZE)
@@ -89,11 +92,11 @@ export default async function ExpenseGroupsPage({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <CashFlowNav
           query={query}
-          range={month}
-          isCurrent={month.from <= today && today <= month.to}
+          range={period}
+          isCurrent={period.from <= today && today <= period.to}
           today={today}
           pathname={pathname}
-          views={["month"]}
+          views={["month", "year"]}
           preserve={filters}
         />
         {canManage && summary.length > 0 && <CreateExpenseGroupSheet workspaceId={workspaceId} unitId={unitId} icons={icons} />}
@@ -126,6 +129,7 @@ export default async function ExpenseGroupsPage({
             workspaceId={workspaceId}
             unitId={unitId}
             canManage={canManage}
+            limitLabel={months === 1 ? "Limite por mês" : "Limite no ano"}
           />
           <ListPagination
             query={listQuery}

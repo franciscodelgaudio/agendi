@@ -16,6 +16,8 @@ const errorMessages: Record<UpdateUnitMemberPayError | "unauthenticated", string
   invalid_commission: "Informe uma comissão entre 0% e 100%.",
   invalid_salary: "Informe um salário mensal maior que zero.",
   invalid_bonus: "Cada bônus precisa de descrição (até 80 caracteres) e valor maior que zero.",
+  invalid_start_date: "Data de início inválida.",
+  invalid_pay_day: "Informe um dia de pagamento entre 1 e 31.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
@@ -46,7 +48,12 @@ export async function updateUnitMemberAction(
   const bonuses = formData.getAll("bonusDescription").map((description, i) => ({ description, amount: amounts[i] }))
 
   const result = await updateUnitMemberPay(
-    { commissionPercent: formData.get("commissionPercent"), salary: formData.get("salary"), bonuses },
+    {
+      startDate: formData.get("startDate"),
+      payDay: formData.get("payDay"),
+      commissionPercent: formData.get("commissionPercent"),       salary: formData.get("salary"),
+      bonuses,
+    },
     memberId,
     { actorRole: access?.role ?? null },
     {
@@ -55,9 +62,11 @@ export async function updateUnitMemberAction(
         const member = await WorkspaceMember.findOne(filter).select("role").lean()
         return member && { id: member._id.toString(), role: member.role }
       },
-      update: async (_id, { commissionPercent, salaryCents, bonuses }) => {
+      update: async (_id, { startDate, payDay, commissionPercent, salaryCents, bonuses }) => {
         await WorkspaceMember.updateOne(filter!, {
           $set: {
+            "units.$.startDate": startDate,
+            "units.$.payDay": payDay,
             "units.$.commissionPercent": commissionPercent,
             "units.$.salaryCents": salaryCents,
             "units.$.bonuses": bonuses,

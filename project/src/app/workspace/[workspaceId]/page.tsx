@@ -30,7 +30,7 @@ import {
   type ServiceTotal,
   type StaffCashFlowAmounts,
 } from "@/lib/cash-flow"
-import { dailyExpenseTotalsPipeline, type ExpenseDayTotal } from "@/lib/expense"
+import { dailyExpenseTotalsPipeline, expenseBudgetCents, type ExpenseDayTotal } from "@/lib/expense"
 import { canManageMembers, type WorkspaceRole } from "@/lib/member"
 import type { RevenueShare } from "@/lib/revenue-share"
 import { requirePage } from "@/lib/page-guard"
@@ -41,10 +41,11 @@ import { teamCandidatesLookup, type TeamCandidate } from "@/lib/unit-team"
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
 import { Expense } from "@/models/Expense"
+import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Product } from "@/models/Product"
 import { Workspace } from "@/models/Workspace"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
-import { CostCumulativeChart, CostPhysicalChart } from "@/components/cost-curve-chart"
+import { CostCumulativeChart, CostPeriodChart } from "@/components/cost-curve-chart"
 import { CreateUnitSheet } from "@/components/create-unit-sheet"
 import { timeFormat } from "@/components/service-format"
 import type { TherapistOption } from "@/components/therapist-avatar"
@@ -185,15 +186,17 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
           to: yearRange.to > weekRange.to ? yearRange.to : weekRange.to,
         }
         const unitMatch = { $match: { unitId: new Types.ObjectId(unit.id) } }
-        const [appointments, bookings, serviceAppointments, serviceBookings, expenses] = await Promise.all([
+        const [appointments, bookings, serviceAppointments, serviceBookings, expenses, groups] = await Promise.all([
           Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
           Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
           Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(month)]),
           Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(month, now)]),
           Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(periods.year)]),
+          ExpenseGroup.find({ unitId: new Types.ObjectId(unit.id) }).select({ monthlyLimitCents: 1 }).lean(),
         ])
         return {
           unit,
+          monthlyBudgetCents: expenseBudgetCents(groups.map((group) => ({ monthlyLimitCents: group.monthlyLimitCents ?? null }))),
           appointments,
           bookings,
           expenses,
@@ -216,7 +219,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     Product.countDocuments({ unitId: { $in: unitIds } }),
   ])
 
-  const unitSummaries = perUnit.map(({ unit, appointments, bookings, expenses, services }) => {
+  const unitSummaries = perUnit.map(({ unit, appointments, bookings, expenses, services, monthlyBudgetCents }) => {
     const { commissionRates, ...staffCosts } = teamPayRates(members, unit.id)
     const summarize = (buckets: DayRange[]) =>
       applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, unit.revenueShare, commissionRates), {
@@ -231,9 +234,9 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         !!unit.revenueShare ||
         Object.keys(commissionRates).length > 0 ||
         staffCosts.grossCommissionPercent > 0 ||
-        staffCosts.monthlySalaryCents > 0,
+        staffCosts.salaries.length > 0,
       month: summarize(monthBuckets).total,
-      year: applyExpenses(summarize(yearBuckets), expenses).buckets,
+      year: { buckets: applyExpenses(summarize(yearBuckets), expenses).buckets, monthlyBudgetCents },
       services: { done, scheduled: all - done },
     }
   })
@@ -387,8 +390,8 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
           </CardHeader>
           <CardContent className="gap-6">
             <div className="grid gap-2">
-              <span className="text-sm font-medium">Físico</span>
-              <CostPhysicalChart points={curve} view="year" />
+              <span className="text-sm font-medium">Custo por mês</span>
+              <CostPeriodChart points={curve} view="year" />
             </div>
             <div className="grid gap-2">
               <span className="text-sm font-medium">Acumulado</span>

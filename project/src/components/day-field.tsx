@@ -26,12 +26,13 @@ type Props = {
   id: string
   name: string
   label: string
-  // "2026-09-24"
+  // "2026-09-24"; vazio mostra o placeholder até escolher um dia.
   defaultValue: string
+  placeholder?: string
 }
 
 // Dia escolhido pelo Calendar, enviado como "2026-09-24" num campo oculto.
-export function DayField({ id, name, label, defaultValue }: Props) {
+export function DayField({ id, name, label, defaultValue, placeholder }: Props) {
   const [day, setDay] = useState(defaultValue)
   const [open, setOpen] = useState(false)
 
@@ -42,14 +43,14 @@ export function DayField({ id, name, label, defaultValue }: Props) {
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger render={<Button id={id} type="button" variant="outline" className="justify-start font-normal" />}>
           <CalendarIcon />
-          {dateLabelFormat.format(toDate(day))}
+          {day ? dateLabelFormat.format(toDate(day)) : <span className="text-muted-foreground">{placeholder}</span>}
         </PopoverTrigger>
         <PopoverContent className="w-auto overflow-hidden p-0" align="start">
           <Calendar
             mode="single"
             locale={ptBR}
-            selected={toDate(day)}
-            defaultMonth={toDate(day)}
+            selected={day ? toDate(day) : undefined}
+            defaultMonth={day ? toDate(day) : undefined}
             required
             onSelect={(date) => {
               setDay(toDay(date))

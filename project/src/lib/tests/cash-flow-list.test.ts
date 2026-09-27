@@ -171,7 +171,8 @@ const GROUP_BASE = { q: "", limit: "", sort: "name", dir: "asc", page: 1 } as co
 function group(
   overrides: Partial<ExpenseGroupSummary> & { id: string },
 ): ExpenseGroupSummary {
-  return { name: overrides.id, monthlyLimitCents: null, totalCents: 0, paidCents: 0, overLimit: false, ...overrides };
+  const monthlyLimitCents = overrides.monthlyLimitCents ?? null;
+  return { name: overrides.id, monthlyLimitCents, limitCents: monthlyLimitCents, totalCents: 0, paidCents: 0, overLimit: false, ...overrides };
 }
 
 // Na ordem do resumo: por nome.

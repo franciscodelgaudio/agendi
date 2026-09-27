@@ -1,6 +1,6 @@
 "use client"
 
-import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts"
+import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts"
 import type { CashFlowView, CostCurvePoint, DayRange } from "@/lib/cash-flow"
 import { currencyFormat } from "@/components/service-format"
 import {
@@ -20,7 +20,7 @@ const longMonthFormat = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZo
 const compactFormat = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact" })
 
 // Planejado e gasto têm a mesma cor nos dois gráficos.
-const physicalConfig = {
+const periodConfig = {
   plannedCents: { label: "Planejado", color: "var(--chart-3)" },
   spentCents: { label: "Gasto", color: "var(--chart-1)" },
 } satisfies ChartConfig
@@ -85,33 +85,45 @@ const Y_AXIS = {
   tickFormatter: (cents: number) => compactFormat.format(cents / 100),
 } as const
 
-// Custo de cada período (repasse, comissões, salários e despesas): planejado ao lado do gasto.
-export function CostPhysicalChart(props: Props) {
+// Custo de cada período (repasse, comissões, salários e despesas): gasto em coluna, planejado em linha.
+export function CostPeriodChart(props: Props) {
   return (
-    <ChartContainer config={physicalConfig} className="aspect-auto h-56 w-full">
-      <BarChart data={toData(props)} margin={{ left: 4, right: 4 }} barGap={2}>
+    <ChartContainer config={periodConfig} className="aspect-auto h-56 w-full">
+      <ComposedChart data={toData(props)} margin={{ left: 4, right: 4 }}>
         <CartesianGrid vertical={false} />
         <XAxis {...X_AXIS} />
         <YAxis {...Y_AXIS} />
-        <Tip config={physicalConfig} />
+        <Tip config={periodConfig} />
         <ChartLegend content={<ChartLegendContent />} />
-        <Bar dataKey="plannedCents" fill="var(--color-plannedCents)" radius={[4, 4, 0, 0]} maxBarSize={20} />
-        <Bar dataKey="spentCents" fill="var(--color-spentCents)" radius={[4, 4, 0, 0]} maxBarSize={20} />
-      </BarChart>
+        <Bar dataKey="spentCents" fill="var(--color-spentCents)" radius={[4, 4, 0, 0]} maxBarSize={24} />
+        <Line
+          dataKey="plannedCents"
+          type="monotone"
+          stroke="var(--color-plannedCents)"
+          strokeWidth={2}
+          dot={false}
+        />
+      </ComposedChart>
     </ChartContainer>
   )
 }
 
-// Curva S: planejado e gasto somados período a período; o gasto para no período de hoje.
+// Curva S: gasto acumulado em coluna (para no período de hoje), planejado acumulado em linha.
 export function CostCumulativeChart(props: Props) {
   return (
     <ChartContainer config={cumulativeConfig} className="aspect-auto h-56 w-full">
-      <LineChart data={toData(props)} margin={{ left: 4, right: 4 }}>
+      <ComposedChart data={toData(props)} margin={{ left: 4, right: 4 }}>
         <CartesianGrid vertical={false} />
         <XAxis {...X_AXIS} />
         <YAxis {...Y_AXIS} />
         <Tip config={cumulativeConfig} />
         <ChartLegend content={<ChartLegendContent />} />
+        <Bar
+          dataKey="spentCumulativeCents"
+          fill="var(--color-spentCumulativeCents)"
+          radius={[4, 4, 0, 0]}
+          maxBarSize={24}
+        />
         <Line
           dataKey="plannedCumulativeCents"
           type="monotone"
@@ -119,14 +131,7 @@ export function CostCumulativeChart(props: Props) {
           strokeWidth={2}
           dot={false}
         />
-        <Line
-          dataKey="spentCumulativeCents"
-          type="monotone"
-          stroke="var(--color-spentCumulativeCents)"
-          strokeWidth={2}
-          dot={{ r: 4, fill: "var(--color-spentCumulativeCents)", stroke: "var(--card)", strokeWidth: 2 }}
-        />
-      </LineChart>
+      </ComposedChart>
     </ChartContainer>
   )
 }

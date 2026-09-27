@@ -233,23 +233,32 @@ export function expenseGroupTotalsPipeline(range: DayRange): PipelineStage[] {
 export type ExpenseGroupInfo = { id: string; name: string; monthlyLimitCents: number | null };
 
 export type ExpenseGroupSummary<T extends ExpenseGroupInfo = ExpenseGroupInfo> = T & {
+  // Limite do período: o mensal vezes os meses; null sem limite.
+  limitCents: number | null;
   totalCents: number;
   paidCents: number;
   overLimit: boolean;
 };
 
-// Passa do limite pelo total lançado, pago ou não: o limite é do gasto previsto no mês.
-// Campos extras do grupo (como o ícone) seguem no resumo.
+// Passa do limite pelo total lançado, pago ou não: o limite é do gasto previsto por mês,
+// multiplicado pelos meses do período. Campos extras do grupo (como o ícone) seguem no resumo.
 export function summarizeExpenseGroups<T extends ExpenseGroupInfo>(
   groups: T[],
   totals: ExpenseGroupTotal[],
+  months = 1,
 ): ExpenseGroupSummary<T>[] {
   const byGroup = new Map(totals.map((total) => [total.groupId, total]));
   return groups
     .map((group) => {
       const { totalCents = 0, paidCents = 0 } = byGroup.get(group.id) ?? {};
-      const overLimit = group.monthlyLimitCents !== null && totalCents > group.monthlyLimitCents;
-      return { ...group, totalCents, paidCents, overLimit };
+      const limitCents = group.monthlyLimitCents === null ? null : group.monthlyLimitCents * months;
+      const overLimit = limitCents !== null && totalCents > limitCents;
+      return { ...group, limitCents, totalCents, paidCents, overLimit };
     })
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+}
+
+// Gasto previsto da unidade por mês: a soma dos limites dos grupos que têm limite.
+export function expenseBudgetCents(groups: { monthlyLimitCents: number | null }[]) {
+  return groups.reduce((sum, group) => sum + (group.monthlyLimitCents ?? 0), 0);
 }

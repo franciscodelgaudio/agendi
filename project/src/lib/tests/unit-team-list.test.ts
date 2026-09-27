@@ -18,6 +18,8 @@ function member(overrides: Partial<UnitTeamListItem> & { id: string }): UnitTeam
     commissionPercent: null,
     salaryCents: null,
     bonuses: [],
+    startDate: null,
+    payDay: null,
     ...overrides,
   };
 }

@@ -8,6 +8,7 @@ import {
   expenseGroupTotalsPipeline,
   setExpensePaid,
   summarizeExpenseGroups,
+  expenseBudgetCents,
   updateExpense,
 } from "@/lib/expense";
 
@@ -395,9 +396,9 @@ describe("summarizeExpenseGroups", () => {
     );
 
     expect(result).toEqual([
-      { ...RENT, totalCents: 0, paidCents: 0, overLimit: false },
-      { ...TAXES, totalCents: 80_000, paidCents: 50_000, overLimit: false },
-      { ...SUPPLIES, totalCents: 0, paidCents: 0, overLimit: false },
+      { ...RENT, limitCents: 300_000, totalCents: 0, paidCents: 0, overLimit: false },
+      { ...TAXES, limitCents: 100_000, totalCents: 80_000, paidCents: 50_000, overLimit: false },
+      { ...SUPPLIES, limitCents: null, totalCents: 0, paidCents: 0, overLimit: false },
     ]);
   });
 
@@ -422,7 +423,34 @@ describe("summarizeExpenseGroups", () => {
   it("ignora totais de grupos que não estão na lista", () => {
     const result = summarizeExpenseGroups([TAXES], [{ groupId: "gone", totalCents: 500, paidCents: 500 }]);
 
-    expect(result).toEqual([{ ...TAXES, totalCents: 0, paidCents: 0, overLimit: false }]);
+    expect(result).toEqual([{ ...TAXES, limitCents: 100_000, totalCents: 0, paidCents: 0, overLimit: false }]);
+  });
+
+  it("no ano, o limite é o mensal vezes 12 e o total do ano é comparado com ele", () => {
+    const totals = [
+      { groupId: "g1", totalCents: 1_200_000, paidCents: 900_000 },
+      { groupId: "g3", totalCents: 3_600_001, paidCents: 0 },
+    ];
+
+    const result = summarizeExpenseGroups([TAXES, SUPPLIES, RENT], totals, 12);
+
+    expect(result).toEqual([
+      { ...RENT, limitCents: 3_600_000, totalCents: 3_600_001, paidCents: 0, overLimit: true },
+      { ...TAXES, limitCents: 1_200_000, totalCents: 1_200_000, paidCents: 900_000, overLimit: false },
+      { ...SUPPLIES, limitCents: null, totalCents: 0, paidCents: 0, overLimit: false },
+    ]);
+  });
+});
+
+describe("expenseBudgetCents", () => {
+  it("soma os limites mensais dos grupos; grupo sem limite não entra", () => {
+    const groups = [{ monthlyLimitCents: 100_000 }, { monthlyLimitCents: null }, { monthlyLimitCents: 250_000 }];
+
+    expect(expenseBudgetCents(groups)).toBe(350_000);
+  });
+
+  it("sem grupos, orçamento zero", () => {
+    expect(expenseBudgetCents([])).toBe(0);
   });
 });
 
