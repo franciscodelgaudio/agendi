@@ -562,3 +562,37 @@ export function summarizeCosts<T extends { paidCents: number }>(
     rows: items.map((item) => ({ ...item, share: item.cents / totalCents })).sort((a, b) => b.cents - a.cents),
   };
 }
+
+// Um mês da curva S: planejado (previsto) e gasto (real), no mês e acumulados. Depois do mês
+// de hoje ainda não há gasto, então fica null para a linha parar no mês atual.
+export type CostCurvePoint = DayRange & {
+  plannedCents: number;
+  spentCents: number | null;
+  plannedCumulativeCents: number;
+  spentCumulativeCents: number | null;
+};
+
+function costsOf({ partnerShareCents, commissionCents, salaryCents, expenseCents }: ExpenseCashFlowAmounts) {
+  return partnerShareCents + commissionCents + salaryCents + expenseCents;
+}
+
+// Recebe os mesmos intervalos de cada unidade e soma as unidades mês a mês.
+export function costCurve(units: ExpenseCashFlowBucket[][], today: string): CostCurvePoint[] {
+  let planned = 0;
+  let spent = 0;
+  return (units[0] ?? []).map(({ from, to }, index) => {
+    const plannedCents = units.reduce((sum, buckets) => sum + costsOf(buckets[index].forecast), 0);
+    const spentCents = units.reduce((sum, buckets) => sum + costsOf(buckets[index].real), 0);
+    planned += plannedCents;
+    spent += spentCents;
+    const started = from <= today;
+    return {
+      from,
+      to,
+      plannedCents,
+      spentCents: started ? spentCents : null,
+      plannedCumulativeCents: planned,
+      spentCumulativeCents: started ? spent : null,
+    };
+  });
+}

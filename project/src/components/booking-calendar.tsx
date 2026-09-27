@@ -16,6 +16,7 @@ import "@fullcalendar/react/skeleton.css"
 import "@fullcalendar/react/themes/monarch/theme.css"
 import Link from "@/components/link"
 import { CheckIcon, PlusIcon, XIcon } from "lucide-react"
+import { toast } from "sonner"
 import { convertBookingAction } from "@/lib/actions/appointment"
 import {
   createBookingAction,
@@ -258,7 +259,11 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
         event.setDates(new Date(`${times.startsAt}:00Z`), new Date(`${times.endsAt}:00Z`))
         event.setExtendedProp("booking", withTimes(event.extendedProps.booking, times))
       },
-      onError: setError,
+      // Arraste recusado (sala, massagista ou horário ocupado): o evento volta e o motivo aparece num toast.
+      onError: (message) => {
+        setError((current) => (current === RETRY_MESSAGE ? null : current))
+        toast.error(message)
+      },
       onRetry: () => setError(RETRY_MESSAGE),
       onSaved: () => setError((current) => (current === RETRY_MESSAGE ? null : current)),
       onIdle: () => {

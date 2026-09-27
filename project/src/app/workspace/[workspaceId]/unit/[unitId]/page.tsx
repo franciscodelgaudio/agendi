@@ -9,9 +9,11 @@ import {
   UsersIcon,
 } from "lucide-react"
 import {
+  applyExpenses,
   applyStaffCosts,
   cashFlowBuckets,
   cashFlowFetchRange,
+  costCurve,
   dailyAppointmentTotalsPipeline,
   dailyBookingForecastPipeline,
   parseCashFlowQuery,
@@ -26,6 +28,7 @@ import {
   type DayTotal,
   type ServiceTotal,
 } from "@/lib/cash-flow"
+import { dailyExpenseTotalsPipeline, type ExpenseDayTotal } from "@/lib/expense"
 import type { RevenueShare } from "@/lib/revenue-share"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
@@ -33,9 +36,11 @@ import { therapistOptionsStages } from "@/lib/therapist"
 import { BRT_OFFSET_HOURS } from "@/lib/timezone"
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
+import { Expense } from "@/models/Expense"
 import { Product } from "@/models/Product"
 import { Workspace } from "@/models/Workspace"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
+import { CostCumulativeChart, CostPhysicalChart } from "@/components/cost-curve-chart"
 import { timeFormat } from "@/components/service-format"
 import type { TherapistOption } from "@/components/therapist-avatar"
 import {
@@ -44,10 +49,8 @@ import {
   LowStockList,
   money,
   plural,
-  RealForecastLegend,
   StatTile,
   TodaySchedule,
-  WeekChart,
   type StockItem,
   type TodayBooking,
 } from "@/components/unit-overview"
@@ -117,16 +120,17 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
   if (!workspace?.unit) notFound()
   const { revenueShare } = workspace.unit
 
-  // Mês corrente para os indicadores; semana corrente para o gráfico; semana, mês e ano para
-  // os rankings. Uma busca só cobre todos, com o resto dos períodos de repasse das pontas.
+  // Mês corrente para os indicadores; ano corrente para a curva de custos; semana, mês e ano
+  // para os rankings. Uma busca só cobre todos, com o resto dos períodos de repasse das pontas.
   const today = parseCashFlowQuery({}, now).date
   const monthBuckets = cashFlowBuckets({ view: "month", date: today })
   const weekBuckets = cashFlowBuckets({ view: "week", date: today })
+  const yearBuckets = cashFlowBuckets({ view: "year", date: today })
   const periods = byPeriod((view): DayRange => {
     const buckets = cashFlowBuckets({ view, date: today })
     return { from: buckets[0].from, to: buckets.at(-1)!.to }
   })
-  const fetchRanges = [weekBuckets, cashFlowBuckets({ view: "year", date: today })].map((buckets) =>
+  const fetchRanges = [weekBuckets, yearBuckets].map((buckets) =>
     cashFlowFetchRange(buckets, revenueShare?.period ?? null),
   )
   const range = {
@@ -139,7 +143,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
 
   const unitObjectId = new Types.ObjectId(unitId)
   const unitMatch = { $match: { unitId: unitObjectId } }
-  const [appointments, bookings, serviceSummaries, team, todayBookings, lowStock, productCount] =
+  const [appointments, bookings, serviceSummaries, team, todayBookings, lowStock, productCount, expenses] =
     await Promise.all([
       Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
       Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
@@ -169,6 +173,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
         .select({ name: 1, quantity: 1, avatarUrl: 1 })
         .lean(),
       Product.countDocuments({ unitId: unitObjectId }),
+      Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(periods.year)]),
     ])
 
   const { commissionRates, ...staffCosts } = teamPayRates(team, unitId)
@@ -178,7 +183,9 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
       today,
     })
   const monthTotal = summarize(monthBuckets).total
-  const week = summarize(weekBuckets)
+  const curve = costCurve([applyExpenses(summarize(yearBuckets), expenses).buckets], today)
+  const spentCents = curve.findLast((point) => point.spentCumulativeCents !== null)?.spentCumulativeCents ?? 0
+  const plannedCents = curve.at(-1)?.plannedCumulativeCents ?? 0
   const servicesByPeriod = byPeriod((view) => serviceSummaries[PERIOD_VIEWS.indexOf(view)])
   const services = servicesByPeriod.month
   const therapistImages = new Map(workspace.therapists.map((therapist) => [therapist.id, therapist.image]))
@@ -289,8 +296,8 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
           <CardHeader>
             <CardTitle>Agenda de hoje</CardTitle>
             <CardDescription>
@@ -309,17 +316,23 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
+        <Card>
           <CardHeader>
-            <CardTitle>Esta semana</CardTitle>
+            <CardTitle>Custos em {periods.year.from.slice(0, 4)}</CardTitle>
             <CardDescription>
-              {money(week.total.real.grossCents)} realizados de {money(week.total.forecast.grossCents)} previstos
+              {money(spentCents)} gastos de {money(plannedCents)} planejados
             </CardDescription>
-            <CardLink href={`${base}/cash-flow?view=week`}>Caixa</CardLink>
+            <CardLink href={`${base}/cash-flow?view=year`}>Caixa</CardLink>
           </CardHeader>
-          <CardContent className="gap-4">
-            <WeekChart buckets={week.buckets} today={today} />
-            <RealForecastLegend />
+          <CardContent className="gap-6">
+            <div className="grid gap-2">
+              <span className="text-sm font-medium">Físico</span>
+              <CostPhysicalChart points={curve} view="year" />
+            </div>
+            <div className="grid gap-2">
+              <span className="text-sm font-medium">Acumulado</span>
+              <CostCumulativeChart points={curve} view="year" />
+            </div>
           </CardContent>
         </Card>
       </div>

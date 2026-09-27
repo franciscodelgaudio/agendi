@@ -1,6 +1,5 @@
 import Link from "@/components/link"
 import { ArrowRightIcon, CheckIcon, PackageCheckIcon, type LucideIcon } from "lucide-react"
-import type { CashFlowBucket } from "@/lib/cash-flow"
 import { currencyFormat, timeFormat } from "@/components/service-format"
 import { TherapistAvatar, type TherapistOption } from "@/components/therapist-avatar"
 import { Avatar, AvatarImage } from "@/components/ui/avatar"
@@ -8,17 +7,7 @@ import { InitialFallback } from "@/components/initial-fallback"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent } from "@/components/ui/card"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-
-// Os dias são do calendário, então são formatados em UTC para não deslocar.
-const weekdayFormat = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "UTC" })
-const longDayFormat = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })
-
-function toDate(day: string) {
-  const [year, month, date] = day.split("-").map(Number)
-  return new Date(Date.UTC(year, month - 1, date))
-}
 
 export function money(cents: number) {
   return currencyFormat.format(cents / 100)
@@ -73,82 +62,6 @@ export function StatTile({
         <div className="truncate text-xs text-muted-foreground">{detail}</div>
       </CardContent>
     </Card>
-  )
-}
-
-// Legenda comum ao gráfico e às listas: sólido é realizado, claro é o que ainda está agendado.
-export function RealForecastLegend() {
-  return (
-    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-      <span className="flex items-center gap-1.5">
-        <span className="size-2.5 bg-primary" />
-        Realizado
-      </span>
-      <span className="flex items-center gap-1.5">
-        <span className="size-2.5 bg-primary/30" />
-        Agendado
-      </span>
-    </div>
-  )
-}
-
-// Faturamento bruto de cada dia da semana: realizado embaixo, agendado empilhado em cima.
-export function WeekChart({ buckets, today }: { buckets: CashFlowBucket[]; today: string }) {
-  const max = Math.max(...buckets.map((bucket) => bucket.forecast.grossCents))
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="grid h-44 grid-cols-7 gap-2 border-b" role="list" aria-label="Faturamento por dia">
-        {buckets.map((bucket) => {
-          const real = bucket.real.grossCents
-          const scheduled = bucket.forecast.grossCents - real
-          const height = (cents: number) => (max ? `${(cents / max) * 100}%` : "0%")
-          return (
-            <Tooltip key={bucket.from}>
-              <TooltipTrigger
-                render={<div role="listitem" />}
-                className="group flex h-full flex-col justify-end gap-0.5 rounded-t-md px-1 outline-none hover:bg-muted/60 focus-visible:bg-muted/60"
-                tabIndex={0}
-              >
-                {scheduled > 0 && (
-                  <div
-                    className="w-full bg-primary/30"
-                    style={{ height: height(scheduled) }}
-                  />
-                )}
-                {real > 0 && (
-                  <div
-                    className="w-full bg-primary"
-                    style={{ height: height(real) }}
-                  />
-                )}
-              </TooltipTrigger>
-              <TooltipContent className="flex-col items-start gap-0.5">
-                <span className="font-medium capitalize">{longDayFormat.format(toDate(bucket.from))}</span>
-                <span className="tabular-nums">Realizado: {money(real)}</span>
-                {scheduled > 0 && <span className="tabular-nums">Agendado: {money(scheduled)}</span>}
-              </TooltipContent>
-            </Tooltip>
-          )
-        })}
-      </div>
-      <div className="grid grid-cols-7 gap-2 text-center text-xs">
-        {buckets.map((bucket) => (
-          <div key={bucket.from} className="flex flex-col items-center gap-0.5">
-            <span className="text-muted-foreground capitalize">
-              {weekdayFormat.format(toDate(bucket.from)).replace(".", "")}
-            </span>
-            <span
-              className={cn(
-                "flex size-6 items-center justify-center rounded-full font-medium tabular-nums",
-                bucket.from === today && "bg-primary text-primary-foreground",
-              )}
-            >
-              {Number(bucket.from.slice(8))}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
   )
 }
 

@@ -21,14 +21,14 @@ describe("visiblePages", () => {
 
   it("tira as páginas ocultas da função, mantendo a ordem do catálogo", () => {
     expect(visiblePages("massage_therapist", hidden)).toEqual({
-      workspace: ["home", "calendar"],
+      workspace: ["home", "calendar", "cash_flow"],
       unit: ["overview", "services", "calendar", "appointments", "team"],
     });
   });
 
   it("aplica só a configuração da própria função", () => {
     expect(visiblePages("receptionist", hidden)).toEqual({
-      workspace: ["units", "calendar", "users"],
+      workspace: ["units", "calendar", "cash_flow", "users"],
       unit: ["overview", "services", "calendar", "appointments", "stock", "cash_flow"],
     });
   });
@@ -56,7 +56,7 @@ describe("updatePageAccess", () => {
     expect(result).toEqual({ ok: true });
     expect(save).toHaveBeenCalledWith({
       massage_therapist: {
-        workspace: ["units", "users"],
+        workspace: ["units", "cash_flow", "users"],
         unit: ["overview", "services", "stock", "team", "cash_flow"],
       },
       receptionist: { workspace: [], unit: [] },
@@ -78,7 +78,7 @@ describe("updatePageAccess", () => {
     expect(save).toHaveBeenCalledWith({
       massage_therapist: { workspace: [], unit: [...UNIT_PAGES] },
       receptionist: {
-        workspace: ["home", "calendar", "users"],
+        workspace: ["home", "calendar", "cash_flow", "users"],
         unit: ["overview", "services", "calendar", "appointments", "stock", "cash_flow"],
       },
     });

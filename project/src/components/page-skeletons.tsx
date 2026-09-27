@@ -159,9 +159,9 @@ export function OverviewSkeleton() {
           <StatTileSkeleton key={i} />
         ))}
       </div>
-      <div className="grid gap-4 lg:grid-cols-5">
-        <CardSkeleton className="lg:col-span-3" contentClassName="h-56 w-full" />
-        <CardSkeleton className="lg:col-span-2" contentClassName="h-56 w-full" />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <CardSkeleton contentClassName="h-72 w-full" />
+        <CardSkeleton contentClassName="h-72 w-full" />
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 3 }, (_, i) => (

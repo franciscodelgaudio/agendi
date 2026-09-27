@@ -1,39 +1,20 @@
 import { notFound, redirect } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import {
-  applyExpenses,
-  applyStaffCosts,
-  cashFlowBuckets,
-  cashFlowFetchRange,
-  dailyAppointmentTotalsPipeline,
-  parseCashFlowQuery,
-  summarizeCashFlow,
-  summarizeCosts,
-  summarizeTherapists,
-  teamPayRates,
-  type DayTotal,
-} from "@/lib/cash-flow"
+import { cashFlowBuckets, costCurve, parseCashFlowQuery, summarizeCosts, summarizeTherapists } from "@/lib/cash-flow"
 import { CASH_FLOW_PAGE_SIZE, parseTherapistListQuery, therapistListPage } from "@/lib/cash-flow-list"
-import {
-  dailyExpenseTotalsPipeline,
-  expenseGroupTotalsPipeline,
-  type ExpenseDayTotal,
-  type ExpenseGroupTotal,
-} from "@/lib/expense"
 import { loadExpenseGroupIcons } from "@/lib/expense-group-icon-store"
-import { openingBalanceRange, type OpeningBalance } from "@/lib/opening-balance"
+import type { OpeningBalance } from "@/lib/opening-balance"
 import type { RevenueShare } from "@/lib/revenue-share"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
-import { Appointment } from "@/models/Appointment"
-import { Expense } from "@/models/Expense"
-import { ExpenseGroup } from "@/models/ExpenseGroup"
+import { loadUnitCashFlow } from "@/lib/unit-cash-flow-store"
 import { Workspace } from "@/models/Workspace"
-import { WorkspaceMember } from "@/models/WorkspaceMember"
 import { CashFlowNav } from "@/components/cash-flow-nav"
 import { OpeningBalanceCard } from "@/components/opening-balance-card"
 import { CashFlowTable } from "@/components/cash-flow-table"
 import { CashFlowCostsChart } from "@/components/cash-flow-costs-chart"
+import { CostCumulativeChart, CostPhysicalChart } from "@/components/cost-curve-chart"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CashFlowTherapistsTable } from "@/components/cash-flow-therapists-table"
 import { ListPagination } from "@/components/list-pagination"
 import { ListSearch } from "@/components/list-search"
@@ -83,73 +64,26 @@ export default async function CashFlowPage({
   if (!workspace?.unit) notFound()
   const { revenueShare, openingBalance } = workspace.unit
   const today = parseCashFlowQuery({}, now).date
-  // Dias cujo líquido real soma no saldo em caixa de hoje.
-  const balanceRange = openingBalance && openingBalanceRange(openingBalance, today)
-
   const buckets = cashFlowBuckets(query)
   const shown = { from: buckets[0].from, to: buckets.at(-1)!.to }
-  const range = cashFlowFetchRange(buckets, revenueShare?.period ?? null)
-  const unitMatch = { $match: { unitId: new Types.ObjectId(unitId) } }
-  const [appointments, team, balanceAppointments, expenses, balanceExpenses, groups, groupTotals, icons] =
-    await Promise.all([
-      Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
-      // Remuneração da equipe vinculada a esta unidade (o proprietário não tem).
-      WorkspaceMember.find({
-        workspaceId: workspace.id,
-        role: { $in: ["massage_therapist", "receptionist"] },
-        "units.unitId": unitId,
-      })
-        .select({ userId: 1, role: 1, units: 1 })
-        .lean(),
-      balanceRange
-        ? Appointment.aggregate<DayTotal>([
-            unitMatch,
-            ...dailyAppointmentTotalsPipeline(cashFlowFetchRange([balanceRange], revenueShare?.period ?? null)),
-          ])
-        : [],
-      Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(shown)]),
-      balanceRange ? Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(balanceRange)]) : [],
-      ExpenseGroup.find({ unitId: new Types.ObjectId(unitId) }).select({ name: 1, iconId: 1 }).sort({ name: 1 }).lean(),
-      Expense.aggregate<ExpenseGroupTotal>([unitMatch, ...expenseGroupTotalsPipeline(shown)]),
-      loadExpenseGroupIcons(),
-    ])
-  const { commissionRates, grossCommissionPercent, monthlySalaryCents } = teamPayRates(team, unitId)
-  const staffCosts = { grossCommissionPercent, monthlySalaryCents, today }
-  const summary = applyExpenses(
-    applyStaffCosts(summarizeCashFlow(buckets, appointments, [], revenueShare, commissionRates), staffCosts),
-    expenses,
-  )
-  const balanceCents = !openingBalance
-    ? null
-    : openingBalance.amountCents +
-      (balanceRange
-        ? applyExpenses(
-            applyStaffCosts(
-              summarizeCashFlow([balanceRange], balanceAppointments, [], revenueShare, commissionRates),
-              staffCosts,
-            ),
-            balanceExpenses,
-          ).total.real.netCents
-        : 0)
+  const [
+    { summary, balanceCents, appointments, commissionRates, groups, hasCommission, hasSalary, hasExpenses },
+    icons,
+  ] = await Promise.all([
+    loadUnitCashFlow(workspace.id, { id: unitId, ...workspace.unit }, buckets, today),
+    loadExpenseGroupIcons(),
+  ])
   const therapists = therapistListPage(summarizeTherapists(shown, appointments, [], commissionRates), {
     ...filters,
     page,
   })
-  // Mesmos valores reais da tabela: das despesas, só as pagas.
   const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
-  const paidByGroup = new Map(groupTotals.map((total) => [total.groupId, total.paidCents]))
   const costs = summarizeCosts(
     summary.total.real,
-    groups.map((group) => ({
-      id: group._id.toString(),
-      name: group.name,
-      icon: (group.iconId && iconsById.get(group.iconId.toString())) || null,
-      paidCents: paidByGroup.get(group._id.toString()) ?? 0,
-    })),
+    groups.map(({ iconId, ...group }) => ({ ...group, icon: (iconId && iconsById.get(iconId)) || null })),
   )
-  const hasCommission = Object.keys(commissionRates).length > 0 || grossCommissionPercent > 0
-  const hasSalary = monthlySalaryCents > 0
-  const hasExpenses = expenses.length > 0
+
+  const curve = costCurve([summary.buckets], today)
 
   const pathname = `/workspace/${workspaceId}/unit/${unitId}/cash-flow`
   const listQuery = { view: query.view, date: query.date, ...filters }
@@ -182,6 +116,24 @@ export default async function CashFlowPage({
         hasExpenses={hasExpenses}
         today={today}
       />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Custos físico</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CostPhysicalChart points={curve} view={query.view} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Custos acumulado</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CostCumulativeChart points={curve} view={query.view} />
+          </CardContent>
+        </Card>
+      </div>
       {costs.rows.length > 0 && <CashFlowCostsChart rows={costs.rows} totalCents={costs.totalCents} />}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         <h4 className="font-semibold tracking-tight">Por massagista</h4>

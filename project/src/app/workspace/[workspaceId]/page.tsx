@@ -10,9 +10,11 @@ import {
   UsersIcon,
 } from "lucide-react"
 import {
+  applyExpenses,
   applyStaffCosts,
   cashFlowBuckets,
   cashFlowFetchRange,
+  costCurve,
   dailyAppointmentTotalsPipeline,
   dailyBookingForecastPipeline,
   parseCashFlowQuery,
@@ -28,6 +30,7 @@ import {
   type ServiceTotal,
   type StaffCashFlowAmounts,
 } from "@/lib/cash-flow"
+import { dailyExpenseTotalsPipeline, type ExpenseDayTotal } from "@/lib/expense"
 import { canManageMembers, type WorkspaceRole } from "@/lib/member"
 import type { RevenueShare } from "@/lib/revenue-share"
 import { requirePage } from "@/lib/page-guard"
@@ -37,9 +40,11 @@ import { BRT_OFFSET_HOURS } from "@/lib/timezone"
 import { teamCandidatesLookup, type TeamCandidate } from "@/lib/unit-team"
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
+import { Expense } from "@/models/Expense"
 import { Product } from "@/models/Product"
 import { Workspace } from "@/models/Workspace"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
+import { CostCumulativeChart, CostPhysicalChart } from "@/components/cost-curve-chart"
 import { CreateUnitSheet } from "@/components/create-unit-sheet"
 import { timeFormat } from "@/components/service-format"
 import type { TherapistOption } from "@/components/therapist-avatar"
@@ -50,10 +55,8 @@ import {
   money,
   plural,
   RankList,
-  RealForecastLegend,
   StatTile,
   TodaySchedule,
-  WeekChart,
   type StockItem,
   type TodayBooking,
 } from "@/components/unit-overview"
@@ -153,8 +156,8 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     )
   }
 
-  // Mês corrente para os indicadores e rankings; semana corrente para o gráfico; semana, mês
-  // e ano para o ranking das massagistas.
+  // Mês corrente para os indicadores e rankings; ano corrente para a curva de custos; semana,
+  // mês e ano para o ranking das massagistas.
   const today = parseCashFlowQuery({}, now).date
   const monthBuckets = cashFlowBuckets({ view: "month", date: today })
   const weekBuckets = cashFlowBuckets({ view: "week", date: today })
@@ -182,13 +185,20 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
           to: yearRange.to > weekRange.to ? yearRange.to : weekRange.to,
         }
         const unitMatch = { $match: { unitId: new Types.ObjectId(unit.id) } }
-        const [appointments, bookings, serviceAppointments, serviceBookings] = await Promise.all([
+        const [appointments, bookings, serviceAppointments, serviceBookings, expenses] = await Promise.all([
           Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
           Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
           Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(month)]),
           Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(month, now)]),
+          Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(periods.year)]),
         ])
-        return { unit, appointments, bookings, services: summarizeServices(serviceAppointments, serviceBookings) }
+        return {
+          unit,
+          appointments,
+          bookings,
+          expenses,
+          services: summarizeServices(serviceAppointments, serviceBookings),
+        }
       }),
     ),
     // Remuneração da equipe em cada unidade (o proprietário não tem).
@@ -206,7 +216,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     Product.countDocuments({ unitId: { $in: unitIds } }),
   ])
 
-  const unitSummaries = perUnit.map(({ unit, appointments, bookings, services }) => {
+  const unitSummaries = perUnit.map(({ unit, appointments, bookings, expenses, services }) => {
     const { commissionRates, ...staffCosts } = teamPayRates(members, unit.id)
     const summarize = (buckets: DayRange[]) =>
       applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, unit.revenueShare, commissionRates), {
@@ -223,7 +233,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         staffCosts.grossCommissionPercent > 0 ||
         staffCosts.monthlySalaryCents > 0,
       month: summarize(monthBuckets).total,
-      week: summarize(weekBuckets).buckets,
+      year: applyExpenses(summarize(yearBuckets), expenses).buckets,
       services: { done, scheduled: all - done },
     }
   })
@@ -232,15 +242,12 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     real: sumAmounts(unitSummaries.map((summary) => summary.month.real)),
     forecast: sumAmounts(unitSummaries.map((summary) => summary.month.forecast)),
   }
-  const weekBucketsTotal = weekBuckets.map((bucket, index) => ({
-    ...bucket,
-    real: sumAmounts(unitSummaries.map((summary) => summary.week[index].real)),
-    forecast: sumAmounts(unitSummaries.map((summary) => summary.week[index].forecast)),
-  }))
-  const weekTotal = {
-    real: sumAmounts(weekBucketsTotal.map((bucket) => bucket.real)),
-    forecast: sumAmounts(weekBucketsTotal.map((bucket) => bucket.forecast)),
-  }
+  const curve = costCurve(
+    unitSummaries.map((summary) => summary.year),
+    today,
+  )
+  const spentCents = curve.findLast((point) => point.spentCumulativeCents !== null)?.spentCumulativeCents ?? 0
+  const plannedCents = curve.at(-1)?.plannedCumulativeCents ?? 0
   const servicesDone = unitSummaries.reduce((sum, summary) => sum + summary.services.done, 0)
   const servicesScheduled = unitSummaries.reduce((sum, summary) => sum + summary.services.scheduled, 0)
   const hasDeductions = unitSummaries.some((summary) => summary.hasDeductions)
@@ -350,8 +357,8 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
           <CardHeader>
             <CardTitle>Agenda de hoje</CardTitle>
             <CardDescription>
@@ -370,17 +377,23 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
+        <Card>
           <CardHeader>
-            <CardTitle>Esta semana</CardTitle>
+            <CardTitle>Custos em {periods.year.from.slice(0, 4)}</CardTitle>
             <CardDescription>
-              {money(weekTotal.real.grossCents)} realizados de {money(weekTotal.forecast.grossCents)} previstos
+              {money(spentCents)} gastos de {money(plannedCents)} planejados
             </CardDescription>
             <CardLink href={`${base}/unit`}>Ver unidades</CardLink>
           </CardHeader>
-          <CardContent className="gap-4">
-            <WeekChart buckets={weekBucketsTotal} today={today} />
-            <RealForecastLegend />
+          <CardContent className="gap-6">
+            <div className="grid gap-2">
+              <span className="text-sm font-medium">Físico</span>
+              <CostPhysicalChart points={curve} view="year" />
+            </div>
+            <div className="grid gap-2">
+              <span className="text-sm font-medium">Acumulado</span>
+              <CostCumulativeChart points={curve} view="year" />
+            </div>
           </CardContent>
         </Card>
       </div>

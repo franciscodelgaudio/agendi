@@ -14,7 +14,7 @@ function toDate(day: string) {
 }
 
 // balanceCents: saldo inicial mais o líquido real desde o dia dele (null sem saldo inicial).
-// O saldo inicial é informado no cadastro da unidade.
+// O saldo inicial é informado no cadastro da unidade; sem ele (ex.: soma das unidades), só o saldo aparece.
 export function OpeningBalanceCard({
   openingBalance,
   balanceCents,
@@ -31,17 +31,19 @@ export function OpeningBalanceCard({
           </span>
           <span className="font-medium">Saldo em caixa</span>
         </div>
-        {openingBalance && balanceCents !== null ? (
+        {balanceCents !== null ? (
           <>
             <div
               className={cn("text-2xl font-semibold tracking-tight tabular-nums", balanceCents < 0 && "text-destructive")}
             >
               {currencyFormat.format(balanceCents / 100)}
             </div>
-            <div className="text-xs text-muted-foreground">
-              {currencyFormat.format(openingBalance.amountCents / 100)} em{" "}
-              {dayFormat.format(toDate(openingBalance.date))}
-            </div>
+            {openingBalance && (
+              <div className="text-xs text-muted-foreground">
+                {currencyFormat.format(openingBalance.amountCents / 100)} em{" "}
+                {dayFormat.format(toDate(openingBalance.date))}
+              </div>
+            )}
           </>
         ) : (
           <div className="text-sm text-muted-foreground">Saldo não informado</div>
