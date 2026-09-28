@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation"
 import { Types } from "mongoose"
+import { PlansSection } from "@/components/landing/plans-section"
 import { requireUser } from "@/lib/session"
 import { Workspace } from "@/models/Workspace"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 
 // "/workspace" é o destino padrão após login e cadastro: manda para o workspace do
-// usuário ou para a criação do primeiro.
+// usuário ou, sem nenhum, para a escolha do plano. O primeiro workspace só nasce pelo
+// webhook do pagamento.
 export default async function Home() {
   const user = await requireUser()
 
@@ -19,5 +21,14 @@ export default async function Home() {
     { $project: { _id: 0, id: { $toString: "$_id" } } },
   ])
 
-  redirect(workspace ? `/workspace/${workspace.id}` : "/workspace/new")
+  if (workspace) redirect(`/workspace/${workspace.id}`)
+
+  return (
+    <div className="flex min-h-svh items-center justify-center bg-ld-paper p-6 text-ld-ink md:p-10">
+      <div className="flex w-full max-w-5xl flex-col gap-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Escolha um plano</h1>
+        <PlansSection />
+      </div>
+    </div>
+  )
 }

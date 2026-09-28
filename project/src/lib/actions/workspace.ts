@@ -1,19 +1,13 @@
 "use server"
 
 import { refresh } from "next/cache"
-import { redirect } from "next/navigation"
 import { canManageMembers } from "@/lib/member"
 import { getSessionUserId } from "@/lib/session"
-import {
-  createWorkspace,
-  updateWorkspace,
-  type CreateWorkspaceError,
-  type UpdateWorkspaceError,
-} from "@/lib/workspace"
+import { updateWorkspace, type UpdateWorkspaceError } from "@/lib/workspace"
 import { findWorkspaceAccess } from "@/lib/workspace-access"
 import { Workspace } from "@/models/Workspace"
 
-const errorMessages: Record<CreateWorkspaceError | UpdateWorkspaceError, string> = {
+const errorMessages: Record<UpdateWorkspaceError | "unauthenticated", string> = {
   invalid_input: "Informe o nome do workspace.",
   invalid_name: "Informe o nome do workspace.",
   name_too_long: "O nome pode ter no máximo 80 caracteres.",
@@ -22,26 +16,7 @@ const errorMessages: Record<CreateWorkspaceError | UpdateWorkspaceError, string>
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
-export type CreateWorkspaceState = { error: string | null }
-
-export async function createWorkspaceAction(
-  _prev: CreateWorkspaceState,
-  formData: FormData,
-): Promise<CreateWorkspaceState> {
-  const userId = await getSessionUserId()
-  if (!userId) return { error: errorMessages.unauthenticated }
-
-  const result = await createWorkspace({ name: formData.get("name") }, userId, async (data) => {
-    const workspace = await Workspace.create(data)
-    return { id: workspace._id.toString() }
-  })
-
-  if (!result.ok) return { error: errorMessages[result.error] }
-
-  redirect(`/workspace/${result.workspaceId}`)
-}
-
-export type UpdateWorkspaceState = CreateWorkspaceState
+export type UpdateWorkspaceState = { error: string | null }
 
 // workspaceId vem via argumento do cliente; só dono e administradores podem editar.
 export async function updateWorkspaceAction(
