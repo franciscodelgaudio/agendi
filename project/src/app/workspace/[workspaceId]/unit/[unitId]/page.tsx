@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { CalendarCheckIcon, CalendarXIcon, PiggyBankIcon, LeafIcon, TrendingUpIcon, UsersIcon } from "lucide-react"
+import { CalendarCheckIcon, CalendarXIcon, PiggyBankIcon, LeafIcon, TrendingUpIcon } from "lucide-react"
 import {
   applyExpenses,
   applyStaffCosts,
@@ -12,12 +12,9 @@ import {
   parseCashFlowQuery,
   serviceAppointmentTotalsPipeline,
   serviceBookingForecastPipeline,
-  shiftCashFlowDate,
   summarizeCashFlow,
   summarizeServices,
-  summarizeTherapists,
   teamPayRates,
-  type CashFlowView,
   type DayRange,
   type DayTotal,
   type ServiceTotal,
@@ -32,50 +29,19 @@ import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
 import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
-import { Product } from "@/models/Product"
 import { Workspace } from "@/models/Workspace"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 import { CostCumulativeChart, CostPeriodChart } from "@/components/cost-curve-chart"
 import { timeFormat } from "@/components/service-format"
 import type { TherapistOption } from "@/components/therapist-avatar"
-import {
-  CardEmpty,
-  CardLink,
-  LowStockList,
-  money,
-  plural,
-  StatTile,
-  TodaySchedule,
-  type StockItem,
-  type TodayBooking,
-} from "@/components/unit-overview"
-import { MonthRankCard } from "@/components/month-rank-card"
-import { PeriodRankCard, type RankPeriod } from "@/components/period-rank-card"
+import { CardEmpty, CardLink, money, plural, StatTile, TodaySchedule, type TodayBooking } from "@/components/unit-overview"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
-// Produtos com até esta quantidade aparecem como acabando.
-const LOW_STOCK_QUANTITY = 2
-const TOP_ITEMS = 5
-const PERIOD_VIEWS: CashFlowView[] = ["week", "month", "year"]
-
-// Um valor para cada período dos rankings: semana, mês e ano correntes.
-function byPeriod<T>(value: (view: CashFlowView) => T): Record<CashFlowView, T> {
-  return { week: value("week"), month: value("month"), year: value("year") }
-}
-
 // Os dias são do calendário, então são formatados em UTC para não deslocar.
-const monthFormat = new Intl.DateTimeFormat("pt-BR", {
-  month: "long",
-  timeZone: "UTC",
-})
-const todayFormat = new Intl.DateTimeFormat("pt-BR", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  timeZone: "UTC",
-})
+const monthFormat = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" })
+const todayFormat = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })
 
 function toDate(day: string) {
   const [year, month, date] = day.split("-").map(Number)
@@ -84,8 +50,8 @@ function toDate(day: string) {
 
 // Cabeçalho e navegação ficam no layout da unidade. Layout e página podem renderizar em
 // paralelo, então a página refaz a verificação de acesso.
-export default async function UnitOverviewPage({ params, searchParams }: PageProps<"/workspace/[workspaceId]/unit/[unitId]">) {
-  const [{ workspaceId, unitId }, search] = await Promise.all([params, searchParams])
+export default async function UnitOverviewPage({ params }: PageProps<"/workspace/[workspaceId]/unit/[unitId]">) {
+  const { workspaceId, unitId } = await params
   const now = new Date()
   const user = await requireUser()
   await requirePage(workspaceId, user.id, { unit: "overview", unitId })
@@ -107,12 +73,7 @@ export default async function UnitOverviewPage({ params, searchParams }: PagePro
         as: "unit",
         pipeline: [
           { $match: { _id: new Types.ObjectId(unitId) } },
-          {
-            $project: {
-              _id: 0,
-              revenueShare: { $ifNull: ["$revenueShare", null] },
-            },
-          },
+          { $project: { _id: 0, revenueShare: { $ifNull: ["$revenueShare", null] } } },
         ],
       },
     },
@@ -130,124 +91,45 @@ export default async function UnitOverviewPage({ params, searchParams }: PagePro
   const { revenueShare } = workspace.unit
 
   // Mês corrente para os indicadores; ano corrente para a curva de custos, numa busca só com o
-  // resto dos períodos de repasse das pontas; semana, mês e ano para o ranking de serviços; o mês
-  // escolhido para o ranking das massagistas.
+  // resto dos períodos de repasse das pontas.
   const today = parseCashFlowQuery({}, now).date
   const monthBuckets = cashFlowBuckets({ view: "month", date: today })
   const yearBuckets = cashFlowBuckets({ view: "year", date: today })
-  const periods = byPeriod((view): DayRange => {
-    const buckets = cashFlowBuckets({ view, date: today })
-    return { from: buckets[0].from, to: buckets.at(-1)!.to }
-  })
+  const month = { from: monthBuckets[0].from, to: monthBuckets.at(-1)!.to }
+  const year = { from: yearBuckets[0].from, to: yearBuckets.at(-1)!.to }
   const range = cashFlowFetchRange(yearBuckets, revenueShare?.period ?? null)
-  const therapistMonth = shiftCashFlowDate(
-    {
-      view: "month",
-      date: parseCashFlowQuery({ date: search.therapistMonth }, now).date,
-    },
-    0,
-  )
-  const therapistBuckets = cashFlowBuckets({
-    view: "month",
-    date: therapistMonth,
-  })
-  const therapistRange = {
-    from: therapistBuckets[0].from,
-    to: therapistBuckets.at(-1)!.to,
-  }
-  const [year, monthNumber, day] = today.split("-").map(Number)
-  const todayStart = new Date(Date.UTC(year, monthNumber - 1, day, BRT_OFFSET_HOURS))
+  const [todayYear, todayMonth, todayDay] = today.split("-").map(Number)
+  const todayStart = new Date(Date.UTC(todayYear, todayMonth - 1, todayDay, BRT_OFFSET_HOURS))
   const todayEnd = new Date(todayStart.getTime() + DAY_MS)
 
   const unitObjectId = new Types.ObjectId(unitId)
   const unitMatch = { $match: { unitId: unitObjectId } }
-  const [
-    appointments,
-    bookings,
-    therapistAppointments,
-    therapistBookings,
-    serviceSummaries,
-    team,
-    todayBookings,
-    lowStock,
-    productCount,
-    expenses,
-    groups,
-  ] = await Promise.all([
+  const [appointments, bookings, serviceAppointments, serviceBookings, team, todayBookings, expenses, groups] = await Promise.all([
     Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
     Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
-    Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(therapistRange)]),
-    Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(therapistRange, now)]),
-    Promise.all(
-      PERIOD_VIEWS.map(async (view) => {
-        const [serviceAppointments, serviceBookings] = await Promise.all([
-          Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(periods[view])]),
-          Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(periods[view], now)]),
-        ])
-        return summarizeServices(serviceAppointments, serviceBookings)
-      }),
-    ),
+    Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(month)]),
+    Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(month, now)]),
     // Remuneração da equipe vinculada a esta unidade (o proprietário não tem).
-    WorkspaceMember.find({
-      workspaceId: workspace.id,
-      role: { $in: ["massage_therapist", "receptionist"] },
-      "units.unitId": unitId,
-    })
+    WorkspaceMember.find({ workspaceId: workspace.id, role: { $in: ["massage_therapist", "receptionist"] }, "units.unitId": unitId })
       .select({ userId: 1, role: 1, units: 1 })
       .lean(),
-    Booking.find({
-      unitId: unitObjectId,
-      startsAt: { $gte: todayStart, $lt: todayEnd },
-    })
+    Booking.find({ unitId: unitObjectId, startsAt: { $gte: todayStart, $lt: todayEnd } })
       .sort({ startsAt: 1 })
-      .select({
-        startsAt: 1,
-        endsAt: 1,
-        guest: 1,
-        service: 1,
-        therapistId: 1,
-        therapistName: 1,
-        appointmentId: 1,
-      })
+      .select({ startsAt: 1, endsAt: 1, guest: 1, service: 1, therapistId: 1, therapistName: 1, appointmentId: 1 })
       .lean(),
-    Product.find({
-      unitId: unitObjectId,
-      quantity: { $lte: LOW_STOCK_QUANTITY },
-    })
-      .sort({ quantity: 1, name: 1 })
-      .select({ name: 1, quantity: 1, avatarUrl: 1 })
-      .lean(),
-    Product.countDocuments({ unitId: unitObjectId }),
-    Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(periods.year)]),
+    Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(year)]),
     ExpenseGroup.find({ unitId: unitObjectId }).select({ monthlyLimitCents: 1 }).lean(),
   ])
 
   const { commissionRates, ...staffCosts } = teamPayRates(team, unitId)
   const summarize = (buckets: DayRange[]) =>
-    applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, revenueShare, commissionRates), {
-      ...staffCosts,
-      today,
-    })
+    applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, revenueShare, commissionRates), { ...staffCosts, today })
   const monthTotal = summarize(monthBuckets).total
-  const monthlyBudgetCents = expenseBudgetCents(
-    groups.map((group) => ({
-      monthlyLimitCents: group.monthlyLimitCents ?? null,
-    })),
-  )
-  const curve = costCurve(
-    [
-      {
-        buckets: applyExpenses(summarize(yearBuckets), expenses).buckets,
-        monthlyBudgetCents,
-      },
-    ],
-    today,
-  )
+  const monthlyBudgetCents = expenseBudgetCents(groups.map((group) => ({ monthlyLimitCents: group.monthlyLimitCents ?? null })))
+  const curve = costCurve([{ buckets: applyExpenses(summarize(yearBuckets), expenses).buckets, monthlyBudgetCents }], today)
   const spentCents = curve.findLast((point) => point.spentCumulativeCents !== null)?.spentCumulativeCents ?? 0
   const plannedCents = curve.at(-1)?.plannedCumulativeCents ?? 0
-  const servicesByPeriod = byPeriod((view) => serviceSummaries[PERIOD_VIEWS.indexOf(view)])
-  const services = servicesByPeriod.month
-  const therapistImages = new Map(workspace.therapists.map((therapist) => [therapist.id, therapist.image]))
+  const services = summarizeServices(serviceAppointments, serviceBookings)
 
   const servicesDone = services.reduce((sum, service) => sum + service.real.count, 0)
   const servicesScheduled = services.reduce((sum, service) => sum + service.forecast.count, 0) - servicesDone
@@ -270,44 +152,9 @@ export default async function UnitOverviewPage({ params, searchParams }: PagePro
   }))
   const attendedToday = schedule.filter((booking) => booking.attended).length
   const nextBooking = schedule.find((booking) => !booking.attended && booking.startsAt > now)
-  const stock: StockItem[] = lowStock.map((product) => ({
-    id: product._id.toString(),
-    name: product.name,
-    quantity: product.quantity,
-    avatarUrl: product.avatarUrl ?? null,
-  }))
 
   const base = `/workspace/${workspaceId}/unit/${unitId}`
   const monthName = monthFormat.format(toDate(today))
-  const periodLabels: Record<CashFlowView, string> = {
-    week: "Esta semana",
-    month: monthName,
-    year: today.slice(0, 4),
-  }
-  const periodNouns: Record<CashFlowView, string> = {
-    week: "nesta semana",
-    month: "neste mês",
-    year: "neste ano",
-  }
-  const servicePeriods = byPeriod((view): RankPeriod => ({
-    label: periodLabels[view],
-    items: servicesByPeriod[view].slice(0, TOP_ITEMS).map((service) => ({
-      id: service.serviceId,
-      name: service.serviceName,
-      real: service.real,
-      forecast: service.forecast,
-    })),
-    empty: <CardEmpty icon={LeafIcon}>Nenhum serviço realizado ou agendado {periodNouns[view]}.</CardEmpty>,
-  }))
-  const therapists = summarizeTherapists(therapistRange, therapistAppointments, therapistBookings, commissionRates)
-    .slice(0, TOP_ITEMS)
-    .map((therapist) => ({
-      id: therapist.therapistId,
-      name: therapist.therapistName,
-      image: therapistImages.get(therapist.therapistId) ?? null,
-      real: therapist.real,
-      forecast: therapist.forecast,
-    }))
 
   return (
     <div className="flex flex-col gap-4">
@@ -378,7 +225,7 @@ export default async function UnitOverviewPage({ params, searchParams }: PagePro
 
         <Card>
           <CardHeader>
-            <CardTitle>Custos em {periods.year.from.slice(0, 4)}</CardTitle>
+            <CardTitle>Custos em {year.from.slice(0, 4)}</CardTitle>
             <CardDescription>
               {money(spentCents)} gastos de {money(plannedCents)} planejados
             </CardDescription>

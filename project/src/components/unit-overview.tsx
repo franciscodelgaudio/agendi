@@ -116,10 +116,7 @@ export function TodaySchedule({
       <ol className="flex flex-col">
         {visible.map((booking, index) => {
           const done = booking.attended || booking.endsAt <= now
-          const therapist = therapistsById.get(booking.therapistId) ?? {
-            name: booking.therapistName,
-            image: null,
-          }
+          const therapist = therapistsById.get(booking.therapistId) ?? { name: booking.therapistName, image: null }
           return (
             <li key={booking.id} className="relative flex gap-4 pb-4 last:pb-0">
               {index < visible.length - 1 && <span className="absolute top-3 bottom-0 left-[4.75rem] w-px bg-border" />}
@@ -202,9 +199,7 @@ export function RankList({ items, avatar }: { items: RankItem[]; avatar?: "round
                 <div className="h-full bg-primary" style={{ width: `${(item.real.cents / max) * 100}%` }} />
                 <div
                   className="h-full bg-primary/30"
-                  style={{
-                    width: `${((item.forecast.cents - item.real.cents) / max) * 100}%`,
-                  }}
+                  style={{ width: `${((item.forecast.cents - item.real.cents) / max) * 100}%` }}
                 />
               </div>
               <span className="text-xs text-muted-foreground">
@@ -215,46 +210,6 @@ export function RankList({ items, avatar }: { items: RankItem[]; avatar?: "round
           </li>
         )
       })}
-    </ul>
-  )
-}
-
-// unitName: na visão do workspace, a unidade do produto.
-export type StockItem = {
-  id: string
-  name: string
-  quantity: number
-  avatarUrl: string | null
-  unitName?: string
-}
-
-// Produtos acabando, do menor estoque para o maior.
-export function LowStockList({ products, href }: { products: StockItem[]; href: (product: StockItem) => string }) {
-  return (
-    <ul className="flex flex-col gap-3">
-      {products.map((product) => (
-        <li key={product.id} className="flex items-center gap-3">
-          <Avatar className="rounded-md after:rounded-md">
-            {product.avatarUrl && (
-              <AvatarImage src={product.avatarUrl} alt={product.name} className="rounded-md object-contain" />
-            )}
-            <InitialFallback name={product.name} className="rounded-md" />
-          </Avatar>
-          <div className="grid min-w-0 flex-1">
-            <Link href={href(product)} className="truncate font-medium hover:underline">
-              {product.name}
-            </Link>
-            {product.unitName && <span className="truncate text-xs text-muted-foreground">{product.unitName}</span>}
-          </div>
-          {product.quantity === 0 ? (
-            <Badge variant="destructive">Esgotado</Badge>
-          ) : (
-            <Badge variant="outline" className="tabular-nums">
-              {plural(product.quantity, "restante", "restantes")}
-            </Badge>
-          )}
-        </li>
-      ))}
     </ul>
   )
 }
