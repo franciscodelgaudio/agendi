@@ -16,7 +16,7 @@ import {
   type Edge,
 } from "@xyflow/react"
 import { toast } from "sonner"
-import { ArrowLeftIcon, PauseIcon, PlayIcon, SaveIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react"
+import { ArrowLeftIcon, PauseIcon, PlayIcon, SaveIcon, SparklesIcon, Trash2Icon, TriangleAlertIcon, Undo2Icon, XIcon } from "lucide-react"
 import Link from "@/components/link"
 import { cn } from "@/lib/utils"
 import { saveUraAction, setUraActiveAction } from "@/lib/actions/ura"
@@ -26,6 +26,8 @@ import { defaultNodeData, type UraNodeType } from "@/lib/ura-nodes"
 import { UraNodeConfig, type ConfigContext } from "@/components/ura-node-config"
 import { FlowNodeContext, UraFlowNode, type FlowNode } from "@/components/ura-flow-node"
 import { availableVariables, categoryMeta, issueLabels, nodeMeta, PALETTE } from "@/components/ura-node-meta"
+import { AgeniaChat } from "@/components/agenia/agenia-chat"
+import { useAgeniaSession, type AgeniaDataPart } from "@/components/agenia/use-agenia-session"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -100,7 +102,42 @@ function Editor({ workspaceId, ura, channels, units, users }: Props) {
   const [saving, startSaving] = useTransition()
   const [toggling, startToggling] = useTransition()
   const canvas = useRef<HTMLDivElement>(null)
-  const { screenToFlowPosition, setCenter } = useReactFlow()
+  const { screenToFlowPosition, setCenter, fitView } = useReactFlow()
+  const [ageniaOpen, setAgeniaOpen] = useState(false)
+  // Estado do canvas antes de cada pedido à AgenIA, para desfazer o que ela mudou.
+  const [checkpoints, setCheckpoints] = useState<{ nodes: FlowNode[]; edges: Edge[] }[]>([])
+
+  // A AgenIA edita uma cópia do grafo no servidor e manda o resultado a cada mudança.
+  const agenia = useAgeniaSession({
+    workspaceId,
+    mode: "ura",
+    id: `agenia-ura-${ura.id}`,
+    body: () => ({
+      ura: {
+        name,
+        active: ura.active,
+        graph: toGraph(nodes, edges),
+        selectedNodeId: selectedId,
+      },
+    }),
+    onData: (part: AgeniaDataPart) => {
+      if (part.type !== "data-ura-graph") return
+      const graph = part.data as UraGraph
+      setNodes(graph.nodes.map(toFlowNode))
+      setEdges(graph.edges.map(toFlowEdge))
+      setSelectedId(null)
+      setTimeout(() => void fitView({ duration: 300, maxZoom: 1 }), 50)
+    },
+  })
+
+  function undoAgenia() {
+    const last = checkpoints.at(-1)
+    if (!last) return
+    setNodes(last.nodes)
+    setEdges(last.edges)
+    setSelectedId(null)
+    setCheckpoints((current) => current.slice(0, -1))
+  }
 
   const graph = useMemo(() => toGraph(nodes, edges), [nodes, edges])
   const dirty = snapshot(name, graph) !== saved
@@ -235,6 +272,10 @@ function Editor({ workspaceId, ura, channels, units, users }: Props) {
               </PopoverContent>
             </Popover>
           )}
+          <Button variant={ageniaOpen ? "secondary" : "outline"} size="sm" onClick={() => setAgeniaOpen((open) => !open)}>
+            <SparklesIcon />
+            AgenIA
+          </Button>
           <Button variant="outline" size="sm" loading={toggling} onClick={toggleActive}>
             {ura.active ? <PauseIcon /> : <PlayIcon />}
             {ura.active ? "Desativar" : "Ativar"}
@@ -327,6 +368,29 @@ function Editor({ workspaceId, ura, channels, units, users }: Props) {
                 ))}
               <UraNodeConfig key={selected.id} node={selected} ctx={configContext} onChange={(config) => updateConfig(selected.id, config)} />
             </div>
+          </aside>
+        )}
+
+        {ageniaOpen && (
+          <aside className="absolute inset-y-0 right-0 z-20 flex w-96 max-w-full flex-col border-l bg-background md:static md:z-auto">
+            <AgeniaChat
+              session={agenia}
+              title="AgenIA · URA"
+              suggestions={["Monte um fluxo de boas-vindas com menu de agendamento", "Revise este fluxo e corrija os avisos", "Organize o fluxo"]}
+              onBeforeSend={() => setCheckpoints((current) => [...current, structuredClone({ nodes, edges })])}
+              actions={
+                <>
+                  {checkpoints.length > 0 && (
+                    <Button variant="ghost" size="icon-sm" aria-label="Desfazer o último pedido" onClick={undoAgenia}>
+                      <Undo2Icon />
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="icon-sm" aria-label="Fechar AgenIA" onClick={() => setAgeniaOpen(false)}>
+                    <XIcon />
+                  </Button>
+                </>
+              }
+            />
           </aside>
         )}
       </div>

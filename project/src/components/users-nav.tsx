@@ -10,8 +10,8 @@ export function UsersNav({ workspaceId, canManage }: { workspaceId: string; canM
   const pathname = usePathname()
   const base = `/workspace/${workspaceId}/users`
   const items = [
-    { title: "Usuários", icon: UsersIcon, href: base },
-    ...(canManage ? [{ title: "Permissões", icon: ShieldCheckIcon, href: `${base}/permissions` }] : []),
+    { title: "Usuários", icon: UsersIcon, href: base, tour: "users-tab-users" },
+    ...(canManage ? [{ title: "Permissões", icon: ShieldCheckIcon, href: `${base}/permissions`, tour: "users-tab-permissions" }] : []),
   ]
 
   return (
@@ -21,6 +21,7 @@ export function UsersNav({ workspaceId, canManage }: { workspaceId: string; canM
         return (
           <Link
             key={item.href}
+            data-tour={item.tour}
             href={item.href}
             aria-current={isActive ? "page" : undefined}
             className={cn(

@@ -82,7 +82,7 @@ export function UnitTable({ units, query, pathname, workspaceId, canManage, team
             </TableRow>
           ) : (
             units.map((unit) => (
-              <TableRow key={unit.id} className="relative cursor-pointer">
+              <TableRow key={unit.id} data-tour="unit-row" className="relative cursor-pointer">
                 <CodeCell id={unit.id} className="@max-2xl:hidden" />
                 <TableCell className="max-w-0 px-4">
                   <div className="flex items-center gap-3">

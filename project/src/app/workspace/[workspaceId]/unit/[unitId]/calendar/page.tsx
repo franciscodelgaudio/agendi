@@ -87,13 +87,15 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
         <h3 className="text-lg font-semibold tracking-tight">Calendário</h3>
         <CalendarNav base={`/workspace/${workspaceId}/unit/${unitId}/calendar`} />
       </div>
-      <BookingCalendar
-        workspaceId={workspaceId}
-        canManage={canManageMembers(role)}
-        unitId={unit.id}
-        units={[unit]}
-        {...options}
-      />
+      <div data-tour="unit-calendar">
+        <BookingCalendar
+          workspaceId={workspaceId}
+          canManage={canManageMembers(role)}
+          unitId={unit.id}
+          units={[unit]}
+          {...options}
+        />
+      </div>
     </div>
   )
 }

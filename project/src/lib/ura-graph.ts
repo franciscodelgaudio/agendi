@@ -134,7 +134,7 @@ function contentIssue(node: UraNode, graph: UraGraph, ids: Set<string>): GraphIs
 }
 
 // Ids dos nós que o início alcança, seguindo arestas e saltos de Ir para.
-function reachableIds(graph: UraGraph) {
+export function reachableIds(graph: UraGraph) {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const start = graph.nodes.find((n) => n.type === "start");
   const seen = new Set<string>();

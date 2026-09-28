@@ -1,10 +1,15 @@
 import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
+import { AgeniaProvider } from "@/components/agenia/agenia-provider"
 import { NavigationProgressBar, NavigationProgressProvider } from "@/components/navigation-progress"
+import { TourProvider } from "@/components/tour/tour"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { WorkspacePaywall } from "@/components/workspace-paywall"
 import { hasActiveSubscription } from "@/lib/billing"
+import { canManageMembers, canUseInbox, type WorkspaceRole } from "@/lib/member-role"
+import { visiblePages, type HiddenPages } from "@/lib/page-access"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
+import { User } from "@/models/User"
 import { Workspace } from "@/models/Workspace"
 
 // O layout espera o workspace antes de renderizar: ao abrir a página inteira, a espera cai no
@@ -20,11 +25,18 @@ export default async function WorkspaceLayout({
   const access = workspaceAccessStages(workspaceId, user.id, { allowUnpaid: true })
   if (!access) notFound()
 
-  const [workspace] = await Workspace.aggregate<{
-    name: string
-    role: string
-    subscription: { status: string; currentPeriodEnd: Date } | null
-  }>([...access, { $project: { _id: 0, name: 1, role: 1, subscription: 1 } }])
+  const [[workspace], tutorial] = await Promise.all([
+    Workspace.aggregate<{
+      name: string
+      role: WorkspaceRole
+      hiddenPages: HiddenPages | null
+      subscription: { status: string; currentPeriodEnd: Date } | null
+    }>([
+      ...access,
+      { $project: { _id: 0, name: 1, role: 1, hiddenPages: { $ifNull: ["$hiddenPages", null] }, subscription: 1 } },
+    ]),
+    User.findById(user.id).select({ _id: 0, tutorialCompletedAt: 1 }).lean(),
+  ])
   if (!workspace) notFound()
 
   if (!hasActiveSubscription(workspace.subscription, new Date())) {
@@ -36,14 +48,27 @@ export default async function WorkspaceLayout({
 
   return (
     <NavigationProgressProvider>
+      <AgeniaProvider workspaceId={workspaceId} enabled={canManageMembers(workspace.role)}>
       <SidebarProvider defaultOpen={defaultOpen}>
-        {sidebar}
-        <SidebarInset>
-          <SidebarTrigger className="fixed bottom-4 left-4 z-20 bg-background shadow-sm md:hidden" />
-          <NavigationProgressBar />
-          {children}
-        </SidebarInset>
+        {/* Dentro do SidebarProvider: no celular o tutorial abre a sidebar nos passos dela. */}
+        <TourProvider
+          workspaceId={workspaceId}
+          access={{
+            canManage: canManageMembers(workspace.role),
+            inbox: canUseInbox(workspace.role),
+            pages: visiblePages(workspace.role, workspace.hiddenPages),
+          }}
+          autoStart={!tutorial?.tutorialCompletedAt}
+        >
+          {sidebar}
+          <SidebarInset>
+            <SidebarTrigger className="fixed bottom-4 left-4 z-20 bg-background shadow-sm md:hidden" />
+            <NavigationProgressBar />
+            {children}
+          </SidebarInset>
+        </TourProvider>
       </SidebarProvider>
+      </AgeniaProvider>
     </NavigationProgressProvider>
   )
 }

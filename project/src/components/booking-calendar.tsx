@@ -462,7 +462,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
               // agendamentos no mesmo horário), sai a hora e depois o avatar, e fica só o hóspede.
               if (view.type.startsWith("dayGrid") || isShort) {
                 return (
-                  <div className="@container w-full min-w-0">
+                  <div data-tour="booking-event" className="@container w-full min-w-0">
                     <div className="flex min-w-0 items-center gap-1.5 overflow-hidden px-1 text-xs leading-tight">
                       {therapistAvatar(booking, "size-4 shrink-0 @max-[4.5rem]:hidden")}
                       <span className="shrink-0 tabular-nums opacity-85 @max-[7rem]:hidden">
@@ -479,7 +479,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
               // Na largura, o que é pouco útil cortado sai de propósito: o nome da massagista (o avatar e
               // a cor já dizem quem é), depois quarto e serviço, e por fim o avatar.
               return (
-                <div className="@container h-full w-full min-w-0">
+                <div data-tour="booking-event" className="@container h-full w-full min-w-0">
                   <div className="flex h-full min-w-0 flex-col flex-wrap gap-x-3 gap-y-0.5 overflow-hidden px-1.5 py-1 text-xs leading-snug">
                     <div className="flex w-full min-w-0 items-center gap-1.5">
                       {therapistAvatar(booking, "size-5 shrink-0 ring-1 ring-white/60 @max-[4.5rem]:hidden")}
@@ -553,6 +553,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
         }}
       >
         <PopoverContent
+          data-tour="booking-form"
           anchor={draftAnchor}
           side="right"
           align="start"

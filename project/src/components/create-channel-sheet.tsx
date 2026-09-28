@@ -30,7 +30,7 @@ export function CreateChannelSheet({ workspaceId }: { workspaceId: string }) {
         setOpen(next)
       }}
     >
-      <SheetTrigger render={<Button />}>
+      <SheetTrigger data-tour="create-channel" render={<Button />}>
         <PlusIcon />
         Conectar canal
       </SheetTrigger>

@@ -59,7 +59,7 @@ export function ServiceTable({ services, query, pathname, workspaceId, unitId, c
             </TableRow>
           ) : (
             services.map((service) => (
-              <TableRow key={service.id}>
+              <TableRow key={service.id} data-tour="service-row">
                 <CodeCell id={service.id} className="@max-xl:hidden" />
                 <TableCell className="max-w-0 truncate px-4 font-medium">{service.name}</TableCell>
                 <TableCell className="px-4 tabular-nums">{currencyFormat.format(service.priceCents / 100)}</TableCell>

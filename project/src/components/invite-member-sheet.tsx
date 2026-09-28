@@ -31,7 +31,7 @@ export function InviteMemberSheet({ workspaceId }: { workspaceId: string }) {
         setOpen(next)
       }}
     >
-      <SheetTrigger render={<Button />}>
+      <SheetTrigger data-tour="invite-member" render={<Button />}>
         <UserPlusIcon />
         Convidar usuário
       </SheetTrigger>

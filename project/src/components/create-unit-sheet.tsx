@@ -31,11 +31,11 @@ export function CreateUnitSheet({ workspaceId, team }: { workspaceId: string; te
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger render={<Button />}>
+      <SheetTrigger data-tour="create-unit" render={<Button />}>
         <PlusIcon />
         Cadastrar unidade
       </SheetTrigger>
-      <SheetContent>
+      <SheetContent data-tour="create-unit-form">
         <form action={formAction} className="flex min-h-0 flex-1 flex-col">
           <SheetHeader>
             <SheetTitle>Cadastrar unidade</SheetTitle>

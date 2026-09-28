@@ -58,6 +58,7 @@
   --color-ld-ink-soft: #5e6b66;
   --color-ld-mist: #b9c9c2;
   --animate-progress: progress 1.2s ease-in-out infinite;
+  --animate-tour-pulse: tour-pulse 1.6s ease-out infinite;
 
   @keyframes progress {
     from {
@@ -65,6 +66,15 @@
     }
     to {
       transform: translateX(300%);
+    }
+  }
+
+  @keyframes tour-pulse {
+    from {
+      box-shadow: 0 0 0 0 var(--color-primary);
+    }
+    to {
+      box-shadow: 0 0 0 14px transparent;
     }
   }
 }

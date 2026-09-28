@@ -50,7 +50,7 @@ export function TeamTable({
   const canManage = canManageMembers(role)
   const columns = 5 + (showUnit ? 1 : 0) + (canManage ? 1 : 0)
   return (
-    <div className="border">
+    <div data-tour="team-table" className="border">
       <Table>
         <TableHeader>
           <TableRow>

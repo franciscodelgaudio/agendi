@@ -50,7 +50,7 @@ export function CashFlowNav({ query, range, isCurrent, today, pathname, views = 
   const [previousLabel, nextLabel] = stepLabels[query.view]
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
+    <div data-tour="cash-flow-nav" className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="outline"

@@ -11,6 +11,8 @@ const userSchema = new Schema(
     image: String,
     emailVerified: Date,
     passwordHash: { type: String, select: false },
+    // Quando o usuário concluiu ou dispensou o tutorial; sem o campo, o tutorial abre sozinho.
+    tutorialCompletedAt: Date,
   },
   { collection: "users" },
 );

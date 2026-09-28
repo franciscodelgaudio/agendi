@@ -9,6 +9,7 @@ import { isReplyWindowOpen, MAX_TEXT_LENGTH } from "@/lib/messaging-send"
 import type { DeliveryStatus, MessageDirection, MessageType, MessagingPlatform } from "@/lib/messaging-types"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { Workspace } from "@/models/Workspace"
+import { ConversationAgeniaFrame, ConversationAgeniaToggle } from "@/components/agenia/conversation-agenia"
 import { ConversationActions } from "@/components/conversation-actions"
 import { ConversationReply, MarkConversationRead } from "@/components/conversation-reply"
 import { contactDisplayName, PlatformIcon, platformLabels } from "@/components/platform-labels"
@@ -167,7 +168,7 @@ export default async function ConversationPage({
   const canReply = isReplyWindowOpen(conversation.lastInboundAt, new Date())
 
   return (
-    <>
+    <ConversationAgeniaFrame key={conversation.id} workspaceId={workspaceId} conversationId={conversation.id}>
       <MarkConversationRead
         workspaceId={workspaceId}
         conversationId={conversation.id}
@@ -203,6 +204,7 @@ export default async function ConversationPage({
             </Badge>
           )}
           {conversation.status === "closed" && <Badge variant="outline">Encerrada</Badge>}
+          <ConversationAgeniaToggle />
           <ConversationActions
             workspaceId={workspaceId}
             conversationId={conversation.id}
@@ -234,7 +236,7 @@ export default async function ConversationPage({
           Janela de 24h encerrada. Só é possível responder depois que o cliente enviar uma nova mensagem.
         </div>
       )}
-    </>
+    </ConversationAgeniaFrame>
   )
 }
 

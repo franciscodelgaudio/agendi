@@ -31,7 +31,7 @@ export function CreateUraSheet({ workspaceId }: { workspaceId: string }) {
         setOpen(next)
       }}
     >
-      <SheetTrigger render={<Button />}>
+      <SheetTrigger data-tour="create-ura" render={<Button />}>
         <PlusIcon />
         Nova URA
       </SheetTrigger>
