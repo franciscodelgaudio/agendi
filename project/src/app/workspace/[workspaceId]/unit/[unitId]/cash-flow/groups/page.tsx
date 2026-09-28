@@ -31,7 +31,7 @@ export default async function ExpenseGroupsPage({
   const { page, ...filters } = parseExpenseGroupListQuery(search)
   const user = await requireUser()
   await requirePage(workspaceId, user.id, { unit: "cash_flow", unitId })
-  const data = await loadExpenseGroupsScreen(workspaceId, user.id, unitId, query)
+  const data = await loadExpenseGroupsScreen(workspaceId, user.id, unitId, query, now)
   if (!data) notFound()
   const { period, icons, summary } = data
   const canManage = canManageMembers(data.role)

@@ -7,6 +7,7 @@ import {
   deleteExpense,
   expenseGroupTotalsPipeline,
   setExpensePaid,
+  staffExpenseGroups,
   summarizeExpenseGroups,
   expenseBudgetCents,
   updateExpense,
@@ -439,6 +440,60 @@ describe("summarizeExpenseGroups", () => {
       { ...TAXES, limitCents: 1_200_000, totalCents: 1_200_000, paidCents: 900_000, overLimit: false },
       { ...SUPPLIES, limitCents: null, totalCents: 0, paidCents: 0, overLimit: false },
     ]);
+  });
+});
+
+describe("staffExpenseGroups", () => {
+  // Custos da equipe e repasse do período; bruto, líquido e despesas não entram nos grupos.
+  const amounts = (partnerShareCents: number, commissionCents: number, salaryCents: number) => ({
+    grossCents: 999_999,
+    partnerShareCents,
+    commissionCents,
+    salaryCents,
+    netCents: -1,
+  });
+
+  it("equipe tem limite no salário com bônus e na comissão previstos, e lançado e pago no que já correu", () => {
+    const result = staffExpenseGroups({ real: amounts(300, 200, 1_500), forecast: amounts(300, 200, 3_000) });
+
+    expect(result).toEqual([
+      {
+        id: "team",
+        name: "Equipe",
+        automatic: true,
+        monthlyLimitCents: 3_200,
+        limitCents: 3_200,
+        totalCents: 1_700,
+        paidCents: 1_700,
+        overLimit: false,
+      },
+      {
+        id: "partner_share",
+        name: "Repasse",
+        automatic: true,
+        monthlyLimitCents: 300,
+        limitCents: 300,
+        totalCents: 300,
+        paidCents: 300,
+        overLimit: false,
+      },
+    ]);
+  });
+
+  it("sem repasse, só aparece a equipe", () => {
+    const result = staffExpenseGroups({ real: amounts(0, 50, 0), forecast: amounts(0, 50, 0) });
+
+    expect(result.map((group) => group.id)).toEqual(["team"]);
+  });
+
+  it("sem salário, bônus nem comissão, só aparece o repasse", () => {
+    const result = staffExpenseGroups({ real: amounts(80, 0, 0), forecast: amounts(80, 0, 0) });
+
+    expect(result.map((group) => group.id)).toEqual(["partner_share"]);
+  });
+
+  it("sem custos de equipe nem repasse, não há grupos automáticos", () => {
+    expect(staffExpenseGroups({ real: amounts(0, 0, 0), forecast: amounts(0, 0, 0) })).toEqual([]);
   });
 });
 

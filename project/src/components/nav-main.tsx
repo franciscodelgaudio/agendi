@@ -6,6 +6,7 @@ import {
   MapPinIcon,
   CalendarIcon,
   HomeIcon,
+  LifeBuoyIcon,
   MessagesSquareIcon,
   RadioTowerIcon,
   UsersIcon,
@@ -25,7 +26,7 @@ import { WORKSPACE_PAGE_PATHS, type WorkspacePage } from "@/lib/page-access"
 type NavItem = { title: string; href: string; icon: LucideIcon }
 
 // pages: páginas do sistema liberadas para a função do usuário; Canais é só de
-// quem gerencia. inbox: a função atende clientes pelas Conversas.
+// quem gerencia. inbox: a função atende clientes pelas Conversas. Tickets é de todos.
 export function NavMain({
   workspaceId,
   pages,
@@ -62,6 +63,7 @@ export function NavMain({
               { title: "Canais", href: `${base}/channels`, icon: RadioTowerIcon },
             ]
           : []),
+        { title: "Tickets", href: `${base}/tickets`, icon: LifeBuoyIcon },
       ],
     },
   ]

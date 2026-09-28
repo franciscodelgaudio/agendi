@@ -3,6 +3,7 @@ import { canManageMembers, type WorkspaceRole } from "@/lib/member"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { unitListPipeline, parseUnitListQuery } from "@/lib/unit-list"
+import type { BusinessHours } from "@/lib/business-hours"
 import type { RevenueShare } from "@/lib/revenue-share"
 import type { TreatmentRoomOption } from "@/components/treatment-room-fields"
 import { teamCandidatesLookup, type TeamCandidate } from "@/lib/unit-team"
@@ -32,6 +33,7 @@ export default async function UnitsPage({
       avatarUrl: string | null
       revenueShare: RevenueShare | null
       treatmentRooms: TreatmentRoomOption[]
+      businessHours: BusinessHours
       createdAt: Date
       updatedAt: Date
     }[]

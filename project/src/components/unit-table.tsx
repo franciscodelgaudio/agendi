@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import type { UnitListQuery } from "@/lib/unit-list"
+import type { BusinessHours } from "@/lib/business-hours"
 import type { RevenueShare } from "@/lib/revenue-share"
 import type { TreatmentRoomOption } from "@/components/treatment-room-fields"
 import { dateTimeFormat } from "@/lib/utils"
@@ -26,6 +27,7 @@ type Props = {
     avatarUrl: string | null
     revenueShare: RevenueShare | null
     treatmentRooms: TreatmentRoomOption[]
+    businessHours: BusinessHours
     createdAt: Date
     updatedAt: Date
   }[]

@@ -1,3 +1,4 @@
+import { parseBusinessHours, type BusinessHours, type BusinessHoursError } from "@/lib/business-hours";
 import { parseOpeningBalance, type OpeningBalance, type OpeningBalanceError } from "@/lib/opening-balance";
 import { parseRevenueShare, type RevenueShare, type RevenueShareError } from "@/lib/revenue-share";
 import { parseTreatmentRooms, type TreatmentRoomError, type TreatmentRoomInput } from "@/lib/treatment-room";
@@ -12,6 +13,7 @@ export type CreateUnitError =
   | "invalid_ownership"
   | RevenueShareError
   | TreatmentRoomError
+  | BusinessHoursError
   | OpeningBalanceError
   | "workspace_not_found";
 
@@ -37,12 +39,13 @@ type UnitInput = {
   avatarUrl: string | null;
   revenueShare: RevenueShare | null;
   treatmentRooms: TreatmentRoomInput[];
+  businessHours: BusinessHours;
 };
 
-// Valida e normaliza nome, avatarUrl, regra de repasse e salas; avatarUrl vazia vira null.
+// Valida e normaliza nome, avatarUrl, regra de repasse, salas e horário; avatarUrl vazia vira null.
 // A regra só é lida quando a unidade funciona dentro de um estabelecimento parceiro.
 function parseUnitInput(input: unknown): ({ ok: true } & UnitInput) | { ok: false; error: UnitInputError } {
-  const { name, avatarUrl, ownership, revenueShare, treatmentRooms } = (input ?? {}) as Record<string, unknown>;
+  const { name, avatarUrl, ownership, revenueShare, treatmentRooms, businessHours } = (input ?? {}) as Record<string, unknown>;
   if (typeof name !== "string") return { ok: false, error: "invalid_input" };
   if (avatarUrl != null && typeof avatarUrl !== "string") return { ok: false, error: "invalid_input" };
 
@@ -67,12 +70,16 @@ function parseUnitInput(input: unknown): ({ ok: true } & UnitInput) | { ok: fals
   const rooms = parseTreatmentRooms(treatmentRooms);
   if (!rooms.ok) return rooms;
 
+  const hours = parseBusinessHours(businessHours);
+  if (!hours.ok) return hours;
+
   return {
     ok: true,
     name: normalizedName,
     avatarUrl: normalizedAvatarUrl,
     revenueShare: share,
     treatmentRooms: rooms.value,
+    businessHours: hours.value,
   };
 }
 
@@ -84,6 +91,7 @@ export async function createUnit(
     avatarUrl?: string;
     revenueShare?: RevenueShare;
     treatmentRooms: TreatmentRoomInput[];
+    businessHours: BusinessHours;
     openingBalance?: OpeningBalance;
     workspaceId: string;
   }) => Promise<{ id: string }>,
@@ -100,6 +108,7 @@ export async function createUnit(
     ...(parsed.avatarUrl && { avatarUrl: parsed.avatarUrl }),
     ...(parsed.revenueShare && { revenueShare: parsed.revenueShare }),
     treatmentRooms: parsed.treatmentRooms,
+    businessHours: parsed.businessHours,
     ...(balance.value && { openingBalance: balance.value }),
     workspaceId,
   });
@@ -123,11 +132,11 @@ export async function updateUnit(
   const parsed = parseUnitInput(input);
   if (!parsed.ok) return parsed;
 
-  const { name, avatarUrl, revenueShare, treatmentRooms } = parsed;
+  const { name, avatarUrl, revenueShare, treatmentRooms, businessHours } = parsed;
   const keptRoomIds = treatmentRooms.flatMap((room) => (room.id ? [room.id] : []));
   if (await hasBookingsInRemovedRooms(unitId, keptRoomIds)) return { ok: false, error: "treatment_room_in_use" };
 
-  const found = await update(unitId, { name, avatarUrl, revenueShare, treatmentRooms });
+  const found = await update(unitId, { name, avatarUrl, revenueShare, treatmentRooms, businessHours });
   return found ? { ok: true } : { ok: false, error: "unit_not_found" };
 }
 

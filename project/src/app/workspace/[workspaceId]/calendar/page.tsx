@@ -3,6 +3,7 @@ import { canManageMembers, type WorkspaceRole } from "@/lib/member"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { therapistOptionsStages } from "@/lib/therapist"
+import type { BusinessHours } from "@/lib/business-hours"
 import { Workspace } from "@/models/Workspace"
 import { BookingCalendar, type BookingOptions } from "@/components/booking-calendar"
 import { CalendarNav } from "@/components/calendar-nav"
@@ -16,7 +17,12 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access) notFound()
 
-  const [workspace] = await Workspace.aggregate<BookingOptions & { role: WorkspaceRole }>([
+  const [workspace] = await Workspace.aggregate<
+    Omit<BookingOptions, "units"> & {
+      role: WorkspaceRole
+      units: (BookingOptions["units"][number] & { businessHours: BusinessHours })[]
+    }
+  >([
     ...access,
     {
       $lookup: {
@@ -24,7 +30,7 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
         localField: "_id",
         foreignField: "workspaceId",
         as: "units",
-        pipeline: [{ $sort: { name: 1, _id: 1 } }, { $project: { name: 1, treatmentRooms: 1 } }],
+        pipeline: [{ $sort: { name: 1, _id: 1 } }, { $project: { name: 1, treatmentRooms: 1, businessHours: 1 } }],
       },
     },
     {
@@ -54,7 +60,13 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
       $project: {
         _id: 0,
         role: 1,
-        units: { $map: { input: "$units", as: "unit", in: { id: { $toString: "$$unit._id" }, name: "$$unit.name" } } },
+        units: {
+          $map: {
+            input: "$units",
+            as: "unit",
+            in: { id: { $toString: "$$unit._id" }, name: "$$unit.name", businessHours: "$$unit.businessHours" },
+          },
+        },
         services: 1,
         // Salas de todas as unidades, cada uma com a sua unidade.
         treatmentRooms: {

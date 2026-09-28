@@ -14,7 +14,8 @@ function money(cents: number) {
 }
 
 type Props = {
-  groups: ExpenseGroupSummary<ExpenseGroupInfo & { icon: ExpenseGroupIcon | null }>[]
+  // Grupos automáticos (equipe e repasse) não são editados nem excluídos.
+  groups: ExpenseGroupSummary<ExpenseGroupInfo & { icon: ExpenseGroupIcon | null; automatic?: boolean }>[]
   icons: ExpenseGroupIcon[]
   // Busca, filtro e ordenação atuais, preservados nos links de ordenação.
   query: { q: string; sort: GroupSortField; dir: SortDir } & Record<string, string>
@@ -93,7 +94,9 @@ export function ExpenseGroupsTable({ groups, icons, query, pathname, workspaceId
               </TableCell>
               {canManage && (
                 <TableCell className="px-4 text-right">
-                  <ExpenseGroupActions workspaceId={workspaceId} unitId={unitId} icons={icons} group={group} />
+                  {!group.automatic && (
+                    <ExpenseGroupActions workspaceId={workspaceId} unitId={unitId} icons={icons} group={group} />
+                  )}
                 </TableCell>
               )}
             </TableRow>

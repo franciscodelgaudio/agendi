@@ -10,7 +10,7 @@ import {
 } from "@/lib/cash-flow"
 import { CASH_FLOW_PAGE_SIZE } from "@/lib/cash-flow-list"
 import { loadExpenseGroupIcons } from "@/lib/expense-group-icon-store"
-import { expenseGroupTotalsPipeline, summarizeExpenseGroups, type ExpenseGroupTotal, type ExpenseSeries } from "@/lib/expense"
+import { expenseGroupTotalsPipeline, staffExpenseGroups, summarizeExpenseGroups, type ExpenseGroupTotal, type ExpenseSeries } from "@/lib/expense"
 import type { WorkspaceRole } from "@/lib/member"
 import type { OpeningBalance } from "@/lib/opening-balance"
 import type { RevenueShare } from "@/lib/revenue-share"
@@ -179,18 +179,29 @@ export async function loadExpensesScreen(workspaceId: string, userId: string, un
   return { unitName: workspace.unit.name, role: workspace.role, month, groups, expenses }
 }
 
-// O limite é mensal: no ano, vale 12 vezes.
+// Ícones dos grupos automáticos, fora do catálogo.
+const STAFF_GROUP_ICONS = {
+  team: { id: "team", key: "users", name: "Equipe", color: "#7c3aed" },
+  partner_share: { id: "partner_share", key: "handshake", name: "Repasse", color: "#1f5a4e" },
+}
+
+// O limite é mensal: no ano, vale 12 vezes. Equipe e repasse entram como grupos automáticos.
 export async function loadExpenseGroupsScreen(
   workspaceId: string,
   userId: string,
   unitId: string,
   query: { view: "month" | "year"; date: string },
+  now: Date,
 ) {
   const access = workspaceAccessStages(workspaceId, userId)
   if (!access || !isObjectIdOrHexString(unitId)) return null
 
-  // Parte do workspace para garantir o acesso à unidade.
-  const [workspace] = await Workspace.aggregate<{ role: WorkspaceRole; unit: { name: string } | null }>([
+  // Parte do workspace para garantir o acesso à unidade; a regra de repasse entra nos custos da equipe.
+  const [workspace] = await Workspace.aggregate<{
+    id: string
+    role: WorkspaceRole
+    unit: { name: string; revenueShare: RevenueShare | null } | null
+  }>([
     ...access,
     {
       $lookup: {
@@ -198,32 +209,41 @@ export async function loadExpenseGroupsScreen(
         localField: "_id",
         foreignField: "workspaceId",
         as: "unit",
-        pipeline: [{ $match: { _id: new Types.ObjectId(unitId) } }, { $project: { _id: 0, name: 1 } }],
+        pipeline: [
+          { $match: { _id: new Types.ObjectId(unitId) } },
+          { $project: { _id: 0, name: 1, revenueShare: { $ifNull: ["$revenueShare", null] } } },
+        ],
       },
     },
-    { $project: { _id: 0, role: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
+    { $project: { _id: 0, id: { $toString: "$_id" }, role: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   if (!workspace?.unit) return null
 
+  const today = parseCashFlowQuery({}, now).date
   const buckets = cashFlowBuckets(query)
   const period = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const unitObjectId = new Types.ObjectId(unitId)
-  const [groups, totals, icons] = await Promise.all([
+  const unit = { id: unitId, revenueShare: workspace.unit.revenueShare, openingBalance: null }
+  const [groups, totals, icons, cashFlow] = await Promise.all([
     ExpenseGroup.find({ unitId: unitObjectId }).select({ name: 1, monthlyLimitCents: 1, iconId: 1 }).lean(),
     Expense.aggregate<ExpenseGroupTotal>([{ $match: { unitId: unitObjectId } }, ...expenseGroupTotalsPipeline(period)]),
     loadExpenseGroupIcons(),
+    loadUnitCashFlow(workspace.id, unit, buckets, today),
   ])
   const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
-  const summary = summarizeExpenseGroups(
-    groups.map((group) => ({
-      id: group._id.toString(),
-      name: group.name,
-      monthlyLimitCents: group.monthlyLimitCents ?? null,
-      icon: (group.iconId && iconsById.get(group.iconId.toString())) || null,
-    })),
-    totals,
-    query.view === "year" ? 12 : 1,
-  )
+  const summary = [
+    ...summarizeExpenseGroups(
+      groups.map((group) => ({
+        id: group._id.toString(),
+        name: group.name,
+        monthlyLimitCents: group.monthlyLimitCents ?? null,
+        icon: (group.iconId && iconsById.get(group.iconId.toString())) || null,
+      })),
+      totals,
+      query.view === "year" ? 12 : 1,
+    ),
+    ...staffExpenseGroups(cashFlow.summary.total).map((group) => ({ ...group, icon: STAFF_GROUP_ICONS[group.id] })),
+  ]
 
   return { unitName: workspace.unit.name, role: workspace.role, period, icons, summary }
 }

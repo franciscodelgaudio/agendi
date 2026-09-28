@@ -3,6 +3,7 @@
 import { useActionState, useState, useTransition } from "react"
 import { EllipsisIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import { deleteUnitAction, updateUnitAction, type UpdateUnitState } from "@/lib/actions/unit"
+import type { BusinessHours } from "@/lib/business-hours"
 import type { RevenueShare } from "@/lib/revenue-share"
 import type { TreatmentRoomOption } from "@/components/treatment-room-fields"
 
@@ -40,6 +41,7 @@ type Unit = {
   avatarUrl: string | null
   revenueShare: RevenueShare | null
   treatmentRooms: TreatmentRoomOption[]
+  businessHours: BusinessHours
 }
 
 export function UnitActions({ workspaceId, unit, team }: { workspaceId: string; unit: Unit; team: UnitTeamOptions }) {

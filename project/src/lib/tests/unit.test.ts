@@ -11,8 +11,10 @@ const SHARE = { period: "monthly", tiers: [{ upToCents: null, percent: 15 }] };
 // Salas de atendimento como chegam do formulário (id vazio = sala nova) e como são salvas.
 const ROOMS_INPUT = { ids: [""], names: ["Sala Single"], beds: ["1"] };
 const ROOMS = [{ id: null, name: "Sala Single", beds: 1 }];
-const PARTNER = { ownership: "partner", revenueShare: SHARE_INPUT, treatmentRooms: ROOMS_INPUT };
-const OWN = { ownership: "own", treatmentRooms: ROOMS_INPUT };
+// Horário de funcionamento; chega do formulário do mesmo jeito que é salvo.
+const HOURS = { opensAt: "08:00", closesAt: "22:00" };
+const PARTNER = { ownership: "partner", revenueShare: SHARE_INPUT, treatmentRooms: ROOMS_INPUT, businessHours: HOURS };
+const OWN = { ownership: "own", treatmentRooms: ROOMS_INPUT, businessHours: HOURS };
 
 describe("createUnit", () => {
   function makeInsert() {
@@ -25,7 +27,7 @@ describe("createUnit", () => {
     const result = await createUnit({ name: "Spa Central", ...OWN }, WORKSPACE_ID, insert);
 
     expect(result).toEqual({ ok: true, unitId: UNIT_ID });
-    expect(insert).toHaveBeenCalledWith({ name: "Spa Central", treatmentRooms: ROOMS, workspaceId: WORKSPACE_ID });
+    expect(insert).toHaveBeenCalledWith({ name: "Spa Central", treatmentRooms: ROOMS, businessHours: HOURS, workspaceId: WORKSPACE_ID });
   });
 
   it("remove espaços das pontas do nome e da avatarUrl antes de salvar", async () => {
@@ -41,6 +43,7 @@ describe("createUnit", () => {
       name: "Spa Central",
       avatarUrl: "https://example.com/a.png",
       treatmentRooms: ROOMS,
+      businessHours: HOURS,
       workspaceId: WORKSPACE_ID,
     });
   });
@@ -55,7 +58,7 @@ describe("createUnit", () => {
     const result = await createUnit({ name: "Spa Central", avatarUrl, ...OWN }, WORKSPACE_ID, insert);
 
     expect(result).toEqual({ ok: true, unitId: UNIT_ID });
-    expect(insert).toHaveBeenCalledWith({ name: "Spa Central", treatmentRooms: ROOMS, workspaceId: WORKSPACE_ID });
+    expect(insert).toHaveBeenCalledWith({ name: "Spa Central", treatmentRooms: ROOMS, businessHours: HOURS, workspaceId: WORKSPACE_ID });
   });
 
   it("unidade dentro de estabelecimento parceiro salva a regra de repasse", async () => {
@@ -64,7 +67,7 @@ describe("createUnit", () => {
     const result = await createUnit({ name: "Spa Resort", ...PARTNER }, WORKSPACE_ID, insert);
 
     expect(result).toEqual({ ok: true, unitId: UNIT_ID });
-    expect(insert).toHaveBeenCalledWith({ name: "Spa Resort", revenueShare: SHARE, treatmentRooms: ROOMS, workspaceId: WORKSPACE_ID });
+    expect(insert).toHaveBeenCalledWith({ name: "Spa Resort", revenueShare: SHARE, treatmentRooms: ROOMS, businessHours: HOURS, workspaceId: WORKSPACE_ID });
   });
 
   it("unidade em espaço próprio ignora regra de repasse enviada", async () => {
@@ -72,7 +75,7 @@ describe("createUnit", () => {
 
     await createUnit({ name: "Spa Centro", ...OWN, revenueShare: SHARE_INPUT }, WORKSPACE_ID, insert);
 
-    expect(insert).toHaveBeenCalledWith({ name: "Spa Centro", treatmentRooms: ROOMS, workspaceId: WORKSPACE_ID });
+    expect(insert).toHaveBeenCalledWith({ name: "Spa Centro", treatmentRooms: ROOMS, businessHours: HOURS, workspaceId: WORKSPACE_ID });
   });
 
   it("aceita nome com exatamente 80 caracteres", async () => {
@@ -101,6 +104,9 @@ describe("createUnit", () => {
     ["salas ausentes", { name: "Spa Central", ownership: "own" }, "invalid_input"],
     ["nenhuma sala", { name: "Spa Central", ...OWN, treatmentRooms: { ids: [], names: [], beds: [] } }, "no_treatment_rooms"],
     ["sala sem maca", { name: "Spa Central", ...OWN, treatmentRooms: { ...ROOMS_INPUT, beds: ["0"] } }, "invalid_treatment_room_beds"],
+    ["horário ausente", { name: "Spa Central", ownership: "own", treatmentRooms: ROOMS_INPUT }, "invalid_input"],
+    ["horário inválido", { name: "Spa Central", ...OWN, businessHours: { opensAt: "8h", closesAt: "22:00" } }, "invalid_business_hours"],
+    ["fechamento antes da abertura", { name: "Spa Central", ...OWN, businessHours: { opensAt: "22:00", closesAt: "08:00" } }, "invalid_business_hours_order"],
   ])("retorna erro sem salvar quando %s", async (_label, input, error) => {
     const insert = makeInsert();
 
@@ -149,6 +155,7 @@ describe("updateUnit", () => {
       avatarUrl: "https://example.com/a.png",
       revenueShare: null,
       treatmentRooms: ROOMS,
+      businessHours: HOURS,
     });
   });
 
@@ -158,7 +165,7 @@ describe("updateUnit", () => {
     const result = await updateUnit({ name: "Spa Resort", ...PARTNER }, UNIT_ID, update, makeRoomCheck());
 
     expect(result).toEqual({ ok: true });
-    expect(update).toHaveBeenCalledWith(UNIT_ID, { name: "Spa Resort", avatarUrl: null, revenueShare: SHARE, treatmentRooms: ROOMS });
+    expect(update).toHaveBeenCalledWith(UNIT_ID, { name: "Spa Resort", avatarUrl: null, revenueShare: SHARE, treatmentRooms: ROOMS, businessHours: HOURS });
   });
 
   it("remove a regra de repasse (revenueShare null) quando a unidade passa a ser própria", async () => {
@@ -166,7 +173,7 @@ describe("updateUnit", () => {
 
     await updateUnit({ name: "Spa Centro", ...OWN, revenueShare: SHARE_INPUT }, UNIT_ID, update, makeRoomCheck());
 
-    expect(update).toHaveBeenCalledWith(UNIT_ID, { name: "Spa Centro", avatarUrl: null, revenueShare: null, treatmentRooms: ROOMS });
+    expect(update).toHaveBeenCalledWith(UNIT_ID, { name: "Spa Centro", avatarUrl: null, revenueShare: null, treatmentRooms: ROOMS, businessHours: HOURS });
   });
 
   // Sala com id é mantida (e seus agendamentos continuam nela); sem id é criada.
@@ -189,6 +196,7 @@ describe("updateUnit", () => {
         { id: SINGLE_ID, name: "Sala Single", beds: 1 },
         { id: null, name: "Sala Casal", beds: 2 },
       ],
+      businessHours: HOURS,
     });
   });
 
@@ -202,7 +210,7 @@ describe("updateUnit", () => {
     const result = await updateUnit({ name: "Spa Central", avatarUrl, ...OWN }, UNIT_ID, update, makeRoomCheck());
 
     expect(result).toEqual({ ok: true });
-    expect(update).toHaveBeenCalledWith(UNIT_ID, { name: "Spa Central", avatarUrl: null, revenueShare: null, treatmentRooms: ROOMS });
+    expect(update).toHaveBeenCalledWith(UNIT_ID, { name: "Spa Central", avatarUrl: null, revenueShare: null, treatmentRooms: ROOMS, businessHours: HOURS });
   });
 
   it.each([
@@ -216,6 +224,7 @@ describe("updateUnit", () => {
     ["parceiro com limite inválido", { name: "Spa Central", ...PARTNER, revenueShare: { ...SHARE_INPUT, limits: ["0"], percents: ["30", "35"] } }, "invalid_tier_limit"],
     ["salas ausentes", { name: "Spa Central", ownership: "own" }, "invalid_input"],
     ["sala com nome repetido", { name: "Spa Central", ...OWN, treatmentRooms: { ids: ["", ""], names: ["Sala 1", "Sala 1"], beds: ["1", "2"] } }, "duplicate_treatment_room_name"],
+    ["fechamento igual à abertura", { name: "Spa Central", ...OWN, businessHours: { opensAt: "10:00", closesAt: "10:00" } }, "invalid_business_hours_order"],
   ])("retorna erro sem salvar quando %s", async (_label, input, error) => {
     const update = makeUpdate();
 
@@ -319,6 +328,7 @@ describe("createUnit com saldo inicial", () => {
     expect(insert).toHaveBeenCalledWith({
       name: "Spa Central",
       treatmentRooms: ROOMS,
+      businessHours: HOURS,
       openingBalance: { amountCents: 250_000, date: "2026-09-01" },
       workspaceId: WORKSPACE_ID,
     });
@@ -329,7 +339,7 @@ describe("createUnit com saldo inicial", () => {
 
     await createUnit({ name: "Spa Central", ...OWN, openingBalance: { amount: "", date: "" } }, WORKSPACE_ID, insert);
 
-    expect(insert).toHaveBeenCalledWith({ name: "Spa Central", treatmentRooms: ROOMS, workspaceId: WORKSPACE_ID });
+    expect(insert).toHaveBeenCalledWith({ name: "Spa Central", treatmentRooms: ROOMS, businessHours: HOURS, workspaceId: WORKSPACE_ID });
   });
 
   it.each([

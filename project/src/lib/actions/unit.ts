@@ -36,6 +36,8 @@ const errorMessages: Record<CreateUnitError | UpdateUnitError | PlanUnitTeamErro
   treatment_room_name_too_long: "O nome da sala pode ter no máximo 40 caracteres.",
   duplicate_treatment_room_name: "Cada sala precisa de um nome diferente.",
   invalid_treatment_room_beds: "Cada sala precisa ter de 1 a 10 macas.",
+  invalid_business_hours: "Informe o horário de funcionamento.",
+  invalid_business_hours_order: "O horário de fechamento deve ser depois da abertura.",
   treatment_room_in_use: "Uma sala removida ainda tem agendamentos. Mova ou exclua os agendamentos antes.",
   invalid_opening_balance: "Informe um saldo em caixa de até R$ 1.000.000,00.",
   invalid_opening_balance_date: "Informe o dia do saldo em caixa.",
@@ -104,6 +106,7 @@ function unitInput(formData: FormData) {
       names: formData.getAll("treatmentRoomName"),
       beds: formData.getAll("treatmentRoomBeds"),
     },
+    businessHours: { opensAt: formData.get("opensAt"), closesAt: formData.get("closesAt") },
     openingBalance: { amount: formData.get("openingBalance"), date: formData.get("openingBalanceDate") },
   }
 }
@@ -162,7 +165,7 @@ export async function updateUnitAction(
   const result = await updateUnit(
     unitInput(formData),
     target.unitId,
-    async (id, { name, avatarUrl, revenueShare, treatmentRooms }) => {
+    async (id, { name, avatarUrl, revenueShare, treatmentRooms, businessHours }) => {
       // Campos null saem do documento em vez de ficarem gravados como null.
       const $unset = { ...(!avatarUrl && { avatarUrl: 1 }), ...(!revenueShare && { revenueShare: 1 }) }
       const { matchedCount } = await Unit.updateOne(
@@ -171,6 +174,7 @@ export async function updateUnitAction(
           $set: {
             name,
             treatmentRooms: toTreatmentRoomDocs(treatmentRooms),
+            businessHours,
             ...(avatarUrl && { avatarUrl }),
             ...(revenueShare && { revenueShare }),
           },

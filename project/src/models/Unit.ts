@@ -26,6 +26,15 @@ const treatmentRoomSchema = new Schema({
   beds: { type: Number, required: true, min: 1, max: 10 },
 });
 
+// Horário de funcionamento, igual para todos os dias; "24:00" fecha à meia-noite.
+const businessHoursSchema = new Schema(
+  {
+    opensAt: { type: String, required: true },
+    closesAt: { type: String, required: true },
+  },
+  { _id: false },
+);
+
 // Valor em caixa no início do dia `date` ("2026-09-01"); o saldo soma o líquido real a partir dele.
 const openingBalanceSchema = new Schema(
   {
@@ -42,6 +51,7 @@ const unitSchema = new Schema(
     // Ausente quando a unidade funciona em espaço próprio.
     revenueShare: { type: revenueShareSchema },
     treatmentRooms: { type: [treatmentRoomSchema], default: [] },
+    businessHours: { type: businessHoursSchema, required: true },
     // Ausente enquanto o saldo em caixa não foi informado.
     openingBalance: { type: openingBalanceSchema },
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true, index: true },

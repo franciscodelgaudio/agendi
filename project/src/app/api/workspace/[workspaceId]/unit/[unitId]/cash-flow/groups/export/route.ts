@@ -24,9 +24,10 @@ export async function GET(
   }
 
   // A visão semanal não se aplica aos grupos.
-  const parsed = parseCashFlowQuery(search, new Date())
+  const now = new Date()
+  const parsed = parseCashFlowQuery(search, now)
   const query = { ...parsed, view: parsed.view === "year" ? ("year" as const) : ("month" as const) }
-  const data = await loadExpenseGroupsScreen(workspaceId, userId, unitId, query)
+  const data = await loadExpenseGroupsScreen(workspaceId, userId, unitId, query, now)
   if (!data) return Response.json({ error: "Unidade não encontrada." }, { status: 404 })
   const filters = parseExpenseGroupListQuery(search)
   const result = allPages((page) => expenseGroupListPage(data.summary, { ...filters, page }))

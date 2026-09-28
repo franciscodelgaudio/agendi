@@ -51,6 +51,7 @@ export function unitListPipeline({ q, sort, dir }: UnitListQuery) {
             in: { id: { $toString: "$$room._id" }, name: "$$room.name", beds: "$$room.beds" },
           },
         },
+        businessHours: 1,
         createdAt: 1,
         updatedAt: 1,
       },

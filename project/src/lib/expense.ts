@@ -1,6 +1,6 @@
 import type { PipelineStage } from "mongoose";
 import { parseDay } from "@/lib/appointment-list";
-import type { DayRange, ExpenseDayCents } from "@/lib/cash-flow";
+import type { DayRange, ExpenseDayCents, StaffCashFlowAmounts } from "@/lib/cash-flow";
 import { parsePriceCents } from "@/lib/service";
 
 const MAX_DESCRIPTION_LENGTH = 80;
@@ -256,6 +256,27 @@ export function summarizeExpenseGroups<T extends ExpenseGroupInfo>(
       return { ...group, limitCents, totalCents, paidCents, overLimit };
     })
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+}
+
+type StaffAmounts = Pick<StaffCashFlowAmounts, "partnerShareCents" | "commissionCents" | "salaryCents">;
+
+// Grupos automáticos do período, fora do banco: equipe (salários com bônus e comissões) e
+// repasse. O limite é o previsto; lançado e pago são o que já correu. Sem custo, o grupo não aparece.
+export function staffExpenseGroups({ real, forecast }: { real: StaffAmounts; forecast: StaffAmounts }) {
+  const group = (id: "team" | "partner_share", name: string, limitCents: number, spentCents: number) => ({
+    id,
+    name,
+    automatic: true as const,
+    monthlyLimitCents: limitCents,
+    limitCents,
+    totalCents: spentCents,
+    paidCents: spentCents,
+    overLimit: false,
+  });
+  return [
+    group("team", "Equipe", forecast.commissionCents + forecast.salaryCents, real.commissionCents + real.salaryCents),
+    group("partner_share", "Repasse", forecast.partnerShareCents, real.partnerShareCents),
+  ].filter((row) => row.limitCents > 0);
 }
 
 // Gasto previsto da unidade por mês: a soma dos limites dos grupos que têm limite.

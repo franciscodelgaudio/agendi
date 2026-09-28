@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react"
 import FullCalendar, {
   type CalendarRef,
   type EventChangeInfo,
@@ -27,6 +27,7 @@ import {
 import { BOOKING_COLORS } from "@/lib/booking-colors"
 import type { BookingRow } from "@/lib/booking-list"
 import { createRescheduleQueue, type RescheduleTimes } from "@/lib/reschedule-queue"
+import { calendarTimeRange, type BusinessHours } from "@/lib/business-hours"
 import { BRT_OFFSET_HOURS } from "@/lib/timezone"
 
 import {
@@ -56,7 +57,12 @@ import {
 export type BookingOptions = Required<BookingFormOptions>
 
 // unitId: calendário de uma unidade (units traz só ela); sem filtro nem escolha de unidade.
-type Props = BookingOptions & { workspaceId: string; canManage: boolean; unitId?: string }
+type Props = Omit<BookingOptions, "units"> & {
+  units: (BookingOptions["units"][number] & { businessHours: BusinessHours })[]
+  workspaceId: string
+  canManage: boolean
+  unitId?: string
+}
 
 const ALL = "all"
 const HOUR_MS = 60 * 60 * 1000
@@ -103,6 +109,8 @@ type Draft = { values: BookingFormValues; key: number; fallbackAnchor: Element |
 // rascunho) e o botão de novo agendamento.
 const KEEPS_DRAFT = "data-keeps-draft"
 
+const noopSubscribe = () => () => {}
+
 export function BookingCalendar({ workspaceId, canManage, unitId, units, therapists, services, treatmentRooms }: Props) {
   const calendarRef = useRef<CalendarRef>(null)
   const [unit, setUnit] = useState(unitId ?? "")
@@ -120,6 +128,9 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
   // A busca que confirma arrastes já salvos não esmaece o calendário.
   const silentFetch = useRef(false)
   const mounted = useRef(false)
+  // O calendário só é desenhado no cliente: o Intl do Node e o do navegador formatam os títulos
+  // com espaços diferentes, e a hidratação falharia.
+  const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false)
   useEffect(() => {
     mounted.current = true
     return () => {
@@ -133,6 +144,10 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
   // O proprietário sempre está entre as massagistas, então basta haver uma unidade.
   const canCreate = canManage && units.length > 0
   const options = { units: unitId ? undefined : units, therapists, services, treatmentRooms }
+  // Do horário da unidade filtrada; sem filtro, da abertura mais cedo ao fechamento mais tarde.
+  const timeRange = calendarTimeRange(
+    units.filter((option) => !unit || option.id === unit).map((option) => option.businessHours),
+  )
 
   // Cada busca recria os ids internos dos eventos, e ao soltar um arraste o FullCalendar grava
   // a cópia do evento feita no início dele. Uma busca que chegasse no meio deixaria as duas
@@ -161,9 +176,6 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
   // Uma nova função a cada troca de filtro faz o calendário buscar de novo.
   const fetchEvents = useCallback(
     async (info: EventSourceFuncInfo): Promise<EventInput[]> => {
-      // O FullCalendar também busca no render do servidor; lá não há sessão do navegador
-      // nem URL base, então a busca fica para o cliente.
-      if (typeof window === "undefined") return []
       const params = new URLSearchParams(
         Object.entries({ start: toDay(info.start), end: toDay(info.end), unit, therapist }).filter(([, v]) => v),
       )
@@ -381,148 +393,150 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
       {error && <FieldError>{error}</FieldError>}
 
       <div className="booking-calendar" aria-busy={eventsLoading} {...{ [KEEPS_DRAFT]: "" }}>
-        <FullCalendar
-          ref={calendarRef}
-          plugins={[monarchThemePlugin, dayGridPlugin, timeGridPlugin, interactionPlugin]}
-          locale={ptBrLocale}
-          timeZone="UTC"
-          now={brtNow}
-          initialView="timeGridWeek"
-          headerToolbar={{ start: "prev,next today", center: "title", end: "dayGridMonth,timeGridWeek,timeGridDay" }}
-          height="auto"
-          allDaySlot={false}
-          slotMinTime="06:00"
-          slotMaxTime="24:00"
-          scrollTime="08:00"
-          // Uma faixa por hora, como no Google Agenda; arrastar e selecionar continuam de 30 em 30 min.
-          slotDuration="01:00"
-          snapDuration="00:30"
-          slotMinHeight={48}
-          nowIndicator
-          dayMaxEvents
-          eventSources={eventSources}
-          // O FullCalendar avisa do carregamento no meio do próprio render; o estado muda logo depois dele.
-          loading={(isLoading) => {
-            if (!isLoading) silentFetch.current = false
-            else if (silentFetch.current) return
-            if (mounted.current) queueMicrotask(() => setEventsLoading(isLoading))
-          }}
-          eventDidMount={({ event, el }) => {
-            if (event.extendedProps.draft) setDraftEl(el)
-          }}
-          eventWillUnmount={({ event, el }) => {
-            if (event.extendedProps.draft) setDraftEl((current) => (current === el ? null : current))
-          }}
-          // Mudou o período à vista: o rascunho só fica se ainda estiver nele. O FullCalendar dispara
-          // isto já ao ser criado, durante o render e antes de este componente montar, então sem
-          // rascunho não há o que atualizar.
-          datesSet={({ start, end }) => {
-            if (!draft) return
-            setDraft((current) =>
-              current && current.values.startsAt >= toWallTime(start) && current.values.startsAt < toWallTime(end)
-                ? current
-                : null,
-            )
-          }}
-          // Altura definida no miolo do evento, para o conteúdo esconder as linhas que não cabem inteiras.
-          columnEventInnerClass={({ isShort }) => (isShort ? undefined : "h-full")}
-          eventContent={({ event, timeText, view, isShort }) => {
-            // O evento-espelho da seleção (selectMirror) não tem agendamento associado.
-            const booking = event.extendedProps.booking as BookingRow | undefined
-            if (!booking) {
+        {hydrated && (
+          <FullCalendar
+            ref={calendarRef}
+            plugins={[monarchThemePlugin, dayGridPlugin, timeGridPlugin, interactionPlugin]}
+            locale={ptBrLocale}
+            timeZone="UTC"
+            now={brtNow}
+            initialView="timeGridWeek"
+            headerToolbar={{ start: "prev,next today", center: "title", end: "dayGridMonth,timeGridWeek,timeGridDay" }}
+            height="auto"
+            allDaySlot={false}
+            {...timeRange}
+            scrollTime="08:00"
+            // Uma faixa por hora, como no Google Agenda; arrastar e selecionar continuam de 30 em 30 min.
+            slotDuration="01:00"
+            snapDuration="00:30"
+            slotMinHeight={48}
+            // O tema põe a hora em 14px, fora das camadas do Tailwind; o "!" garante o tamanho menor.
+            slotHeaderInnerClass="text-xs!"
+            nowIndicator
+            dayMaxEvents
+            eventSources={eventSources}
+            // O FullCalendar avisa do carregamento no meio do próprio render; o estado muda logo depois dele.
+            loading={(isLoading) => {
+              if (!isLoading) silentFetch.current = false
+              else if (silentFetch.current) return
+              if (mounted.current) queueMicrotask(() => setEventsLoading(isLoading))
+            }}
+            eventDidMount={({ event, el }) => {
+              if (event.extendedProps.draft) setDraftEl(el)
+            }}
+            eventWillUnmount={({ event, el }) => {
+              if (event.extendedProps.draft) setDraftEl((current) => (current === el ? null : current))
+            }}
+            // Mudou o período à vista: o rascunho só fica se ainda estiver nele. O FullCalendar dispara
+            // isto já ao ser criado, durante o render, então sem rascunho não há o que atualizar.
+            datesSet={({ start, end }) => {
+              if (!draft) return
+              setDraft((current) =>
+                current && current.values.startsAt >= toWallTime(start) && current.values.startsAt < toWallTime(end)
+                  ? current
+                  : null,
+              )
+            }}
+            // Altura definida no miolo do evento, para o conteúdo esconder as linhas que não cabem inteiras.
+            columnEventInnerClass={({ isShort }) => (isShort ? undefined : "h-full")}
+            eventContent={({ event, timeText, view, isShort }) => {
+              // O evento-espelho da seleção (selectMirror) não tem agendamento associado.
+              const booking = event.extendedProps.booking as BookingRow | undefined
+              if (!booking) {
+                return (
+                  <div className="overflow-hidden px-1.5 py-1 text-xs leading-snug">
+                    {event.extendedProps.draft && <div className="truncate font-semibold">Novo agendamento</div>}
+                    <div className="truncate tabular-nums">{timeText}</div>
+                  </div>
+                )
+              }
+              const guestName = (
+                <span className="flex min-w-0 items-center gap-1 font-semibold">
+                  {booking.appointmentId && <CheckIcon className="size-3 shrink-0" aria-label="Atendido" />}
+                  <span className="truncate">{booking.guest.name}</span>
+                </span>
+              )
+              // No mês e em eventos curtos cabe uma linha só: hora e hóspede. Estreito (vários
+              // agendamentos no mesmo horário), sai a hora e depois o avatar, e fica só o hóspede.
+              if (view.type.startsWith("dayGrid") || isShort) {
+                return (
+                  <div className="@container w-full min-w-0">
+                    <div className="flex min-w-0 items-center gap-1.5 overflow-hidden px-1 text-xs leading-tight">
+                      {therapistAvatar(booking, "size-4 shrink-0 @max-[4.5rem]:hidden")}
+                      <span className="shrink-0 tabular-nums opacity-85 @max-[7rem]:hidden">
+                        {toWallTime(event.start!).slice(11)}
+                      </span>
+                      {guestName}
+                    </div>
+                  </div>
+                )
+              }
+              // Cada linha trunca sozinha. A coluna quebra (flex-wrap) e cada linha ocupa a largura toda:
+              // a linha que não cabe inteira na altura vai para uma coluna fora da vista, em vez de aparecer cortada.
+              // O gap-x maior que o padding impede que o começo dessa coluna apareça no padding da direita.
+              // Na largura, o que é pouco útil cortado sai de propósito: o nome da massagista (o avatar e
+              // a cor já dizem quem é), depois quarto e serviço, e por fim o avatar.
               return (
-                <div className="overflow-hidden px-1.5 py-1 text-xs leading-snug">
-                  {event.extendedProps.draft && <div className="truncate font-semibold">Novo agendamento</div>}
-                  <div className="truncate tabular-nums">{timeText}</div>
+                <div className="@container h-full w-full min-w-0">
+                  <div className="flex h-full min-w-0 flex-col flex-wrap gap-x-3 gap-y-0.5 overflow-hidden px-1.5 py-1 text-xs leading-snug">
+                    <div className="flex w-full min-w-0 items-center gap-1.5">
+                      {therapistAvatar(booking, "size-5 shrink-0 ring-1 ring-white/60 @max-[4.5rem]:hidden")}
+                      {guestName}
+                    </div>
+                    <div className="w-full truncate tabular-nums opacity-85">
+                      {timeText}
+                      <span className="@max-[8rem]:hidden"> · {booking.treatmentRoom.roomName}</span>
+                      <span className="@max-[12rem]:hidden"> · Quarto {booking.guest.room}</span>
+                    </div>
+                    <div className="w-full truncate opacity-85 @max-[8rem]:hidden">
+                      {booking.service.serviceName}
+                      <span className="@max-[12rem]:hidden"> · {booking.therapistName}</span>
+                    </div>
+                  </div>
                 </div>
               )
-            }
-            const guestName = (
-              <span className="flex min-w-0 items-center gap-1 font-semibold">
-                {booking.appointmentId && <CheckIcon className="size-3 shrink-0" aria-label="Atendido" />}
-                <span className="truncate">{booking.guest.name}</span>
-              </span>
-            )
-            // No mês e em eventos curtos cabe uma linha só: hora e hóspede. Estreito (vários
-            // agendamentos no mesmo horário), sai a hora e depois o avatar, e fica só o hóspede.
-            if (view.type.startsWith("dayGrid") || isShort) {
-              return (
-                <div className="@container w-full min-w-0">
-                  <div className="flex min-w-0 items-center gap-1.5 overflow-hidden px-1 text-xs leading-tight">
-                    {therapistAvatar(booking, "size-4 shrink-0 @max-[4.5rem]:hidden")}
-                    <span className="shrink-0 tabular-nums opacity-85 @max-[7rem]:hidden">
-                      {toWallTime(event.start!).slice(11)}
-                    </span>
-                    {guestName}
-                  </div>
-                </div>
-              )
-            }
-            // Cada linha trunca sozinha. A coluna quebra (flex-wrap) e cada linha ocupa a largura toda:
-            // a linha que não cabe inteira na altura vai para uma coluna fora da vista, em vez de aparecer cortada.
-            // O gap-x maior que o padding impede que o começo dessa coluna apareça no padding da direita.
-            // Na largura, o que é pouco útil cortado sai de propósito: o nome da massagista (o avatar e
-            // a cor já dizem quem é), depois quarto e serviço, e por fim o avatar.
-            return (
-              <div className="@container h-full w-full min-w-0">
-                <div className="flex h-full min-w-0 flex-col flex-wrap gap-x-3 gap-y-0.5 overflow-hidden px-1.5 py-1 text-xs leading-snug">
-                  <div className="flex w-full min-w-0 items-center gap-1.5">
-                    {therapistAvatar(booking, "size-5 shrink-0 ring-1 ring-white/60 @max-[4.5rem]:hidden")}
-                    {guestName}
-                  </div>
-                  <div className="w-full truncate tabular-nums opacity-85">
-                    {timeText}
-                    <span className="@max-[8rem]:hidden"> · {booking.treatmentRoom.roomName}</span>
-                    <span className="@max-[12rem]:hidden"> · Quarto {booking.guest.room}</span>
-                  </div>
-                  <div className="w-full truncate opacity-85 @max-[8rem]:hidden">
-                    {booking.service.serviceName}
-                    <span className="@max-[12rem]:hidden"> · {booking.therapistName}</span>
-                  </div>
-                </div>
-              </div>
-            )
-          }}
-          selectable={canCreate}
-          selectMirror
-          select={(info) => {
-            info.view.calendar.unselect()
-            // No mês a seleção é do dia inteiro: sugere 9h com 1 hora.
-            if (info.allDay) openCreate(`${toDay(info.start)}T09:00`, 60)
-            else openCreate(toWallTime(info.start), Math.round((info.end.getTime() - info.start.getTime()) / 60000))
-          }}
-          editable={canManage}
-          eventDragStart={hold}
-          eventDragStop={handleInteractionStop}
-          eventResizeStart={hold}
-          eventResizeStop={handleInteractionStop}
-          eventDrop={handleChange}
-          eventResize={handleChange}
-          eventClick={({ event }) => {
-            if (!canManage) return
-            const booking = event.extendedProps.booking as BookingRow | undefined
-            if (!booking) return
-            setDraft(null)
-            setDeleteError(null)
-            if (booking.appointmentId) return openSheet({ mode: "done", booking })
-            openSheet({
-              mode: "edit",
-              booking,
-              values: {
-                unitId: booking.unitId,
-                therapistId: booking.therapistId,
-                guestName: booking.guest.name,
-                room: booking.guest.room,
-                startsAt: booking.startsAt,
-                durationMinutes: booking.durationMinutes,
-                serviceId: booking.service.serviceId,
-                treatmentRoomId: booking.treatmentRoom.roomId,
-                productIds: booking.productIds,
-                color: booking.color,
-              },
-            })
-          }}
-        />
+            }}
+            selectable={canCreate}
+            selectMirror
+            select={(info) => {
+              info.view.calendar.unselect()
+              // No mês a seleção é do dia inteiro: sugere 9h com 1 hora.
+              if (info.allDay) openCreate(`${toDay(info.start)}T09:00`, 60)
+              else openCreate(toWallTime(info.start), Math.round((info.end.getTime() - info.start.getTime()) / 60000))
+            }}
+            editable={canManage}
+            eventDragStart={hold}
+            eventDragStop={handleInteractionStop}
+            eventResizeStart={hold}
+            eventResizeStop={handleInteractionStop}
+            eventDrop={handleChange}
+            eventResize={handleChange}
+            eventClick={({ event }) => {
+              if (!canManage) return
+              const booking = event.extendedProps.booking as BookingRow | undefined
+              if (!booking) return
+              setDraft(null)
+              setDeleteError(null)
+              if (booking.appointmentId) return openSheet({ mode: "done", booking })
+              openSheet({
+                mode: "edit",
+                booking,
+                values: {
+                  unitId: booking.unitId,
+                  therapistId: booking.therapistId,
+                  guestName: booking.guest.name,
+                  room: booking.guest.room,
+                  startsAt: booking.startsAt,
+                  durationMinutes: booking.durationMinutes,
+                  serviceId: booking.service.serviceId,
+                  treatmentRoomId: booking.treatmentRoom.roomId,
+                  productIds: booking.productIds,
+                  color: booking.color,
+                },
+              })
+            }}
+          />
+        )}
       </div>
 
       {/* Sem fundo: o calendário continua à vista, com o rascunho ao lado do balão. */}

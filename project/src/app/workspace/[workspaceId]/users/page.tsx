@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation"
 import { MailIcon, SettingsIcon, ShieldIcon, UserIcon } from "lucide-react"
 import { canManageMembers, type MemberRole, type WorkspaceRole } from "@/lib/member-role"
-import { visiblePages, type HiddenPages } from "@/lib/page-access"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { parseUserListQuery, USER_PAGE_SIZE, userListPage, type UserListItem } from "@/lib/user-list"
@@ -10,7 +9,6 @@ import { InviteMemberSheet } from "@/components/invite-member-sheet"
 import { ListPagination } from "@/components/list-pagination"
 import { ListSearch } from "@/components/list-search"
 import { MemberActions } from "@/components/member-actions"
-import { PageAccessForm } from "@/components/page-access-form"
 import { roleLabels } from "@/components/role-labels"
 import { CodeCell, CodeHead } from "@/components/record-code"
 import { SortableHead } from "@/components/sortable-head"
@@ -40,7 +38,7 @@ export default async function UsersPage({ params, searchParams }: PageProps<"/wo
 
   // Layout e página renderizam em paralelo, então o acesso é verificado aqui
   // também. O dono vem de Workspace.userId; membros e convites, de workspace_members.
-  const [workspace] = await Workspace.aggregate<{ role: WorkspaceRole; owner: Person | null; members: Member[]; hiddenPages: HiddenPages | null }>([
+  const [workspace] = await Workspace.aggregate<{ role: WorkspaceRole; owner: Person | null; members: Member[] }>([
     ...access,
     {
       $lookup: {
@@ -79,7 +77,7 @@ export default async function UsersPage({ params, searchParams }: PageProps<"/wo
         ],
       },
     },
-    { $project: { _id: 0, role: 1, owner: { $first: "$owner" }, members: 1, hiddenPages: { $ifNull: ["$hiddenPages", null] } } },
+    { $project: { _id: 0, role: 1, owner: { $first: "$owner" }, members: 1 } },
   ])
   if (!workspace) notFound()
   const canManage = canManageMembers(workspace.role)
@@ -108,15 +106,14 @@ export default async function UsersPage({ params, searchParams }: PageProps<"/wo
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-2xl font-semibold tracking-tight">Usuários</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <ListSearch query={filters} placeholder="Buscar nome ou email..." />
+          <UserRoleFilter query={filters} />
+          <UserStatusFilter query={filters} />
+        </div>
         {canManage && <InviteMemberSheet workspaceId={workspaceId} />}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <ListSearch query={filters} placeholder="Buscar nome ou email..." />
-        <UserRoleFilter query={filters} />
-        <UserStatusFilter query={filters} />
       </div>
       <div className="border">
         <Table>
@@ -184,21 +181,6 @@ export default async function UsersPage({ params, searchParams }: PageProps<"/wo
         pathname={pathname}
         itemLabel="usuários"
       />
-      {canManage && (
-        <section className="flex flex-col gap-4 border-t pt-6" aria-labelledby="permissions-heading">
-          <div>
-            <h3 id="permissions-heading" className="text-lg font-semibold tracking-tight">Permissões</h3>
-            <p className="text-sm text-muted-foreground">Defina quais páginas cada função pode acessar.</p>
-          </div>
-          <PageAccessForm
-            workspaceId={workspaceId}
-            visible={{
-              massage_therapist: visiblePages("massage_therapist", workspace.hiddenPages),
-              receptionist: visiblePages("receptionist", workspace.hiddenPages),
-            }}
-          />
-        </section>
-      )}
     </div>
   )
 }

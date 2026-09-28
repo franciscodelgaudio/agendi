@@ -1037,9 +1037,15 @@ describe("costCurve", () => {
     expenseCents,
     netCents: -1,
   });
-  // O previsto dos intervalos não entra na curva: o planejado vem do orçamento dos grupos.
-  const IGNORED = costs(9_999, 9_999, 9_999, 9_999);
-  const month = (from: string, to: string, real: ReturnType<typeof costs>) => ({ from, to, real, forecast: IGNORED });
+  // Do previsto, só repasse, comissão e salário entram no planejado; as despesas previstas
+  // não, porque o planejado delas é o orçamento dos grupos.
+  const NO_STAFF = costs(0, 0, 0, 9_999);
+  const month = (from: string, to: string, real: ReturnType<typeof costs>, forecast = NO_STAFF) => ({
+    from,
+    to,
+    real,
+    forecast,
+  });
   const JUL = { from: "2026-07-01", to: "2026-07-31" };
   const AUG = { from: "2026-08-01", to: "2026-08-31" };
   const SEP = { from: "2026-09-01", to: "2026-09-30" };
@@ -1128,5 +1134,50 @@ describe("costCurve", () => {
 
   it("sem unidades, a curva fica vazia", () => {
     expect(costCurve([], "2026-09-24")).toEqual([]);
+  });
+
+  it("o planejado soma ao orçamento dos grupos o repasse, a comissão e o salário previstos, que variam por intervalo", () => {
+    const result = costCurve(
+      [
+        {
+          monthlyBudgetCents: 1_000,
+          buckets: [
+            month(JUL.from, JUL.to, costs(100, 200, 300, 400), costs(100, 200, 300, 9_999)),
+            month(AUG.from, AUG.to, costs(0, 50, 300, 0), costs(0, 50, 300, 9_999)),
+            month(SEP.from, SEP.to, costs(10, 20, 150, 0), costs(10, 20, 300, 9_999)),
+          ],
+        },
+      ],
+      "2026-09-15",
+    );
+
+    expect(result).toEqual([
+      { ...JUL, plannedCents: 1_600, spentCents: 1_000, plannedCumulativeCents: 1_600, spentCumulativeCents: 1_000 },
+      { ...AUG, plannedCents: 1_350, spentCents: 350, plannedCumulativeCents: 2_950, spentCumulativeCents: 1_350 },
+      { ...SEP, plannedCents: 1_330, spentCents: 180, plannedCumulativeCents: 4_280, spentCumulativeCents: 1_530 },
+    ]);
+  });
+
+  it("depois de hoje, o planejado segue com o salário previsto, sem gasto", () => {
+    const result = costCurve(
+      [{ monthlyBudgetCents: 0, buckets: [month(OCT.from, OCT.to, costs(0, 0, 0, 0), costs(0, 0, 500, 0))] }],
+      "2026-09-24",
+    );
+
+    expect(result).toEqual([
+      { ...OCT, plannedCents: 500, spentCents: null, plannedCumulativeCents: 500, spentCumulativeCents: null },
+    ]);
+  });
+
+  it("com várias unidades, soma também o repasse, a comissão e o salário previstos de todas", () => {
+    const result = costCurve(
+      [
+        { monthlyBudgetCents: 200, buckets: [month(JUL.from, JUL.to, costs(0, 0, 0, 0), costs(100, 0, 0, 0))] },
+        { monthlyBudgetCents: 0, buckets: [month(JUL.from, JUL.to, costs(0, 0, 0, 0), costs(0, 30, 40, 0))] },
+      ],
+      "2026-09-24",
+    );
+
+    expect(result[0].plannedCents).toBe(370);
   });
 });

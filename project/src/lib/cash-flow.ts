@@ -580,7 +580,8 @@ export function summarizeCosts<T extends { paidCents: number }>(
   };
 }
 
-// Um intervalo da curva S: planejado (orçamento dos grupos) e gasto (real), no intervalo e
+// Um intervalo da curva S: planejado (orçamento dos grupos mais repasse, comissão e salário
+// previstos) e gasto (real), no intervalo e
 // acumulados. Depois de hoje ainda não há gasto, então fica null para a linha parar no atual.
 export type CostCurvePoint = DayRange & {
   plannedCents: number;
@@ -594,7 +595,8 @@ function costsOf({ partnerShareCents, commissionCents, salaryCents, expenseCents
 }
 
 // Recebe os mesmos intervalos de cada unidade e soma as unidades intervalo a intervalo. O
-// orçamento mensal é rateado pelos dias, como o salário; arredonda por intervalo.
+// orçamento mensal é rateado pelos dias, como o salário; arredonda por intervalo. Das despesas
+// previstas, o planejado é só o orçamento.
 export function costCurve(
   units: { buckets: ExpenseCashFlowBucket[]; monthlyBudgetCents: number }[],
   today: string,
@@ -604,7 +606,9 @@ export function costCurve(
   let planned = 0;
   let spent = 0;
   return (units[0]?.buckets ?? []).map(({ from, to }, index) => {
-    const plannedCents = Math.round(monthlyForDays({ from, to }, budget));
+    const plannedCents =
+      Math.round(monthlyForDays({ from, to }, budget)) +
+      units.reduce((sum, unit) => sum + costsOf({ ...unit.buckets[index].forecast, expenseCents: 0 }), 0);
     const spentCents = units.reduce((sum, unit) => sum + costsOf(unit.buckets[index].real), 0);
     planned += plannedCents;
     spent += spentCents;

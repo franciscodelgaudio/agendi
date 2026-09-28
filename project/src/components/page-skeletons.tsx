@@ -229,15 +229,22 @@ export function UnitHeaderSkeleton() {
         <Skeleton className="size-14 rounded-lg" />
         <Skeleton className="h-8 w-56" />
       </div>
-      <div className="-mx-4 flex gap-1 px-4 pt-3 shadow-[inset_0_-1px_0_var(--border)]">
-        {["w-24", "w-20", "w-24", "w-28", "w-20", "w-20", "w-16"].map((width, i) => (
-          <div key={i} className="flex items-center gap-2 px-3 py-2">
-            <Skeleton className="size-4" />
-            <Skeleton className={cn("h-4", width)} />
-          </div>
-        ))}
-      </div>
+      <TabsNavSkeleton widths={["w-24", "w-20", "w-24", "w-28", "w-20", "w-20", "w-16"]} />
     </LoadingRegion>
+  )
+}
+
+// Abas sublinhadas (unidade, usuários), uma por largura de rótulo.
+export function TabsNavSkeleton({ widths }: { widths: string[] }) {
+  return (
+    <div className="-mx-4 flex gap-1 px-4 pt-3 shadow-[inset_0_-1px_0_var(--border)]">
+      {widths.map((width, i) => (
+        <div key={i} className="flex items-center gap-2 px-3 py-2">
+          <Skeleton className="size-4" />
+          <Skeleton className={cn("h-4", width)} />
+        </div>
+      ))}
+    </div>
   )
 }
 

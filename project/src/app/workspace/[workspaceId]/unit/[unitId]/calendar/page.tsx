@@ -4,6 +4,7 @@ import { canManageMembers, type WorkspaceRole } from "@/lib/member"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { therapistOptionsStages } from "@/lib/therapist"
+import type { BusinessHours } from "@/lib/business-hours"
 import { Workspace } from "@/models/Workspace"
 import { BookingCalendar, type BookingOptions } from "@/components/booking-calendar"
 import { CalendarNav } from "@/components/calendar-nav"
@@ -20,7 +21,7 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
   // Parte do workspace -> unidade -> serviços para que o acesso seja garantido em cada nível.
   const [workspace] = await Workspace.aggregate<Omit<BookingOptions, "units"> & {
     role: WorkspaceRole
-    unit: { id: string; name: string } | null
+    unit: { id: string; name: string; businessHours: BusinessHours } | null
   }>([
     ...access,
     {
@@ -29,7 +30,7 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
         localField: "_id",
         foreignField: "workspaceId",
         as: "unit",
-        pipeline: [{ $match: { _id: new Types.ObjectId(unitId) } }, { $project: { name: 1, treatmentRooms: 1 } }],
+        pipeline: [{ $match: { _id: new Types.ObjectId(unitId) } }, { $project: { name: 1, treatmentRooms: 1, businessHours: 1 } }],
       },
     },
     {
@@ -62,7 +63,7 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
         unit: {
           $let: {
             vars: { unit: { $first: "$unit" } },
-            in: { $cond: ["$$unit", { id: { $toString: "$$unit._id" }, name: "$$unit.name" }, null] },
+            in: { $cond: ["$$unit", { id: { $toString: "$$unit._id" }, name: "$$unit.name", businessHours: "$$unit.businessHours" }, null] },
           },
         },
         services: 1,
