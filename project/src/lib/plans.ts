@@ -16,10 +16,12 @@ export type Plan = {
 }
 
 export const PLANS: readonly Plan[] = [
-  { id: "starter", name: "1 unidade", maxUnits: 1, maxUsers: 3, prices: { standard: 11900, communication: 19800 } },
-  { id: "growth", name: "Até 5 unidades", maxUnits: 5, maxUsers: 10, prices: { standard: 17900, communication: 25800 } },
-  { id: "network", name: "Até 10 unidades", maxUnits: 10, maxUsers: 25, prices: { standard: 27900, communication: 35800 } },
+  { id: "starter", name: "Até 3 unidades", maxUnits: 3, maxUsers: 10, prices: { standard: 11900, communication: 19800 } },
+  { id: "growth", name: "Até 6 unidades", maxUnits: 6, maxUsers: 20, prices: { standard: 17900, communication: 25800 } },
+  { id: "network", name: "Até 10 unidades", maxUnits: 10, maxUsers: 50, prices: { standard: 27900, communication: 35800 } },
 ]
+
+export const RECOMMENDED_PLAN_ID: PlanId = "growth"
 
 export const PLAN_MODE_LABELS: Record<PlanMode, string> = {
   standard: "Sem comunicação",

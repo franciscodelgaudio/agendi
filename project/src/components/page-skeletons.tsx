@@ -251,7 +251,7 @@ export function TabsNavSkeleton({ widths }: { widths: string[] }) {
 // Lista de conversas ao lado do painel vazio, enquanto a inbox carrega.
 export function InboxSkeleton() {
   return (
-    <LoadingRegion className="flex h-[calc(100svh-4rem)] min-h-0">
+    <LoadingRegion className="flex h-svh min-h-0">
       <div className="flex w-full min-w-0 flex-col border-r md:w-80 md:shrink-0">
         <div className="flex h-12 shrink-0 items-center border-b px-4">
           <Skeleton className="h-5 w-24" />

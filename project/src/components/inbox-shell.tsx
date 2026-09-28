@@ -47,7 +47,7 @@ export function InboxShell({ workspaceId, conversations, children }: Props) {
   }, [router])
 
   return (
-    <div className="flex h-[calc(100svh-4rem)] min-h-0">
+    <div className="flex h-svh min-h-0">
       <aside
         className={cn(
           "flex w-full min-w-0 flex-col border-r md:w-80 md:shrink-0",

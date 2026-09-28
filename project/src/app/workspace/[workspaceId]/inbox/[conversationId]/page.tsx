@@ -179,6 +179,7 @@ export default async function ConversationPage({
           size="icon-sm"
           className="-ml-2 md:hidden"
           aria-label="Voltar para as conversas"
+          nativeButton={false}
           render={<Link href={`/workspace/${workspaceId}/inbox`} />}
         >
           <ArrowLeftIcon />

@@ -193,9 +193,9 @@ function Editor({ workspaceId, ura, channels, units, users }: Props) {
   }
 
   return (
-    <div className="flex h-[calc(100svh-4rem)] min-h-0 flex-col">
+    <div className="flex h-svh min-h-0 flex-col">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
-        <Button variant="ghost" size="icon-sm" aria-label="Voltar para as URAs" render={<Link href={`/workspace/${workspaceId}/uras`} />}>
+        <Button variant="ghost" size="icon-sm" aria-label="Voltar para as URAs" nativeButton={false} render={<Link href={`/workspace/${workspaceId}/uras`} />}>
           <ArrowLeftIcon />
         </Button>
         <Input
@@ -247,9 +247,9 @@ function Editor({ workspaceId, ura, channels, units, users }: Props) {
       </header>
 
       <div className="relative flex min-h-0 flex-1">
-        <aside className="hidden w-52 shrink-0 flex-col gap-4 overflow-y-auto border-r p-3 md:flex">
+        <aside className="hidden w-56 shrink-0 flex-col gap-3 overflow-x-hidden overflow-y-auto border-r p-2 md:flex">
           {PALETTE.map((category) => (
-            <div key={category} className="grid gap-1">
+            <div key={category} className="grid min-w-0 gap-0.5">
               <span className="px-1 text-xs font-medium text-muted-foreground">{categoryMeta[category].label}</span>
               {(Object.keys(nodeMeta) as UraNodeType[])
                 .filter((type) => nodeMeta[type].category === category)
@@ -260,9 +260,9 @@ function Editor({ workspaceId, ura, channels, units, users }: Props) {
                       key={type}
                       type="button"
                       onClick={() => addNode(type)}
-                      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+                      className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-muted"
                     >
-                      <span className={cn("flex size-6 shrink-0 items-center justify-center rounded", categoryMeta[category].className)}>
+                      <span className={cn("flex size-5 shrink-0 items-center justify-center rounded", categoryMeta[category].className)}>
                         <Icon className="size-3.5" />
                       </span>
                       <span className="truncate">{nodeMeta[type].label}</span>

@@ -6,6 +6,7 @@ import { FEATURES } from "@/components/landing/features"
 import { LandingLogo } from "@/components/landing/landing-logo"
 import { PlansSection } from "@/components/landing/plans-section"
 import { ScrollReveal } from "@/components/landing/scroll-reveal"
+import { Tilt } from "@/components/landing/tilt"
 import { submitLeadAction } from "@/lib/actions/lead"
 import { PLANS } from "@/lib/plans"
 import { cn } from "@/lib/utils"
@@ -166,20 +167,22 @@ export default function LandingPage() {
                 </a>
               </div>
             </div>
-            <div className="relative h-[260px] self-end min-[600px]:h-[380px] min-[900px]:h-[500px]">
-              <div className="ld-screen absolute top-0 left-0 aspect-[1850/990] w-[720px] overflow-hidden rounded-tl-xl border-t border-l border-white/15 bg-white shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)] min-[600px]:w-[900px] min-[900px]:w-[1040px]">
-                <Image
-                  src="/landing/inicio.webp"
-                  alt="Tela Início do Agenli com indicadores do negócio e gráficos de custos"
-                  fill
-                  priority
-                  sizes="(min-width: 900px) 1040px, (min-width: 600px) 900px, 720px"
-                  className="object-cover object-left-top"
-                />
-                <div aria-hidden="true" className="ld-scan pointer-events-none absolute inset-x-0 top-0 h-1/4" />
-                <div aria-hidden="true" className="ld-sheen pointer-events-none absolute inset-0" />
+            <Tilt className="relative h-[260px] self-end min-[600px]:h-[380px] min-[900px]:h-[500px]">
+              <div className="ld-tilt absolute top-0 left-0 w-[720px] origin-left min-[600px]:w-[900px] min-[900px]:w-[1040px]">
+                <div className="ld-screen relative aspect-[1850/990] w-full overflow-hidden rounded-tl-xl border-t border-l border-white/15 bg-white shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)]">
+                  <Image
+                    src="/landing/inicio.webp"
+                    alt="Tela Início do Agenli com indicadores do negócio e gráficos de custos"
+                    fill
+                    priority
+                    quality={90}
+                    sizes="(min-width: 900px) 1040px, (min-width: 600px) 900px, 720px"
+                    className="object-cover object-left-top"
+                  />
+                  <div aria-hidden="true" className="ld-scan pointer-events-none absolute inset-x-0 top-0 h-1/4" />
+                </div>
               </div>
-              <div aria-hidden="true" className="hidden min-[600px]:block">
+              <div aria-hidden="true" className="ld-parallax absolute inset-0 hidden min-[600px]:block">
                 <div
                   className="ld-float absolute top-10 -left-6 flex items-center gap-3 rounded-[10px] border border-white/15 bg-ld-forest/85 px-4 py-3 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.5)] backdrop-blur-md"
                   style={{ "--delay": "1.4s" } as React.CSSProperties}
@@ -204,7 +207,7 @@ export default function LandingPage() {
                   </span>
                 </div>
               </div>
-            </div>
+            </Tilt>
           </Container>
         </section>
 
@@ -223,16 +226,19 @@ export default function LandingPage() {
               <Eyebrow>Recursos</Eyebrow>
               <H2 id="recursos-title">Tudo o que o seu negócio usa no dia.</H2>
             </div>
-            <div data-reveal="zoom" className="ld-shine relative aspect-[4/3] overflow-hidden rounded-xl border border-ld-line bg-white shadow-sm min-[600px]:aspect-[16/8]">
-              <Image
-                src="/landing/calendario.webp"
-                alt="Calendário semanal de uma unidade no Agenli, com os agendamentos de cada profissional"
-                fill
-                loading="lazy"
-                sizes="(min-width: 1280px) 1200px, 100vw"
-                className="object-cover object-[center_top]"
-              />
-            </div>
+            <Tilt data-reveal="zoom">
+              <div className="ld-tilt relative aspect-[4/3] overflow-hidden rounded-xl border border-ld-line bg-white shadow-sm min-[600px]:aspect-[16/8]">
+                <Image
+                  src="/landing/calendario.webp"
+                  alt="Calendário semanal de uma unidade no Agenli, com os agendamentos de cada profissional"
+                  fill
+                  loading="lazy"
+                  quality={90}
+                  sizes="(min-width: 1280px) 1200px, 100vw"
+                  className="object-cover object-[center_top]"
+                />
+              </div>
+            </Tilt>
             <ul className="grid grid-cols-1 gap-4 min-[900px]:grid-cols-3">
               {FEATURES.map(({ icon: Icon, title, description }, index) => (
                 <li
@@ -272,16 +278,19 @@ export default function LandingPage() {
                 ))}
               </ul>
             </div>
-            <div data-reveal="zoom" style={stagger(1)} className="ld-shine relative aspect-[1850/990] overflow-hidden rounded-xl border border-ld-line bg-white shadow-sm">
-              <Image
-                src="/landing/gastos.webp"
-                alt="Resumo do caixa de uma unidade com o card Gastos por grupo e os limites mensais"
-                fill
-                loading="lazy"
-                sizes="(min-width: 1280px) 680px, (min-width: 900px) 55vw, 100vw"
-                className="object-cover object-[center_30%]"
-              />
-            </div>
+            <Tilt data-reveal="zoom" style={stagger(1)}>
+              <div className="ld-tilt relative aspect-[1850/990] overflow-hidden rounded-xl border border-ld-line bg-white shadow-sm">
+                <Image
+                  src="/landing/gastos.webp"
+                  alt="Resumo do caixa de uma unidade com o card Gastos por grupo e os limites mensais"
+                  fill
+                  loading="lazy"
+                  quality={90}
+                  sizes="(min-width: 1280px) 680px, (min-width: 900px) 55vw, 100vw"
+                  className="object-cover object-[center_30%]"
+                />
+              </div>
+            </Tilt>
           </Container>
         </section>
 

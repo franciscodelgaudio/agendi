@@ -3,7 +3,7 @@ import { LoadingRegion } from "@/components/page-skeletons"
 
 export default function Loading() {
   return (
-    <LoadingRegion className="flex h-[calc(100svh-4rem)] flex-col">
+    <LoadingRegion className="flex h-svh flex-col">
       <div className="flex h-12 items-center gap-2 border-b px-3">
         <Skeleton className="size-8" />
         <Skeleton className="h-8 w-60" />
