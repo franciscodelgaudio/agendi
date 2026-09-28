@@ -62,6 +62,16 @@ type IngestDeps = {
     error: string | null;
     from: DeliveryStatus[];
   }) => Promise<void>;
+  // Chamado para cada mensagem recebida nova, depois de atualizar a conversa (dispara a URA).
+  onInbound?: (data: InboundNotice) => Promise<void>;
+};
+
+export type InboundNotice = {
+  workspaceId: string;
+  channelId: string;
+  conversationId: string;
+  text: string;
+  optionId: string | null;
 };
 
 // Grava os eventos do webhook. Eventos de canais não conectados e mensagens
@@ -116,6 +126,15 @@ export async function ingestWebhookEvents(events: WebhookEvent[], deps: IngestDe
       lastMessagePreview: messagePreview(event.type, event.text),
       inbound,
     });
+    if (inbound) {
+      await deps.onInbound?.({
+        workspaceId: channel.workspaceId,
+        channelId: channel.id,
+        conversationId: conversation.id,
+        text: event.text ?? "",
+        optionId: event.optionId ?? null,
+      });
+    }
     result.messages++;
   }
 

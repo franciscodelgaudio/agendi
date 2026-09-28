@@ -221,3 +221,41 @@ describe("statusesBefore", () => {
     expect(statusesBefore(status)).toEqual(expected);
   });
 });
+
+describe("ingestWebhookEvents · aviso de mensagem recebida", () => {
+  it("avisa cada mensagem recebida nova, com a conversa, o texto e a opção escolhida", async () => {
+    const deps = { ...makeDeps(), onInbound: vi.fn().mockResolvedValue(undefined) };
+
+    await ingestWebhookEvents([{ ...inbound, text: "Agendar", optionId: "opt_0" }, { ...inbound, externalMessageId: "wamid.BBB" }], deps);
+
+    expect(deps.onInbound.mock.calls).toEqual([
+      [{ workspaceId: WORKSPACE_ID, channelId: CHANNEL_ID, conversationId: CONVERSATION_ID, text: "Agendar", optionId: "opt_0" }],
+      [
+        {
+          workspaceId: WORKSPACE_ID,
+          channelId: CHANNEL_ID,
+          conversationId: CONVERSATION_ID,
+          text: "Oi, tem horário amanhã?",
+          optionId: null,
+        },
+      ],
+    ]);
+    // Só depois de atualizar a conversa.
+    expect(deps.touchConversation.mock.invocationCallOrder[0]).toBeLessThan(deps.onInbound.mock.invocationCallOrder[0]);
+  });
+
+  it("usa texto vazio para mídia sem legenda", async () => {
+    const deps = { ...makeDeps(), onInbound: vi.fn().mockResolvedValue(undefined) };
+    await ingestWebhookEvents([{ ...inbound, type: "image", text: null }], deps);
+    expect(deps.onInbound).toHaveBeenCalledWith(expect.objectContaining({ text: "" }));
+  });
+
+  it("não avisa ecos enviados pelo app nem mensagens repetidas", async () => {
+    const deps = { ...makeDeps(), onInbound: vi.fn().mockResolvedValue(undefined) };
+    deps.insertMessage.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    await ingestWebhookEvents([{ ...inbound, platform: "instagram", direction: "outbound" }, inbound], deps);
+
+    expect(deps.onInbound).not.toHaveBeenCalled();
+  });
+});

@@ -5,8 +5,10 @@ export type SendMessageParams = {
   channelExternalId: string;
   accessToken: string;
   to: string;
-  text: string;
   apiVersion: string;
+  text?: string;
+  // Corpo já montado (lib/meta-message): mídia, menu interativo etc. Tem prioridade sobre text.
+  body?: Record<string, unknown>;
 };
 
 export type SendMessageResult =
@@ -15,12 +17,13 @@ export type SendMessageResult =
 
 // WhatsApp: Cloud API do número (graph.facebook.com). Instagram: API com login do
 // Instagram (graph.instagram.com), com o token da conta profissional.
-function buildRequest({ platform, channelExternalId, accessToken, to, text, apiVersion }: SendMessageParams) {
+function buildRequest({ platform, channelExternalId, accessToken, to, text, body: ready, apiVersion }: SendMessageParams) {
   const host = platform === "whatsapp" ? "graph.facebook.com" : "graph.instagram.com";
   const body =
-    platform === "whatsapp"
+    ready ??
+    (platform === "whatsapp"
       ? { messaging_product: "whatsapp", recipient_type: "individual", to, type: "text", text: { preview_url: false, body: text } }
-      : { recipient: { id: to }, message: { text } };
+      : { recipient: { id: to }, message: { text } });
   return {
     url: `https://${host}/${apiVersion}/${channelExternalId}/messages`,
     init: {

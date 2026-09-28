@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import FullCalendar, {
   type CalendarRef,
   type EventChangeInfo,
@@ -109,8 +109,6 @@ type Draft = { values: BookingFormValues; key: number; fallbackAnchor: Element |
 // rascunho) e o botão de novo agendamento.
 const KEEPS_DRAFT = "data-keeps-draft"
 
-const noopSubscribe = () => () => {}
-
 export function BookingCalendar({ workspaceId, canManage, unitId, units, therapists, services, treatmentRooms }: Props) {
   const calendarRef = useRef<CalendarRef>(null)
   const [unit, setUnit] = useState(unitId ?? "")
@@ -128,11 +126,15 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
   // A busca que confirma arrastes já salvos não esmaece o calendário.
   const silentFetch = useRef(false)
   const mounted = useRef(false)
-  // O calendário só é desenhado no cliente: o Intl do Node e o do navegador formatam os títulos
-  // com espaços diferentes, e a hidratação falharia.
-  const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false)
+  // O calendário só é desenhado no cliente, depois de montar: o Intl do Node e o do navegador
+  // formatam os títulos com espaços diferentes, e a hidratação falharia. E o FullCalendar já
+  // busca os eventos no próprio render; num render descartado (navegação), a resposta chegaria
+  // a um componente que nunca montou.
+  const [hydrated, setHydrated] = useState(false)
   useEffect(() => {
     mounted.current = true
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHydrated(true)
     return () => {
       mounted.current = false
     }

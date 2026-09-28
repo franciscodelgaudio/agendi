@@ -38,7 +38,15 @@ export async function upsertConversation(data: {
 }
 
 // false quando a mensagem já existe (reenvio do webhook).
-export async function insertMessage(data: StoredMessage & { sentByUserId?: string }) {
+export async function insertMessage(
+  data: StoredMessage & {
+    sentByUserId?: string
+    // Mensagens da URA: quem enviou, link da mídia e opções do menu.
+    sentByUraId?: string
+    mediaUrl?: string | null
+    options?: { title: string; description: string | null }[]
+  },
+) {
   try {
     const message = await Message.create(data)
     return { id: message._id.toString() }

@@ -15,6 +15,7 @@ import { sendReply, type ReplyConversation, type SendReplyError } from "@/lib/me
 import { insertMessage, touchConversation } from "@/lib/messaging-store"
 import type { MessagingPlatform } from "@/lib/messaging-types"
 import { sendMetaMessage } from "@/lib/meta-graph"
+import { endConversationSessions } from "@/lib/ura-store"
 import { getSessionUserId } from "@/lib/session"
 import { findWorkspaceAccess } from "@/lib/workspace-access"
 import { Conversation } from "@/models/Conversation"
@@ -203,6 +204,16 @@ export async function sendReplyAction(
       },
     },
   )
+
+  // Quem responde assume a conversa: a URA para e a conversa fica com essa pessoa, se ainda não tinha ninguém.
+  if (result.ok) {
+    await endConversationSessions(conversationId)
+    await Conversation.updateOne({ _id: conversationId }, { $set: { handedOff: true, status: "open" } })
+    await Conversation.updateOne(
+      { _id: conversationId, assignedUserId: null },
+      { $set: { assignedUserId: new Types.ObjectId(actor.userId) } },
+    )
+  }
 
   // Falha no envio já aparece na própria mensagem, marcada como não enviada.
   refresh()

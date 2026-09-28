@@ -8,6 +8,9 @@ import {
   upsertConversation,
 } from "@/lib/messaging-store"
 import { isValidWebhookSignature, parseMetaWebhook, verifyWebhookSubscription } from "@/lib/meta-webhook"
+import { enqueueInbound } from "@/lib/ura-queue"
+import { Conversation } from "@/models/Conversation"
+import { Message } from "@/models/Message"
 
 // Webhook único da Meta para WhatsApp Cloud API e Instagram. Fica fora do login
 // (proxy.ts); a autenticidade vem do token de verificação (GET) e da assinatura (POST).
@@ -45,6 +48,13 @@ export async function POST(request: Request) {
     insertMessage: async (data) => (await insertMessage(data)) !== null,
     touchConversation,
     updateMessageStatus: ({ channelId, ...data }) => updateOutboundStatus(channelWorkspaces.get(channelId)!, data),
+    onInbound: async ({ conversationId, text, optionId }) => {
+      // Conversa nova (primeira mensagem do cliente) ou reaberta: vale o gatilho de conversa nova.
+      const reopened = await Conversation.updateOne({ _id: conversationId, status: "closed" }, { $set: { status: "open" } })
+      const isNewConversation =
+        reopened.modifiedCount > 0 || (await Message.countDocuments({ conversationId, direction: "inbound" })) === 1
+      await enqueueInbound({ conversationId, text, optionId, isNewConversation })
+    },
   })
 
   // Erro ao gravar sobe como 500 e a Meta reenvia; mensagens repetidas são ignoradas.

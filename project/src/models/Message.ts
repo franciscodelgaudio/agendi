@@ -17,6 +17,15 @@ const messageSchema = new Schema(
     sentAt: { type: Date, required: true },
     // Quem respondeu pelo sistema; null em recebidas e em ecos enviados pelo app.
     sentByUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    // URA que enviou a mensagem automaticamente.
+    sentByUraId: { type: Schema.Types.ObjectId, ref: "Ura", default: null },
+    // Link da mídia enviada pela URA (text guarda a legenda).
+    mediaUrl: { type: String, default: null },
+    // Opções do menu enviado pela URA (text guarda a pergunta).
+    options: {
+      type: [new Schema({ title: { type: String, required: true }, description: { type: String, default: null } }, { _id: false })],
+      default: undefined,
+    },
   },
   { collection: "messages", timestamps: true },
 );

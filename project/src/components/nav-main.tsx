@@ -12,6 +12,7 @@ import {
   UsersIcon,
   UsersRoundIcon,
   WalletIcon,
+  WorkflowIcon,
   type LucideIcon,
 } from "lucide-react"
 import {
@@ -25,7 +26,7 @@ import { WORKSPACE_PAGE_PATHS, type WorkspacePage } from "@/lib/page-access"
 
 type NavItem = { title: string; href: string; icon: LucideIcon }
 
-// pages: páginas do sistema liberadas para a função do usuário; Canais é só de
+// pages: páginas do sistema liberadas para a função do usuário; Canais e URAs são só de
 // quem gerencia. inbox: a função atende clientes pelas Conversas. Tickets é de todos.
 export function NavMain({
   workspaceId,
@@ -61,6 +62,7 @@ export function NavMain({
         ...(canManage
           ? [
               { title: "Canais", href: `${base}/channels`, icon: RadioTowerIcon },
+              { title: "URAs", href: `${base}/uras`, icon: WorkflowIcon },
             ]
           : []),
         { title: "Tickets", href: `${base}/tickets`, icon: LifeBuoyIcon },

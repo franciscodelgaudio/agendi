@@ -112,3 +112,17 @@ describe("sendMetaMessage · falhas", () => {
     expect(await sendMetaMessage(params, fetchFn)).toEqual({ ok: false, reason: "unexpected_response", detail: null });
   });
 });
+
+describe("sendMetaMessage · corpo pronto", () => {
+  it("envia o corpo informado no lugar do texto", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(jsonResponse(200, { messages: [{ id: "wamid.OUT" }] }));
+    const body = { messaging_product: "whatsapp", to: "5511988887777", type: "image", image: { link: "https://cdn/x.png" } };
+
+    const result = await sendMetaMessage({ ...whatsapp, text: undefined, body }, fetchFn);
+
+    expect(result).toEqual({ ok: true, externalMessageId: "wamid.OUT" });
+    const [url, init] = fetchFn.mock.calls[0];
+    expect(url).toBe("https://graph.facebook.com/v23.0/106540352242922/messages");
+    expect(JSON.parse(init.body)).toEqual(body);
+  });
+});

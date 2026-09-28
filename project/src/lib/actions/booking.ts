@@ -1,10 +1,9 @@
 "use server"
 
-import { isObjectIdOrHexString, Types } from "mongoose"
+import { isObjectIdOrHexString } from "mongoose"
 import { canManageMembers } from "@/lib/member"
 import { getSessionUserId } from "@/lib/session"
-import { findWorkspaceTherapists } from "@/lib/therapist-lookup"
-import { findUnitProducts } from "@/lib/product-lookup"
+import { bookingLookups, conflictChecker, findUnitTreatmentRoom, roomBookingsFinder } from "@/lib/booking-store"
 import { findManagedUnit } from "@/lib/unit-access"
 import { findWorkspaceAccess } from "@/lib/workspace-access"
 import {
@@ -16,7 +15,6 @@ import {
 } from "@/lib/booking"
 import { Booking } from "@/models/Booking"
 import { Unit } from "@/models/Unit"
-import { Service } from "@/models/Service"
 
 const errorMessages: Record<BookingError | "unauthenticated", string> = {
   invalid_input: "Preencha massagista, sala, hóspede, quarto, início e duração.",
@@ -63,82 +61,6 @@ async function findManagedUnitIds(workspaceId: string, userId: string) {
   const access = await findWorkspaceAccess(workspaceId, userId)
   if (!access || !canManageMembers(access.role)) return null
   return Unit.find({ workspaceId: access.id }).distinct("_id")
-}
-
-// Conflito da massagista em qualquer unidade do workspace.
-function conflictChecker(unitIds: Types.ObjectId[]) {
-  return async ({
-    therapistId,
-    startsAt,
-    endsAt,
-    excludeId,
-  }: {
-    therapistId: string
-    startsAt: Date
-    endsAt: Date
-    excludeId?: string
-  }) => {
-    const conflict = await Booking.exists({
-      therapistId,
-      unitId: { $in: unitIds },
-      startsAt: { $lt: endsAt },
-      endsAt: { $gt: startsAt },
-      ...(excludeId && { _id: { $ne: excludeId } }),
-    })
-    return conflict !== null
-  }
-}
-
-// Outros agendamentos da sala que se sobrepõem ao intervalo, nas unidades dadas.
-function roomBookingsFinder(unitIds: (Types.ObjectId | string)[]) {
-  return async ({
-    treatmentRoomId,
-    startsAt,
-    endsAt,
-    excludeId,
-  }: {
-    treatmentRoomId: string
-    startsAt: Date
-    endsAt: Date
-    excludeId?: string
-  }) => {
-    if (!isObjectIdOrHexString(treatmentRoomId)) return []
-    return Booking.find({
-      "treatmentRoom.roomId": treatmentRoomId,
-      unitId: { $in: unitIds },
-      startsAt: { $lt: endsAt },
-      endsAt: { $gt: startsAt },
-      ...(excludeId && { _id: { $ne: excludeId } }),
-    })
-      .select({ _id: 0, startsAt: 1, endsAt: 1 })
-      .lean()
-  }
-}
-
-// Sala da unidade, ou null se não existe nela.
-async function findUnitTreatmentRoom(unitId: string | Types.ObjectId, roomId: string) {
-  if (!isObjectIdOrHexString(roomId)) return null
-  const unit = await Unit.findOne({ _id: unitId, "treatmentRooms._id": roomId })
-    .select({ "treatmentRooms.$": 1 })
-    .lean()
-  const room = unit?.treatmentRooms[0]
-  return room ? { id: room._id.toString(), name: room.name, beds: room.beds } : null
-}
-
-// Buscas usadas por createBooking/updateBooking, restritas à unidade e ao workspace.
-function bookingLookups(unit: { workspaceId: string; unitId: string }, unitIds: Types.ObjectId[]) {
-  return {
-    findService: async (id: string) => {
-      if (!isObjectIdOrHexString(id)) return null
-      const service = await Service.findOne({ _id: id, unitId: unit.unitId }).select({ name: 1 }).lean()
-      return service && { id: service._id.toString(), name: service.name }
-    },
-    findTherapist: async (id: string) => (await findWorkspaceTherapists(unit.workspaceId, [id]))[0] ?? null,
-    hasConflict: conflictChecker(unitIds),
-    findTreatmentRoom: (id: string) => findUnitTreatmentRoom(unit.unitId, id),
-    findRoomBookings: roomBookingsFinder([unit.unitId]),
-    findProducts: (ids: string[]) => findUnitProducts(unit.unitId, ids),
-  }
 }
 
 // workspaceId vem via argumento e a unidade pelo formulário (campo unitId); a posse é conferida aqui.

@@ -363,3 +363,71 @@ describe("parseMetaWebhook · payload inválido", () => {
     expect(parseMetaWebhook(payload)).toEqual([]);
   });
 });
+
+describe("parseMetaWebhook · respostas de menu", () => {
+  function whatsappMessage(content: Record<string, unknown>) {
+    return whatsappPayload({
+      metadata: WA_METADATA,
+      contacts: [WA_CONTACT],
+      messages: [{ from: "5511988887777", id: "wamid.AAA", timestamp: "1790000000", ...content }],
+    });
+  }
+
+  it("converte o toque num botão do WhatsApp em texto com o id da opção", () => {
+    const payload = whatsappMessage({
+      type: "interactive",
+      interactive: { type: "button_reply", button_reply: { id: "opt_0", title: "Agendar" } },
+    });
+
+    expect(parseMetaWebhook(payload)).toEqual([
+      expect.objectContaining({ kind: "message", type: "text", text: "Agendar", optionId: "opt_0" }),
+    ]);
+  });
+
+  it("converte a escolha numa lista do WhatsApp em texto com o id da linha", () => {
+    const payload = whatsappMessage({
+      type: "interactive",
+      interactive: { type: "list_reply", list_reply: { id: "slot_1", title: "sáb 03/10 14:30", description: "com Bia" } },
+    });
+
+    expect(parseMetaWebhook(payload)).toEqual([
+      expect.objectContaining({ type: "text", text: "sáb 03/10 14:30", optionId: "slot_1" }),
+    ]);
+  });
+
+  it("converte o botão de resposta rápida de template em texto com o payload", () => {
+    const payload = whatsappMessage({ type: "button", button: { text: "Confirmar", payload: "CONFIRMAR" } });
+
+    expect(parseMetaWebhook(payload)).toEqual([
+      expect.objectContaining({ type: "text", text: "Confirmar", optionId: "CONFIRMAR" }),
+    ]);
+  });
+
+  it("resposta interativa sem id nem título vira mensagem de outro tipo", () => {
+    const payload = whatsappMessage({ type: "interactive", interactive: { type: "nfm_reply", nfm_reply: {} } });
+
+    const [event] = parseMetaWebhook(payload);
+    expect(event).toMatchObject({ type: "other", text: null });
+    expect(event).not.toHaveProperty("optionId");
+  });
+
+  it("mensagem comum não tem optionId", () => {
+    const [event] = parseMetaWebhook(whatsappMessage({ type: "text", text: { body: "Oi" } }));
+    expect(event).not.toHaveProperty("optionId");
+  });
+
+  it("converte a resposta rápida do Instagram guardando o payload", () => {
+    const payload = instagramPayload([
+      {
+        sender: { id: "6000000000000001" },
+        recipient: { id: "17841400000000001" },
+        timestamp: 1790000000123,
+        message: { mid: "mid.1", text: "Agendar", quick_reply: { payload: "opt_0" } },
+      },
+    ]);
+
+    expect(parseMetaWebhook(payload)).toEqual([
+      expect.objectContaining({ platform: "instagram", type: "text", text: "Agendar", optionId: "opt_0" }),
+    ]);
+  });
+});

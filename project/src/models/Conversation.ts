@@ -15,6 +15,12 @@ const conversationSchema = new Schema(
     lastMessagePreview: { type: String, default: null },
     lastInboundAt: { type: Date, default: null },
     unreadCount: { type: Number, default: 0, min: 0 },
+    // Encerrada pela equipe ou pela URA; volta a open quando o cliente escreve.
+    status: { type: String, enum: ["open", "closed"], default: "open" },
+    // Quem atende depois de a URA transferir; null = na fila da equipe. Sai ao encerrar.
+    assignedUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    // Com atendente (ou na fila depois da URA transferir), a URA não inicia sozinha.
+    handedOff: { type: Boolean, default: false },
   },
   { collection: "conversations", timestamps: true },
 );

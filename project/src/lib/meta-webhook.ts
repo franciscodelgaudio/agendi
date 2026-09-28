@@ -15,6 +15,8 @@ export type MessageEvent = {
   type: MessageType;
   text: string | null;
   sentAt: Date;
+  // Id da opção de menu (botão, lista ou resposta rápida) que o cliente tocou.
+  optionId?: string;
 };
 
 export type StatusEvent = {
@@ -83,6 +85,22 @@ const INSTAGRAM_ATTACHMENTS: Partial<Record<string, MessageType>> = {
   file: "document",
 };
 
+// Toque em botão ou lista de mensagem interativa, ou botão de resposta rápida de template.
+function whatsappReply(message: Json): { id: string; title: string } | null {
+  if (message.type === "button" && isObject(message.button)) {
+    const id = asString(message.button.payload);
+    const title = asString(message.button.text);
+    return id && title ? { id, title } : null;
+  }
+  if (message.type !== "interactive" || !isObject(message.interactive)) return null;
+  const { type, button_reply: button, list_reply: list } = message.interactive;
+  const choice = type === "button_reply" ? button : type === "list_reply" ? list : null;
+  if (!isObject(choice)) return null;
+  const id = asString(choice.id);
+  const title = asString(choice.title);
+  return id && title ? { id, title } : null;
+}
+
 function whatsappMessage(message: unknown, channelExternalId: string, names: Map<string, string>): MessageEvent | null {
   if (!isObject(message)) return null;
   const from = asString(message.from);
@@ -93,7 +111,13 @@ function whatsappMessage(message: unknown, channelExternalId: string, names: Map
   const waType = asString(message.type) ?? "";
   let type: MessageType = WHATSAPP_MEDIA[waType] ?? "other";
   let text: string | null = null;
-  if (waType === "text") {
+  let optionId: string | null = null;
+  const reply = whatsappReply(message);
+  if (reply) {
+    type = "text";
+    text = reply.title;
+    optionId = reply.id;
+  } else if (waType === "text") {
     type = "text";
     text = isObject(message.text) ? asString(message.text.body) : null;
   } else if (type !== "other") {
@@ -112,6 +136,7 @@ function whatsappMessage(message: unknown, channelExternalId: string, names: Map
     type,
     text,
     sentAt,
+    ...(optionId ? { optionId } : {}),
   };
 }
 
@@ -181,6 +206,7 @@ function instagramEvent(item: unknown, channelExternalId: string): WebhookEvent 
   if (isObject(attachment)) type = INSTAGRAM_ATTACHMENTS[asString(attachment.type) ?? ""] ?? "other";
 
   const outbound = isEcho === true;
+  const optionId = isObject(item.message.quick_reply) ? asString(item.message.quick_reply.payload) : null;
   return {
     kind: "message",
     platform: "instagram",
@@ -192,6 +218,7 @@ function instagramEvent(item: unknown, channelExternalId: string): WebhookEvent 
     type,
     text: body,
     sentAt: at,
+    ...(optionId && body ? { optionId } : {}),
   };
 }
 
