@@ -217,24 +217,6 @@ export default function LandingPage() {
           </Container>
         </section>
 
-        <div aria-hidden="true" className="ld-marquee overflow-hidden border-b border-ld-line bg-ld-paper py-4">
-          <div className="ld-marquee-track flex w-max">
-            {[0, 1].map((copy) => (
-              <ul key={copy} className={cn("flex shrink-0 items-center", copy === 1 && "ld-marquee-dup")}>
-                {FEATURES.map(({ icon: Icon, title }) => (
-                  <li
-                    key={title}
-                    className="flex items-center gap-2 px-6 font-mono text-xs font-medium tracking-[0.14em] whitespace-nowrap text-ld-ink-soft uppercase"
-                  >
-                    <Icon className="size-4 text-ld-sage" />
-                    {title}
-                  </li>
-                ))}
-              </ul>
-            ))}
-          </div>
-        </div>
-
         <section id="recursos" aria-labelledby="recursos-title" className="scroll-mt-16 bg-ld-cream py-20 min-[900px]:py-28">
           <Container className="flex flex-col gap-12">
             <div data-reveal className="flex max-w-3xl flex-col gap-4">
