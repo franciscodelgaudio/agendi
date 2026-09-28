@@ -1,5 +1,12 @@
 import { notFound } from "next/navigation"
-import { cashFlowBuckets, costMonthDate, parseCashFlowQuery, shiftCashFlowDate, summarizeCosts } from "@/lib/cash-flow"
+import {
+  cashFlowBuckets,
+  costCurve,
+  costMonthDate,
+  parseCashFlowQuery,
+  shiftCashFlowDate,
+  summarizeCosts,
+} from "@/lib/cash-flow"
 import { mergeCashFlowSummaries, mergeGroupsByName, sumBalances } from "@/lib/cash-flow-overview"
 import { loadExpenseGroupIcons } from "@/lib/expense-group-icon-store"
 import { requirePage } from "@/lib/page-guard"
@@ -10,9 +17,12 @@ import { CashFlowNav, periodLabel } from "@/components/cash-flow-nav"
 import { OpeningBalanceCard } from "@/components/opening-balance-card"
 import { CashFlowTable } from "@/components/cash-flow-table"
 import { CashFlowCostsChart } from "@/components/cash-flow-costs-chart"
+import { CostCumulativeChart, CostPeriodChart } from "@/components/cost-curve-chart"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CashFlowUnitsTable } from "@/components/cash-flow-units-table"
 
 // Caixa de todas as unidades: cada uma é calculada com as próprias regras e os valores são somados.
+// Como no caixa da unidade, é sempre do ano, mês a mês, e os gastos por grupo são de um mês só.
 export default async function WorkspaceCashFlowPage({
   params,
   searchParams,
@@ -20,7 +30,7 @@ export default async function WorkspaceCashFlowPage({
   const { workspaceId } = await params
   const now = new Date()
   const search = await searchParams
-  const query = parseCashFlowQuery(search, now)
+  const query = { ...parseCashFlowQuery(search, now), view: "year" as const }
   const user = await requireUser()
   await requirePage(workspaceId, user.id, { workspace: "cash_flow" })
   const access = workspaceAccessStages(workspaceId, user.id)
@@ -56,14 +66,12 @@ export default async function WorkspaceCashFlowPage({
   const today = parseCashFlowQuery({}, now).date
   const buckets = cashFlowBuckets(query)
   const shown = { from: buckets[0].from, to: buckets.at(-1)!.to }
-  // No ano, os gastos por grupo são de um mês só, como no caixa da unidade.
-  const costBuckets =
-    query.view === "year" ? cashFlowBuckets({ view: "month", date: costMonthDate(search.costs, shown, today) }) : null
-  const costMonth = costBuckets && { from: costBuckets[0].from, to: costBuckets.at(-1)!.to }
+  const costBuckets = cashFlowBuckets({ view: "month", date: costMonthDate(search.costs, shown, today) })
+  const costMonth = { from: costBuckets[0].from, to: costBuckets.at(-1)!.to }
   const [icons, flows, monthFlows] = await Promise.all([
     loadExpenseGroupIcons(),
     Promise.all(workspace.units.map((unit) => loadUnitCashFlow(workspace.id, unit, buckets, today))),
-    costBuckets ? Promise.all(workspace.units.map((unit) => loadUnitCashFlow(workspace.id, unit, costBuckets, today))) : null,
+    Promise.all(workspace.units.map((unit) => loadUnitCashFlow(workspace.id, unit, costBuckets, today))),
   ])
   const summary = mergeCashFlowSummaries(
     buckets,
@@ -71,13 +79,16 @@ export default async function WorkspaceCashFlowPage({
   )
   const balanceCents = sumBalances(flows.map((flow) => flow.balanceCents))
   const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
-  const costFlows = monthFlows ?? flows
   const costs = summarizeCosts(
-    costBuckets ? mergeCashFlowSummaries(costBuckets, costFlows.map((flow) => flow.summary)).total.real : summary.total.real,
-    mergeGroupsByName(costFlows.flatMap((flow) => flow.groups)).map(({ iconId, ...group }) => ({
+    mergeCashFlowSummaries(costBuckets, monthFlows.map((flow) => flow.summary)).total.real,
+    mergeGroupsByName(monthFlows.flatMap((flow) => flow.groups)).map(({ iconId, ...group }) => ({
       ...group,
       icon: (iconId && iconsById.get(iconId)) || null,
     })),
+  )
+  const curve = costCurve(
+    flows.map((flow) => ({ buckets: flow.summary.buckets, monthlyBudgetCents: flow.monthlyBudgetCents })),
+    today,
   )
   const units = workspace.units.map((unit, i) => ({
     id: unit.id,
@@ -87,11 +98,15 @@ export default async function WorkspaceCashFlowPage({
   }))
 
   const pathname = `/workspace/${workspaceId}/cash-flow`
+  // O mês dos gastos por grupo só vai para a URL depois de escolhido.
+  const listQuery: Record<string, string> = search.costs
+    ? { date: query.date, costs: costMonth.from.slice(0, 7) }
+    : { date: query.date }
   // Setas do gráfico de gastos, dentro do ano exibido.
   function costMonthHref(steps: number) {
-    const month = shiftCashFlowDate({ view: "month", date: costMonth!.from }, steps)
+    const month = shiftCashFlowDate({ view: "month", date: costMonth.from }, steps)
     if (month < shown.from || month > shown.to) return null
-    return `${pathname}?${new URLSearchParams({ view: query.view, date: query.date, costs: month.slice(0, 7) })}`
+    return `${pathname}?${new URLSearchParams({ date: query.date, costs: month.slice(0, 7) })}`
   }
 
   return (
@@ -104,6 +119,7 @@ export default async function WorkspaceCashFlowPage({
         isCurrent={shown.from <= today && today <= shown.to}
         today={today}
         pathname={pathname}
+        views={["year"]}
       />
       <CashFlowTable
         view={query.view}
@@ -114,19 +130,37 @@ export default async function WorkspaceCashFlowPage({
         hasExpenses={flows.some((flow) => flow.hasExpenses)}
         today={today}
       />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Custo fixo</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CostPeriodChart points={curve} view="year" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Custo acumulado</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CostCumulativeChart points={curve} view="year" />
+          </CardContent>
+        </Card>
+      </div>
       {costs.rows.length > 0 && (
         <CashFlowCostsChart
           rows={costs.rows}
           totalCents={costs.totalCents}
-          period={costMonth ? periodLabel({ view: "month", date: costMonth.from }, costMonth) : periodLabel(query, shown)}
-          months={costMonth ? { previousHref: costMonthHref(-1), nextHref: costMonthHref(1) } : undefined}
+          period={periodLabel({ view: "month", date: costMonth.from }, costMonth)}
+          months={{ previousHref: costMonthHref(-1), nextHref: costMonthHref(1) }}
         />
       )}
       <h4 className="mt-4 font-semibold tracking-tight">Por unidade</h4>
       <CashFlowUnitsTable
         units={units}
         total={{ real: summary.total.real, balanceCents }}
-        query={{ view: query.view, date: query.date }}
+        query={listQuery}
         workspaceId={workspaceId}
       />
     </div>

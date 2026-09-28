@@ -67,7 +67,9 @@ export function WorkspaceHeader({ workspace, canManage }: Props) {
   )
 }
 
-function EditWorkspaceForm({ workspace, onDone }: { workspace: Workspace; onDone: () => void }) {
+function EditWorkspaceForm({ workspace: current, onDone }: { workspace: Workspace; onDone: () => void }) {
+  // Congela os valores iniciais: após salvar, o refresh muda o workspace enquanto o Sheet ainda fecha.
+  const [workspace] = useState(current)
   const [state, formAction, pending] = useActionState(
     async (prev: UpdateWorkspaceState, formData: FormData) => {
       const next = await updateWorkspaceAction(workspace.id, prev, formData)

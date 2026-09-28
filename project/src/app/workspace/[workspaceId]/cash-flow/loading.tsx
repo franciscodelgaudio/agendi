@@ -15,6 +15,10 @@ export default function Loading() {
         <Skeleton className="h-8 w-44" />
       </div>
       <TableSkeleton columns={5} rows={7} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Skeleton className="h-80" />
+        <Skeleton className="h-80" />
+      </div>
       <Skeleton className="h-80" />
       <Skeleton className="mt-4 h-5 w-32" />
       <TableSkeleton columns={5} rows={3} />
