@@ -20,12 +20,21 @@ export async function getSessionUserId() {
 // que aceitou o convite, e adicionam o campo role ("owner" ou a função do
 // membro). Aggregation não converte string em ObjectId sozinho, então a
 // conversão é feita aqui; id inválido vira null para a página responder 404
-// sem ir ao banco.
-export function workspaceAccessStages(workspaceId: string, userId: string) {
+// sem ir ao banco. Sem assinatura ativa o workspace não é encontrado, o que barra
+// páginas, server actions e rotas de API; só o layout usa allowUnpaid para mostrar
+// a tela de planos.
+export function workspaceAccessStages(
+  workspaceId: string,
+  userId: string,
+  { now = new Date(), allowUnpaid = false }: { now?: Date; allowUnpaid?: boolean } = {},
+) {
   if (!isObjectIdOrHexString(workspaceId)) return null;
   const userObjectId = new Types.ObjectId(userId);
+  const paid = allowUnpaid
+    ? {}
+    : { "subscription.status": "active", "subscription.currentPeriodEnd": { $gt: now } };
   return [
-    { $match: { _id: new Types.ObjectId(workspaceId) } },
+    { $match: { _id: new Types.ObjectId(workspaceId), ...paid } },
     {
       $lookup: {
         from: "workspace_members",

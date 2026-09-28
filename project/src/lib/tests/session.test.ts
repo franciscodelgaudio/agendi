@@ -14,7 +14,7 @@ describe("workspaceAccessStages", () => {
     const workspaceId = new Types.ObjectId(WORKSPACE_ID);
     const userId = new Types.ObjectId(USER_ID);
 
-    expect(workspaceAccessStages(WORKSPACE_ID, USER_ID)).toEqual([
+    expect(workspaceAccessStages(WORKSPACE_ID, USER_ID, { allowUnpaid: true })).toEqual([
       { $match: { _id: workspaceId } },
       {
         $lookup: {
@@ -35,6 +35,27 @@ describe("workspaceAccessStages", () => {
       { $match: { role: { $ne: null } } },
       { $unset: "membership" },
     ]);
+  });
+
+  it("por padrão só encontra o workspace com assinatura ativa e ainda no período pago", () => {
+    const now = new Date("2026-09-28T12:00:00Z");
+
+    const [first, ...rest] = workspaceAccessStages(WORKSPACE_ID, USER_ID, { now })!;
+
+    expect(first).toEqual({
+      $match: {
+        _id: new Types.ObjectId(WORKSPACE_ID),
+        "subscription.status": "active",
+        "subscription.currentPeriodEnd": { $gt: now },
+      },
+    });
+    expect(rest).toEqual(workspaceAccessStages(WORKSPACE_ID, USER_ID, { allowUnpaid: true })!.slice(1));
+  });
+
+  it("allowUnpaid ignora a assinatura (layout que mostra a tela de planos)", () => {
+    const [first] = workspaceAccessStages(WORKSPACE_ID, USER_ID, { allowUnpaid: true })!;
+
+    expect(first).toEqual({ $match: { _id: new Types.ObjectId(WORKSPACE_ID) } });
   });
 
   it.each(["", "abc", "not-an-object-id"])(

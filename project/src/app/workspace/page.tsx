@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { Types } from "mongoose"
 import { PlansSection } from "@/components/landing/plans-section"
+import { SignedInAs } from "@/components/signed-in-as"
 import { requireUser } from "@/lib/session"
 import { Workspace } from "@/models/Workspace"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
@@ -26,7 +27,10 @@ export default async function Home() {
   return (
     <div className="flex min-h-svh items-center justify-center bg-ld-paper p-6 text-ld-ink md:p-10">
       <div className="flex w-full max-w-5xl flex-col gap-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Escolha um plano</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">Escolha um plano</h1>
+          <SignedInAs email={user.email} />
+        </div>
         <PlansSection />
       </div>
     </div>

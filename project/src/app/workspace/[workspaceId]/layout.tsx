@@ -17,7 +17,7 @@ export default async function WorkspaceLayout({
 }: LayoutProps<"/workspace/[workspaceId]">) {
   const { workspaceId } = await params
   const user = await requireUser()
-  const access = workspaceAccessStages(workspaceId, user.id)
+  const access = workspaceAccessStages(workspaceId, user.id, { allowUnpaid: true })
   if (!access) notFound()
 
   const [workspace] = await Workspace.aggregate<{
@@ -28,7 +28,7 @@ export default async function WorkspaceLayout({
   if (!workspace) notFound()
 
   if (!hasActiveSubscription(workspace.subscription, new Date())) {
-    return <WorkspacePaywall workspaceId={workspaceId} name={workspace.name} isOwner={workspace.role === "owner"} />
+    return <WorkspacePaywall workspaceId={workspaceId} name={workspace.name} isOwner={workspace.role === "owner"} email={user.email} />
   }
 
   // Mesmo cookie que o SidebarProvider grava ao abrir/fechar.
