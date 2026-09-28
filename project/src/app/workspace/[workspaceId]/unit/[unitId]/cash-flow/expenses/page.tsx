@@ -1,21 +1,19 @@
 import { notFound, redirect } from "next/navigation"
-import { isObjectIdOrHexString, Types } from "mongoose"
 import { FolderIcon, ReceiptIcon } from "lucide-react"
-import { cashFlowBuckets, parseCashFlowQuery } from "@/lib/cash-flow"
+import { parseCashFlowQuery } from "@/lib/cash-flow"
 import { CASH_FLOW_PAGE_SIZE, expenseListPage, parseExpenseListQuery } from "@/lib/cash-flow-list"
-import { loadExpenseGroupIcons } from "@/lib/expense-group-icon-store"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member"
+import { loadExpensesScreen } from "@/lib/cash-flow-screen-store"
+import { canManageMembers } from "@/lib/member"
 import { requirePage } from "@/lib/page-guard"
-import { requireUser, workspaceAccessStages } from "@/lib/session"
-import { Expense } from "@/models/Expense"
-import { ExpenseGroup } from "@/models/ExpenseGroup"
-import { Workspace } from "@/models/Workspace"
+import { requireUser } from "@/lib/session"
 import Link from "@/components/link"
 import { ExpenseGroupFilter, ExpenseStatusFilter } from "@/components/cash-flow-filters"
 import { CashFlowNav } from "@/components/cash-flow-nav"
 import { CreateExpenseSheet } from "@/components/expense-sheets"
+import { ExportMenu } from "@/components/export-menu"
 import { ExpensesTable } from "@/components/expenses-table"
 import { ListPagination } from "@/components/list-pagination"
+import { ListTotals } from "@/components/list-totals"
 import { ListSearch } from "@/components/list-search"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
@@ -33,62 +31,10 @@ export default async function ExpensesPage({
   const { page, ...filters } = parseExpenseListQuery(search)
   const user = await requireUser()
   await requirePage(workspaceId, user.id, { unit: "cash_flow", unitId })
-  const access = workspaceAccessStages(workspaceId, user.id)
-  if (!access || !isObjectIdOrHexString(unitId)) notFound()
-
-  // Parte do workspace para garantir o acesso à unidade.
-  const [workspace] = await Workspace.aggregate<{ role: WorkspaceRole; hasUnit: boolean }>([
-    ...access,
-    {
-      $lookup: {
-        from: "units",
-        localField: "_id",
-        foreignField: "workspaceId",
-        as: "unit",
-        pipeline: [{ $match: { _id: new Types.ObjectId(unitId) } }, { $project: { _id: 1 } }],
-      },
-    },
-    { $project: { _id: 0, role: 1, hasUnit: { $gt: [{ $size: "$unit" }, 0] } } },
-  ])
-  if (!workspace?.hasUnit) notFound()
-  const canManage = canManageMembers(workspace.role)
-
-  const buckets = cashFlowBuckets(query)
-  const month = { from: buckets[0].from, to: buckets.at(-1)!.to }
-  const unitObjectId = new Types.ObjectId(unitId)
-  const [groupDocs, expenseDocs, icons] = await Promise.all([
-    ExpenseGroup.find({ unitId: unitObjectId })
-      .sort({ name: 1 })
-      .collation({ locale: "pt" })
-      .select({ name: 1, iconId: 1 })
-      .lean(),
-    Expense.find({ unitId: unitObjectId, date: { $gte: month.from, $lte: month.to } })
-      .sort({ date: 1, createdAt: 1 })
-      .select({ groupId: 1, description: 1, amountCents: 1, date: 1, paidAt: 1, series: 1 })
-      .lean(),
-    loadExpenseGroupIcons(),
-  ])
-  const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
-  const groups = groupDocs.map((group) => ({
-    id: group._id.toString(),
-    name: group.name,
-    icon: (group.iconId && iconsById.get(group.iconId.toString())) || null,
-  }))
-  const expenses = expenseDocs.map((expense) => ({
-    id: expense._id.toString(),
-    groupId: expense.groupId.toString(),
-    description: expense.description,
-    amountCents: expense.amountCents,
-    date: expense.date,
-    paid: !!expense.paidAt,
-    series: expense.series
-      ? {
-          kind: expense.series.kind as "installments" | "recurring",
-          number: expense.series.number,
-          count: expense.series.count,
-        }
-      : null,
-  }))
+  const data = await loadExpensesScreen(workspaceId, user.id, unitId, query)
+  if (!data) notFound()
+  const { month, groups, expenses } = data
+  const canManage = canManageMembers(data.role)
   const today = parseCashFlowQuery({}, now).date
   const isCurrent = month.from <= today && today <= month.to
   const base = `/workspace/${workspaceId}/unit/${unitId}/cash-flow`
@@ -124,7 +70,12 @@ export default async function ExpensesPage({
           views={["month"]}
           preserve={filters}
         />
-        {expenses.length > 0 && create}
+        {expenses.length > 0 && (
+          <div className="flex items-center gap-2">
+            <ExportMenu href={`/api${pathname}/export`} query={listQuery} />
+            {create}
+          </div>
+        )}
       </div>
       {groups.length === 0 ? (
         <Empty className="border">
@@ -137,7 +88,7 @@ export default async function ExpensesPage({
           {canManage && (
             <EmptyContent>
               <Button nativeButton={false} render={<Link href={`${base}/groups`} />}>
-                Ir para grupos
+                Ir para planejamento
               </Button>
             </EmptyContent>
           )}
@@ -158,11 +109,16 @@ export default async function ExpensesPage({
             <ListSearch query={listQuery} placeholder="Buscar descrição..." />
             <ExpenseGroupFilter query={listQuery} groups={groups} />
             <ExpenseStatusFilter query={listQuery} />
+            <ListTotals
+              items={[
+                { label: "Pago", cents: result.paidCents },
+                { label: "Pendente", cents: result.totalCents - result.paidCents },
+                { label: "Total", cents: result.totalCents },
+              ]}
+            />
           </div>
           <ExpensesTable
             expenses={result.rows}
-            totalCents={result.totalCents}
-            paidCents={result.paidCents}
             query={listQuery}
             pathname={pathname}
             groups={groups}

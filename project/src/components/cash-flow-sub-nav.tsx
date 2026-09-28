@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 const tabs = [
   { path: "", title: "Resumo", icon: ChartColumnIcon },
   { path: "/expenses", title: "Despesas", icon: ReceiptIcon },
-  { path: "/groups", title: "Grupos", icon: FolderIcon },
+  { path: "/groups", title: "Planejamento", icon: FolderIcon },
 ]
 
 // Abas do caixa, abaixo das abas da unidade.

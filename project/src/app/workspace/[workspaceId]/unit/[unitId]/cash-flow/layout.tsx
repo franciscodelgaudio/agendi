@@ -1,6 +1,6 @@
 import { CashFlowSubNav } from "@/components/cash-flow-sub-nav"
 
-// Título e abas do caixa (resumo, despesas e grupos); cada aba verifica o acesso por conta própria.
+// Título e abas do caixa (resumo, despesas e planejamento); cada aba verifica o acesso por conta própria.
 export default async function CashFlowLayout({
   children,
   params,

@@ -212,7 +212,11 @@ describe("parseExpenseGroupListQuery", () => {
 
 describe("expenseGroupListPage", () => {
   it("sem busca nem filtro, mantém a ordem por nome", () => {
-    expect(expenseGroupListPage(GROUPS, GROUP_BASE)).toEqual({ rows: GROUPS, total: 4 });
+    expect(expenseGroupListPage(GROUPS, GROUP_BASE)).toEqual({
+      rows: GROUPS,
+      total: 4,
+      sums: { totalCents: 405000, paidCents: 318000, limitCents: 90000 },
+    });
   });
 
   it("ordena por nome decrescente", () => {
@@ -255,13 +259,42 @@ describe("expenseGroupListPage", () => {
     expect(expenseGroupListPage(GROUPS, { ...GROUP_BASE, q: "ins", limit: "within" })).toEqual({
       rows: [INSUMOS],
       total: 1,
+      sums: { totalCents: 20000, paidCents: 8000, limitCents: 30000 },
     });
   });
 
   it("pagina depois de filtrar e ordenar; o total é o de todas as páginas", () => {
     const many = Array.from({ length: 25 }, (_, i) => group({ id: `g${String(i).padStart(2, "0")}` }));
     expect(ids(expenseGroupListPage(many, GROUP_BASE).rows)).toEqual(ids(many.slice(0, 20)));
-    expect(expenseGroupListPage(many, { ...GROUP_BASE, page: 2 })).toEqual({ rows: many.slice(20), total: 25 });
+    expect(expenseGroupListPage(many, { ...GROUP_BASE, page: 2 })).toEqual({
+      rows: many.slice(20),
+      total: 25,
+      sums: { totalCents: 0, paidCents: 0, limitCents: 0 },
+    });
+  });
+
+  it("soma lançado, pago e planejado só dos filtrados; grupo sem limite não entra no planejado", () => {
+    expect(expenseGroupListPage(GROUPS, { ...GROUP_BASE, limit: "within" }).sums).toEqual({
+      totalCents: 20000,
+      paidCents: 8000,
+      limitCents: 40000,
+    });
+    expect(expenseGroupListPage(GROUPS, { ...GROUP_BASE, limit: "none" }).sums).toEqual({
+      totalCents: 325000,
+      paidCents: 300000,
+      limitCents: 0,
+    });
+  });
+
+  it("as somas são de todas as páginas, não só da exibida", () => {
+    const many = Array.from({ length: 21 }, (_, i) =>
+      group({ id: `g${String(i).padStart(2, "0")}`, monthlyLimitCents: 1000, totalCents: 500, paidCents: 100 }),
+    );
+    expect(expenseGroupListPage(many, { ...GROUP_BASE, page: 2 }).sums).toEqual({
+      totalCents: 10500,
+      paidCents: 2100,
+      limitCents: 21000,
+    });
   });
 
   it("não altera a lista recebida", () => {

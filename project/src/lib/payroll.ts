@@ -52,6 +52,15 @@ export function payrollDueDate(month: string, payDay: number) {
   return utcDay(year, next, Math.min(payDay, daysInMonth(year, next)));
 }
 
+// Próximo vencimento a partir de hoje (inclusive), sem contar meses antes da data de início.
+export function nextPayrollDate({ startDate, payDay }: Pick<PayrollMember, "startDate" | "payDay">, today: string) {
+  if (payDay === null) return null;
+  let month = shiftMonth(today.slice(0, 7), -1);
+  if (payrollDueDate(month, payDay) < today) month = shiftMonth(month, 1);
+  if (startDate && startDate.slice(0, 7) > month) month = startDate.slice(0, 7);
+  return payrollDueDate(month, payDay);
+}
+
 // Massagista ganha comissão sobre os próprios serviços; recepcionista, sobre o bruto.
 export function payrollAmount(member: PayrollMember, month: string, appointments: DayTotal[]): PayrollAmount {
   const [year, monthNumber] = parseMonth(month)!;

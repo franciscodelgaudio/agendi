@@ -3,7 +3,7 @@ import { canManageMembers, type WorkspaceRole } from "@/lib/member-role";
 // Sem dependências de servidor: também é importado por componentes de cliente.
 // Páginas do sistema (sidebar) e abas da unidade que o proprietário e administradores
 // podem ocultar de massagistas e recepcionistas. A ordem é a da navegação.
-export const WORKSPACE_PAGES = ["home", "units", "calendar", "cash_flow", "users"] as const;
+export const WORKSPACE_PAGES = ["home", "units", "calendar", "cash_flow", "team", "users"] as const;
 export const UNIT_PAGES = ["overview", "services", "calendar", "appointments", "stock", "team", "cash_flow"] as const;
 export const RESTRICTED_ROLES = ["massage_therapist", "receptionist"] as const;
 
@@ -17,6 +17,7 @@ export const WORKSPACE_PAGE_PATHS: Record<WorkspacePage, string> = {
   units: "/unit",
   calendar: "/calendar",
   cash_flow: "/cash-flow",
+  team: "/team",
   users: "/users",
 };
 export const UNIT_PAGE_PATHS: Record<UnitPage, string> = {

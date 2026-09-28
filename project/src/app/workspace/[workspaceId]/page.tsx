@@ -390,7 +390,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
           </CardHeader>
           <CardContent className="gap-6">
             <div className="grid gap-2">
-              <span className="text-sm font-medium">Custo por mês</span>
+              <span className="text-sm font-medium">Custo fixo</span>
               <CostPeriodChart points={curve} view="year" />
             </div>
             <div className="grid gap-2">

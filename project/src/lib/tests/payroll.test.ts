@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { MemberRole } from "@/lib/member-role";
 import {
+  nextPayrollDate,
   payrollAmount,
   payrollDueDate,
   payrollReminders,
@@ -42,6 +43,44 @@ describe("payrollDueDate", () => {
 
   it("dezembro vence em janeiro do ano seguinte", () => {
     expect(payrollDueDate("2026-12", 10)).toBe("2027-01-10");
+  });
+});
+
+describe("nextPayrollDate", () => {
+  it("sem dia de pagamento, sem data", () => {
+    expect(nextPayrollDate({ startDate: null, payDay: null }, "2026-09-27")).toBeNull();
+  });
+
+  it("dia de pagamento já passou no mês: o do mês seguinte", () => {
+    expect(nextPayrollDate({ startDate: null, payDay: 5 }, "2026-09-27")).toBe("2026-10-05");
+  });
+
+  it("dia de pagamento ainda não chegou no mês: o deste mês", () => {
+    expect(nextPayrollDate({ startDate: null, payDay: 5 }, "2026-10-03")).toBe("2026-10-05");
+  });
+
+  it("vence hoje é hoje", () => {
+    expect(nextPayrollDate({ startDate: null, payDay: 5 }, "2026-10-05")).toBe("2026-10-05");
+  });
+
+  it("dia maior que o mês cai no último dia", () => {
+    expect(nextPayrollDate({ startDate: null, payDay: 31 }, "2026-02-10")).toBe("2026-02-28");
+  });
+
+  it("dezembro passa para janeiro do ano seguinte", () => {
+    expect(nextPayrollDate({ startDate: null, payDay: 10 }, "2026-12-20")).toBe("2027-01-10");
+  });
+
+  it("data de início no futuro: o pagamento do primeiro mês trabalhado", () => {
+    expect(nextPayrollDate({ startDate: "2026-11-10", payDay: 5 }, "2026-09-27")).toBe("2026-12-05");
+  });
+
+  it("começou neste mês: o pagamento deste mês é do anterior, que não trabalhou", () => {
+    expect(nextPayrollDate({ startDate: "2026-09-15", payDay: 25 }, "2026-09-20")).toBe("2026-10-25");
+  });
+
+  it("data de início no passado não muda a data", () => {
+    expect(nextPayrollDate({ startDate: "2026-01-01", payDay: 5 }, "2026-09-27")).toBe("2026-10-05");
   });
 });
 

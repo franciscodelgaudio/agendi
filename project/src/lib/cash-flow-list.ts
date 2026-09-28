@@ -130,7 +130,15 @@ export function expenseGroupListPage<T extends ExpenseGroupSummary>(
   );
   const compare = (a: T, b: T) =>
     sort === "total" ? a.totalCents - b.totalCents : sort === "paid" ? a.paidCents - b.paidCents : compareText(a.name, b.name);
-  return sortAndPage(filtered, compare, dir, page);
+  return {
+    ...sortAndPage(filtered, compare, dir, page),
+    // Somas de todos os filtrados; o planejado é o limite do período, e sem limite não soma.
+    sums: {
+      totalCents: filtered.reduce((sum, group) => sum + group.totalCents, 0),
+      paidCents: filtered.reduce((sum, group) => sum + group.paidCents, 0),
+      limitCents: filtered.reduce((sum, group) => sum + (group.limitCents ?? 0), 0),
+    },
+  };
 }
 
 export function parseTherapistListQuery(params: SearchParams): TherapistListQuery {

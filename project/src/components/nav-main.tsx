@@ -9,6 +9,7 @@ import {
   MessagesSquareIcon,
   RadioTowerIcon,
   UsersIcon,
+  UsersRoundIcon,
   WalletIcon,
   type LucideIcon,
 } from "lucide-react"
@@ -48,6 +49,7 @@ export function NavMain({
         ...item("units", "Unidades", MapPinIcon),
         ...item("calendar", "Calendário", CalendarIcon),
         ...item("cash_flow", "Caixa", WalletIcon),
+        ...item("team", "Equipe", UsersRoundIcon),
         ...(inbox ? [{ title: "Conversas", href: `${base}/inbox`, icon: MessagesSquareIcon }] : []),
       ],
     },

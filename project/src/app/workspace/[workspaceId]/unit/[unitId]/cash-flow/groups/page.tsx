@@ -17,6 +17,7 @@ import { CreateExpenseGroupSheet } from "@/components/expense-group-sheets"
 import { ExpenseGroupsTable } from "@/components/expense-groups-table"
 import { ListPagination } from "@/components/list-pagination"
 import { ListSearch } from "@/components/list-search"
+import { ListTotals } from "@/components/list-totals"
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 
 // Layout e página podem renderizar em paralelo, então a página refaz a verificação de acesso.
@@ -120,6 +121,13 @@ export default async function ExpenseGroupsPage({
           <div className="flex flex-wrap items-center gap-2">
             <ListSearch query={listQuery} placeholder="Buscar grupo..." />
             <GroupLimitFilter query={listQuery} />
+            <ListTotals
+              items={[
+                { label: "Pago", cents: result.sums.paidCents },
+                { label: "Lançado", cents: result.sums.totalCents },
+                { label: "Planejado", cents: result.sums.limitCents },
+              ]}
+            />
           </div>
           <ExpenseGroupsTable
             groups={result.rows}

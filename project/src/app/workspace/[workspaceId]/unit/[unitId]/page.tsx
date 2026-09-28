@@ -327,11 +327,11 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
             <CardDescription>
               {money(spentCents)} gastos de {money(plannedCents)} planejados
             </CardDescription>
-            <CardLink href={`${base}/cash-flow?view=year`}>Caixa</CardLink>
+            <CardLink href={`${base}/cash-flow`}>Caixa</CardLink>
           </CardHeader>
           <CardContent className="gap-6">
             <div className="grid gap-2">
-              <span className="text-sm font-medium">Custo por mês</span>
+              <span className="text-sm font-medium">Custo fixo</span>
               <CostPeriodChart points={curve} view="year" />
             </div>
             <div className="grid gap-2">

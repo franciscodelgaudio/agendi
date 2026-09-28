@@ -5,7 +5,7 @@ import { SortableHead } from "@/components/sortable-head"
 import type { ExpenseSortField } from "@/lib/cash-flow-list"
 import type { SortDir } from "@/lib/unit-list"
 import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 // As datas são dias do calendário, então são formatadas em UTC para não deslocar.
 const dayFormat = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" })
@@ -20,10 +20,8 @@ function money(cents: number) {
 }
 
 type Props = {
-  // Só a página exibida; os totais são de todas as despesas filtradas.
+  // Só a página exibida.
   expenses: ExpenseRow[]
-  totalCents: number
-  paidCents: number
   // Busca, filtros e ordenação atuais, preservados nos links de ordenação.
   query: { q: string; sort: ExpenseSortField; dir: SortDir } & Record<string, string>
   pathname: string
@@ -36,8 +34,6 @@ type Props = {
 
 export function ExpensesTable({
   expenses,
-  totalCents,
-  paidCents,
   query,
   pathname,
   groups,
@@ -105,19 +101,6 @@ export function ExpensesTable({
             </TableRow>
           ))}
         </TableBody>
-        <TableFooter>
-          <TableRow>
-            <TableCell colSpan={3} className="px-4 font-semibold">
-              Total
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
-                {money(paidCents)} pagos · {money(totalCents - paidCents)} pendentes
-              </span>
-            </TableCell>
-            <TableCell className="@max-md:hidden" />
-            <TableCell className="px-4 text-right font-semibold tabular-nums">{money(totalCents)}</TableCell>
-            {canManage && <TableCell />}
-          </TableRow>
-        </TableFooter>
       </Table>
     </div>
   )

@@ -65,9 +65,9 @@ function hasPay(member: UnitTeamListItem, pay: UnitTeamPay) {
 }
 
 // Busca, filtros e ordenação sobre a equipe da unidade (poucas pessoas), e a página pedida.
-export function unitTeamListPage(members: UnitTeamListItem[], { q, dir, role, status, pay, page }: UnitTeamListQuery) {
+export function unitTeamListPage<T extends UnitTeamListItem>(members: T[], { q, dir, role, status, pay, page }: UnitTeamListQuery) {
   const term = normalize(q);
-  const sortKey = (member: UnitTeamListItem) => member.name ?? member.email;
+  const sortKey = (member: T) => member.name ?? member.email;
   const filtered = members
     .filter(
       (member) =>

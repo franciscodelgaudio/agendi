@@ -1,5 +1,4 @@
 import { notFound, redirect } from "next/navigation"
-import { isObjectIdOrHexString, Types } from "mongoose"
 import type { WorkspaceRole } from "@/lib/member-role"
 import { parseCashFlowQuery } from "@/lib/cash-flow"
 import { requirePage } from "@/lib/page-guard"
@@ -11,25 +10,20 @@ import { ListSearch } from "@/components/list-search"
 import { TeamTable } from "@/components/team-table"
 import { UnitTeamFilters } from "@/components/unit-team-filters"
 
-// Layout e página podem renderizar em paralelo, então a página refaz a verificação de acesso.
-export default async function UnitTeamPage({
-  params,
-  searchParams,
-}: PageProps<"/workspace/[workspaceId]/unit/[unitId]/team">) {
-  const { workspaceId, unitId } = await params
+// Equipe de todas as unidades: uma linha por pessoa em cada unidade, já que a
+// remuneração é definida por unidade.
+export default async function TeamPage({ params, searchParams }: PageProps<"/workspace/[workspaceId]/team">) {
+  const { workspaceId } = await params
   const query = parseUnitTeamListQuery(await searchParams)
   const user = await requireUser()
-  await requirePage(workspaceId, user.id, { unit: "team", unitId })
+  await requirePage(workspaceId, user.id, { workspace: "team" })
   const access = workspaceAccessStages(workspaceId, user.id)
-  if (!access || !isObjectIdOrHexString(unitId)) notFound()
-  const unitObjectId = new Types.ObjectId(unitId)
+  if (!access) notFound()
 
-  // Parte do workspace para garantir o acesso. Só massagistas e recepcionistas vinculadas
-  // (no formulário da unidade), por nome.
   const [workspace] = await Workspace.aggregate<{
     role: WorkspaceRole
-    unit: { name: string } | null
-    members: UnitTeamListItem[]
+    units: { id: string; name: string }[]
+    members: (UnitTeamListItem & { unitId: string })[]
   }>([
     ...access,
     {
@@ -37,8 +31,8 @@ export default async function UnitTeamPage({
         from: "units",
         localField: "_id",
         foreignField: "workspaceId",
-        as: "unit",
-        pipeline: [{ $match: { _id: unitObjectId } }, { $project: { _id: 0, name: 1 } }],
+        as: "units",
+        pipeline: [{ $project: { _id: 0, id: { $toString: "$_id" }, name: 1 } }],
       },
     },
     {
@@ -48,54 +42,50 @@ export default async function UnitTeamPage({
         foreignField: "workspaceId",
         as: "members",
         pipeline: [
-          {
-            $match: {
-              role: { $in: ["massage_therapist", "receptionist"] },
-              "units.unitId": unitObjectId,
-            },
-          },
+          { $match: { role: { $in: ["massage_therapist", "receptionist"] } } },
+          { $unwind: "$units" },
           { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
           { $set: { user: { $first: "$user" } } },
-          {
-            $set: {
-              link: {
-                $first: {
-                  $filter: { input: { $ifNull: ["$units", []] }, cond: { $eq: ["$$this.unitId", unitObjectId] } },
-                },
-              },
-            },
-          },
           {
             $project: {
               _id: 0,
               id: { $toString: "$_id" },
+              unitId: { $toString: "$units.unitId" },
               role: 1,
               email: { $ifNull: ["$user.email", "$email"] },
               name: { $ifNull: ["$user.name", null] },
               image: { $ifNull: ["$user.image", null] },
               pending: { $eq: [{ $ifNull: ["$userId", null] }, null] },
-              commissionPercent: { $ifNull: ["$link.commissionPercent", null] },
-              salaryCents: { $ifNull: ["$link.salaryCents", null] },
-              bonuses: { $ifNull: ["$link.bonuses", []] },
-              startDate: { $ifNull: ["$link.startDate", null] },
-              payDay: { $ifNull: ["$link.payDay", null] },
+              commissionPercent: { $ifNull: ["$units.commissionPercent", null] },
+              salaryCents: { $ifNull: ["$units.salaryCents", null] },
+              bonuses: { $ifNull: ["$units.bonuses", []] },
+              startDate: { $ifNull: ["$units.startDate", null] },
+              payDay: { $ifNull: ["$units.payDay", null] },
             },
           },
         ],
       },
     },
-    { $project: { _id: 0, role: 1, unit: { $ifNull: [{ $first: "$unit" }, null] }, members: 1 } },
+    { $project: { _id: 0, role: 1, units: 1, members: 1 } },
   ])
-  if (!workspace?.unit) notFound()
-  const { role, unit } = workspace
-  const members = workspace.members.map((member) => ({ ...member, unitId, unitName: unit.name }))
-  // Busca, filtros e paginação são feitos aqui (poucas pessoas por unidade).
+  if (!workspace) notFound()
+  const { role } = workspace
+  const unitNames = new Map(workspace.units.map((unit) => [unit.id, unit.name]))
+  // Vínculos com unidades que não existem mais ficam de fora. Ordenadas pela unidade antes,
+  // a ordenação por nome (estável) deixa a mesma pessoa em ordem de unidade.
+  const members = workspace.members
+    .flatMap((member) => {
+      const unitName = unitNames.get(member.unitId)
+      return unitName ? [{ ...member, unitName }] : []
+    })
+    .sort((a, b) => a.unitName.localeCompare(b.unitName, "pt-BR", { sensitivity: "base" }))
+  // Busca, filtros e paginação são feitos aqui (poucas pessoas por workspace).
   const result = unitTeamListPage(members, query)
 
-  const pathname = `/workspace/${workspaceId}/unit/${unitId}/team`
+  const pathname = `/workspace/${workspaceId}/team`
   // Filtros mudam sem levar a página junto, então a lista volta para a primeira.
   const { page, ...filters } = query
-  // Página além da última (ex.: depois de desvincular a última pessoa dela) vai para a última.
+  // Página além da última vai para a última.
   const pages = Math.ceil(result.total / UNIT_TEAM_PAGE_SIZE)
   if (pages > 0 && page > pages) {
     const params = new URLSearchParams(
@@ -105,8 +95,8 @@ export default async function UnitTeamPage({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <h3 className="text-lg font-semibold tracking-tight">Equipe</h3>
+    <div className="flex flex-1 flex-col gap-4 p-4">
+      <h2 className="text-2xl font-semibold tracking-tight">Equipe</h2>
       {members.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <ListSearch query={filters} placeholder="Buscar nome ou email..." />
@@ -120,9 +110,10 @@ export default async function UnitTeamPage({
         filters={filters}
         pathname={pathname}
         today={parseCashFlowQuery({}).date}
+        showUnit
         emptyText={
           members.length === 0
-            ? "Ninguém trabalha nesta unidade ainda. Escolha a equipe ao editar a unidade."
+            ? "Ninguém trabalha nas unidades ainda. Escolha a equipe ao editar cada unidade."
             : "Ninguém encontrado."
         }
       />
@@ -134,9 +125,6 @@ export default async function UnitTeamPage({
         pathname={pathname}
         itemLabel="pessoas"
       />
-      {role === "admin" && (
-        <p className="text-sm text-muted-foreground">Só o proprietário define a remuneração de massagistas.</p>
-      )}
     </div>
   )
 }

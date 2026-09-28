@@ -21,6 +21,7 @@ const workspacePageLabels: Record<WorkspacePage, string> = {
   units: "Unidades",
   calendar: "Calendário",
   cash_flow: "Caixa",
+  team: "Equipe",
   users: "Usuários",
 }
 
