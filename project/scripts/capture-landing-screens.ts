@@ -790,7 +790,7 @@ async function main() {
 
       const base = `${origin}/workspace/${seeded.workspaceId}`
       const unit = `${base}/unit/${seeded.unitIds.centro}`
-      const shots: { name: string; url: string; fullPage?: boolean; ready: () => Promise<void> }[] = [
+      const shots: { name: string; url: string; ready: () => Promise<void> }[] = [
         { name: "inicio", url: base, ready: () => waitForCharts(page, 2) },
         {
           name: "calendario",
@@ -810,7 +810,21 @@ async function main() {
             )
           },
         },
-        { name: "gastos", url: `${unit}/cash-flow`, fullPage: true, ready: () => waitForCharts(page, 3) },
+        {
+          name: "gastos",
+          url: `${unit}/cash-flow`,
+          ready: async () => {
+            await waitForCharts(page, 3)
+            // Rola até o card "Gastos por grupo" ficar no terço de cima da tela (a landing recorta em center 30%).
+            await page.evaluate(() => {
+              const card = [...document.querySelectorAll<HTMLElement>('[data-slot="card"]')].find((el) =>
+                el.innerText.includes("Gastos por grupo"),
+              )
+              if (!card) throw new Error('card "Gastos por grupo" não encontrado')
+              window.scrollTo(0, card.getBoundingClientRect().top + window.scrollY - 160)
+            })
+          },
+        },
         { name: "planejamento", url: `${unit}/cash-flow/groups`, ready: async () => {} },
       ]
 
@@ -834,28 +848,9 @@ async function main() {
           }
         }
         const png = path.join(TMP_DIR, `${shot.name}.png`)
-        if (shot.fullPage) {
-          // A barra lateral tem a altura da janela; em vez de fullPage, estica a janela até o fim.
-          const height = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight))
-          await page.setViewportSize({ width: VIEWPORT.width, height })
-          await page.waitForTimeout(1500)
-        }
         await page.screenshot({ path: png, animations: "disabled" })
         results.push(await toWebp(png, shot.name))
 
-        if (shot.name === "gastos") {
-          const card = page.locator('[data-slot="card"]').filter({ hasText: "Gastos por grupo" }).first()
-          if (await card.count()) {
-            await card.scrollIntoViewIfNeeded()
-            await page.waitForTimeout(800)
-            const cardPng = path.join(TMP_DIR, "gastos-card.png")
-            await card.screenshot({ path: cardPng, animations: "disabled" })
-            results.push(await toWebp(cardPng, "gastos-card"))
-          } else {
-            console.warn("  aviso: card \"Gastos por grupo\" não encontrado")
-          }
-        }
-        await page.setViewportSize(VIEWPORT)
       }
 
       console.log("\nArquivos gerados:")

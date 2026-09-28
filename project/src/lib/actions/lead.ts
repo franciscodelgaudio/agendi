@@ -16,13 +16,14 @@ const errorMessages: Record<CreateLeadError, string> = {
 // Pública: formulário de contato da landing. O contato fica salvo em "leads"; o aviso por email
 // só sai se LEADS_NOTIFY_EMAIL estiver configurado, e uma falha nele não perde o contato.
 export async function submitLeadAction(_prev: ContactFormState, formData: FormData): Promise<ContactFormState> {
+  const text = (key: string) => {
+    const value = formData.get(key)
+    return typeof value === "string" ? value : ""
+  }
+  const values = { name: text("name"), whatsapp: text("whatsapp"), message: text("message") }
+
   const result = await createLead(
-    {
-      name: formData.get("name"),
-      whatsapp: formData.get("whatsapp"),
-      message: formData.get("message"),
-      website: formData.get("website"),
-    },
+    { ...values, website: formData.get("website") },
     async (data) => {
       await Lead.create(data)
       if (process.env.LEADS_NOTIFY_EMAIL) {
@@ -30,6 +31,6 @@ export async function submitLeadAction(_prev: ContactFormState, formData: FormDa
       }
     },
   )
-  if (!result.ok) return { status: "error", error: errorMessages[result.error] }
+  if (!result.ok) return { status: "error", error: errorMessages[result.error], values }
   return { status: "sent", error: null }
 }

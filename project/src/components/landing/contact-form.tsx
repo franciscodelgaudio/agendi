@@ -2,7 +2,12 @@
 
 import { useActionState } from "react"
 
-export type ContactFormState = { status: "idle" | "sent" | "error"; error: string | null }
+// values: o React limpa o form depois da action; no erro, os campos voltam preenchidos.
+export type ContactFormState = {
+  status: "idle" | "sent" | "error"
+  error: string | null
+  values?: { name: string; whatsapp: string; message: string }
+}
 
 const inputClass =
   "w-full rounded-[6px] border border-white/15 bg-white/5 px-3.5 py-2.5 text-[15px] text-white placeholder:text-ld-mist/70 focus-visible:border-ld-sage-light focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ld-sage-light"
@@ -24,7 +29,7 @@ export function ContactForm({
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4 rounded-xl border border-white/15 bg-white/5 p-6 min-[900px]:p-8">
+    <form key={state.error ?? ""} action={formAction} className="flex flex-col gap-4 rounded-xl border border-white/15 bg-white/5 p-6 min-[900px]:p-8">
       {/* Campo isca: invisível para pessoas, preenchido por robôs. */}
       <div aria-hidden="true" className="absolute -left-[9999px] size-px overflow-hidden">
         <label>
@@ -35,12 +40,13 @@ export function ContactForm({
       <div className="grid grid-cols-1 gap-4 min-[600px]:grid-cols-2">
         <label className="flex flex-col gap-1.5 text-sm font-medium text-ld-mist">
           Nome
-          <input name="name" required maxLength={120} autoComplete="name" className={inputClass} />
+          <input name="name" defaultValue={state.values?.name} required maxLength={120} autoComplete="name" className={inputClass} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium text-ld-mist">
           WhatsApp
           <input
             name="whatsapp"
+            defaultValue={state.values?.whatsapp}
             type="tel"
             required
             inputMode="tel"
@@ -52,7 +58,7 @@ export function ContactForm({
       </div>
       <label className="flex flex-col gap-1.5 text-sm font-medium text-ld-mist">
         Conte como é o seu negócio
-        <textarea name="message" rows={4} maxLength={2000} className={`${inputClass} resize-y`} />
+        <textarea name="message" defaultValue={state.values?.message} rows={4} maxLength={2000} className={`${inputClass} resize-y`} />
       </label>
       {state.error && (
         <p role="alert" className="text-sm font-medium text-[#ffb4a8]">

@@ -207,7 +207,7 @@ export default function LandingPage() {
         </section>
 
         <section aria-labelledby="financeiro-title" className="bg-ld-paper py-20 min-[900px]:py-28">
-          <Container className="grid grid-cols-1 items-center gap-12 min-[900px]:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+          <Container className="grid grid-cols-1 items-center gap-12 min-[900px]:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
             <div className="flex flex-col gap-5">
               <Eyebrow>Financeiro</Eyebrow>
               <H2 id="financeiro-title">Veja o resultado de cada unidade.</H2>
@@ -224,7 +224,7 @@ export default function LandingPage() {
                 ))}
               </ul>
             </div>
-            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-ld-line bg-white shadow-sm">
+            <div className="relative aspect-[1850/990] overflow-hidden rounded-xl border border-ld-line bg-white shadow-sm">
               <Image
                 src="/landing/gastos.webp"
                 alt="Resumo do caixa de uma unidade com o card Gastos por grupo e os limites mensais"
@@ -238,12 +238,14 @@ export default function LandingPage() {
         </section>
 
         <section id="parceiros" aria-labelledby="parceiros-title" className="scroll-mt-16 border-y border-ld-line bg-ld-cream py-16 min-[900px]:py-20">
-          <Container className="grid grid-cols-1 gap-10 min-[900px]:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] min-[900px]:items-center">
-            <div className="flex flex-col gap-4">
-              <Eyebrow>Parceiros</Eyebrow>
-              <h2 id="parceiros-title" className="text-[28px] leading-[1.15] font-semibold tracking-[-0.03em] text-balance min-[900px]:text-[34px]">
-                Opera dentro de outro negócio? O repasse sai sozinho.
-              </h2>
+          <Container className="flex flex-col gap-10">
+            <div className="grid grid-cols-1 gap-4 min-[900px]:grid-cols-2 min-[900px]:items-end min-[900px]:gap-16">
+              <div className="flex flex-col gap-4">
+                <Eyebrow>Parceiros</Eyebrow>
+                <h2 id="parceiros-title" className="text-[28px] leading-[1.15] font-semibold tracking-[-0.03em] text-balance min-[900px]:text-[34px]">
+                  Opera dentro de outro negócio? O repasse sai sozinho.
+                </h2>
+              </div>
               <p className="leading-relaxed text-ld-ink-soft">
                 Para quem atende dentro de hotéis, clubes, academias ou outros espaços: cadastre a regra do contrato
                 (percentual fixo ou faixas por faturamento; ciclo semanal, quinzenal ou mensal) e o Agenli calcula o
