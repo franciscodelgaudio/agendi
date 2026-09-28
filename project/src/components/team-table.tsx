@@ -26,6 +26,8 @@ function payParts({ commissionPercent, salaryCents, bonuses }: UnitTeamListItem)
 }
 
 // Equipe de uma unidade ou de todas (showUnit). today: "2026-09-27", para o próximo pagamento.
+// Sem rolagem horizontal: breakpoints somam a largura máxima das colunas visíveis (ex.: dois badges
+// em Função, remuneração com comissão + salário + bônus); o nome ocupa o que sobrar.
 export function TeamTable({
   workspaceId,
   role,
@@ -52,7 +54,7 @@ export function TeamTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <CodeHead className="@max-3xl:hidden" />
+            <CodeHead className="@max-7xl:hidden" />
             {/* Só há ordenação por nome; o sort fixo alimenta o cabeçalho e é ignorado na leitura. */}
             <SortableHead
               field="name"
@@ -62,10 +64,10 @@ export function TeamTable({
               pathname={pathname}
               className="w-full"
             />
-            {showUnit && <TableHead className="px-4 @max-md:hidden">Unidade</TableHead>}
-            <TableHead className="px-4">Função</TableHead>
-            <TableHead className="px-4 text-right @max-xl:hidden">Remuneração</TableHead>
-            <TableHead className="px-4 text-right @max-lg:hidden">Próximo pagamento</TableHead>
+            {showUnit && <TableHead className="px-4 @max-4xl:hidden">Unidade</TableHead>}
+            <TableHead className="px-4 @max-lg:hidden">Função</TableHead>
+            <TableHead className="px-4 text-right @max-6xl:hidden">Remuneração</TableHead>
+            <TableHead className="px-4 text-right @max-2xl:hidden">Próximo pagamento</TableHead>
             {canManage && <TableHead className="w-0 px-4 text-right">Ações</TableHead>}
           </TableRow>
         </TableHeader>
@@ -85,7 +87,7 @@ export function TeamTable({
               const nextPay = nextPayrollDate(member, today)
               return (
                 <TableRow key={`${member.id}:${member.unitId}`}>
-                  <CodeCell id={member.id} className="@max-3xl:hidden" />
+                  <CodeCell id={member.id} className="@max-7xl:hidden" />
                   <TableCell className="max-w-0 px-4">
                     <div className="flex items-center gap-3">
                       <Avatar className="size-8">
@@ -98,17 +100,17 @@ export function TeamTable({
                       </div>
                     </div>
                   </TableCell>
-                  {showUnit && <TableCell className="px-4 @max-md:hidden">{member.unitName}</TableCell>}
-                  <TableCell className="px-4">
+                  {showUnit && <TableCell className="px-4 @max-4xl:hidden">{member.unitName}</TableCell>}
+                  <TableCell className="px-4 @max-lg:hidden">
                     <div className="flex items-center gap-1.5">
                       <Badge variant="secondary">{roleLabels[member.role]}</Badge>
                       {member.pending && <Badge variant="outline">Convite pendente</Badge>}
                     </div>
                   </TableCell>
-                  <TableCell className="px-4 text-right tabular-nums @max-xl:hidden">
+                  <TableCell className="px-4 text-right tabular-nums @max-6xl:hidden">
                     {payParts(member).join(" + ") || <span className="text-muted-foreground">Não definida</span>}
                   </TableCell>
-                  <TableCell className="px-4 text-right tabular-nums @max-lg:hidden">
+                  <TableCell className="px-4 text-right tabular-nums @max-2xl:hidden">
                     {nextPay ? (
                       nextPay === today ? "Hoje" : dayFormat.format(new Date(nextPay))
                     ) : (

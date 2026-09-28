@@ -76,6 +76,15 @@ export function shiftCashFlowDate({ view, date }: CashFlowQuery, steps: number) 
   return utcDay(year + steps, 1, 1);
 }
 
+// Mês do gráfico de gastos ("AAAA-MM" na URL) dentro do ano exibido, no primeiro dia. Sem mês
+// válido, fica no de hoje; ano passado mostra dezembro e ano futuro, janeiro.
+export function costMonthDate(param: string | string[] | undefined, shown: DayRange, today: string) {
+  const chosen = `${first(param)}-01`;
+  if (parseDay(chosen) && shown.from <= chosen && chosen <= shown.to) return chosen;
+  const date = today < shown.from ? shown.from : today > shown.to ? shown.to : today;
+  return `${date.slice(0, 7)}-01`;
+}
+
 // Linhas da tabela do caixa para a visão escolhida.
 export function cashFlowBuckets({ view, date }: CashFlowQuery): DayRange[] {
   const [year, month] = parseDay(date)!;

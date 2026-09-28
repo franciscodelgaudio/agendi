@@ -1,10 +1,10 @@
 import { notFound, redirect } from "next/navigation"
-import { parseCashFlowQuery } from "@/lib/cash-flow"
+import { parseCashFlowQuery, shiftCashFlowDate } from "@/lib/cash-flow"
 import { CASH_FLOW_PAGE_SIZE, parseTherapistListQuery, therapistListPage } from "@/lib/cash-flow-list"
 import { loadCashFlowSummaryScreen } from "@/lib/cash-flow-screen-store"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser } from "@/lib/session"
-import { CashFlowNav } from "@/components/cash-flow-nav"
+import { CashFlowNav, periodLabel } from "@/components/cash-flow-nav"
 import { ExportMenu } from "@/components/export-menu"
 import { OpeningBalanceCard } from "@/components/opening-balance-card"
 import { CashFlowTable } from "@/components/cash-flow-table"
@@ -29,13 +29,14 @@ export default async function CashFlowPage({
   const { page, ...filters } = parseTherapistListQuery(search)
   const user = await requireUser()
   await requirePage(workspaceId, user.id, { unit: "cash_flow", unitId })
-  const data = await loadCashFlowSummaryScreen(workspaceId, user.id, unitId, query.date, now)
+  const data = await loadCashFlowSummaryScreen(workspaceId, user.id, unitId, query.date, now, search.costs)
   if (!data) notFound()
-  const { today, shown, revenueShare, openingBalance, balanceCents, summary, columns, costs, curve } = data
+  const { today, shown, revenueShare, openingBalance, balanceCents, summary, columns, costMonth, costs, curve } = data
   const therapists = therapistListPage(data.therapists, { ...filters, page })
 
   const pathname = `/workspace/${workspaceId}/unit/${unitId}/cash-flow`
-  const listQuery = { date: query.date, ...filters }
+  // O mês dos gastos por grupo só vai para a URL depois de escolhido, e segue na busca e na lista.
+  const listQuery = { date: query.date, costs: search.costs ? costMonth.from.slice(0, 7) : "", ...filters }
   // Página além da última (ex.: depois de trocar de período) vai para a última.
   const pages = Math.ceil(therapists.total / CASH_FLOW_PAGE_SIZE)
   if (pages > 0 && page > pages) {
@@ -43,6 +44,18 @@ export default async function CashFlowPage({
       Object.entries({ ...listQuery, page: pages > 1 ? String(pages) : "" }).filter(([, v]) => v),
     )
     redirect(`${pathname}?${params}`)
+  }
+
+  // Setas do gráfico de gastos, dentro do ano exibido; a página da lista é mantida.
+  function costMonthHref(steps: number) {
+    const month = shiftCashFlowDate({ view: "month", date: costMonth.from }, steps)
+    if (month < shown.from || month > shown.to) return null
+    const params = new URLSearchParams(
+      Object.entries({ ...listQuery, costs: month.slice(0, 7), page: page > 1 ? String(page) : "" }).filter(
+        ([, v]) => v,
+      ),
+    )
+    return `${pathname}?${params}`
   }
 
   return (
@@ -89,7 +102,14 @@ export default async function CashFlowPage({
           </CardContent>
         </Card>
       </div>
-      {costs.rows.length > 0 && <CashFlowCostsChart rows={costs.rows} totalCents={costs.totalCents} />}
+      {costs.rows.length > 0 && (
+        <CashFlowCostsChart
+          rows={costs.rows}
+          totalCents={costs.totalCents}
+          period={periodLabel({ view: "month", date: costMonth.from }, costMonth)}
+          months={{ previousHref: costMonthHref(-1), nextHref: costMonthHref(1) }}
+        />
+      )}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         <h4 className="font-semibold tracking-tight">Por massagista</h4>
         <ListSearch query={listQuery} placeholder="Buscar massagista..." />

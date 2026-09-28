@@ -21,7 +21,7 @@ function toDate(day: string) {
   return new Date(Date.UTC(year, month - 1, date))
 }
 
-function periodLabel({ view, date }: CashFlowQuery, range: DayRange) {
+export function periodLabel({ view, date }: CashFlowQuery, range: DayRange) {
   if (view === "year") return date.slice(0, 4)
   if (view === "month") return monthYearFormat.format(toDate(date))
   return `${dayMonthFormat.format(toDate(range.from))} a ${fullDayFormat.format(toDate(range.to))}`

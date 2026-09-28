@@ -6,6 +6,7 @@ import {
   cashFlowBuckets,
   cashFlowFetchRange,
   costCurve,
+  costMonthDate,
   dailyAppointmentTotalsPipeline,
   dailyBookingForecastPipeline,
   parseCashFlowQuery,
@@ -67,6 +68,36 @@ describe("shiftCashFlowDate", () => {
     ["year", "2026-09-24", -1, "2025-01-01"],
   ] as const)("visão %s: %s %+d = %s (primeiro dia do período)", (view, date, steps, expected) => {
     expect(shiftCashFlowDate({ view, date }, steps)).toBe(expected);
+  });
+});
+
+describe("costMonthDate", () => {
+  const YEAR = { from: "2026-01-01", to: "2026-12-31" };
+
+  it("usa o mês escolhido (AAAA-MM) dentro do ano exibido, no primeiro dia", () => {
+    expect(costMonthDate("2026-03", YEAR, "2026-09-24")).toBe("2026-03-01");
+    expect(costMonthDate("2026-12", YEAR, "2026-09-24")).toBe("2026-12-01");
+  });
+
+  it("usa o primeiro valor quando o parâmetro vem repetido", () => {
+    expect(costMonthDate(["2026-05", "2026-06"], YEAR, "2026-09-24")).toBe("2026-05-01");
+  });
+
+  it("sem mês escolhido, mostra o mês de hoje no ano atual", () => {
+    expect(costMonthDate(undefined, YEAR, "2026-09-24")).toBe("2026-09-01");
+  });
+
+  it("sem mês escolhido, ano passado mostra dezembro e ano futuro, janeiro", () => {
+    expect(costMonthDate(undefined, YEAR, "2027-02-10")).toBe("2026-12-01");
+    expect(costMonthDate(undefined, YEAR, "2025-11-10")).toBe("2026-01-01");
+  });
+
+  it.each(["2025-12", "2027-01"])("ignora o mês %s fora do ano exibido", (month) => {
+    expect(costMonthDate(month, YEAR, "2026-09-24")).toBe("2026-09-01");
+  });
+
+  it.each(["2026-13", "2026-00", "2026-3", "2026-03-10", "março", ""])("ignora o mês inválido %j", (month) => {
+    expect(costMonthDate(month, YEAR, "2026-09-24")).toBe("2026-09-01");
   });
 });
 

@@ -2,6 +2,7 @@ import { isObjectIdOrHexString, Types } from "mongoose"
 import {
   cashFlowBuckets,
   costCurve,
+  costMonthDate,
   parseCashFlowQuery,
   summarizeCosts,
   summarizeTherapists,
@@ -9,7 +10,7 @@ import {
 } from "@/lib/cash-flow"
 import { CASH_FLOW_PAGE_SIZE } from "@/lib/cash-flow-list"
 import { loadExpenseGroupIcons } from "@/lib/expense-group-icon-store"
-import type { ExpenseSeries } from "@/lib/expense"
+import { expenseGroupTotalsPipeline, summarizeExpenseGroups, type ExpenseGroupTotal, type ExpenseSeries } from "@/lib/expense"
 import type { WorkspaceRole } from "@/lib/member"
 import type { OpeningBalance } from "@/lib/opening-balance"
 import type { RevenueShare } from "@/lib/revenue-share"
@@ -31,13 +32,14 @@ export function allPages<T, R extends { rows: T[]; total: number }>(list: (page:
 }
 
 // O resumo é sempre do ano da data: caixa, custos e massagistas mês a mês no ano; os gastos
-// por grupo são de um mês só, o de hoje dentro do ano mostrado.
+// por grupo são de um mês só, o escolhido (costMonth, "AAAA-MM") ou o de hoje dentro do ano mostrado.
 export async function loadCashFlowSummaryScreen(
   workspaceId: string,
   userId: string,
   unitId: string,
   date: string,
   now: Date,
+  costMonthParam?: string | string[],
 ) {
   const access = workspaceAccessStages(workspaceId, userId)
   if (!access || !isObjectIdOrHexString(unitId)) return null
@@ -74,9 +76,7 @@ export async function loadCashFlowSummaryScreen(
   const today = parseCashFlowQuery({}, now).date
   const buckets = cashFlowBuckets({ view: "year", date })
   const shown = { from: buckets[0].from, to: buckets.at(-1)!.to }
-  // Ano passado mostra dezembro; ano futuro, janeiro.
-  const costDate = today < shown.from ? shown.from : today > shown.to ? shown.to : today
-  const costBuckets = cashFlowBuckets({ view: "month", date: costDate })
+  const costBuckets = cashFlowBuckets({ view: "month", date: costMonthDate(costMonthParam, shown, today) })
   const costMonth = { from: costBuckets[0].from, to: costBuckets.at(-1)!.to }
   const unit = { id: unitId, revenueShare, openingBalance }
   const [
@@ -177,4 +177,53 @@ export async function loadExpensesScreen(workspaceId: string, userId: string, un
   }))
 
   return { unitName: workspace.unit.name, role: workspace.role, month, groups, expenses }
+}
+
+// O limite é mensal: no ano, vale 12 vezes.
+export async function loadExpenseGroupsScreen(
+  workspaceId: string,
+  userId: string,
+  unitId: string,
+  query: { view: "month" | "year"; date: string },
+) {
+  const access = workspaceAccessStages(workspaceId, userId)
+  if (!access || !isObjectIdOrHexString(unitId)) return null
+
+  // Parte do workspace para garantir o acesso à unidade.
+  const [workspace] = await Workspace.aggregate<{ role: WorkspaceRole; unit: { name: string } | null }>([
+    ...access,
+    {
+      $lookup: {
+        from: "units",
+        localField: "_id",
+        foreignField: "workspaceId",
+        as: "unit",
+        pipeline: [{ $match: { _id: new Types.ObjectId(unitId) } }, { $project: { _id: 0, name: 1 } }],
+      },
+    },
+    { $project: { _id: 0, role: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
+  ])
+  if (!workspace?.unit) return null
+
+  const buckets = cashFlowBuckets(query)
+  const period = { from: buckets[0].from, to: buckets.at(-1)!.to }
+  const unitObjectId = new Types.ObjectId(unitId)
+  const [groups, totals, icons] = await Promise.all([
+    ExpenseGroup.find({ unitId: unitObjectId }).select({ name: 1, monthlyLimitCents: 1, iconId: 1 }).lean(),
+    Expense.aggregate<ExpenseGroupTotal>([{ $match: { unitId: unitObjectId } }, ...expenseGroupTotalsPipeline(period)]),
+    loadExpenseGroupIcons(),
+  ])
+  const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
+  const summary = summarizeExpenseGroups(
+    groups.map((group) => ({
+      id: group._id.toString(),
+      name: group.name,
+      monthlyLimitCents: group.monthlyLimitCents ?? null,
+      icon: (group.iconId && iconsById.get(group.iconId.toString())) || null,
+    })),
+    totals,
+    query.view === "year" ? 12 : 1,
+  )
+
+  return { unitName: workspace.unit.name, role: workspace.role, period, icons, summary }
 }

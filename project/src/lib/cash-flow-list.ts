@@ -4,7 +4,7 @@ import { first, type SearchParams, type SortDir } from "@/lib/unit-list";
 
 export const CASH_FLOW_PAGE_SIZE = 20;
 
-const EXPENSE_SORT_FIELDS = ["date", "description", "amount"] as const;
+const EXPENSE_SORT_FIELDS = ["date", "description", "group", "amount"] as const;
 const EXPENSE_STATUSES = ["paid", "pending"] as const;
 const GROUP_SORT_FIELDS = ["name", "total", "paid"] as const;
 // over: passou do limite; within: tem limite e não passou; none: sem limite.
@@ -83,10 +83,14 @@ export function parseExpenseListQuery(params: SearchParams): ExpenseListQuery {
 }
 
 // Recebe as despesas do mês por dia e criação; os totais são de todas as filtradas, não só da página.
+// Os grupos dão o nome usado na ordenação por grupo.
 export function expenseListPage<T extends ExpenseListItem>(
   expenses: T[],
   { q, group, status, sort, dir, page }: ExpenseListQuery,
+  groups: { id: string; name: string }[] = [],
 ) {
+  const groupNames = new Map(groups.map((g) => [g.id, g.name]));
+  const groupName = (expense: T) => groupNames.get(expense.groupId) ?? "";
   const term = normalize(q);
   const filtered = expenses.filter(
     (expense) =>
@@ -97,9 +101,11 @@ export function expenseListPage<T extends ExpenseListItem>(
   const compare = (a: T, b: T) =>
     sort === "description"
       ? compareText(a.description, b.description)
-      : sort === "amount"
-        ? a.amountCents - b.amountCents
-        : a.date.localeCompare(b.date);
+      : sort === "group"
+        ? compareText(groupName(a), groupName(b))
+        : sort === "amount"
+          ? a.amountCents - b.amountCents
+          : a.date.localeCompare(b.date);
   return {
     ...sortAndPage(filtered, compare, dir, page),
     totalCents: filtered.reduce((sum, expense) => sum + expense.amountCents, 0),

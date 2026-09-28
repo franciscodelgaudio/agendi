@@ -1,15 +1,15 @@
 import { parseCashFlowQuery } from "@/lib/cash-flow"
-import { expenseReport, parseExportFormat } from "@/lib/cash-flow-export"
-import { expenseListPage, parseExpenseListQuery } from "@/lib/cash-flow-list"
-import { allPages, loadExpensesScreen } from "@/lib/cash-flow-screen-store"
+import { expenseGroupReport, parseExportFormat } from "@/lib/cash-flow-export"
+import { expenseGroupListPage, parseExpenseGroupListQuery } from "@/lib/cash-flow-list"
+import { allPages, loadExpenseGroupsScreen } from "@/lib/cash-flow-screen-store"
 import { findVisiblePages } from "@/lib/page-guard"
 import { reportResponse } from "@/lib/report-file"
 import { getSessionUserId } from "@/lib/session"
 
-// Despesas do mês em PDF ou XLSX (?format=), com a busca, os filtros e a ordenação da tela, sem paginar.
+// Planejamento do mês ou do ano em PDF ou XLSX (?format=), com a busca, o filtro e a ordenação da tela, sem paginar.
 export async function GET(
   request: Request,
-  { params }: RouteContext<"/api/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/export">,
+  { params }: RouteContext<"/api/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/export">,
 ) {
   const { workspaceId, unitId } = await params
   const userId = await getSessionUserId()
@@ -23,21 +23,16 @@ export async function GET(
     return Response.json({ error: "Sem permissão para ver o caixa." }, { status: 403 })
   }
 
-  const query = { ...parseCashFlowQuery(search, new Date()), view: "month" as const }
-  const data = await loadExpensesScreen(workspaceId, userId, unitId, query)
+  // A visão semanal não se aplica aos grupos.
+  const parsed = parseCashFlowQuery(search, new Date())
+  const query = { ...parsed, view: parsed.view === "year" ? ("year" as const) : ("month" as const) }
+  const data = await loadExpenseGroupsScreen(workspaceId, userId, unitId, query)
   if (!data) return Response.json({ error: "Unidade não encontrada." }, { status: 404 })
-  const filters = parseExpenseListQuery(search)
-  const result = allPages((page) => expenseListPage(data.expenses, { ...filters, page }, data.groups))
+  const filters = parseExpenseGroupListQuery(search)
+  const result = allPages((page) => expenseGroupListPage(data.summary, { ...filters, page }))
 
   return reportResponse(
-    expenseReport({
-      unitName: data.unitName,
-      date: query.date,
-      groups: data.groups,
-      expenses: result.rows,
-      totalCents: result.totalCents,
-      paidCents: result.paidCents,
-    }),
+    expenseGroupReport({ unitName: data.unitName, query, groups: result.rows, sums: result.sums }),
     format,
   )
 }

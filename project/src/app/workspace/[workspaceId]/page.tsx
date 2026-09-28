@@ -1,14 +1,6 @@
 import { notFound } from "next/navigation"
 import { Types } from "mongoose"
-import {
-  CalendarCheckIcon,
-  CalendarXIcon,
-  PiggyBankIcon,
-  LeafIcon,
-  StoreIcon,
-  TrendingUpIcon,
-  UsersIcon,
-} from "lucide-react"
+import { CalendarCheckIcon, CalendarXIcon, PiggyBankIcon, LeafIcon, StoreIcon, TrendingUpIcon, UsersIcon } from "lucide-react"
 import {
   applyExpenses,
   applyStaffCosts,
@@ -20,11 +12,11 @@ import {
   parseCashFlowQuery,
   serviceAppointmentTotalsPipeline,
   serviceBookingForecastPipeline,
+  shiftCashFlowDate,
   summarizeCashFlow,
   summarizeServices,
   summarizeTherapists,
   teamPayRates,
-  type CashFlowView,
   type DayRange,
   type DayTotal,
   type ServiceTotal,
@@ -62,7 +54,7 @@ import {
   type TodayBooking,
 } from "@/components/unit-overview"
 import { UnitsEmpty } from "@/components/units-empty"
-import { PeriodRankCard, type RankPeriod } from "@/components/period-rank-card"
+import { MonthRankCard } from "@/components/month-rank-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -70,21 +62,30 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const LOW_STOCK_QUANTITY = 2
 const TOP_ITEMS = 5
 
-// Um valor para cada período dos rankings: semana, mês e ano correntes.
-function byPeriod<T>(value: (view: CashFlowView) => T): Record<CashFlowView, T> {
-  return { week: value("week"), month: value("month"), year: value("year") }
-}
-
 // Os dias são do calendário, então são formatados em UTC para não deslocar.
-const monthFormat = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" })
-const todayFormat = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })
+const monthFormat = new Intl.DateTimeFormat("pt-BR", {
+  month: "long",
+  timeZone: "UTC",
+})
+const todayFormat = new Intl.DateTimeFormat("pt-BR", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  timeZone: "UTC",
+})
 
 function toDate(day: string) {
   const [year, month, date] = day.split("-").map(Number)
   return new Date(Date.UTC(year, month - 1, date))
 }
 
-const ZERO: StaffCashFlowAmounts = { grossCents: 0, partnerShareCents: 0, commissionCents: 0, salaryCents: 0, netCents: 0 }
+const ZERO: StaffCashFlowAmounts = {
+  grossCents: 0,
+  partnerShareCents: 0,
+  commissionCents: 0,
+  salaryCents: 0,
+  netCents: 0,
+}
 
 // Soma dos valores já calculados por unidade (cada uma com seu repasse, comissões e salários).
 function sumAmounts(list: StaffCashFlowAmounts[]): StaffCashFlowAmounts {
@@ -100,11 +101,16 @@ function sumAmounts(list: StaffCashFlowAmounts[]): StaffCashFlowAmounts {
   )
 }
 
-type UnitInfo = { id: string; name: string; avatarUrl: string | null; revenueShare: RevenueShare | null }
+type UnitInfo = {
+  id: string
+  name: string
+  avatarUrl: string | null
+  revenueShare: RevenueShare | null
+}
 
 // Página inicial: visão geral de todas as unidades do workspace.
-export default async function WorkspacePage({ params }: PageProps<"/workspace/[workspaceId]">) {
-  const { workspaceId } = await params
+export default async function WorkspacePage({ params, searchParams }: PageProps<"/workspace/[workspaceId]">) {
+  const [{ workspaceId }, search] = await Promise.all([params, searchParams])
   const now = new Date()
   const user = await requireUser()
   await requirePage(workspaceId, user.id, { workspace: "home" })
@@ -142,12 +148,25 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     },
     ...therapistOptionsStages(),
     teamCandidatesLookup(),
-    { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, role: 1, units: 1, therapists: 1, team: 1 } },
+    {
+      $project: {
+        _id: 0,
+        id: { $toString: "$_id" },
+        name: 1,
+        role: 1,
+        units: 1,
+        therapists: 1,
+        team: 1,
+      },
+    },
   ])
   if (!workspace) notFound()
   const { units } = workspace
   const canManage = canManageMembers(workspace.role)
-  const team = { candidates: workspace.team, canLinkTherapists: workspace.role === "owner" }
+  const team = {
+    candidates: workspace.team,
+    canLinkTherapists: workspace.role === "owner",
+  }
 
   if (units.length === 0) {
     return (
@@ -157,17 +176,28 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     )
   }
 
-  // Mês corrente para os indicadores e rankings; ano corrente para a curva de custos; semana,
-  // mês e ano para o ranking das massagistas.
+  // Mês corrente para os indicadores e rankings; ano corrente para a curva de custos; o mês
+  // escolhido para o ranking das massagistas.
   const today = parseCashFlowQuery({}, now).date
   const monthBuckets = cashFlowBuckets({ view: "month", date: today })
-  const weekBuckets = cashFlowBuckets({ view: "week", date: today })
   const yearBuckets = cashFlowBuckets({ view: "year", date: today })
-  const periods = byPeriod((view): DayRange => {
-    const buckets = cashFlowBuckets({ view, date: today })
-    return { from: buckets[0].from, to: buckets.at(-1)!.to }
+  const month = { from: monthBuckets[0].from, to: monthBuckets.at(-1)!.to }
+  const yearRange = { from: yearBuckets[0].from, to: yearBuckets.at(-1)!.to }
+  const therapistMonth = shiftCashFlowDate(
+    {
+      view: "month",
+      date: parseCashFlowQuery({ date: search.therapistMonth }, now).date,
+    },
+    0,
+  )
+  const therapistBuckets = cashFlowBuckets({
+    view: "month",
+    date: therapistMonth,
   })
-  const month = periods.month
+  const therapistRange = {
+    from: therapistBuckets[0].from,
+    to: therapistBuckets.at(-1)!.to,
+  }
   const [year, monthNumber, day] = today.split("-").map(Number)
   const todayStart = new Date(Date.UTC(year, monthNumber - 1, day, BRT_OFFSET_HOURS))
   const todayEnd = new Date(todayStart.getTime() + DAY_MS)
@@ -175,28 +205,29 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
 
   // O repasse depende do faturamento de cada unidade, então o caixa é calculado unidade a
   // unidade (com o resto dos períodos de repasse das pontas) e só depois somado.
-  const [perUnit, members, todayBookings, lowStock, productCount] = await Promise.all([
+  const unitsMatch = { $match: { unitId: { $in: unitIds } } }
+  const [perUnit, members, therapistAppointments, therapistBookings, todayBookings, lowStock, productCount] = await Promise.all([
     Promise.all(
       units.map(async (unit) => {
-        const period = unit.revenueShare?.period ?? null
-        const yearRange = cashFlowFetchRange(yearBuckets, period)
-        const weekRange = cashFlowFetchRange(weekBuckets, period)
-        const range = {
-          from: yearRange.from < weekRange.from ? yearRange.from : weekRange.from,
-          to: yearRange.to > weekRange.to ? yearRange.to : weekRange.to,
-        }
+        const range = cashFlowFetchRange(yearBuckets, unit.revenueShare?.period ?? null)
         const unitMatch = { $match: { unitId: new Types.ObjectId(unit.id) } }
         const [appointments, bookings, serviceAppointments, serviceBookings, expenses, groups] = await Promise.all([
           Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
           Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
           Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(month)]),
           Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(month, now)]),
-          Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(periods.year)]),
-          ExpenseGroup.find({ unitId: new Types.ObjectId(unit.id) }).select({ monthlyLimitCents: 1 }).lean(),
+          Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(yearRange)]),
+          ExpenseGroup.find({ unitId: new Types.ObjectId(unit.id) })
+            .select({ monthlyLimitCents: 1 })
+            .lean(),
         ])
         return {
           unit,
-          monthlyBudgetCents: expenseBudgetCents(groups.map((group) => ({ monthlyLimitCents: group.monthlyLimitCents ?? null }))),
+          monthlyBudgetCents: expenseBudgetCents(
+            groups.map((group) => ({
+              monthlyLimitCents: group.monthlyLimitCents ?? null,
+            })),
+          ),
           appointments,
           bookings,
           expenses,
@@ -205,14 +236,35 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
       }),
     ),
     // Remuneração da equipe em cada unidade (o proprietário não tem).
-    WorkspaceMember.find({ workspaceId: workspace.id, role: { $in: ["massage_therapist", "receptionist"] } })
+    WorkspaceMember.find({
+      workspaceId: workspace.id,
+      role: { $in: ["massage_therapist", "receptionist"] },
+    })
       .select({ userId: 1, role: 1, units: 1 })
       .lean(),
-    Booking.find({ unitId: { $in: unitIds }, startsAt: { $gte: todayStart, $lt: todayEnd } })
+    // Massagistas somando todas as unidades em que atenderam; só os valores brutos são usados.
+    Appointment.aggregate<DayTotal>([unitsMatch, ...dailyAppointmentTotalsPipeline(therapistRange)]),
+    Booking.aggregate<DayTotal>([unitsMatch, ...dailyBookingForecastPipeline(therapistRange, now)]),
+    Booking.find({
+      unitId: { $in: unitIds },
+      startsAt: { $gte: todayStart, $lt: todayEnd },
+    })
       .sort({ startsAt: 1 })
-      .select({ unitId: 1, startsAt: 1, endsAt: 1, guest: 1, service: 1, therapistId: 1, therapistName: 1, appointmentId: 1 })
+      .select({
+        unitId: 1,
+        startsAt: 1,
+        endsAt: 1,
+        guest: 1,
+        service: 1,
+        therapistId: 1,
+        therapistName: 1,
+        appointmentId: 1,
+      })
       .lean(),
-    Product.find({ unitId: { $in: unitIds }, quantity: { $lte: LOW_STOCK_QUANTITY } })
+    Product.find({
+      unitId: { $in: unitIds },
+      quantity: { $lte: LOW_STOCK_QUANTITY },
+    })
       .sort({ quantity: 1, name: 1 })
       .select({ unitId: 1, name: 1, quantity: 1, avatarUrl: 1 })
       .lean(),
@@ -236,7 +288,10 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         staffCosts.grossCommissionPercent > 0 ||
         staffCosts.salaries.length > 0,
       month: summarize(monthBuckets).total,
-      year: { buckets: applyExpenses(summarize(yearBuckets), expenses).buckets, monthlyBudgetCents },
+      year: {
+        buckets: applyExpenses(summarize(yearBuckets), expenses).buckets,
+        monthlyBudgetCents,
+      },
       services: { done, scheduled: all - done },
     }
   })
@@ -254,16 +309,11 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
   const servicesDone = unitSummaries.reduce((sum, summary) => sum + summary.services.done, 0)
   const servicesScheduled = unitSummaries.reduce((sum, summary) => sum + summary.services.scheduled, 0)
   const hasDeductions = unitSummaries.some((summary) => summary.hasDeductions)
-  const deductionsCents =
-    monthTotal.real.partnerShareCents + monthTotal.real.commissionCents + monthTotal.real.salaryCents
+  const deductionsCents = monthTotal.real.partnerShareCents + monthTotal.real.commissionCents + monthTotal.real.salaryCents
 
-  // Massagistas somando todas as unidades em que atenderam; só os valores brutos são usados.
-  const allAppointments = perUnit.flatMap((unit) => unit.appointments)
-  const allBookings = perUnit.flatMap((unit) => unit.bookings)
   const therapistImages = new Map(workspace.therapists.map((therapist) => [therapist.id, therapist.image]))
   const unitRanking = [...unitSummaries].sort(
-    (a, b) =>
-      b.month.forecast.grossCents - a.month.forecast.grossCents || a.unit.name.localeCompare(b.unit.name, "pt-BR"),
+    (a, b) => b.month.forecast.grossCents - a.month.forecast.grossCents || a.unit.name.localeCompare(b.unit.name, "pt-BR"),
   )
 
   const unitNames = new Map(units.map((unit) => [unit.id, unit.name]))
@@ -292,23 +342,15 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
 
   const base = `/workspace/${workspace.id}`
   const monthName = monthFormat.format(toDate(today))
-  const periodLabels: Record<CashFlowView, string> = { week: "Esta semana", month: monthName, year: today.slice(0, 4) }
-  const periodNouns: Record<CashFlowView, string> = { week: "nesta semana", month: "neste mês", year: "neste ano" }
-  const therapistPeriods = byPeriod(
-    (view): RankPeriod => ({
-      label: periodLabels[view],
-      items: summarizeTherapists(periods[view], allAppointments, allBookings, {})
-        .slice(0, TOP_ITEMS)
-        .map((therapist) => ({
-          id: therapist.therapistId,
-          name: therapist.therapistName,
-          image: therapistImages.get(therapist.therapistId) ?? null,
-          real: therapist.real,
-          forecast: therapist.forecast,
-        })),
-      empty: <CardEmpty icon={UsersIcon}>Ninguém atendeu nem tem agendamentos {periodNouns[view]}.</CardEmpty>,
-    }),
-  )
+  const therapists = summarizeTherapists(therapistRange, therapistAppointments, therapistBookings, {})
+    .slice(0, TOP_ITEMS)
+    .map((therapist) => ({
+      id: therapist.therapistId,
+      name: therapist.therapistName,
+      image: therapistImages.get(therapist.therapistId) ?? null,
+      real: therapist.real,
+      forecast: therapist.forecast,
+    }))
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
@@ -334,7 +376,9 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
           icon={PiggyBankIcon}
           label="Líquido do mês"
           value={money(monthTotal.real.netCents)}
-          detail={hasDeductions ? `${money(deductionsCents)} em repasse, comissões e salários` : "Sem repasse, comissões nem salários"}
+          detail={
+            hasDeductions ? `${money(deductionsCents)} em repasse, comissões e salários` : "Sem repasse, comissões nem salários"
+          }
         />
         <StatTile
           icon={LeafIcon}
@@ -382,7 +426,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
 
         <Card>
           <CardHeader>
-            <CardTitle>Custos em {periods.year.from.slice(0, 4)}</CardTitle>
+            <CardTitle>Custos em {yearRange.from.slice(0, 4)}</CardTitle>
             <CardDescription>
               {money(spentCents)} gastos de {money(plannedCents)} planejados
             </CardDescription>
@@ -401,64 +445,33 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Unidades</CardTitle>
-            <CardDescription className="first-letter:uppercase">{monthName}, pelo previsto</CardDescription>
-            <CardLink href={`${base}/unit`}>Todas</CardLink>
-          </CardHeader>
-          <CardContent className="flex-1">
-            {unitRanking.length ? (
-              <RankList
-                avatar="square"
-                items={unitRanking.slice(0, TOP_ITEMS).map(({ unit, month, services }) => ({
-                  id: unit.id,
-                  name: unit.name,
-                  image: unit.avatarUrl,
-                  href: `${base}/unit/${unit.id}`,
-                  real: { count: services.done, cents: month.real.grossCents },
-                  forecast: { count: services.done + services.scheduled, cents: month.forecast.grossCents },
-                }))}
-              />
-            ) : (
-              <CardEmpty icon={StoreIcon}>Nenhuma unidade.</CardEmpty>
-            )}
-          </CardContent>
-        </Card>
-
-        <PeriodRankCard
-          title="Massagistas"
-          avatar="round"
-          action={<CardLink href={`${base}/users`}>Usuários</CardLink>}
-          periods={therapistPeriods}
-        />
-
-        <Card className="md:col-span-2 xl:col-span-1">
-          <CardHeader>
-            <CardTitle>Estoque acabando</CardTitle>
-            <CardDescription>
-              {productCount
-                ? `${plural(stock.length, "produto", "produtos")} com até ${LOW_STOCK_QUANTITY} unidades, de ${productCount}`
-                : "Nenhum produto cadastrado"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1">
-            {stock.length ? (
-              <LowStockList
-                products={stock.slice(0, TOP_ITEMS)}
-                href={(product) => `${base}/unit/${stockUnit.get(product.id)}/stock/${product.id}`}
-              />
-            ) : (
-              <CardEmpty>
-                {productCount
-                  ? "Estoque em dia: nenhum produto acabando."
-                  : "Cadastre produtos no estoque de cada unidade."}
-              </CardEmpty>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Unidades</CardTitle>
+          <CardDescription className="first-letter:uppercase">{monthName}, pelo previsto</CardDescription>
+          <CardLink href={`${base}/unit`}>Todas</CardLink>
+        </CardHeader>
+        <CardContent className="flex-1">
+          {unitRanking.length ? (
+            <RankList
+              avatar="square"
+              items={unitRanking.slice(0, TOP_ITEMS).map(({ unit, month, services }) => ({
+                id: unit.id,
+                name: unit.name,
+                image: unit.avatarUrl,
+                href: `${base}/unit/${unit.id}`,
+                real: { count: services.done, cents: month.real.grossCents },
+                forecast: {
+                  count: services.done + services.scheduled,
+                  cents: month.forecast.grossCents,
+                },
+              }))}
+            />
+          ) : (
+            <CardEmpty icon={StoreIcon}>Nenhuma unidade.</CardEmpty>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

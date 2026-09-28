@@ -40,7 +40,7 @@ export default async function ExpensesPage({
   const base = `/workspace/${workspaceId}/unit/${unitId}/cash-flow`
   const pathname = `${base}/expenses`
   const listQuery = { date: query.date, ...filters }
-  const result = expenseListPage(expenses, { ...filters, page })
+  const result = expenseListPage(expenses, { ...filters, page }, groups)
   // Página além da última (ex.: depois de excluir a última despesa dela) vai para a última.
   const pages = Math.ceil(result.total / CASH_FLOW_PAGE_SIZE)
   if (pages > 0 && page > pages) {

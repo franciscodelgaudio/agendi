@@ -234,3 +234,46 @@ export function expenseReport({ unitName, date, groups, expenses, totalCents, pa
     ],
   };
 }
+
+export type ExpenseGroupReportInput = {
+  unitName: string;
+  // O limite é mensal: no ano, vale 12 vezes.
+  query: { view: "month" | "year"; date: string };
+  // Todos os filtrados (sem paginar), na ordem da tela.
+  groups: { name: string; limitCents: number | null; totalCents: number; paidCents: number; overLimit: boolean }[];
+  sums: { totalCents: number; paidCents: number; limitCents: number };
+};
+
+export function expenseGroupReport({ unitName, query, groups, sums }: ExpenseGroupReportInput): Report {
+  const range = { from: query.date, to: query.date };
+  return {
+    title: `Planejamento · ${unitName}`,
+    subtitle: periodLabel(query, range),
+    fileName: `planejamento-${periodFileSuffix(query, range)}`,
+    highlights: [
+      { label: "Pago", cents: sums.paidCents },
+      { label: "Lançado", cents: sums.totalCents },
+      { label: "Planejado", cents: sums.limitCents },
+    ],
+    tables: [
+      {
+        title: "Grupos",
+        columns: [
+          text("Grupo"),
+          money("Lançado"),
+          money("Pago"),
+          money(query.view === "year" ? "Limite no ano" : "Limite por mês"),
+          money("Acima do limite"),
+        ],
+        rows: groups.map((group) => [
+          group.name,
+          group.totalCents,
+          group.paidCents,
+          group.limitCents,
+          group.overLimit && group.limitCents !== null ? group.totalCents - group.limitCents : null,
+        ]),
+        total: ["Total", sums.totalCents, sums.paidCents, sums.limitCents, null],
+      },
+    ],
+  };
+}

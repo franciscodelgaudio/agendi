@@ -1,13 +1,6 @@
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import {
-  CalendarCheckIcon,
-  CalendarXIcon,
-  PiggyBankIcon,
-  LeafIcon,
-  TrendingUpIcon,
-  UsersIcon,
-} from "lucide-react"
+import { CalendarCheckIcon, CalendarXIcon, PiggyBankIcon, LeafIcon, TrendingUpIcon, UsersIcon } from "lucide-react"
 import {
   applyExpenses,
   applyStaffCosts,
@@ -19,6 +12,7 @@ import {
   parseCashFlowQuery,
   serviceAppointmentTotalsPipeline,
   serviceBookingForecastPipeline,
+  shiftCashFlowDate,
   summarizeCashFlow,
   summarizeServices,
   summarizeTherapists,
@@ -55,6 +49,7 @@ import {
   type StockItem,
   type TodayBooking,
 } from "@/components/unit-overview"
+import { MonthRankCard } from "@/components/month-rank-card"
 import { PeriodRankCard, type RankPeriod } from "@/components/period-rank-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -71,8 +66,16 @@ function byPeriod<T>(value: (view: CashFlowView) => T): Record<CashFlowView, T> 
 }
 
 // Os dias são do calendário, então são formatados em UTC para não deslocar.
-const monthFormat = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" })
-const todayFormat = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })
+const monthFormat = new Intl.DateTimeFormat("pt-BR", {
+  month: "long",
+  timeZone: "UTC",
+})
+const todayFormat = new Intl.DateTimeFormat("pt-BR", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  timeZone: "UTC",
+})
 
 function toDate(day: string) {
   const [year, month, date] = day.split("-").map(Number)
@@ -81,8 +84,8 @@ function toDate(day: string) {
 
 // Cabeçalho e navegação ficam no layout da unidade. Layout e página podem renderizar em
 // paralelo, então a página refaz a verificação de acesso.
-export default async function UnitOverviewPage({ params }: PageProps<"/workspace/[workspaceId]/unit/[unitId]">) {
-  const { workspaceId, unitId } = await params
+export default async function UnitOverviewPage({ params, searchParams }: PageProps<"/workspace/[workspaceId]/unit/[unitId]">) {
+  const [{ workspaceId, unitId }, search] = await Promise.all([params, searchParams])
   const now = new Date()
   const user = await requireUser()
   await requirePage(workspaceId, user.id, { unit: "overview", unitId })
@@ -104,7 +107,12 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
         as: "unit",
         pipeline: [
           { $match: { _id: new Types.ObjectId(unitId) } },
-          { $project: { _id: 0, revenueShare: { $ifNull: ["$revenueShare", null] } } },
+          {
+            $project: {
+              _id: 0,
+              revenueShare: { $ifNull: ["$revenueShare", null] },
+            },
+          },
         ],
       },
     },
@@ -121,22 +129,31 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
   if (!workspace?.unit) notFound()
   const { revenueShare } = workspace.unit
 
-  // Mês corrente para os indicadores; ano corrente para a curva de custos; semana, mês e ano
-  // para os rankings. Uma busca só cobre todos, com o resto dos períodos de repasse das pontas.
+  // Mês corrente para os indicadores; ano corrente para a curva de custos, numa busca só com o
+  // resto dos períodos de repasse das pontas; semana, mês e ano para o ranking de serviços; o mês
+  // escolhido para o ranking das massagistas.
   const today = parseCashFlowQuery({}, now).date
   const monthBuckets = cashFlowBuckets({ view: "month", date: today })
-  const weekBuckets = cashFlowBuckets({ view: "week", date: today })
   const yearBuckets = cashFlowBuckets({ view: "year", date: today })
   const periods = byPeriod((view): DayRange => {
     const buckets = cashFlowBuckets({ view, date: today })
     return { from: buckets[0].from, to: buckets.at(-1)!.to }
   })
-  const fetchRanges = [weekBuckets, yearBuckets].map((buckets) =>
-    cashFlowFetchRange(buckets, revenueShare?.period ?? null),
+  const range = cashFlowFetchRange(yearBuckets, revenueShare?.period ?? null)
+  const therapistMonth = shiftCashFlowDate(
+    {
+      view: "month",
+      date: parseCashFlowQuery({ date: search.therapistMonth }, now).date,
+    },
+    0,
   )
-  const range = {
-    from: fetchRanges.reduce((from, next) => (next.from < from ? next.from : from), fetchRanges[0].from),
-    to: fetchRanges.reduce((to, next) => (next.to > to ? next.to : to), fetchRanges[0].to),
+  const therapistBuckets = cashFlowBuckets({
+    view: "month",
+    date: therapistMonth,
+  })
+  const therapistRange = {
+    from: therapistBuckets[0].from,
+    to: therapistBuckets.at(-1)!.to,
   }
   const [year, monthNumber, day] = today.split("-").map(Number)
   const todayStart = new Date(Date.UTC(year, monthNumber - 1, day, BRT_OFFSET_HOURS))
@@ -144,39 +161,66 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
 
   const unitObjectId = new Types.ObjectId(unitId)
   const unitMatch = { $match: { unitId: unitObjectId } }
-  const [appointments, bookings, serviceSummaries, team, todayBookings, lowStock, productCount, expenses, groups] =
-    await Promise.all([
-      Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
-      Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
-      Promise.all(
-        PERIOD_VIEWS.map(async (view) => {
-          const [serviceAppointments, serviceBookings] = await Promise.all([
-            Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(periods[view])]),
-            Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(periods[view], now)]),
-          ])
-          return summarizeServices(serviceAppointments, serviceBookings)
-        }),
-      ),
-      // Remuneração da equipe vinculada a esta unidade (o proprietário não tem).
-      WorkspaceMember.find({
-        workspaceId: workspace.id,
-        role: { $in: ["massage_therapist", "receptionist"] },
-        "units.unitId": unitId,
+  const [
+    appointments,
+    bookings,
+    therapistAppointments,
+    therapistBookings,
+    serviceSummaries,
+    team,
+    todayBookings,
+    lowStock,
+    productCount,
+    expenses,
+    groups,
+  ] = await Promise.all([
+    Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
+    Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
+    Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(therapistRange)]),
+    Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(therapistRange, now)]),
+    Promise.all(
+      PERIOD_VIEWS.map(async (view) => {
+        const [serviceAppointments, serviceBookings] = await Promise.all([
+          Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(periods[view])]),
+          Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(periods[view], now)]),
+        ])
+        return summarizeServices(serviceAppointments, serviceBookings)
+      }),
+    ),
+    // Remuneração da equipe vinculada a esta unidade (o proprietário não tem).
+    WorkspaceMember.find({
+      workspaceId: workspace.id,
+      role: { $in: ["massage_therapist", "receptionist"] },
+      "units.unitId": unitId,
+    })
+      .select({ userId: 1, role: 1, units: 1 })
+      .lean(),
+    Booking.find({
+      unitId: unitObjectId,
+      startsAt: { $gte: todayStart, $lt: todayEnd },
+    })
+      .sort({ startsAt: 1 })
+      .select({
+        startsAt: 1,
+        endsAt: 1,
+        guest: 1,
+        service: 1,
+        therapistId: 1,
+        therapistName: 1,
+        appointmentId: 1,
       })
-        .select({ userId: 1, role: 1, units: 1 })
-        .lean(),
-      Booking.find({ unitId: unitObjectId, startsAt: { $gte: todayStart, $lt: todayEnd } })
-        .sort({ startsAt: 1 })
-        .select({ startsAt: 1, endsAt: 1, guest: 1, service: 1, therapistId: 1, therapistName: 1, appointmentId: 1 })
-        .lean(),
-      Product.find({ unitId: unitObjectId, quantity: { $lte: LOW_STOCK_QUANTITY } })
-        .sort({ quantity: 1, name: 1 })
-        .select({ name: 1, quantity: 1, avatarUrl: 1 })
-        .lean(),
-      Product.countDocuments({ unitId: unitObjectId }),
-      Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(periods.year)]),
-      ExpenseGroup.find({ unitId: unitObjectId }).select({ monthlyLimitCents: 1 }).lean(),
-    ])
+      .lean(),
+    Product.find({
+      unitId: unitObjectId,
+      quantity: { $lte: LOW_STOCK_QUANTITY },
+    })
+      .sort({ quantity: 1, name: 1 })
+      .select({ name: 1, quantity: 1, avatarUrl: 1 })
+      .lean(),
+    Product.countDocuments({ unitId: unitObjectId }),
+    Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(periods.year)]),
+    ExpenseGroup.find({ unitId: unitObjectId }).select({ monthlyLimitCents: 1 }).lean(),
+  ])
 
   const { commissionRates, ...staffCosts } = teamPayRates(team, unitId)
   const summarize = (buckets: DayRange[]) =>
@@ -186,9 +230,19 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
     })
   const monthTotal = summarize(monthBuckets).total
   const monthlyBudgetCents = expenseBudgetCents(
-    groups.map((group) => ({ monthlyLimitCents: group.monthlyLimitCents ?? null })),
+    groups.map((group) => ({
+      monthlyLimitCents: group.monthlyLimitCents ?? null,
+    })),
   )
-  const curve = costCurve([{ buckets: applyExpenses(summarize(yearBuckets), expenses).buckets, monthlyBudgetCents }], today)
+  const curve = costCurve(
+    [
+      {
+        buckets: applyExpenses(summarize(yearBuckets), expenses).buckets,
+        monthlyBudgetCents,
+      },
+    ],
+    today,
+  )
   const spentCents = curve.findLast((point) => point.spentCumulativeCents !== null)?.spentCumulativeCents ?? 0
   const plannedCents = curve.at(-1)?.plannedCumulativeCents ?? 0
   const servicesByPeriod = byPeriod((view) => serviceSummaries[PERIOD_VIEWS.indexOf(view)])
@@ -202,8 +256,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
     Object.keys(commissionRates).length > 0 ||
     staffCosts.grossCommissionPercent > 0 ||
     staffCosts.salaries.length > 0
-  const deductionsCents =
-    monthTotal.real.partnerShareCents + monthTotal.real.commissionCents + monthTotal.real.salaryCents
+  const deductionsCents = monthTotal.real.partnerShareCents + monthTotal.real.commissionCents + monthTotal.real.salaryCents
 
   const schedule: TodayBooking[] = todayBookings.map((booking) => ({
     id: booking._id.toString(),
@@ -226,35 +279,35 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
 
   const base = `/workspace/${workspaceId}/unit/${unitId}`
   const monthName = monthFormat.format(toDate(today))
-  const periodLabels: Record<CashFlowView, string> = { week: "Esta semana", month: monthName, year: today.slice(0, 4) }
-  const periodNouns: Record<CashFlowView, string> = { week: "nesta semana", month: "neste mês", year: "neste ano" }
-  const servicePeriods = byPeriod(
-    (view): RankPeriod => ({
-      label: periodLabels[view],
-      items: servicesByPeriod[view].slice(0, TOP_ITEMS).map((service) => ({
-        id: service.serviceId,
-        name: service.serviceName,
-        real: service.real,
-        forecast: service.forecast,
-      })),
-      empty: <CardEmpty icon={LeafIcon}>Nenhum serviço realizado ou agendado {periodNouns[view]}.</CardEmpty>,
-    }),
-  )
-  const therapistPeriods = byPeriod(
-    (view): RankPeriod => ({
-      label: periodLabels[view],
-      items: summarizeTherapists(periods[view], appointments, bookings, commissionRates)
-        .slice(0, TOP_ITEMS)
-        .map((therapist) => ({
-          id: therapist.therapistId,
-          name: therapist.therapistName,
-          image: therapistImages.get(therapist.therapistId) ?? null,
-          real: therapist.real,
-          forecast: therapist.forecast,
-        })),
-      empty: <CardEmpty icon={UsersIcon}>Ninguém atendeu nem tem agendamentos {periodNouns[view]}.</CardEmpty>,
-    }),
-  )
+  const periodLabels: Record<CashFlowView, string> = {
+    week: "Esta semana",
+    month: monthName,
+    year: today.slice(0, 4),
+  }
+  const periodNouns: Record<CashFlowView, string> = {
+    week: "nesta semana",
+    month: "neste mês",
+    year: "neste ano",
+  }
+  const servicePeriods = byPeriod((view): RankPeriod => ({
+    label: periodLabels[view],
+    items: servicesByPeriod[view].slice(0, TOP_ITEMS).map((service) => ({
+      id: service.serviceId,
+      name: service.serviceName,
+      real: service.real,
+      forecast: service.forecast,
+    })),
+    empty: <CardEmpty icon={LeafIcon}>Nenhum serviço realizado ou agendado {periodNouns[view]}.</CardEmpty>,
+  }))
+  const therapists = summarizeTherapists(therapistRange, therapistAppointments, therapistBookings, commissionRates)
+    .slice(0, TOP_ITEMS)
+    .map((therapist) => ({
+      id: therapist.therapistId,
+      name: therapist.therapistName,
+      image: therapistImages.get(therapist.therapistId) ?? null,
+      real: therapist.real,
+      forecast: therapist.forecast,
+    }))
 
   return (
     <div className="flex flex-col gap-4">
@@ -276,16 +329,18 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
           label="Líquido do mês"
           value={money(monthTotal.real.netCents)}
           detail={
-            hasDeductions
-              ? `${money(deductionsCents)} em repasse, comissões e salários`
-              : "Sem repasse, comissões nem salários"
+            hasDeductions ? `${money(deductionsCents)} em repasse, comissões e salários` : "Sem repasse, comissões nem salários"
           }
         />
         <StatTile
           icon={LeafIcon}
           label="Serviços no mês"
           value={String(servicesDone)}
-          detail={servicesScheduled ? `+ ${plural(servicesScheduled, "agendado", "agendados")} até o fim do mês` : "Nenhum outro agendado"}
+          detail={
+            servicesScheduled
+              ? `+ ${plural(servicesScheduled, "agendado", "agendados")} até o fim do mês`
+              : "Nenhum outro agendado"
+          }
         />
         <StatTile
           icon={CalendarCheckIcon}
@@ -338,42 +393,6 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
               <span className="text-sm font-medium">Acumulado</span>
               <CostCumulativeChart points={curve} view="year" />
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <PeriodRankCard
-          title="Serviços em destaque"
-          action={<CardLink href={`${base}/services`}>Serviços</CardLink>}
-          periods={servicePeriods}
-        />
-
-        <PeriodRankCard
-          title="Massagistas"
-          avatar="round"
-          action={<CardLink href={`${base}/team`}>Equipe</CardLink>}
-          periods={therapistPeriods}
-        />
-
-        <Card className="md:col-span-2 xl:col-span-1">
-          <CardHeader>
-            <CardTitle>Estoque acabando</CardTitle>
-            <CardDescription>
-              {productCount
-                ? `${plural(stock.length, "produto", "produtos")} com até ${LOW_STOCK_QUANTITY} unidades, de ${productCount}`
-                : "Nenhum produto cadastrado"}
-            </CardDescription>
-            <CardLink href={`${base}/stock`}>Estoque</CardLink>
-          </CardHeader>
-          <CardContent className="flex-1">
-            {stock.length ? (
-              <LowStockList products={stock.slice(0, TOP_ITEMS)} href={(product) => `${base}/stock/${product.id}`} />
-            ) : (
-              <CardEmpty>
-                {productCount ? "Estoque em dia: nenhum produto acabando." : "Cadastre produtos na aba Estoque."}
-              </CardEmpty>
-            )}
           </CardContent>
         </Card>
       </div>

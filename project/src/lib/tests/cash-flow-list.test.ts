@@ -46,7 +46,7 @@ describe("parseExpenseListQuery", () => {
     ).toEqual({ q: "luz", group: "fixas", status: "paid", sort: "amount", dir: "desc", page: 2 });
   });
 
-  it.each(["date", "description", "amount"])("aceita ordenar por %s", (sort) => {
+  it.each(["date", "description", "group", "amount"])("aceita ordenar por %s", (sort) => {
     expect(parseExpenseListQuery({ sort }).sort).toBe(sort);
   });
 
@@ -103,6 +103,25 @@ describe("expenseListPage", () => {
       "luz",
       "toalhas",
       "oleo",
+    ]);
+  });
+
+  it("ordena pelo nome do grupo, sem diferenciar acentos; no mesmo grupo, mantém a ordem por dia", () => {
+    const groups = [
+      { id: "fixas", name: "Custos fixos" },
+      { id: "insumos", name: "Água e insumos" },
+    ];
+    expect(ids(expenseListPage(EXPENSES, { ...EXPENSE_BASE, sort: "group" }, groups).rows)).toEqual([
+      "oleo",
+      "toalhas",
+      "aluguel",
+      "luz",
+    ]);
+    expect(ids(expenseListPage(EXPENSES, { ...EXPENSE_BASE, sort: "group", dir: "desc" }, groups).rows)).toEqual([
+      "aluguel",
+      "luz",
+      "oleo",
+      "toalhas",
     ]);
   });
 

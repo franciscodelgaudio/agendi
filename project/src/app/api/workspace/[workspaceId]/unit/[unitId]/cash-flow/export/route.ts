@@ -25,7 +25,7 @@ export async function GET(
 
   const now = new Date()
   const query = { ...parseCashFlowQuery(search, now), view: "year" as const }
-  const data = await loadCashFlowSummaryScreen(workspaceId, userId, unitId, query.date, now)
+  const data = await loadCashFlowSummaryScreen(workspaceId, userId, unitId, query.date, now, search.costs)
   if (!data) return Response.json({ error: "Unidade não encontrada." }, { status: 404 })
   const filters = parseTherapistListQuery(search)
   const therapists = allPages((page) => therapistListPage(data.therapists, { ...filters, page }))

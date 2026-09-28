@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   cashFlowReport,
+  expenseGroupReport,
   expenseReport,
   parseExportFormat,
   type CashFlowReportInput,
+  type ExpenseGroupReportInput,
   type ExpenseReportInput,
 } from "@/lib/cash-flow-export";
 import type { ExpenseCashFlowAmounts } from "@/lib/cash-flow";
@@ -355,5 +357,75 @@ describe("expenseReport", () => {
     const [table] = expenseReport(expenseInput({ expenses: [], totalCents: 0, paidCents: 0 })).tables;
     expect(table.rows).toEqual([]);
     expect(table.total).toEqual(["Total", null, null, null, 0]);
+  });
+});
+
+// ---------------------------------------------------------------- planejamento
+
+function groupInput(overrides: Partial<ExpenseGroupReportInput> = {}): ExpenseGroupReportInput {
+  return {
+    unitName: "Centro",
+    query: { view: "month", date: "2026-09-24" },
+    groups: [
+      { name: "Fixas", limitCents: 300000, totalCents: 350000, paidCents: 300000, overLimit: true },
+      { name: "Insumos", limitCents: 100000, totalCents: 58000, paidCents: 0, overLimit: false },
+      { name: "Outros", limitCents: null, totalCents: 2000, paidCents: 2000, overLimit: false },
+    ],
+    sums: { totalCents: 410000, paidCents: 302000, limitCents: 400000 },
+    ...overrides,
+  };
+}
+
+describe("expenseGroupReport", () => {
+  it("no mês, tem título com a unidade, o mês por extenso e o nome do arquivo com o mês", () => {
+    const report = expenseGroupReport(groupInput());
+    expect(report.title).toBe("Planejamento · Centro");
+    expect(report.subtitle).toBe("Setembro de 2026");
+    expect(report.fileName).toBe("planejamento-2026-09");
+  });
+
+  it("no ano, o subtítulo e o nome do arquivo são o ano", () => {
+    const report = expenseGroupReport(groupInput({ query: { view: "year", date: "2026-09-24" } }));
+    expect(report.subtitle).toBe("2026");
+    expect(report.fileName).toBe("planejamento-2026");
+  });
+
+  it("destaca o pago, o lançado e o planejado, na ordem da tela", () => {
+    expect(expenseGroupReport(groupInput()).highlights).toEqual([
+      { label: "Pago", cents: 302000 },
+      { label: "Lançado", cents: 410000 },
+      { label: "Planejado", cents: 400000 },
+    ]);
+  });
+
+  it("lista os grupos na ordem recebida, com lançado, pago, limite e quanto passou dele", () => {
+    const [table] = expenseGroupReport(groupInput()).tables;
+    expect(table.title).toBe("Grupos");
+    expect(table.columns).toEqual([
+      { label: "Grupo", kind: "text" },
+      { label: "Lançado", kind: "money" },
+      { label: "Pago", kind: "money" },
+      { label: "Limite por mês", kind: "money" },
+      { label: "Acima do limite", kind: "money" },
+    ]);
+    expect(table.rows).toEqual([
+      ["Fixas", 350000, 300000, 300000, 50000],
+      ["Insumos", 58000, 0, 100000, null],
+      ["Outros", 2000, 2000, null, null],
+    ]);
+    expect(table.total).toEqual(["Total", 410000, 302000, 400000, null]);
+  });
+
+  it("no ano, a coluna do limite é o limite no ano", () => {
+    const [table] = expenseGroupReport(groupInput({ query: { view: "year", date: "2026-09-24" } })).tables;
+    expect(table.columns[3]).toEqual({ label: "Limite no ano", kind: "money" });
+  });
+
+  it("sem grupos, a tabela vem vazia com os totais zerados", () => {
+    const [table] = expenseGroupReport(
+      groupInput({ groups: [], sums: { totalCents: 0, paidCents: 0, limitCents: 0 } }),
+    ).tables;
+    expect(table.rows).toEqual([]);
+    expect(table.total).toEqual(["Total", 0, 0, 0, null]);
   });
 });

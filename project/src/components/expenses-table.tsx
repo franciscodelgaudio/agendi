@@ -51,7 +51,7 @@ export function ExpensesTable({
             <TableHead className="w-0 px-4">Status</TableHead>
             <SortableHead field="date" label="Dia" query={query} pathname={pathname} />
             <SortableHead field="description" label="Descrição" query={query} pathname={pathname} className="w-full" />
-            <TableHead className="px-4 @max-md:hidden">Grupo</TableHead>
+            <SortableHead field="group" label="Grupo" query={query} pathname={pathname} className="@max-md:hidden" />
             <SortableHead field="amount" label="Valor" query={query} pathname={pathname} className="text-right" />
             {canManage && <TableHead className="w-0 px-4" />}
           </TableRow>

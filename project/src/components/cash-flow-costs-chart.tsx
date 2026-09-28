@@ -1,10 +1,13 @@
 "use client"
 
 import { Cell, Label, Pie, PieChart } from "recharts"
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
+import Link from "@/components/link"
 import type { CostRow } from "@/lib/cash-flow"
 import type { ExpenseGroupIcon } from "@/lib/expense-group-icon"
 import { currencyFormat } from "@/components/service-format"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
 
 type Group = { id: string; name: string; icon: ExpenseGroupIcon | null }
@@ -59,7 +62,38 @@ function Tooltip() {
   )
 }
 
-export function CashFlowCostsChart({ rows, totalCents }: { rows: CostRow<Group>[]; totalCents: number }) {
+type Props = {
+  rows: CostRow<Group>[]
+  totalCents: number
+  // Período a que os gastos se referem.
+  period: string
+  // Troca de mês no próprio gráfico; sem as duas, o período segue a navegação da página.
+  // null desativa a seta (limite do ano exibido).
+  months?: { previousHref: string | null; nextHref: string | null }
+}
+
+function MonthButton({ href, label, children }: { href: string | null; label: string; children: React.ReactNode }) {
+  if (!href) {
+    return (
+      <Button variant="outline" size="icon-sm" aria-label={label} disabled>
+        {children}
+      </Button>
+    )
+  }
+  return (
+    <Button
+      variant="outline"
+      size="icon-sm"
+      aria-label={label}
+      nativeButton={false}
+      render={<Link href={href} replace scroll={false} />}
+    >
+      {children}
+    </Button>
+  )
+}
+
+export function CashFlowCostsChart({ rows, totalCents, period, months }: Props) {
   const data = rows.map(toDatum)
   const config = Object.fromEntries(data.map((datum) => [datum.key, { label: datum.name, color: datum.fill }])) satisfies ChartConfig
 
@@ -67,6 +101,17 @@ export function CashFlowCostsChart({ rows, totalCents }: { rows: CostRow<Group>[
     <Card>
       <CardHeader>
         <CardTitle>Gastos por grupo</CardTitle>
+        <CardDescription className="first-letter:uppercase">{period}</CardDescription>
+        {months && (
+          <CardAction className="flex gap-2">
+            <MonthButton href={months.previousHref} label="Mês anterior">
+              <ChevronLeftIcon />
+            </MonthButton>
+            <MonthButton href={months.nextHref} label="Próximo mês">
+              <ChevronRightIcon />
+            </MonthButton>
+          </CardAction>
+        )}
       </CardHeader>
       <CardContent className="grid items-center gap-6 sm:grid-cols-[16rem_minmax(0,1fr)]">
         <ChartContainer config={config} className="mx-auto aspect-square w-full max-w-64">
