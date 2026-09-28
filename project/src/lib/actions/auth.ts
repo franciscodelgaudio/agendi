@@ -40,13 +40,13 @@ export async function signupAction(
   if (!result.ok) return { error: errorMessages[result.error] }
 
   // Entra direto após o cadastro; o signIn lança o redirect para o callbackUrl
-  // (ex: link de convite) ou "/". Como no login, o callback redirect do Auth.js
+  // (ex: link de convite) ou "/workspace". Como no login, o callback redirect do Auth.js
   // só aceita destinos do próprio app.
   const callbackUrl = formData.get("callbackUrl")
   await signIn("credentials", {
     email: input.email,
     password: input.password,
-    redirectTo: typeof callbackUrl === "string" && callbackUrl ? callbackUrl : "/",
+    redirectTo: typeof callbackUrl === "string" && callbackUrl ? callbackUrl : "/workspace",
   })
   return { error: null }
 }

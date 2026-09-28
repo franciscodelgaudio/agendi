@@ -2,6 +2,8 @@ import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
 import { NavigationProgressBar, NavigationProgressProvider } from "@/components/navigation-progress"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { WorkspacePaywall } from "@/components/workspace-paywall"
+import { hasActiveSubscription } from "@/lib/billing"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { Workspace } from "@/models/Workspace"
 
@@ -18,11 +20,16 @@ export default async function WorkspaceLayout({
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access) notFound()
 
-  const [workspace] = await Workspace.aggregate<{ name: string }>([
-    ...access,
-    { $project: { _id: 1 } },
-  ])
+  const [workspace] = await Workspace.aggregate<{
+    name: string
+    role: string
+    subscription: { status: string; currentPeriodEnd: Date } | null
+  }>([...access, { $project: { _id: 0, name: 1, role: 1, subscription: 1 } }])
   if (!workspace) notFound()
+
+  if (!hasActiveSubscription(workspace.subscription, new Date())) {
+    return <WorkspacePaywall workspaceId={workspaceId} name={workspace.name} isOwner={workspace.role === "owner"} />
+  }
 
   // Mesmo cookie que o SidebarProvider grava ao abrir/fechar.
   const defaultOpen = (await cookies()).get("sidebar_state")?.value !== "false"

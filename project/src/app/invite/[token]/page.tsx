@@ -76,7 +76,7 @@ function InviteMessage({ title, description }: { title: string; description: str
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardFooter>
-        <Button variant="outline" nativeButton={false} render={<Link href="/" />}>
+        <Button variant="outline" nativeButton={false} render={<Link href="/workspace" />}>
           Ir para o início
         </Button>
       </CardFooter>

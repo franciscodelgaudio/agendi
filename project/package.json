@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "capture:landing": "tsx scripts/capture-landing-screens.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.3",
@@ -46,7 +47,10 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
     "patch-package": "^8.0.1",
+    "playwright": "^1.63.0",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.1"
   }

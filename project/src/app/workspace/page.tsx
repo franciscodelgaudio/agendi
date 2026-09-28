@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/session"
 import { Workspace } from "@/models/Workspace"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 
-// "/" é o destino padrão após login e cadastro: manda para o workspace do
+// "/workspace" é o destino padrão após login e cadastro: manda para o workspace do
 // usuário ou para a criação do primeiro.
 export default async function Home() {
   const user = await requireUser()

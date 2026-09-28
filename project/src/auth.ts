@@ -43,8 +43,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // Usado pelo proxy: false manda para pages.signIn com ?callbackUrl=.
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
+      // Landing pública (inclui o POST da server action do formulário de contato).
+      if (nextUrl.pathname === "/") return true;
       if (["/login", "/signup"].includes(nextUrl.pathname)) {
-        return isLoggedIn ? Response.redirect(new URL("/", nextUrl)) : true;
+        return isLoggedIn ? Response.redirect(new URL("/workspace", nextUrl)) : true;
       }
       return isLoggedIn;
     },

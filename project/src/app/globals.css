@@ -46,6 +46,17 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  /* Paleta da landing (src/app/page.tsx). */
+  --color-ld-forest: #173f38;
+  --color-ld-brand: #1f5b50;
+  --color-ld-sage: #4f8c7a;
+  --color-ld-sage-light: #e4ede8;
+  --color-ld-cream: #f4f1ea;
+  --color-ld-paper: #fcfbf8;
+  --color-ld-line: #e3dfd6;
+  --color-ld-ink: #1c2521;
+  --color-ld-ink-soft: #5e6b66;
+  --color-ld-mist: #b9c9c2;
   --animate-progress: progress 1.2s ease-in-out infinite;
 
   @keyframes progress {
@@ -175,6 +186,12 @@
   }
   html {
     @apply font-sans;
+  }
+  /* Âncoras do menu da landing rolam suavemente, salvo quem pede menos movimento. */
+  @media (prefers-reduced-motion: no-preference) {
+    html:has(.landing) {
+      scroll-behavior: smooth;
+    }
   }
   /* O Tailwind 4 deixa botões com o cursor padrão; aqui todo botão clicável mostra a mãozinha. */
   button:not(:disabled),

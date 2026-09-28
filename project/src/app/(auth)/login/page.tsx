@@ -11,7 +11,7 @@ const errorMessages: Record<string, string> = {
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const { callbackUrl, error } = await searchParams
-  const redirectTo = typeof callbackUrl === "string" ? callbackUrl : "/"
+  const redirectTo = typeof callbackUrl === "string" ? callbackUrl : "/workspace"
   const errorMessage =
     typeof error === "string"
       ? (errorMessages[error] ?? "Não foi possível entrar. Tente novamente.")

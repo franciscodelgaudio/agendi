@@ -39,3 +39,19 @@ export async function sendInviteEmail({
   })
   if (error) throw new Error(`Resend: ${error.message}`)
 }
+
+// Aviso de novo contato da landing para a equipe (LEADS_NOTIFY_EMAIL, opcional).
+export async function sendLeadEmail(lead: { name: string; whatsapp: string; message: string | null }) {
+  if (!process.env.EMAIL_FROM) throw new Error("EMAIL_FROM não definido no ambiente")
+  if (!process.env.LEADS_NOTIFY_EMAIL) throw new Error("LEADS_NOTIFY_EMAIL não definido no ambiente")
+  const message = lead.message ?? "(sem mensagem)"
+
+  const { error } = await resend.emails.send({
+    from: process.env.EMAIL_FROM,
+    to: process.env.LEADS_NOTIFY_EMAIL,
+    subject: `Novo contato pela landing: ${lead.name}`,
+    text: `Nome: ${lead.name}\nWhatsApp: ${lead.whatsapp}\n\n${message}`,
+    html: `<p><strong>Nome:</strong> ${escapeHtml(lead.name)}<br><strong>WhatsApp:</strong> <a href="https://wa.me/${lead.whatsapp}">${lead.whatsapp}</a></p><p>${escapeHtml(message).replace(/\n/g, "<br>")}</p>`,
+  })
+  if (error) throw new Error(`Resend: ${error.message}`)
+}
