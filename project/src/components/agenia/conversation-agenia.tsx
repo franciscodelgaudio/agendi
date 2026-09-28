@@ -36,7 +36,7 @@ export function ConversationAgeniaFrame({
   const session = useAgeniaSession({
     workspaceId,
     mode: "conversation",
-    id: `agenia-conversation-${conversationId}`,
+    scopeId: conversationId,
     body: () => ({ conversationId }),
   })
 

@@ -1,6 +1,7 @@
 import { generateText, isStepCount } from "ai"
 import { z } from "zod"
-import { ageniaModel, isAgeniaConfigured } from "@/lib/agenia-model"
+import { AGENIA_MODEL, ageniaModel, isAgeniaConfigured } from "@/lib/agenia-model"
+import { recordAiUsage } from "@/lib/ai-usage-store"
 import { smartComposePrompt } from "@/lib/agenia-prompts"
 import { buildReadTools, loadConversation, loadWorkspaceContext } from "@/lib/agenia-read"
 import { canUseInbox } from "@/lib/member-role"
@@ -38,6 +39,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
       tools: { listServices, listBookings },
       stopWhen: isStepCount(4),
     })
+    await recordAiUsage({ workspaceId, userId }, "agenia_suggest", result.response.modelId || AGENIA_MODEL, result.totalUsage)
     const text = result.text.trim()
     return Response.json({ text: text && text !== NO_REPLY ? text : null })
   } catch (error) {

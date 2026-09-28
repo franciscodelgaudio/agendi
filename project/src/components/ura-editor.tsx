@@ -111,9 +111,10 @@ function Editor({ workspaceId, ura, channels, units, users }: Props) {
   const agenia = useAgeniaSession({
     workspaceId,
     mode: "ura",
-    id: `agenia-ura-${ura.id}`,
+    scopeId: ura.id,
     body: () => ({
       ura: {
+        id: ura.id,
         name,
         active: ura.active,
         graph: toGraph(nodes, edges),

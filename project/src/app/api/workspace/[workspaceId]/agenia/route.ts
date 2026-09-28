@@ -13,7 +13,10 @@ import { z } from "zod"
 import { AGENIA_ACTION_NAMES, AGENIA_ACTIONS, type AgeniaActionName } from "@/lib/agenia-actions"
 import { ageniaModel, isAgeniaConfigured } from "@/lib/agenia-model"
 import { conversationPrompt, globalPrompt, uraPrompt } from "@/lib/agenia-prompts"
-import { buildReadTools, loadConversation, loadWorkspaceContext } from "@/lib/agenia-read"
+import { buildMemoryTools, buildReadTools, loadConversation, loadWorkspaceContext } from "@/lib/agenia-read"
+import { isThreadTaken, persistThread } from "@/lib/agenia-store"
+import { recordAiUsage } from "@/lib/ai-usage-store"
+import { AGENIA_MODEL } from "@/lib/agenia-model"
 import { uraGraphIndex } from "@/lib/agenia-ura"
 import { buildUraTools } from "@/lib/agenia-ura-tools"
 import { canManageMembers, canUseInbox } from "@/lib/member-role"
@@ -32,10 +35,13 @@ const INBOX_ACTIONS: AgeniaActionName[] = ["sendReply", "takeConversation", "clo
 
 const bodySchema = z.object({
   messages: z.array(z.any()),
+  // Id da conversa com a AgenIA (uuid gerado no navegador); com ele o histórico é gravado.
+  threadKey: z.string().max(64),
   mode: z.enum(["global", "ura", "conversation"]),
   page: z.string().max(300).nullable().optional(),
   ura: z
     .object({
+      id: z.string(),
       name: z.string(),
       active: z.boolean(),
       graph: z.unknown(),
@@ -85,6 +91,10 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
   const tools: ToolSet = manager
     ? { ...reads, ...actionTools(AGENIA_ACTION_NAMES) }
     : { listServices: reads.listServices, listBookings: reads.listBookings, ...actionTools(INBOX_ACTIONS) }
+  const owner = { workspaceId, userId }
+  if (manager) Object.assign(tools, buildMemoryTools(owner))
+  if (await isThreadTaken(body.threadKey, owner)) return fail("Conversa da AgenIA não encontrada.", 404)
+  const scopeId = body.mode === "ura" ? (body.ura?.id ?? null) : body.mode === "conversation" ? (body.conversationId ?? null) : null
 
   let instructions = globalPrompt(ctx)
   let uraGraph = null
@@ -111,7 +121,6 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
 
   const stream = createUIMessageStream({
     execute: ({ writer }) => {
-      writer.write({ type: "start" })
       const allTools = uraGraph
         ? { ...tools, ...buildUraTools(uraGraph, (graph) => writer.write({ type: "data-ura-graph", data: graph, transient: true })) }
         : tools
@@ -121,8 +130,20 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
         messages,
         tools: allTools,
         stopWhen: isStepCount(MAX_STEPS),
+        onEnd: (event) =>
+          recordAiUsage(owner, `agenia_${body.mode}`, event.response.modelId || AGENIA_MODEL, event.totalUsage),
       })
-      writer.merge(toUIMessageStream({ stream: result.stream, sendStart: false }))
+      writer.merge(
+        toUIMessageStream({
+          stream: result.stream,
+          originalMessages: body.messages as UIMessage[],
+          generateMessageId: () => crypto.randomUUID(),
+          onEnd: async ({ messages: all }) => {
+            const saved = await persistThread({ key: body.threadKey, mode: body.mode, scopeId, messages: all }, owner)
+            if (!saved.ok) console.error("AgenIA: histórico não gravado", saved.error)
+          },
+        }),
+      )
     },
     onError: (error) => {
       console.error("AgenIA falhou", error)

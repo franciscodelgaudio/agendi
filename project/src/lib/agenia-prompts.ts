@@ -10,6 +10,9 @@ export type WorkspaceContext = {
   team: { userId: string | null; memberId: string | null; name: string; role: string; unitIds: string[] }[]
   channels: { id: string; name: string; platform: string }[]
   uras: { id: string; name: string; active: boolean }[]
+  memories: { id: string; content: string }[]
+  // Quem pode guardar e apagar fatos da memória (proprietário e administradores).
+  canRemember: boolean
 }
 
 const roleLabels: Record<string, string> = {
@@ -34,6 +37,13 @@ COMO TRABALHAR:
 
 function list<T>(label: string, items: T[], format: (item: T) => string) {
   return `${label}:\n${items.length ? items.map(format).join("\n") : "(nenhum)"}`
+}
+
+function memorySection(ctx: WorkspaceContext) {
+  const facts = list("MEMÓRIA (fatos que você guardou sobre este workspace; valem como verdade até alguém corrigir)", ctx.memories, (m) => `- ${m.content} (id=${m.id})`)
+  if (!ctx.canRemember) return facts
+  return `${facts}
+Quando aprender algo durável sobre o negócio ou uma preferência de como trabalhar (horários, políticas, tom, regras da casa), guarde com saveMemory, em uma frase curta e autossuficiente. Quando um fato mudar ou pedirem para esquecer, use forgetMemory (e saveMemory com o novo, se houver). Não guarde dados pessoais de clientes nem coisas passageiras.`
 }
 
 export function workspaceSection(ctx: WorkspaceContext) {
@@ -61,6 +71,7 @@ export function workspaceSection(ctx: WorkspaceContext) {
     list("Canais", ctx.channels, (c) => `- ${c.name} (${c.platform}, id=${c.id})`),
     list("URAs", ctx.uras, (u) => `- ${u.name} (id=${u.id}, ${u.active ? "ativa" : "inativa"})`),
     "Quem pode atender (massagista em agendamentos e atendimentos): o proprietário e os membros com função massagista, pelo userId.",
+    memorySection(ctx),
   ]
     .filter(Boolean)
     .join("\n")

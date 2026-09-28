@@ -26,7 +26,7 @@ export const GLOBAL_SUGGESTIONS = [
 export function AgeniaProvider({ workspaceId, enabled, children }: { workspaceId: string; enabled: boolean; children: React.ReactNode }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  const session = useAgeniaSession({ workspaceId, mode: "global", id: `agenia-${workspaceId}`, body: () => ({ page: pathname }) })
+  const session = useAgeniaSession({ workspaceId, mode: "global", scopeId: null, body: () => ({ page: pathname }) })
   const pageHref = `/workspace/${workspaceId}/agenia`
 
   if (!enabled) return children

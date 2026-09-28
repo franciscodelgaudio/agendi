@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import {
   MapPinIcon,
   CalendarIcon,
+  CoinsIcon,
   HomeIcon,
   LifeBuoyIcon,
   MessagesSquareIcon,
@@ -67,6 +68,7 @@ export function NavMain({
           ? [
               { title: "Canais", href: `${base}/channels`, icon: RadioTowerIcon, tour: "nav-channels" },
               { title: "URAs", href: `${base}/uras`, icon: WorkflowIcon, tour: "nav-uras" },
+              { title: "Custos de IA", href: `${base}/ai-costs`, icon: CoinsIcon, tour: "nav-ai-costs" },
             ]
           : []),
         { title: "Tickets", href: `${base}/tickets`, icon: LifeBuoyIcon, tour: "nav-tickets" },

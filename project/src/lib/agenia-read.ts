@@ -6,7 +6,8 @@ import { uraGraphIndex } from "@/lib/agenia-ura"
 import { parsePerformedAt } from "@/lib/appointment"
 import { cashFlowBuckets } from "@/lib/cash-flow"
 import type { WorkspaceContext } from "@/lib/agenia-prompts"
-import type { WorkspaceRole } from "@/lib/member-role"
+import { canManageMembers, type WorkspaceRole } from "@/lib/member-role"
+import { forgetMemory, listMemories, saveMemory } from "@/lib/agenia-store"
 import { loadUnitCashFlow } from "@/lib/unit-cash-flow-store"
 import type { OpeningBalance } from "@/lib/opening-balance"
 import type { RevenueShare } from "@/lib/revenue-share"
@@ -56,13 +57,14 @@ export async function loadWorkspaceContext(
   page: string | null,
 ): Promise<WorkspaceContext> {
   const wid = oid(workspaceId)
-  const [workspace, units, members, channels, uras, me] = await Promise.all([
+  const [workspace, units, members, channels, uras, me, memories] = await Promise.all([
     Workspace.findById(wid).select({ name: 1, userId: 1 }).lean(),
     Unit.find({ workspaceId: wid }).select({ name: 1, businessHours: 1, treatmentRooms: 1 }).sort({ name: 1 }).lean(),
     WorkspaceMember.find({ workspaceId: wid }).select({ email: 1, role: 1, userId: 1, units: 1 }).lean(),
     MessagingChannel.find({ workspaceId: wid }).select({ name: 1, platform: 1 }).lean(),
     Ura.find({ workspaceId: wid }).select({ name: 1, active: 1 }).lean(),
     User.findById(user.id).select({ name: 1, email: 1 }).lean(),
+    listMemories(workspaceId),
   ])
   const userIds = [workspace?.userId, ...members.map((m) => m.userId)].filter((id) => id != null)
   const users = await User.find({ _id: { $in: userIds } }).select({ name: 1, email: 1 }).lean()
@@ -95,6 +97,36 @@ export async function loadWorkspaceContext(
     ],
     channels: channels.map((c) => ({ id: c._id.toString(), name: c.name, platform: c.platform })),
     uras: uras.map((u) => ({ id: u._id.toString(), name: u.name, active: u.active })),
+    memories: memories.map((m) => ({ id: m.id, content: m.content })),
+    canRemember: canManageMembers(user.role),
+  }
+}
+
+const memoryErrors = {
+  invalid_content: "Escreva o fato a guardar.",
+  content_too_long: "O fato pode ter no máximo 300 caracteres.",
+  memory_full: "A memória está cheia (50 fatos). Esqueça algum antes de guardar outro.",
+}
+
+// Memória do workspace: roda direto, sem card de autorização, porque não mexe nos dados do negócio.
+export function buildMemoryTools(ctx: { workspaceId: string; userId: string }) {
+  return {
+    saveMemory: tool({
+      description: "Guarda um fato durável sobre o negócio ou uma preferência de trabalho na memória do workspace.",
+      inputSchema: z.object({ content: z.string().describe("Uma frase curta e autossuficiente.") }),
+      execute: async ({ content }) => {
+        const result = await saveMemory(content, ctx)
+        return result.ok ? { ok: true, content, duplicate: !!result.duplicate } : { ok: false, reason: memoryErrors[result.error] }
+      },
+    }),
+    forgetMemory: tool({
+      description: "Apaga um fato da memória do workspace pelo id.",
+      inputSchema: z.object({ memoryId: objectId }),
+      execute: async ({ memoryId }) => {
+        const result = await forgetMemory(ctx.workspaceId, memoryId)
+        return result.ok ? { ok: true } : { ok: false, reason: "Fato não encontrado na memória." }
+      },
+    }),
   }
 }
 

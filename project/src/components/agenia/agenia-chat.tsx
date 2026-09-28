@@ -6,15 +6,16 @@ import type { UIMessage } from "ai"
 import {
   CheckIcon,
   CircleAlertIcon,
-  EraserIcon,
   SendHorizontalIcon,
   ShieldCheckIcon,
   SparklesIcon,
   SquareIcon,
+  SquarePenIcon,
   XIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AGENIA_ACTIONS, isAgeniaAction, type AgeniaActionName } from "@/lib/agenia-actions"
+import { AgeniaHistoryMenu, AgeniaMemoryMenu } from "@/components/agenia/agenia-history-menu"
 import type { AgeniaSession } from "@/components/agenia/use-agenia-session"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -33,6 +34,8 @@ const toolLabels: Record<string, string> = {
   readConversation: "Leu a conversa",
   readUra: "Leu a URA",
   listTickets: "Consultou os tickets",
+  saveMemory: "Guardou na memória",
+  forgetMemory: "Esqueceu um fato da memória",
   addNode: "Criou um nó",
   updateNode: "Editou um nó",
   deleteNode: "Removeu um nó",
@@ -89,11 +92,18 @@ type Props = {
   onUseDraft?: (text: string) => void
   // Chamado antes de cada envio do usuário (ex.: o editor da URA guarda um ponto para desfazer).
   onBeforeSend?: () => void
+  // A página própria mostra o histórico na lista ao lado, sem o menu no cabeçalho.
+  hideHistory?: boolean
   className?: string
 }
 
-export function AgeniaChat({ session, title, actions, suggestions = [], onUseDraft, onBeforeSend, className }: Props) {
-  const { messages, sendMessage, status, stop, error, setMessages, clearError } = useChat({ chat: session.chat })
+// Cada thread do histórico é um Chat próprio: trocar de thread remonta o conteúdo.
+export function AgeniaChat(props: Props) {
+  return <ChatView key={props.session.chat.id} {...props} />
+}
+
+function ChatView({ session, title, actions, suggestions = [], onUseDraft, onBeforeSend, hideHistory, className }: Props) {
+  const { messages, sendMessage, status, stop, error, clearError } = useChat({ chat: session.chat })
   const [draft, setDraft] = useState("")
   const bottom = useRef<HTMLDivElement>(null)
   const busy = status === "submitted" || status === "streaming"
@@ -112,23 +122,19 @@ export function AgeniaChat({ session, title, actions, suggestions = [], onUseDra
     setDraft("")
   }
 
-  function clear() {
-    void stop()
-    setMessages([])
-    session.clearAutoApprove()
-  }
-
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
       <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
         <SparklesIcon className="size-4 text-primary" />
         <span className="truncate text-sm font-medium">{title ?? "AgenIA"}</span>
         <div className="ml-auto flex items-center gap-1">
-          {messages.length > 0 && (
-            <Button variant="ghost" size="icon-sm" aria-label="Limpar conversa" onClick={clear}>
-              <EraserIcon />
+          {!hideHistory && messages.length > 0 && (
+            <Button variant="ghost" size="icon-sm" aria-label="Nova conversa" onClick={session.newThread}>
+              <SquarePenIcon />
             </Button>
           )}
+          {!hideHistory && <AgeniaHistoryMenu session={session} />}
+          {session.showMemory && <AgeniaMemoryMenu workspaceId={session.workspaceId} />}
           {actions}
         </div>
       </div>
@@ -247,6 +253,7 @@ function ToolActivity({ part, name }: { part: ToolPart; name: string }) {
     <span className={cn("flex items-center gap-1.5 text-xs text-muted-foreground", failed && "text-destructive")}>
       {!done ? <Spinner className="size-3" /> : failed ? <XIcon className="size-3" /> : <CheckIcon className="size-3" />}
       {toolLabels[name] ?? name}
+      {name === "saveMemory" && !failed && typeof part.input?.content === "string" && <span className="truncate">: {part.input.content}</span>}
       {failed && part.output?.reason && <span className="truncate">: {part.output.reason}</span>}
     </span>
   )
