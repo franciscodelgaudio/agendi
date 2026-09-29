@@ -73,6 +73,12 @@ export function SignupForm({
             {pending ? "Criando conta..." : "Criar conta"}
           </Button>
           <FieldDescription className="text-center">
+            Ao criar a conta, você concorda com os{" "}
+            <Link href="/termos" target="_blank" className="underline underline-offset-4">
+              Termos de uso
+            </Link>
+          </FieldDescription>
+          <FieldDescription className="text-center">
             Já tem uma conta?{" "}
             <Link href={callbackUrl ? `/login?${new URLSearchParams({ callbackUrl })}` : "/login"} className="underline underline-offset-4">
               Entrar

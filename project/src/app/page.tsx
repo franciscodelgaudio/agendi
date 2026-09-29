@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import Image from "next/image"
+import Link from "next/link"
 import { ArrowRight, Bot, CalendarCheck, CalendarDays, Check, Wallet } from "lucide-react"
 import { ContactForm } from "@/components/landing/contact-form"
 import { FEATURES } from "@/components/landing/features"
@@ -349,9 +350,13 @@ export default function LandingPage() {
 
       <footer className="border-t border-white/10 bg-ld-forest">
         <Container className="flex flex-col gap-6 py-8 text-sm text-ld-mist min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <LandingLogo className="size-5" />
             Agenli · Gestão para beleza e bem-estar
+            <span aria-hidden="true">·</span>
+            <Link href="/termos" className={cn("underline-offset-4 hover:text-white hover:underline focus-visible:outline-ld-sage-light", focusRing)}>
+              Termos de uso
+            </Link>
           </div>
           <div className="flex flex-col gap-2 min-[900px]:items-end">
             <div className="flex items-center gap-2">
