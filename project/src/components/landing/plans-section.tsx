@@ -42,15 +42,6 @@ export function PlansSection({ workspaceId }: { workspaceId?: string }) {
                 </span>
                 <span className="text-sm text-ld-ink-soft">/mês</span>
               </p>
-              <div className="flex flex-col gap-1 text-sm">
-                <p className="text-ld-ink">
-                  Robô, URA, WhatsApp e Instagram inclusos
-                </p>
-                <p className="font-medium text-ld-brand">
-                  Sem pacote fechado: você paga só o que usar, cerca de{" "}
-                  {formatCost(AVG_COST_PER_SERVICE_CENTS)} por atendimento
-                </p>
-              </div>
               <a
                 href={`/assinar?${new URLSearchParams({ plano: plan.id, ...(workspaceId ? { workspace: workspaceId } : {}) })}`}
                 className="mt-auto inline-flex h-11 items-center justify-center rounded-[6px] bg-ld-brand px-5 text-sm font-medium text-white transition-colors hover:bg-ld-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ld-brand"
@@ -79,6 +70,15 @@ export function PlansSection({ workspaceId }: { workspaceId?: string }) {
           </a>
         </li>
       </ul>
+      <div className="flex flex-col items-center gap-1 text-center text-sm">
+        <p className="text-ld-ink">
+          Todos os planos incluem robô, URA, WhatsApp e Instagram
+        </p>
+        <p className="font-medium text-ld-brand">
+          Sem pacote fechado: você paga só o que usar, cerca de{" "}
+          {formatCost(AVG_COST_PER_SERVICE_CENTS)} por atendimento
+        </p>
+      </div>
     </div>
   );
 }

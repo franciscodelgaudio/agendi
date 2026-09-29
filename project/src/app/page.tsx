@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Image from "next/image"
-import { ArrowRight, Bot, CalendarCheck } from "lucide-react"
+import { ArrowRight, Bot, CalendarCheck, CalendarDays, Check, Wallet } from "lucide-react"
 import { ContactForm } from "@/components/landing/contact-form"
 import { FEATURES } from "@/components/landing/features"
 import { LandingLogo } from "@/components/landing/landing-logo"
@@ -25,6 +25,25 @@ const NAV = [
 
 const CLIENTS = [
   { name: "Aira Spa", href: "https://airaspa.com.br", logo: "/landing/clientes/aira-spa.png", width: 1243, height: 569 },
+]
+
+const SHOWCASE = [
+  {
+    src: "/landing/calendario.webp",
+    alt: "Calendário semanal de uma unidade no Agenli, com os agendamentos de cada profissional",
+    icon: CalendarDays,
+    title: "Agenda por profissional",
+    description: "Todos os agendamentos da unidade em mês, semana, dia ou lista, com uma cor por profissional.",
+    points: ["Filtro por profissional", "Novo agendamento em poucos cliques", "Agenda de cada unidade"],
+  },
+  {
+    src: "/landing/gastos.webp",
+    alt: "Resumo do caixa de uma unidade com o card Gastos por grupo e os limites mensais",
+    icon: Wallet,
+    title: "Caixa e comissões",
+    description: "Gastos por grupo, planejado contra realizado e o bruto e a comissão de cada profissional no mês.",
+    points: ["Limite mensal por grupo de gasto", "Comissão calculada no fechamento", "Resultado de cada unidade"],
+  },
 ]
 
 const lowestPrice = Math.min(...PLANS.map((plan) => plan.price)) / 100
@@ -200,38 +219,50 @@ export default function LandingPage() {
               <Eyebrow>Recursos</Eyebrow>
               <H2 id="recursos-title">Tudo o que o seu negócio usa no dia.</H2>
             </div>
-            {/* Agenda e financeiro: no desktop, a tela de gastos sobrepõe o canto do calendário. */}
-            <div className="relative flex flex-col gap-4 min-[900px]:block min-[900px]:pb-[16%]">
-              <Tilt data-reveal="zoom" className="min-[900px]:w-[80%]">
-                <div className="ld-tilt relative aspect-[4/3] overflow-hidden rounded-xl border border-ld-line bg-white shadow-sm min-[600px]:aspect-[1850/990]">
-                  <Image
-                    src="/landing/calendario.webp"
-                    alt="Calendário semanal de uma unidade no Agenli, com os agendamentos de cada profissional"
-                    fill
-                    loading="lazy"
-                    quality={90}
-                    sizes="(min-width: 1280px) 960px, (min-width: 900px) 80vw, 100vw"
-                    className="object-cover object-[center_top]"
-                  />
+            {/* Cada tela ao lado do recurso que ela mostra, alternando o lado no desktop. */}
+            <div className="flex flex-col gap-12 min-[900px]:gap-20">
+              {SHOWCASE.map((item, index) => (
+                <div
+                  key={item.src}
+                  className={cn(
+                    "grid grid-cols-1 items-center gap-6 min-[900px]:gap-12",
+                    index % 2 === 1
+                      ? "min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]"
+                      : "min-[900px]:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]",
+                  )}
+                >
+                  <Tilt data-reveal="zoom" className={cn(index % 2 === 1 && "min-[900px]:order-last")}>
+                    <div className="ld-tilt relative aspect-[1850/990] overflow-hidden rounded-xl border border-ld-line bg-white shadow-[0_30px_60px_-24px_rgba(23,63,56,0.35)]">
+                      <Image
+                        src={item.src}
+                        alt={item.alt}
+                        fill
+                        loading="lazy"
+                        quality={90}
+                        sizes="(min-width: 1280px) 740px, (min-width: 900px) 60vw, 100vw"
+                        className="object-cover object-top"
+                      />
+                    </div>
+                  </Tilt>
+                  <div data-reveal style={stagger(1)} className="flex flex-col gap-4">
+                    <span className="flex size-11 items-center justify-center rounded-[8px] bg-ld-sage-light text-ld-brand">
+                      <item.icon aria-hidden="true" className="size-5" />
+                    </span>
+                    <h3 className="text-2xl leading-tight font-semibold tracking-[-0.02em] text-ld-ink min-[900px]:text-[28px]">
+                      {item.title}
+                    </h3>
+                    <p className="text-base leading-relaxed text-ld-ink-soft">{item.description}</p>
+                    <ul className="flex flex-col gap-2 pt-1">
+                      {item.points.map((point) => (
+                        <li key={point} className="flex items-center gap-2 text-sm font-medium text-ld-ink">
+                          <Check aria-hidden="true" className="size-4 shrink-0 text-ld-brand" />
+                          {point}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
-              </Tilt>
-              <Tilt
-                data-reveal="zoom"
-                style={stagger(1)}
-                className="min-[900px]:absolute min-[900px]:right-0 min-[900px]:bottom-0 min-[900px]:w-[48%]"
-              >
-                <div className="ld-tilt relative aspect-[1850/990] overflow-hidden rounded-xl border border-ld-line bg-white shadow-sm min-[900px]:shadow-[0_30px_60px_-20px_rgba(23,63,56,0.45)]">
-                  <Image
-                    src="/landing/gastos.webp"
-                    alt="Resumo do caixa de uma unidade com o card Gastos por grupo e os limites mensais"
-                    fill
-                    loading="lazy"
-                    quality={90}
-                    sizes="(min-width: 1280px) 580px, (min-width: 900px) 48vw, 100vw"
-                    className="object-cover object-[center_30%]"
-                  />
-                </div>
-              </Tilt>
+              ))}
             </div>
             <ul className="grid grid-cols-1 gap-4 min-[900px]:grid-cols-3">
               {FEATURES.map(({ icon: Icon, title, description }, index) => (
