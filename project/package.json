@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.85",
+    "@ai-sdk/groq": "^4.0.52",
     "@ai-sdk/react": "^4.0.122",
     "@auth/mongodb-adapter": "^3.11.3",
     "@base-ui/react": "^1.8.0",
@@ -38,7 +39,9 @@
     "react": "19.2.8",
     "react-day-picker": "^10.0.1",
     "react-dom": "19.2.8",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.8.0",
+    "remark-gfm": "^4.0.1",
     "resend": "^6.29.0",
     "shadcn": "^4.21.0",
     "sonner": "^2.0.8",

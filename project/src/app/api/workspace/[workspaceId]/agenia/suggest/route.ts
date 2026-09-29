@@ -1,6 +1,6 @@
 import { generateText, isStepCount } from "ai"
 import { z } from "zod"
-import { AGENIA_MODEL, ageniaModel, isAgeniaConfigured } from "@/lib/agenia-model"
+import { loadAgeniaModel, NOT_CONFIGURED_MESSAGE } from "@/lib/agenia-model"
 import { recordAiUsage } from "@/lib/ai-usage-store"
 import { smartComposePrompt } from "@/lib/agenia-prompts"
 import { buildReadTools, loadConversation, loadWorkspaceContext } from "@/lib/agenia-read"
@@ -22,7 +22,8 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
   if (!userId) return fail("Sua sessão expirou. Entre novamente.", 401)
   const access = await findWorkspaceAccess(workspaceId, userId)
   if (!access || !canUseInbox(access.role)) return fail("Sua função não pode usar a AgenIA aqui.", 403)
-  if (!isAgeniaConfigured()) return fail("A AgenIA não está configurada: defina GEMINI_API_KEY no ambiente.", 503)
+  const agenia = await loadAgeniaModel(workspaceId)
+  if (!agenia) return fail(NOT_CONFIGURED_MESSAGE, 503)
 
   const parsed = z.object({ conversationId: z.string() }).safeParse(await request.json().catch(() => null))
   if (!parsed.success) return fail("Requisição inválida.", 400)
@@ -33,13 +34,13 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
   const { listServices, listBookings } = buildReadTools(workspaceId)
   try {
     const result = await generateText({
-      model: ageniaModel(),
+      model: agenia.model,
       instructions: smartComposePrompt(conversation, ctx),
       prompt: "Escreva a próxima mensagem.",
       tools: { listServices, listBookings },
       stopWhen: isStepCount(4),
     })
-    await recordAiUsage({ workspaceId, userId }, "agenia_suggest", result.response.modelId || AGENIA_MODEL, result.totalUsage)
+    await recordAiUsage({ workspaceId, userId }, "agenia_suggest", result.response.modelId || agenia.name, result.totalUsage)
     const text = result.text.trim()
     return Response.json({ text: text && text !== NO_REPLY ? text : null })
   } catch (error) {

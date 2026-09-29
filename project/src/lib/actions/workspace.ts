@@ -1,6 +1,8 @@
 "use server"
 
 import { refresh } from "next/cache"
+import { ageniaProviders } from "@/lib/agenia-model"
+import { updateAgeniaModel, type UpdateAgeniaModelError } from "@/lib/agenia-models"
 import { canManageMembers } from "@/lib/member"
 import { getSessionUserId } from "@/lib/session"
 import { updateWorkspace, type UpdateWorkspaceError } from "@/lib/workspace"
@@ -42,6 +44,31 @@ export async function updateWorkspaceAction(
   )
 
   if (!result.ok) return { error: errorMessages[result.error] }
+
+  refresh()
+  return { error: null }
+}
+
+const ageniaModelErrors: Record<UpdateAgeniaModelError | "unauthenticated", string> = {
+  invalid_model: "Escolha um modelo da lista.",
+  provider_not_configured: "Esse provedor não tem chave configurada no ambiente.",
+  workspace_not_found: "Workspace não encontrado ou sem permissão.",
+  unauthenticated: "Sua sessão expirou. Entre novamente.",
+}
+
+// Modelo usado pela AgenIA em todo o workspace; só dono e administradores trocam.
+export async function updateAgeniaModelAction(workspaceId: string, modelId: string): Promise<{ error: string | null }> {
+  const userId = await getSessionUserId()
+  if (!userId) return { error: ageniaModelErrors.unauthenticated }
+
+  const access = await findWorkspaceAccess(workspaceId, userId)
+  const result = await updateAgeniaModel(
+    modelId,
+    access && canManageMembers(access.role) ? access.id : null,
+    ageniaProviders(),
+    async (id, ageniaModel) => (await Workspace.updateOne({ _id: id }, { $set: { ageniaModel } })).matchedCount > 0,
+  )
+  if (!result.ok) return { error: ageniaModelErrors[result.error] }
 
   refresh()
   return { error: null }

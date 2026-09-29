@@ -11,12 +11,11 @@ import {
 } from "ai"
 import { z } from "zod"
 import { AGENIA_ACTION_NAMES, AGENIA_ACTIONS, type AgeniaActionName } from "@/lib/agenia-actions"
-import { ageniaModel, isAgeniaConfigured } from "@/lib/agenia-model"
+import { loadAgeniaModel, NOT_CONFIGURED_MESSAGE } from "@/lib/agenia-model"
 import { conversationPrompt, globalPrompt, uraPrompt } from "@/lib/agenia-prompts"
 import { buildMemoryTools, buildReadTools, loadConversation, loadWorkspaceContext } from "@/lib/agenia-read"
 import { isThreadTaken, persistThread } from "@/lib/agenia-store"
 import { recordAiUsage } from "@/lib/ai-usage-store"
-import { AGENIA_MODEL } from "@/lib/agenia-model"
 import { uraGraphIndex } from "@/lib/agenia-ura"
 import { buildUraTools } from "@/lib/agenia-ura-tools"
 import { canManageMembers, canUseInbox } from "@/lib/member-role"
@@ -76,7 +75,8 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
   if (!userId) return fail("Sua sessão expirou. Entre novamente.", 401)
   const access = await findWorkspaceAccess(workspaceId, userId)
   if (!access) return fail("Workspace não encontrado.", 404)
-  if (!isAgeniaConfigured()) return fail("A AgenIA não está configurada: defina GEMINI_API_KEY no ambiente.", 503)
+  const agenia = await loadAgeniaModel(workspaceId)
+  if (!agenia) return fail(NOT_CONFIGURED_MESSAGE, 503)
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return fail("Requisição inválida.", 400)
@@ -125,13 +125,13 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
         ? { ...tools, ...buildUraTools(uraGraph, (graph) => writer.write({ type: "data-ura-graph", data: graph, transient: true })) }
         : tools
       const result = streamText({
-        model: ageniaModel(),
+        model: agenia.model,
         instructions,
         messages,
         tools: allTools,
         stopWhen: isStepCount(MAX_STEPS),
         onEnd: (event) =>
-          recordAiUsage(owner, `agenia_${body.mode}`, event.response.modelId || AGENIA_MODEL, event.totalUsage),
+          recordAiUsage(owner, `agenia_${body.mode}`, event.response.modelId || agenia.name, event.totalUsage),
       })
       writer.merge(
         toUIMessageStream({

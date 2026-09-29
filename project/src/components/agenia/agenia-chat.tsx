@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils"
 import { AGENIA_ACTIONS, isAgeniaAction, type AgeniaActionName } from "@/lib/agenia-actions"
 import { AgeniaHistoryMenu, AgeniaMemoryMenu } from "@/components/agenia/agenia-history-menu"
+import { AgeniaMarkdown } from "@/components/agenia/agenia-markdown"
 import type { AgeniaSession } from "@/components/agenia/use-agenia-session"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -230,11 +231,7 @@ function Message({
     <div className="flex flex-col gap-2">
       {message.parts.map((part, i) => {
         if (part.type === "text") {
-          return part.text ? (
-            <p key={i} className="text-sm leading-relaxed whitespace-pre-wrap">
-              {part.text}
-            </p>
-          ) : null
+          return part.text ? <AgeniaMarkdown key={i} text={part.text} /> : null
         }
         if (!isToolPart(part)) return null
         const name = toolName(part)

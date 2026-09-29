@@ -29,6 +29,8 @@ const workspaceSchema = new Schema(
     avatarUrl: { type: String, trim: true },
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     subscription: { type: subscriptionSchema, default: null },
+    // Modelo da AgenIA (id do catálogo em agenia-models); ausente = o primeiro disponível.
+    ageniaModel: { type: String },
     // Ausente = tudo liberado.
     hiddenPages: {
       massage_therapist: { type: rolePagesSchema },
