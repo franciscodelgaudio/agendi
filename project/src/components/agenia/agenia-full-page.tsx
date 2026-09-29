@@ -80,7 +80,7 @@ export function AgeniaFullPage() {
           </ul>
         )}
       </aside>
-      <section className={cn("min-w-0 flex-1 flex-col md:flex", showList ? "hidden" : "flex")}>
+      <section data-tour="agenia-chat" className={cn("min-w-0 flex-1 flex-col md:flex", showList ? "hidden" : "flex")}>
         <AgeniaChat
           session={session}
           suggestions={GLOBAL_SUGGESTIONS}

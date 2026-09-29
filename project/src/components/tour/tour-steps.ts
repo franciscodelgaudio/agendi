@@ -31,7 +31,7 @@ export type TourStep = {
   show?: (access: TourAccess) => boolean
 }
 
-export type TourId = "start" | "finance" | "team" | "messaging"
+export type TourId = "start" | "general" | "service" | "agenia" | "settings"
 
 export type Tour = {
   id: TourId
@@ -183,11 +183,23 @@ const start: Tour = {
   ],
 }
 
-const finance: Tour = {
-  id: "finance",
-  title: "Caixa e estoque",
-  show: (access) => access.pages.workspace.includes("cash_flow") || access.pages.unit.includes("stock"),
+// Os tutoriais das áreas seguem os grupos da sidebar.
+const general: Tour = {
+  id: "general",
+  title: "Geral",
+  show: (access) =>
+    (["calendar", "cash_flow", "team"] as const).some((page) => access.pages.workspace.includes(page)) ||
+    access.pages.unit.includes("stock"),
   steps: [
+    {
+      id: "nav-calendar",
+      target: "nav-calendar",
+      sidebar: true,
+      side: "right",
+      title: "Calendário",
+      body: "Os agendamentos de todas as unidades num calendário só.",
+      show: workspacePage("calendar"),
+    },
     {
       id: "nav-cash_flow",
       target: "nav-cash_flow",
@@ -206,29 +218,6 @@ const finance: Tour = {
       body: "Veja a semana, o mês ou o ano e navegue entre os períodos. O previsto vem dos agendamentos; o realizado, dos atendimentos.",
       show: workspacePage("cash_flow"),
     },
-    ...openUnit,
-    {
-      id: "unit-tab-cash_flow",
-      target: "unit-tab-cash_flow",
-      title: "Caixa da unidade",
-      body: "Entradas, despesas por grupo, repasse ao parceiro, comissões e o líquido só desta unidade.",
-      show: unitPage("cash_flow"),
-    },
-    {
-      id: "unit-tab-stock",
-      target: "unit-tab-stock",
-      title: "Estoque",
-      body: "Os produtos da unidade, as compras e o consumo, que sai sozinho a cada atendimento.",
-      show: unitPage("stock"),
-    },
-  ],
-}
-
-const team: Tour = {
-  id: "team",
-  title: "Equipe e usuários",
-  show: (access) => access.pages.workspace.includes("team") || access.pages.workspace.includes("users"),
-  steps: [
     {
       id: "nav-team",
       target: "nav-team",
@@ -248,6 +237,128 @@ const team: Tour = {
       body: "Todas as pessoas do workspace, as unidades em que atendem e como recebem: comissão ou salário.",
       show: workspacePage("team"),
     },
+    ...openUnit,
+    {
+      id: "unit-tab-cash_flow",
+      target: "unit-tab-cash_flow",
+      title: "Caixa da unidade",
+      body: "Entradas, despesas por grupo, repasse ao parceiro, comissões e o líquido só desta unidade.",
+      show: unitPage("cash_flow"),
+    },
+    {
+      id: "unit-tab-stock",
+      target: "unit-tab-stock",
+      title: "Estoque",
+      body: "Os produtos da unidade, as compras e o consumo, que sai sozinho a cada atendimento.",
+      show: unitPage("stock"),
+    },
+  ],
+}
+
+const service: Tour = {
+  id: "service",
+  title: "Atendimento",
+  show: (access) => access.inbox || access.canManage,
+  steps: [
+    {
+      id: "nav-inbox",
+      target: "nav-inbox",
+      sidebar: true,
+      side: "right",
+      title: "Conversas",
+      body: "As mensagens dos clientes chegam aqui para a equipe responder.",
+      show: (access) => access.inbox,
+    },
+    {
+      id: "nav-channels",
+      target: "nav-channels",
+      action: "click",
+      href: "/channels",
+      sidebar: true,
+      side: "right",
+      title: "Canais",
+      body: "Clique em Canais.",
+      show: manages,
+    },
+    {
+      id: "create-channel",
+      target: "create-channel",
+      title: "Conecte um canal",
+      body: "Ligue um número do WhatsApp Business ou uma conta do Instagram ao workspace.",
+      show: manages,
+    },
+  ],
+}
+
+// A AgenIA é de quem gerencia, como as URAs e os custos.
+const agenia: Tour = {
+  id: "agenia",
+  title: "AgenIA",
+  show: manages,
+  steps: [
+    {
+      id: "agenia-button",
+      target: "agenia-button",
+      side: "left",
+      title: "AgenIA",
+      body: "Sua assistente em qualquer página: consulta agenda, caixa, estoque e conversas, e usa a página aberta como contexto.",
+    },
+    {
+      id: "nav-agenia",
+      target: "nav-agenia",
+      action: "click",
+      href: "/agenia",
+      sidebar: true,
+      side: "right",
+      title: "Tela cheia",
+      body: "A mesma conversa também tem uma página própria. Clique em AgenIA.",
+    },
+    {
+      id: "agenia-chat",
+      target: "agenia-chat",
+      side: "left",
+      title: "Converse com a AgenIA",
+      body: "Pergunte ou peça o que precisar. Antes de mudar algo no sistema, ela pede sua autorização.",
+    },
+    {
+      id: "nav-uras",
+      target: "nav-uras",
+      action: "click",
+      href: "/uras",
+      sidebar: true,
+      side: "right",
+      title: "URAs",
+      body: "Clique em URAs.",
+    },
+    {
+      id: "create-ura",
+      target: "create-ura",
+      title: "Atendimento automático",
+      body: "Monte fluxos para os canais: menus, perguntas e agendamento direto pela conversa. No editor, a AgenIA monta e ajusta o fluxo com você.",
+    },
+    {
+      id: "nav-ai-costs",
+      target: "nav-ai-costs",
+      action: "click",
+      href: "/ai-costs",
+      sidebar: true,
+      side: "right",
+      title: "Custos de IA",
+      body: "Clique em Custos de IA.",
+    },
+    {
+      id: "agenia-model",
+      target: "agenia-model",
+      title: "Modelo e gastos",
+      body: "Escolha o modelo que a AgenIA usa e acompanhe quanto ela custou em cada período.",
+    },
+  ],
+}
+
+const settings: Tour = {
+  id: "settings",
+  title: "Configurações",
+  steps: [
     {
       id: "nav-users",
       target: "nav-users",
@@ -273,60 +384,15 @@ const team: Tour = {
       body: "Escolha quais páginas cada função enxerga.",
       show: (access) => access.canManage && access.pages.workspace.includes("users"),
     },
-  ],
-}
-
-const messaging: Tour = {
-  id: "messaging",
-  title: "Conversas e automação",
-  show: (access) => access.inbox || access.canManage,
-  steps: [
     {
-      id: "nav-channels",
-      target: "nav-channels",
-      action: "click",
-      href: "/channels",
+      id: "nav-tickets",
+      target: "nav-tickets",
       sidebar: true,
       side: "right",
-      title: "Canais",
-      body: "Clique em Canais.",
-      show: manages,
-    },
-    {
-      id: "create-channel",
-      target: "create-channel",
-      title: "Conecte um canal",
-      body: "Ligue um número do WhatsApp Business ou uma conta do Instagram ao workspace.",
-      show: manages,
-    },
-    {
-      id: "nav-uras",
-      target: "nav-uras",
-      action: "click",
-      href: "/uras",
-      sidebar: true,
-      side: "right",
-      title: "URAs",
-      body: "Clique em URAs.",
-      show: manages,
-    },
-    {
-      id: "create-ura",
-      target: "create-ura",
-      title: "Atendimento automático",
-      body: "Monte fluxos para os canais: menus, perguntas e agendamento direto pela conversa.",
-      show: manages,
-    },
-    {
-      id: "nav-inbox",
-      target: "nav-inbox",
-      sidebar: true,
-      side: "right",
-      title: "Conversas",
-      body: "As mensagens dos clientes chegam aqui para a equipe responder.",
-      show: (access) => access.inbox,
+      title: "Tickets",
+      body: "Relate bugs e peça melhorias ao time do agenli.",
     },
   ],
 }
 
-export const TOURS: Tour[] = [start, finance, team, messaging]
+export const TOURS: Tour[] = [start, general, service, agenia, settings]

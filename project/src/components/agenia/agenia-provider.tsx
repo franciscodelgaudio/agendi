@@ -43,6 +43,7 @@ export function AgeniaProvider({ workspaceId, enabled, children }: { workspaceId
       {floating && (
         <Popover.Root open={open} onOpenChange={setOpen}>
           <Popover.Trigger
+            data-tour="agenia-button"
             render={
               <Button
                 className="fixed right-5 bottom-5 z-30 size-14 rounded-full shadow-lg motion-safe:animate-agenia-breathe"

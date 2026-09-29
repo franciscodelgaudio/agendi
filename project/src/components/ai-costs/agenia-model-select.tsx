@@ -12,7 +12,7 @@ export function AgeniaModelSelect({ workspaceId, models, value }: { workspaceId:
   const [pending, startTransition] = useTransition()
   const items = models.map((m) => ({ value: m.id, label: m.label }))
 
-  if (!models.length) return <span className="text-sm text-muted-foreground">Nenhum provedor de IA configurado</span>
+  if (!models.length) return <span data-tour="agenia-model" className="text-sm text-muted-foreground">Nenhum provedor de IA configurado</span>
 
   return (
     <Select
@@ -31,7 +31,7 @@ export function AgeniaModelSelect({ workspaceId, models, value }: { workspaceId:
         })
       }}
     >
-      <SelectTrigger className="w-full sm:w-60" aria-label="Modelo da AgenIA" disabled={pending}>
+      <SelectTrigger data-tour="agenia-model" className="w-full sm:w-60" aria-label="Modelo da AgenIA" disabled={pending}>
         <span className="text-muted-foreground">Modelo</span>
         <SelectValue />
         {pending && <Spinner className="size-3.5" />}
