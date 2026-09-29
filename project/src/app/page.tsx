@@ -20,7 +20,6 @@ export const metadata: Metadata = {
 const NAV = [
   { href: "#recursos", label: "Recursos" },
   { href: "#planos", label: "Planos" },
-  { href: "#sob-medida", label: "Sob medida" },
 ]
 
 const CLIENTS = [
@@ -46,7 +45,7 @@ const SHOWCASE = [
   },
 ]
 
-const lowestPrice = Math.min(...PLANS.map((plan) => plan.price)) / 100
+const lowestMonthlyPrice = (Math.min(...PLANS.map((plan) => plan.monthlyPrice)) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2"
 const lightButton = cn(
@@ -161,7 +160,7 @@ export default function LandingPage() {
               </p>
               <div className="ld-enter flex flex-col gap-3 pt-2 min-[600px]:flex-row" style={stagger(3)}>
                 <a href="#planos" className={lightButton}>
-                  Assinar a partir de R$ {lowestPrice}
+                  Assinar a partir de {lowestMonthlyPrice}/mês
                   <ArrowRight aria-hidden="true" className="size-4 transition-transform group-hover:translate-x-1" />
                 </a>
                 <a href="#contato" className={ghostButton}>
@@ -323,37 +322,10 @@ export default function LandingPage() {
           <Container className="flex flex-col gap-10">
             <div data-reveal className="flex max-w-3xl flex-col gap-4">
               <Eyebrow>Planos</Eyebrow>
-              <H2 id="planos-title">Escolha pelo tamanho da operação.</H2>
+              <H2 id="planos-title">Plano completo ou sob medida para o seu negócio.</H2>
             </div>
             <div data-reveal style={stagger(1)}>
               <PlansSection />
-            </div>
-            <div className="flex text-sm min-[900px]:justify-end">
-              <a href="#contato" className={cn("font-medium text-ld-brand underline-offset-4 hover:underline focus-visible:outline-ld-brand", focusRing)}>
-                Quer outro formato de plano? Fale com a gente →
-              </a>
-            </div>
-          </Container>
-        </section>
-
-        <section id="sob-medida" aria-labelledby="sob-medida-title" className="scroll-mt-16 bg-ld-paper pb-20 min-[900px]:pb-28">
-          <Container>
-            <div data-reveal="zoom" className="ld-aurora flex flex-col gap-8 rounded-xl border border-ld-line p-8 min-[900px]:flex-row min-[900px]:items-end min-[900px]:justify-between min-[900px]:p-12">
-              <div className="flex max-w-3xl flex-col gap-4">
-                <Eyebrow>Sob medida</Eyebrow>
-                <H2 id="sob-medida-title" className="text-ld-forest min-[900px]:text-[40px]">
-                  O sistema não cobre uma particularidade do seu negócio? Desenvolvemos.
-                </H2>
-                <p className="text-lg leading-relaxed text-ld-ink-soft">
-                  Conversamos sobre preço, montamos o plano com você e construímos o que a sua operação precisar.
-                </p>
-              </div>
-              <a
-                href="#contato"
-                className={cn("inline-flex h-12 shrink-0 items-center justify-center rounded-[6px] bg-ld-brand px-5 text-[15px] font-semibold text-white transition-[background-color,translate,box-shadow] hover:-translate-y-0.5 hover:bg-ld-forest hover:shadow-[0_12px_30px_-10px_rgba(23,63,56,0.6)] focus-visible:outline-ld-brand", focusRing)}
-              >
-                Conversar sobre o meu caso
-              </a>
             </div>
           </Container>
         </section>

@@ -262,7 +262,7 @@ async function seed(db: Db, now: Date): Promise<SeedResult> {
     name: "Studio Aurora",
     userId: ownerId,
     subscription: {
-      planId: "network",
+      planId: "padrao",
       status: "active",
       paidAt: now,
       currentPeriodEnd: new Date(now.getTime() + 30 * DAY_MS),

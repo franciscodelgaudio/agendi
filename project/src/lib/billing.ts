@@ -1,4 +1,4 @@
-import { PLAN_PERIOD_DAYS, PLANS, type PlanId } from "@/lib/plans"
+import { PLANS, type PlanId } from "@/lib/plans"
 
 const DAY = 24 * 60 * 60 * 1000
 
@@ -92,7 +92,7 @@ type AbacateEventDeps = {
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null
 
-// Webhook checkout.completed: libera PLAN_PERIOD_DAYS de acesso no workspace da cobrança.
+// Webhook checkout.completed: libera os dias de acesso do plano no workspace da cobrança.
 export async function handleAbacateEvent(
   payload: unknown,
   ctx: { now: Date; acceptDevMode: boolean },
@@ -119,11 +119,12 @@ export async function handleAbacateEvent(
     // Renovação antes do vencimento soma ao fim do período atual.
     const currentEnd = workspace?.subscription?.currentPeriodEnd?.getTime() ?? 0
     const start = Math.max(ctx.now.getTime(), currentEnd)
+    const { periodDays } = PLANS.find((p) => p.id === checkout.planId)!
     const subscription: Subscription = {
       planId: checkout.planId,
       status: "active",
       paidAt: ctx.now,
-      currentPeriodEnd: new Date(start + PLAN_PERIOD_DAYS * DAY),
+      currentPeriodEnd: new Date(start + periodDays * DAY),
     }
 
     if (workspace) await deps.setSubscription(workspace.id, subscription)

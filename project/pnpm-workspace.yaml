@@ -1,0 +1,14 @@
+allowBuilds:
+  core-js: set this to true or false
+  esbuild: set this to true or false
+  msgpackr-extract: set this to true or false
+  unrs-resolver: set this to true or false
+minimumReleaseAgeExclude:
+  - '@ai-sdk/gateway@4.0.97'
+  - '@ai-sdk/google@4.0.85'
+  - '@ai-sdk/groq@4.0.52'
+  - '@ai-sdk/mcp@2.0.61'
+  - '@ai-sdk/provider-utils@5.0.50 || 5.0.51'
+  - '@ai-sdk/provider@4.0.19'
+  - '@ai-sdk/react@4.0.122'
+  - ai@7.0.119

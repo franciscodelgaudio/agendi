@@ -49,7 +49,7 @@ async function ensureProduct(planId: PlanId, amount: number) {
     body: {
       externalId,
       name: `Agenli · ${plan.name}`,
-      description: `30 dias de acesso ao Agenli: ${plan.name.toLowerCase()}, até ${plan.maxUsers} usuários.`,
+      description: `${plan.periodDays} dias de acesso ao Agenli: plano ${plan.name.toLowerCase()}, até ${plan.maxUsers} usuários.`,
       price: amount,
       currency: "BRL",
     },

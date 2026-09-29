@@ -324,15 +324,6 @@
     transition: translate 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
   }
 
-  /* Fundo vivo do bloco Sob medida. */
-  .ld-aurora {
-    background:
-      radial-gradient(40% 60% at var(--x, 20%) 30%, rgba(127, 179, 162, 0.35), transparent 70%),
-      radial-gradient(35% 55% at calc(100% - var(--x, 20%)) 80%, rgba(31, 91, 80, 0.18), transparent 70%),
-      #e4ede8;
-    animation: ld-aurora 14s ease-in-out infinite alternate;
-  }
-
   /* Barra de progresso de leitura no topo, guiada pela rolagem. */
   .ld-progress {
     transform-origin: left;
@@ -344,12 +335,6 @@
       animation-timeline: scroll(root);
     }
   }
-}
-
-@property --x {
-  syntax: "<percentage>";
-  inherits: false;
-  initial-value: 20%;
 }
 
 @keyframes ld-rise {
@@ -405,11 +390,6 @@
   100% {
     transform: scale(2.4);
     opacity: 0;
-  }
-}
-@keyframes ld-aurora {
-  to {
-    --x: 70%;
   }
 }
 @keyframes ld-progress {

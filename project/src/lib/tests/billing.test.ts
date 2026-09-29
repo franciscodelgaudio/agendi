@@ -20,41 +20,38 @@ describe("startCheckout", () => {
   it("registra a cobrança pendente com o valor do plano e devolve a URL do checkout", async () => {
     const deps = makeDeps();
 
-    const result = await startCheckout({ plan: "starter" }, ctx, deps);
+    const result = await startCheckout({ plan: "mensal" }, ctx, deps);
 
     expect(result).toEqual({ ok: true, url: "https://app.abacatepay.com/pay/bill_abc" });
     expect(deps.insertCheckout).toHaveBeenCalledWith({
       userId: USER_ID,
       workspaceId: null,
-      planId: "starter",
-      amount: 11900,
+      planId: "mensal",
+      amount: 12999,
     });
     expect(deps.createCharge).toHaveBeenCalledWith({
       checkoutId: CHECKOUT_ID,
-      planId: "starter",
-      amount: 11900,
+      planId: "mensal",
+      amount: 12999,
       email: "ana@exemplo.com",
       name: "Ana",
     });
     expect(deps.attachCharge).toHaveBeenCalledWith(CHECKOUT_ID, "bill_abc");
   });
 
-  it.each([
-    ["starter", 11900],
-    ["growth", 17900],
-    ["network", 27900],
-  ])("cobra o valor da tabela (%s → %i)", async (plan, amount) => {
+  it("plano anual cobra os 12 meses de uma vez (12 × R$ 89,90)", async () => {
     const deps = makeDeps();
 
-    await startCheckout({ plan }, ctx, deps);
+    await startCheckout({ plan: "anual" }, ctx, deps);
 
-    expect(deps.insertCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount }));
+    expect(deps.insertCheckout).toHaveBeenCalledWith(expect.objectContaining({ planId: "anual", amount: 107880 }));
+    expect(deps.createCharge).toHaveBeenCalledWith(expect.objectContaining({ planId: "anual", amount: 107880 }));
   });
 
   it("vincula ao workspace informado quando o usuário é o dono", async () => {
     const deps = makeDeps();
 
-    await startCheckout({ plan: "growth", workspaceId: WORKSPACE_ID }, ctx, deps);
+    await startCheckout({ plan: "mensal", workspaceId: WORKSPACE_ID }, ctx, deps);
 
     expect(deps.ownsWorkspace).toHaveBeenCalledWith(WORKSPACE_ID, USER_ID);
     expect(deps.insertCheckout).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: WORKSPACE_ID }));
@@ -64,7 +61,7 @@ describe("startCheckout", () => {
     const deps = makeDeps();
     deps.ownsWorkspace.mockResolvedValue(false);
 
-    const result = await startCheckout({ plan: "growth", workspaceId: WORKSPACE_ID }, ctx, deps);
+    const result = await startCheckout({ plan: "mensal", workspaceId: WORKSPACE_ID }, ctx, deps);
 
     expect(result).toEqual({ ok: false, error: "workspace_not_found" });
     expect(deps.insertCheckout).not.toHaveBeenCalled();
@@ -74,7 +71,7 @@ describe("startCheckout", () => {
   it("sem sessão → unauthenticated", async () => {
     const deps = makeDeps();
 
-    const result = await startCheckout({ plan: "starter" }, { ...ctx, userId: null }, deps);
+    const result = await startCheckout({ plan: "mensal" }, { ...ctx, userId: null }, deps);
 
     expect(result).toEqual({ ok: false, error: "unauthenticated" });
     expect(deps.insertCheckout).not.toHaveBeenCalled();
@@ -106,8 +103,8 @@ describe("handleAbacateEvent", () => {
       checkout: {
         id: "bill_abc",
         externalId: CHECKOUT_ID,
-        amount: 11900,
-        paidAmount: 11900,
+        amount: 12999,
+        paidAmount: 12999,
         status: "PAID",
         ...overrides,
       },
@@ -119,8 +116,8 @@ describe("handleAbacateEvent", () => {
     id: CHECKOUT_ID,
     userId: USER_ID,
     workspaceId: null as string | null,
-    planId: "starter" as const,
-    amount: 11900,
+    planId: "mensal" as const,
+    amount: 12999,
     status: "pending" as const,
     ...overrides,
   });
@@ -138,7 +135,7 @@ describe("handleAbacateEvent", () => {
   const ctx = { now: NOW, acceptDevMode: false };
 
   const activeFor = (days: number, from = NOW) => ({
-    planId: "starter",
+    planId: "mensal",
     status: "active",
     paidAt: NOW,
     currentPeriodEnd: new Date(from.getTime() + days * DAY),
@@ -202,17 +199,24 @@ describe("handleAbacateEvent", () => {
     expect(deps.setSubscription).toHaveBeenCalledWith(WORKSPACE_ID, activeFor(30));
   });
 
-  it("troca de plano grava o plano da nova cobrança", async () => {
+  it("plano anual libera 365 dias de acesso", async () => {
     const deps = makeDeps();
-    deps.findCheckout.mockResolvedValue(pendingCheckout({ planId: "network", amount: 27900 }));
+    deps.findCheckout.mockResolvedValue(pendingCheckout({ planId: "anual", amount: 107880 }));
+    deps.findOwnedWorkspace.mockResolvedValue({ id: WORKSPACE_ID, subscription: null });
+
+    await handleAbacateEvent(paidPayload({ amount: 107880, paidAmount: 107880 }), ctx, deps);
+
+    expect(deps.setSubscription).toHaveBeenCalledWith(WORKSPACE_ID, { ...activeFor(365), planId: "anual" });
+  });
+
+  it("renovação anual antes do vencimento soma 365 dias ao fim do período atual", async () => {
+    const deps = makeDeps();
+    deps.findCheckout.mockResolvedValue(pendingCheckout({ planId: "anual", amount: 107880 }));
     deps.findOwnedWorkspace.mockResolvedValue({ id: WORKSPACE_ID, subscription: activeFor(10) });
 
-    await handleAbacateEvent(paidPayload({ amount: 27900, paidAmount: 27900 }), ctx, deps);
+    await handleAbacateEvent(paidPayload({ amount: 107880, paidAmount: 107880 }), ctx, deps);
 
-    expect(deps.setSubscription).toHaveBeenCalledWith(
-      WORKSPACE_ID,
-      { ...activeFor(40), planId: "network" },
-    );
+    expect(deps.setSubscription).toHaveBeenCalledWith(WORKSPACE_ID, { ...activeFor(375), planId: "anual" });
   });
 
   it("cobrança já paga → duplicate, sem ativar de novo", async () => {
