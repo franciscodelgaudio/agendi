@@ -70,7 +70,8 @@ export async function saveThread(
     userId: ctx.userId,
     ...scope,
     title: threadTitle(messages),
-    messages: messages.slice(-MAX_THREAD_MESSAGES),
+    // Sem os campos undefined: o Mongo os gravaria como null e o AI SDK recusaria o histórico.
+    messages: JSON.parse(JSON.stringify(messages.slice(-MAX_THREAD_MESSAGES))),
     lastMessageAt: deps.now(),
   });
   return { ok: true };

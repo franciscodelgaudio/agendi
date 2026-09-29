@@ -120,6 +120,32 @@ describe("saveThread", () => {
     expect(saved.title).toBe("primeira pergunta");
   });
 
+  it("tira os campos undefined das mensagens (o Mongo gravaria null e o AI SDK recusaria o histórico)", async () => {
+    const d = deps();
+    const toolPart = {
+      type: "tool-addNode",
+      toolCallId: "c1",
+      state: "output-available",
+      input: { userId: null, data: { text: "oi", label: undefined } },
+      output: { ok: true },
+      providerExecuted: undefined,
+    };
+    const messages = [user("oi"), { id: "a", role: "assistant", parts: [{ type: "step-start" }, toolPart] }];
+    await saveThread({ key: KEY, mode: "global", scopeId: null, messages }, ctx, d);
+    const saved = (d.upsert.mock.calls[0] as unknown[])[1] as { messages: unknown[] };
+    expect(saved.messages).toStrictEqual([
+      user("oi"),
+      {
+        id: "a",
+        role: "assistant",
+        parts: [
+          { type: "step-start" },
+          { type: "tool-addNode", toolCallId: "c1", state: "output-available", input: { userId: null, data: { text: "oi" } }, output: { ok: true } },
+        ],
+      },
+    ]);
+  });
+
   it("sem pergunta do usuário não grava nada", async () => {
     const d = deps();
     expect(await saveThread({ key: KEY, mode: "global", scopeId: null, messages: [] }, ctx, d)).toEqual({ ok: true });
