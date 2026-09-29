@@ -1,16 +1,15 @@
-import { PLAN_MODES, PLAN_PERIOD_DAYS, PLANS, type PlanId, type PlanMode } from "@/lib/plans"
+import { PLAN_PERIOD_DAYS, PLANS, type PlanId } from "@/lib/plans"
 
 const DAY = 24 * 60 * 60 * 1000
 
 export type Subscription = {
   planId: PlanId
-  mode: PlanMode
   status: "active"
   paidAt: Date
   currentPeriodEnd: Date
 }
 
-export type StartCheckoutError = "unauthenticated" | "invalid_plan" | "invalid_mode" | "workspace_not_found"
+export type StartCheckoutError = "unauthenticated" | "invalid_plan" | "workspace_not_found"
 export type StartCheckoutResult = { ok: true; url: string } | { ok: false; error: StartCheckoutError }
 
 type StartCheckoutDeps = {
@@ -19,13 +18,11 @@ type StartCheckoutDeps = {
     userId: string
     workspaceId: string | null
     planId: PlanId
-    mode: PlanMode
     amount: number
   }) => Promise<{ id: string }>
   createCharge: (data: {
     checkoutId: string
     planId: PlanId
-    mode: PlanMode
     amount: number
     email: string
     name: string
@@ -42,29 +39,25 @@ export async function startCheckout(
 ): Promise<StartCheckoutResult> {
   if (!ctx.userId) return { ok: false, error: "unauthenticated" }
 
-  const { plan: planId, mode, workspaceId } = (input ?? {}) as Record<string, unknown>
+  const { plan: planId, workspaceId } = (input ?? {}) as Record<string, unknown>
   const plan = PLANS.find((p) => p.id === planId)
   if (!plan) return { ok: false, error: "invalid_plan" }
-  if (!PLAN_MODES.includes(mode as PlanMode)) return { ok: false, error: "invalid_mode" }
-  const planMode = mode as PlanMode
 
   const targetWorkspaceId = typeof workspaceId === "string" && workspaceId ? workspaceId : null
   if (targetWorkspaceId && !(await deps.ownsWorkspace(targetWorkspaceId, ctx.userId))) {
     return { ok: false, error: "workspace_not_found" }
   }
 
-  const amount = plan.prices[planMode]
+  const amount = plan.price
   const checkout = await deps.insertCheckout({
     userId: ctx.userId,
     workspaceId: targetWorkspaceId,
     planId: plan.id,
-    mode: planMode,
     amount,
   })
   const charge = await deps.createCharge({
     checkoutId: checkout.id,
     planId: plan.id,
-    mode: planMode,
     amount,
     email: ctx.email,
     name: ctx.name,
@@ -80,7 +73,6 @@ type CheckoutRecord = {
   userId: string
   workspaceId: string | null
   planId: PlanId
-  mode: PlanMode
   amount: number
   status: "pending" | "paid"
 }
@@ -129,7 +121,6 @@ export async function handleAbacateEvent(
     const start = Math.max(ctx.now.getTime(), currentEnd)
     const subscription: Subscription = {
       planId: checkout.planId,
-      mode: checkout.mode,
       status: "active",
       paidAt: ctx.now,
       currentPeriodEnd: new Date(start + PLAN_PERIOD_DAYS * DAY),

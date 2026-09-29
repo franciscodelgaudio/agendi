@@ -21,7 +21,7 @@ export const FEATURES: readonly Feature[] = [
   { icon: Contact, title: "Clientes", description: "Histórico de atendimentos, contato e observações de cada cliente." },
   { icon: Sparkles, title: "Serviços e produtos", description: "Duração, preço e produtos usados em cada serviço." },
   { icon: Package, title: "Estoque", description: "Entradas, consumo por atendimento e histórico de cada produto." },
-  { icon: Wallet, title: "Caixa e planejamento", description: "Entradas, saídas, saldo e o planejamento do mês." },
+  { icon: Wallet, title: "Financeiro", description: "Caixa, despesas por grupo com limite mensal e o resultado de cada unidade." },
   { icon: Percent, title: "Comissões por profissional e unidade", description: "Regras por profissional e por unidade, calculadas no fechamento." },
   { icon: Handshake, title: "Profissional parceiro", description: "Quem atende como parceiro, com repasse calculado à parte." },
   { icon: Building2, title: "Múltiplas unidades", description: "Cada unidade com equipe, agenda e caixa, e a visão da rede toda." },

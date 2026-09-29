@@ -5,7 +5,7 @@ import { startCheckout } from "@/lib/billing"
 import { Checkout } from "@/models/Checkout"
 import { Workspace } from "@/models/Workspace"
 
-// "Assinar agora" da landing e da tela de planos: /assinar?plano=&modalidade=[&workspace=].
+// "Assinar agora" da landing e da tela de planos: /assinar?plano=[&workspace=].
 // Sem sessão, o proxy manda para o login com callbackUrl e o usuário volta para cá.
 // É GET porque vem de um link; cada clique cria uma cobrança pendente nova.
 export async function GET(request: Request) {
@@ -16,7 +16,6 @@ export async function GET(request: Request) {
   const result = await startCheckout(
     {
       plan: url.searchParams.get("plano"),
-      mode: url.searchParams.get("modalidade"),
       workspaceId: url.searchParams.get("workspace"),
     },
     { userId, email: user?.email ?? "", name: user?.name ?? "" },

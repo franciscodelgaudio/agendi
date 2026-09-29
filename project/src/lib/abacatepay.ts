@@ -1,4 +1,4 @@
-import { PLAN_MODE_LABELS, PLANS, type PlanId, type PlanMode } from "@/lib/plans"
+import { PLANS, type PlanId } from "@/lib/plans"
 
 const API_URL = "https://api.abacatepay.com/v2"
 
@@ -36,10 +36,10 @@ async function request<T>(path: string, init?: { method?: "GET" | "POST"; body?:
   return json.data
 }
 
-// A v2 só cria checkout de produtos do catálogo. Cada plano × modalidade × preço vira um produto;
+// A v2 só cria checkout de produtos do catálogo. Cada plano × preço vira um produto;
 // mudar o preço em plans.ts cria um produto novo em vez de alterar o antigo.
-async function ensureProduct(planId: PlanId, mode: PlanMode, amount: number) {
-  const externalId = `agenli-${planId}-${mode}-${amount}`
+async function ensureProduct(planId: PlanId, amount: number) {
+  const externalId = `agenli-${planId}-${amount}`
   const [existing] = await request<{ id: string }[]>(`/products/list?${new URLSearchParams({ externalId, status: "ACTIVE" })}`)
   if (existing) return existing.id
 
@@ -48,7 +48,7 @@ async function ensureProduct(planId: PlanId, mode: PlanMode, amount: number) {
     method: "POST",
     body: {
       externalId,
-      name: `Agenli · ${plan.name} · ${PLAN_MODE_LABELS[mode]}`,
+      name: `Agenli · ${plan.name}`,
       description: `30 dias de acesso ao Agenli: ${plan.name.toLowerCase()}, até ${plan.maxUsers} usuários.`,
       price: amount,
       currency: "BRL",
@@ -62,13 +62,12 @@ async function ensureProduct(planId: PlanId, mode: PlanMode, amount: number) {
 export async function createPlanCharge(data: {
   checkoutId: string
   planId: PlanId
-  mode: PlanMode
   amount: number
   email: string
   name: string
 }) {
   const [productId, customer] = await Promise.all([
-    ensureProduct(data.planId, data.mode, data.amount),
+    ensureProduct(data.planId, data.amount),
     request<{ id: string }>("/customers/create", {
       method: "POST",
       body: { email: data.email, ...(data.name ? { name: data.name } : {}) },
@@ -84,7 +83,7 @@ export async function createPlanCharge(data: {
       externalId: data.checkoutId,
       returnUrl: appUrl("/#planos"),
       completionUrl: appUrl(`/assinar/concluido?cobranca=${data.checkoutId}`),
-      metadata: { planId: data.planId, mode: data.mode },
+      metadata: { planId: data.planId },
     },
   })
   return { chargeId: charge.id, url: charge.url }

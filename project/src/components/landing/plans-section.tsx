@@ -1,50 +1,15 @@
-"use client";
-
-import { useState } from "react";
-import {
-  PLAN_MODE_LABELS,
-  PLAN_MODE_NOTES,
-  PLAN_MODES,
-  PLANS,
-  RECOMMENDED_PLAN_ID,
-  type PlanMode,
-} from "@/lib/plans";
+import { AVG_COST_PER_SERVICE_CENTS, PLANS, RECOMMENDED_PLAN_ID } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 
 const formatPrice = (cents: number) =>
   `R$ ${(cents / 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`;
+const formatCost = (cents: number) =>
+  (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-// Toggle entre as modalidades: troca os preços no cliente, sem recarregar.
 // Com workspaceId (tela de planos dentro do app), o pagamento ativa esse workspace.
 export function PlansSection({ workspaceId }: { workspaceId?: string }) {
-  const [mode, setMode] = useState<PlanMode>("standard");
-
   return (
     <div className="flex flex-col gap-6">
-      <div
-        role="radiogroup"
-        aria-label="Modalidade do plano"
-        className="flex w-full flex-col gap-1 rounded-[10px] border border-ld-line bg-ld-cream p-1 min-[600px]:w-fit min-[600px]:flex-row"
-      >
-        {PLAN_MODES.map((option) => (
-          <button
-            key={option}
-            type="button"
-            role="radio"
-            aria-checked={mode === option}
-            onClick={() => setMode(option)}
-            className={cn(
-              "rounded-[6px] px-4 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ld-brand",
-              mode === option
-                ? "bg-ld-brand text-white shadow-sm"
-                : "text-ld-ink-soft hover:text-ld-ink",
-            )}
-          >
-            {PLAN_MODE_LABELS[option]}
-          </button>
-        ))}
-      </div>
-
       <ul className="grid grid-cols-1 gap-4 min-[600px]:grid-cols-2 min-[1100px]:grid-cols-4">
         {PLANS.map((plan) => {
           const recommended = plan.id === RECOMMENDED_PLAN_ID;
@@ -72,21 +37,24 @@ export function PlansSection({ workspaceId }: { workspaceId?: string }) {
                 </p>
               </div>
               <p className="font-mono text-ld-ink">
-                <span
-                  className="text-3xl font-semibold tracking-tight"
-                  aria-live="polite"
-                >
-                  {formatPrice(plan.prices[mode])}
+                <span className="text-3xl font-semibold tracking-tight">
+                  {formatPrice(plan.price)}
                 </span>
                 <span className="text-sm text-ld-ink-soft">/mês</span>
               </p>
-              <p className="font-mono text-xs uppercase tracking-wide text-ld-ink-soft">
-                {PLAN_MODE_NOTES[mode]}
-              </p>
+              <div className="flex flex-col gap-1 text-sm">
+                <p className="text-ld-ink">
+                  Robô, URA, WhatsApp e Instagram inclusos
+                </p>
+                <p className="font-medium text-ld-brand">
+                  Sem pacote fechado: você paga só o que usar, cerca de{" "}
+                  {formatCost(AVG_COST_PER_SERVICE_CENTS)} por atendimento
+                </p>
+              </div>
               <a
-                href={`/assinar?${new URLSearchParams({ plano: plan.id, modalidade: mode, ...(workspaceId ? { workspace: workspaceId } : {}) })}`}
+                href={`/assinar?${new URLSearchParams({ plano: plan.id, ...(workspaceId ? { workspace: workspaceId } : {}) })}`}
                 className="mt-auto inline-flex h-11 items-center justify-center rounded-[6px] bg-ld-brand px-5 text-sm font-medium text-white transition-colors hover:bg-ld-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ld-brand"
-                aria-label={`Assinar agora o plano ${plan.name}, ${PLAN_MODE_LABELS[mode]}`}
+                aria-label={`Assinar agora o plano ${plan.name}`}
               >
                 Assinar agora
               </a>

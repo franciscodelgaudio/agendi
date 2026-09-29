@@ -20,20 +20,18 @@ describe("startCheckout", () => {
   it("registra a cobrança pendente com o valor do plano e devolve a URL do checkout", async () => {
     const deps = makeDeps();
 
-    const result = await startCheckout({ plan: "starter", mode: "standard" }, ctx, deps);
+    const result = await startCheckout({ plan: "starter" }, ctx, deps);
 
     expect(result).toEqual({ ok: true, url: "https://app.abacatepay.com/pay/bill_abc" });
     expect(deps.insertCheckout).toHaveBeenCalledWith({
       userId: USER_ID,
       workspaceId: null,
       planId: "starter",
-      mode: "standard",
       amount: 11900,
     });
     expect(deps.createCharge).toHaveBeenCalledWith({
       checkoutId: CHECKOUT_ID,
       planId: "starter",
-      mode: "standard",
       amount: 11900,
       email: "ana@exemplo.com",
       name: "Ana",
@@ -42,16 +40,13 @@ describe("startCheckout", () => {
   });
 
   it.each([
-    ["starter", "standard", 11900],
-    ["starter", "communication", 19800],
-    ["growth", "standard", 17900],
-    ["growth", "communication", 25800],
-    ["network", "standard", 27900],
-    ["network", "communication", 35800],
-  ])("cobra o valor da tabela (%s, %s → %i)", async (plan, mode, amount) => {
+    ["starter", 11900],
+    ["growth", 17900],
+    ["network", 27900],
+  ])("cobra o valor da tabela (%s → %i)", async (plan, amount) => {
     const deps = makeDeps();
 
-    await startCheckout({ plan, mode }, ctx, deps);
+    await startCheckout({ plan }, ctx, deps);
 
     expect(deps.insertCheckout).toHaveBeenCalledWith(expect.objectContaining({ amount }));
   });
@@ -59,7 +54,7 @@ describe("startCheckout", () => {
   it("vincula ao workspace informado quando o usuário é o dono", async () => {
     const deps = makeDeps();
 
-    await startCheckout({ plan: "growth", mode: "communication", workspaceId: WORKSPACE_ID }, ctx, deps);
+    await startCheckout({ plan: "growth", workspaceId: WORKSPACE_ID }, ctx, deps);
 
     expect(deps.ownsWorkspace).toHaveBeenCalledWith(WORKSPACE_ID, USER_ID);
     expect(deps.insertCheckout).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: WORKSPACE_ID }));
@@ -69,7 +64,7 @@ describe("startCheckout", () => {
     const deps = makeDeps();
     deps.ownsWorkspace.mockResolvedValue(false);
 
-    const result = await startCheckout({ plan: "growth", mode: "standard", workspaceId: WORKSPACE_ID }, ctx, deps);
+    const result = await startCheckout({ plan: "growth", workspaceId: WORKSPACE_ID }, ctx, deps);
 
     expect(result).toEqual({ ok: false, error: "workspace_not_found" });
     expect(deps.insertCheckout).not.toHaveBeenCalled();
@@ -79,7 +74,7 @@ describe("startCheckout", () => {
   it("sem sessão → unauthenticated", async () => {
     const deps = makeDeps();
 
-    const result = await startCheckout({ plan: "starter", mode: "standard" }, { ...ctx, userId: null }, deps);
+    const result = await startCheckout({ plan: "starter" }, { ...ctx, userId: null }, deps);
 
     expect(result).toEqual({ ok: false, error: "unauthenticated" });
     expect(deps.insertCheckout).not.toHaveBeenCalled();
@@ -88,18 +83,9 @@ describe("startCheckout", () => {
   it.each([undefined, "", "enterprise", 3])("plano inválido (%s) → invalid_plan", async (plan) => {
     const deps = makeDeps();
 
-    const result = await startCheckout({ plan, mode: "standard" }, ctx, deps);
+    const result = await startCheckout({ plan }, ctx, deps);
 
     expect(result).toEqual({ ok: false, error: "invalid_plan" });
-    expect(deps.createCharge).not.toHaveBeenCalled();
-  });
-
-  it.each([undefined, "", "premium"])("modalidade inválida (%s) → invalid_mode", async (mode) => {
-    const deps = makeDeps();
-
-    const result = await startCheckout({ plan: "starter", mode }, ctx, deps);
-
-    expect(result).toEqual({ ok: false, error: "invalid_mode" });
     expect(deps.createCharge).not.toHaveBeenCalled();
   });
 
@@ -120,8 +106,8 @@ describe("handleAbacateEvent", () => {
       checkout: {
         id: "bill_abc",
         externalId: CHECKOUT_ID,
-        amount: 19800,
-        paidAmount: 19800,
+        amount: 11900,
+        paidAmount: 11900,
         status: "PAID",
         ...overrides,
       },
@@ -134,8 +120,7 @@ describe("handleAbacateEvent", () => {
     userId: USER_ID,
     workspaceId: null as string | null,
     planId: "starter" as const,
-    mode: "communication" as const,
-    amount: 19800,
+    amount: 11900,
     status: "pending" as const,
     ...overrides,
   });
@@ -154,7 +139,6 @@ describe("handleAbacateEvent", () => {
 
   const activeFor = (days: number, from = NOW) => ({
     planId: "starter",
-    mode: "communication",
     status: "active",
     paidAt: NOW,
     currentPeriodEnd: new Date(from.getTime() + days * DAY),
@@ -218,16 +202,16 @@ describe("handleAbacateEvent", () => {
     expect(deps.setSubscription).toHaveBeenCalledWith(WORKSPACE_ID, activeFor(30));
   });
 
-  it("troca de plano grava o plano e a modalidade da nova cobrança", async () => {
+  it("troca de plano grava o plano da nova cobrança", async () => {
     const deps = makeDeps();
-    deps.findCheckout.mockResolvedValue(pendingCheckout({ planId: "network", mode: "standard", amount: 27900 }));
+    deps.findCheckout.mockResolvedValue(pendingCheckout({ planId: "network", amount: 27900 }));
     deps.findOwnedWorkspace.mockResolvedValue({ id: WORKSPACE_ID, subscription: activeFor(10) });
 
     await handleAbacateEvent(paidPayload({ amount: 27900, paidAmount: 27900 }), ctx, deps);
 
     expect(deps.setSubscription).toHaveBeenCalledWith(
       WORKSPACE_ID,
-      expect.objectContaining({ planId: "network", mode: "standard" }),
+      { ...activeFor(40), planId: "network" },
     );
   });
 

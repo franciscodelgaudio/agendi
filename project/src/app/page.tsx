@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Image from "next/image"
-import { ArrowRight, Bot, CalendarCheck, Check } from "lucide-react"
+import { ArrowRight, Bot, CalendarCheck } from "lucide-react"
 import { ContactForm } from "@/components/landing/contact-form"
 import { FEATURES } from "@/components/landing/features"
 import { LandingLogo } from "@/components/landing/landing-logo"
@@ -19,32 +19,15 @@ export const metadata: Metadata = {
 
 const NAV = [
   { href: "#recursos", label: "Recursos" },
-  { href: "#parceiros", label: "Parceiros" },
   { href: "#planos", label: "Planos" },
   { href: "#sob-medida", label: "Sob medida" },
 ]
 
-const PARTNER_RULES = [
-  {
-    name: "Hotel parceiro",
-    cycle: "Mensal",
-    rows: [
-      ["Até R$ 30.000", "30%"],
-      ["Acima de R$ 30.000", "35% do total"],
-    ],
-  },
-  { name: "Clube parceiro", cycle: "Quinzenal", rows: [["Percentual fixo", "15%"]] },
-  { name: "Unidade própria", cycle: "Sem ciclo", rows: [["Repasse", "Sem repasse"]] },
+const CLIENTS = [
+  { name: "Aira Spa", href: "https://airaspa.com.br", logo: "/landing/clientes/aira-spa.png", width: 1243, height: 569 },
 ]
 
-const FINANCE_POINTS = [
-  "Faturamento por unidade e por profissional",
-  "Despesas por grupo com limite mensal",
-  "Comissões calculadas no fechamento",
-  "Resultado do mês de cada unidade e da rede",
-]
-
-const lowestPrice = Math.min(...PLANS.map((plan) => plan.prices.standard)) / 100
+const lowestPrice = Math.min(...PLANS.map((plan) => plan.price)) / 100
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2"
 const lightButton = cn(
@@ -211,34 +194,45 @@ export default function LandingPage() {
           </Container>
         </section>
 
-        <section aria-label="Destaque" className="border-b border-ld-line bg-ld-sage-light">
-          <Container className="flex flex-col gap-2 py-6 min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between">
-            <p className="text-lg font-semibold tracking-tight text-ld-forest">Uma unidade ou uma rede, na mesma conta.</p>
-            <p className="font-mono text-xs font-medium tracking-[0.14em] text-ld-brand uppercase">
-              Acesso liberado após o pagamento
-            </p>
-          </Container>
-        </section>
-
         <section id="recursos" aria-labelledby="recursos-title" className="scroll-mt-16 bg-ld-cream py-20 min-[900px]:py-28">
           <Container className="flex flex-col gap-12">
             <div data-reveal className="flex max-w-3xl flex-col gap-4">
               <Eyebrow>Recursos</Eyebrow>
               <H2 id="recursos-title">Tudo o que o seu negócio usa no dia.</H2>
             </div>
-            <Tilt data-reveal="zoom">
-              <div className="ld-tilt relative aspect-[4/3] overflow-hidden rounded-xl border border-ld-line bg-white shadow-sm min-[600px]:aspect-[16/8]">
-                <Image
-                  src="/landing/calendario.webp"
-                  alt="Calendário semanal de uma unidade no Agenli, com os agendamentos de cada profissional"
-                  fill
-                  loading="lazy"
-                  quality={90}
-                  sizes="(min-width: 1280px) 1200px, 100vw"
-                  className="object-cover object-[center_top]"
-                />
-              </div>
-            </Tilt>
+            {/* Agenda e financeiro: no desktop, a tela de gastos sobrepõe o canto do calendário. */}
+            <div className="relative flex flex-col gap-4 min-[900px]:block min-[900px]:pb-[16%]">
+              <Tilt data-reveal="zoom" className="min-[900px]:w-[80%]">
+                <div className="ld-tilt relative aspect-[4/3] overflow-hidden rounded-xl border border-ld-line bg-white shadow-sm min-[600px]:aspect-[1850/990]">
+                  <Image
+                    src="/landing/calendario.webp"
+                    alt="Calendário semanal de uma unidade no Agenli, com os agendamentos de cada profissional"
+                    fill
+                    loading="lazy"
+                    quality={90}
+                    sizes="(min-width: 1280px) 960px, (min-width: 900px) 80vw, 100vw"
+                    className="object-cover object-[center_top]"
+                  />
+                </div>
+              </Tilt>
+              <Tilt
+                data-reveal="zoom"
+                style={stagger(1)}
+                className="min-[900px]:absolute min-[900px]:right-0 min-[900px]:bottom-0 min-[900px]:w-[48%]"
+              >
+                <div className="ld-tilt relative aspect-[1850/990] overflow-hidden rounded-xl border border-ld-line bg-white shadow-sm min-[900px]:shadow-[0_30px_60px_-20px_rgba(23,63,56,0.45)]">
+                  <Image
+                    src="/landing/gastos.webp"
+                    alt="Resumo do caixa de uma unidade com o card Gastos por grupo e os limites mensais"
+                    fill
+                    loading="lazy"
+                    quality={90}
+                    sizes="(min-width: 1280px) 580px, (min-width: 900px) 48vw, 100vw"
+                    className="object-cover object-[center_30%]"
+                  />
+                </div>
+              </Tilt>
+            </div>
             <ul className="grid grid-cols-1 gap-4 min-[900px]:grid-cols-3">
               {FEATURES.map(({ icon: Icon, title, description }, index) => (
                 <li
@@ -260,77 +254,34 @@ export default function LandingPage() {
           </Container>
         </section>
 
-        <section aria-labelledby="financeiro-title" className="bg-ld-paper py-20 min-[900px]:py-28">
-          <Container className="grid grid-cols-1 items-center gap-12 min-[900px]:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
-            <div data-reveal className="flex flex-col gap-5">
-              <Eyebrow>Financeiro</Eyebrow>
-              <H2 id="financeiro-title">Veja o resultado de cada unidade.</H2>
-              <p className="text-lg leading-relaxed text-ld-ink-soft">
-                Faturamento, despesas por grupo com limite mensal, comissões e o resultado do mês, por unidade e da rede
-                inteira.
-              </p>
-              <ul className="flex flex-col gap-3 pt-2">
-                {FINANCE_POINTS.map((point, index) => (
-                  <li key={point} data-reveal style={stagger(index + 2)} className="flex items-start gap-3 text-ld-ink">
-                    <Check aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-ld-brand" />
-                    {point}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <Tilt data-reveal="zoom" style={stagger(1)}>
-              <div className="ld-tilt relative aspect-[1850/990] overflow-hidden rounded-xl border border-ld-line bg-white shadow-sm">
-                <Image
-                  src="/landing/gastos.webp"
-                  alt="Resumo do caixa de uma unidade com o card Gastos por grupo e os limites mensais"
-                  fill
-                  loading="lazy"
-                  quality={90}
-                  sizes="(min-width: 1280px) 680px, (min-width: 900px) 55vw, 100vw"
-                  className="object-cover object-[center_30%]"
-                />
-              </div>
-            </Tilt>
-          </Container>
-        </section>
-
-        <section id="parceiros" aria-labelledby="parceiros-title" className="scroll-mt-16 border-y border-ld-line bg-ld-cream py-16 min-[900px]:py-20">
-          <Container className="flex flex-col gap-10">
-            <div data-reveal className="grid grid-cols-1 gap-4 min-[900px]:grid-cols-2 min-[900px]:items-end min-[900px]:gap-16">
-              <div className="flex flex-col gap-4">
-                <Eyebrow>Parceiros</Eyebrow>
-                <h2 id="parceiros-title" className="text-[28px] leading-[1.15] font-semibold tracking-[-0.03em] text-balance min-[900px]:text-[34px]">
-                  Opera dentro de outro negócio? O repasse sai sozinho.
-                </h2>
-              </div>
-              <p className="leading-relaxed text-ld-ink-soft">
-                Para quem atende dentro de hotéis, clubes, academias ou outros espaços: cadastre a regra do contrato
-                (percentual fixo ou faixas por faturamento; ciclo semanal, quinzenal ou mensal) e o Agenli calcula o
-                repasse.
-              </p>
-            </div>
-            <ul className="grid grid-cols-1 gap-4 min-[900px]:grid-cols-3">
-              {PARTNER_RULES.map((rule, index) => (
-                <li
-                  key={rule.name}
-                  data-reveal
-                  style={stagger(index)}
-                  className={cn("flex flex-col gap-4 rounded-[10px] border border-ld-line bg-ld-paper p-5", cardHover)}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-semibold text-ld-ink">{rule.name}</h3>
-                    <span className="rounded-[4px] bg-ld-sage-light px-2 py-0.5 font-mono text-[11px] font-medium tracking-wide text-ld-brand uppercase">
-                      {rule.cycle}
-                    </span>
-                  </div>
-                  <dl className="flex flex-col gap-2 border-t border-ld-line pt-3">
-                    {rule.rows.map(([label, value]) => (
-                      <div key={label} className="flex items-baseline justify-between gap-3 text-sm">
-                        <dt className="text-ld-ink-soft">{label}</dt>
-                        <dd className="font-mono font-semibold text-ld-ink">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
+        <section id="clientes" aria-labelledby="clientes-title" className="border-y border-ld-line bg-ld-paper py-8">
+          <Container className="flex flex-col items-center gap-5 min-[600px]:flex-row min-[600px]:justify-center min-[600px]:gap-8">
+            <h2 id="clientes-title" className="font-mono text-xs font-medium tracking-[0.14em] text-ld-brand uppercase">
+              Cliente em destaque
+            </h2>
+            <span aria-hidden="true" className="hidden h-8 w-px bg-ld-line min-[600px]:block" />
+            <ul className="flex flex-wrap items-center justify-center gap-8">
+              {CLIENTS.map((client) => (
+                <li key={client.name}>
+                  <a
+                    href={client.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn(
+                      "group block focus-visible:outline-ld-brand",
+                      focusRing,
+                    )}
+                  >
+                    <Image
+                      src={client.logo}
+                      alt={client.name}
+                      width={client.width}
+                      height={client.height}
+                      loading="lazy"
+                      sizes="160px"
+                      className="h-10 w-auto transition-transform duration-300 group-hover:scale-105"
+                    />
+                  </a>
                 </li>
               ))}
             </ul>
@@ -346,10 +297,7 @@ export default function LandingPage() {
             <div data-reveal style={stagger(1)}>
               <PlansSection />
             </div>
-            <div className="flex flex-col gap-3 text-sm min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between">
-              <p className="font-mono text-xs tracking-wide text-ld-ink-soft uppercase">
-                Pagamento via AbacatePay · acesso liberado após a confirmação
-              </p>
+            <div className="flex text-sm min-[900px]:justify-end">
               <a href="#contato" className={cn("font-medium text-ld-brand underline-offset-4 hover:underline focus-visible:outline-ld-brand", focusRing)}>
                 Quer outro formato de plano? Fale com a gente →
               </a>
@@ -397,9 +345,20 @@ export default function LandingPage() {
       </main>
 
       <footer className="border-t border-white/10 bg-ld-forest">
-        <Container className="flex items-center gap-2 py-8 text-sm text-ld-mist">
-          <LandingLogo className="size-5" />
-          Agenli · Gestão para beleza e bem-estar
+        <Container className="flex flex-col gap-6 py-8 text-sm text-ld-mist min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between">
+          <div className="flex items-center gap-2">
+            <LandingLogo className="size-5" />
+            Agenli · Gestão para beleza e bem-estar
+          </div>
+          <div className="flex flex-col gap-2 min-[900px]:items-end">
+            <div className="flex items-center gap-2">
+              Feito por
+              <Image src="/landing/triad.png" alt="Triad" width={260} height={96} className="h-5 w-auto" />
+            </div>
+            <p className="text-xs text-ld-mist/70">
+              Triad Soluções Inteligentes · CNPJ 62.262.799/0001-41 · (45) 98835-1168
+            </p>
+          </div>
         </Container>
       </footer>
     </div>

@@ -44,7 +44,6 @@ export async function POST(request: Request) {
             userId: checkout.userId.toString(),
             workspaceId: checkout.workspaceId?.toString() ?? null,
             planId: checkout.planId,
-            mode: checkout.mode,
             amount: checkout.amount,
             status: checkout.status,
           }

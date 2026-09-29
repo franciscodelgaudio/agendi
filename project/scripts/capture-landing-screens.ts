@@ -263,7 +263,6 @@ async function seed(db: Db, now: Date): Promise<SeedResult> {
     userId: ownerId,
     subscription: {
       planId: "network",
-      mode: "communication",
       status: "active",
       paidAt: now,
       currentPeriodEnd: new Date(now.getTime() + 30 * DAY_MS),

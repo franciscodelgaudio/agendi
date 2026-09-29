@@ -1,7 +1,7 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 import { connectOnUse } from "@/lib/mongoose";
 import { UNIT_PAGES, WORKSPACE_PAGES } from "@/lib/page-access";
-import { PLAN_IDS, PLAN_MODES } from "@/lib/plans";
+import { PLAN_IDS } from "@/lib/plans";
 
 // Páginas ocultas para uma função; o proprietário e administradores sempre veem tudo.
 const rolePagesSchema = new Schema(
@@ -16,7 +16,6 @@ const rolePagesSchema = new Schema(
 const subscriptionSchema = new Schema(
   {
     planId: { type: String, enum: PLAN_IDS, required: true },
-    mode: { type: String, enum: PLAN_MODES, required: true },
     status: { type: String, enum: ["active"], required: true },
     paidAt: { type: Date, required: true },
     currentPeriodEnd: { type: Date, required: true },
