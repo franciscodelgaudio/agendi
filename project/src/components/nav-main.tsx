@@ -57,20 +57,31 @@ export function NavMain({
         ...item("calendar", "Calendário", CalendarIcon),
         ...item("cash_flow", "Caixa", WalletIcon),
         ...item("team", "Equipe", UsersRoundIcon),
+      ],
+    },
+    {
+      label: "Atendimento",
+      items: [
         ...(inbox ? [{ title: "Conversas", href: `${base}/inbox`, icon: MessagesSquareIcon, tour: "nav-inbox" }] : []),
+        ...(canManage ? [{ title: "Canais", href: `${base}/channels`, icon: RadioTowerIcon, tour: "nav-channels" }] : []),
+      ],
+    },
+    {
+      label: "AgenIA",
+      items: [
+        ...(agenia ? [{ title: "AgenIA", href: agenia.pageHref, icon: SparklesIcon, tour: "nav-agenia" }] : []),
+        ...(canManage
+          ? [
+              { title: "URAs", href: `${base}/uras`, icon: WorkflowIcon, tour: "nav-uras" },
+              { title: "Custos de IA", href: `${base}/ai-costs`, icon: CoinsIcon, tour: "nav-ai-costs" },
+            ]
+          : []),
       ],
     },
     {
       label: "Configurações",
       items: [
         ...item("users", "Usuários", UsersIcon),
-        ...(canManage
-          ? [
-              { title: "Canais", href: `${base}/channels`, icon: RadioTowerIcon, tour: "nav-channels" },
-              { title: "URAs", href: `${base}/uras`, icon: WorkflowIcon, tour: "nav-uras" },
-              { title: "Custos de IA", href: `${base}/ai-costs`, icon: CoinsIcon, tour: "nav-ai-costs" },
-            ]
-          : []),
         { title: "Tickets", href: `${base}/tickets`, icon: LifeBuoyIcon, tour: "nav-tickets" },
       ],
     },
@@ -94,19 +105,6 @@ export function NavMain({
             </SidebarMenuButton>
           </SidebarMenuItem>
         ))}
-        {/* A AgenIA abre como painel lateral; fica no primeiro grupo, junto do Início. */}
-        {i === 0 && agenia && (
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip="AgenIA"
-              isActive={agenia.open || pathname === agenia.pageHref}
-              onClick={() => agenia.setOpen(!agenia.open)}
-            >
-              <SparklesIcon />
-              <span>AgenIA</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        )}
       </SidebarMenu>
     </SidebarGroup>
   ))

@@ -59,6 +59,8 @@
   --color-ld-mist: #b9c9c2;
   --animate-progress: progress 1.2s ease-in-out infinite;
   --animate-tour-pulse: tour-pulse 1.6s ease-out infinite;
+  --animate-agenia-breathe: agenia-breathe 4s ease-in-out infinite;
+  --animate-agenia-twinkle: agenia-twinkle 4s ease-in-out infinite;
 
   @keyframes progress {
     from {
@@ -75,6 +77,29 @@
     }
     to {
       box-shadow: 0 0 0 14px transparent;
+    }
+  }
+
+  /* Repete o shadow-lg do botão para o halo não apagá-lo. */
+  @keyframes agenia-breathe {
+    0%,
+    100% {
+      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1), 0 0 0 0 color-mix(in oklab, var(--color-primary) 0%, transparent);
+    }
+    50% {
+      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1), 0 0 0 6px color-mix(in oklab, var(--color-primary) 18%, transparent);
+    }
+  }
+
+  @keyframes agenia-twinkle {
+    0%,
+    100% {
+      opacity: 0.7;
+      transform: scale(0.9);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.1);
     }
   }
 }
