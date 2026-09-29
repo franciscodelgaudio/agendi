@@ -22,7 +22,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
   if (!userId) return fail("Sua sessão expirou. Entre novamente.", 401)
   const access = await findWorkspaceAccess(workspaceId, userId)
   if (!access || !canUseInbox(access.role)) return fail("Sua função não pode usar a AgenIA aqui.", 403)
-  if (!isAgeniaConfigured()) return fail("A AgenIA não está configurada: defina OPENAI_API_KEY no ambiente.", 503)
+  if (!isAgeniaConfigured()) return fail("A AgenIA não está configurada: defina GEMINI_API_KEY no ambiente.", 503)
 
   const parsed = z.object({ conversationId: z.string() }).safeParse(await request.json().catch(() => null))
   if (!parsed.success) return fail("Requisição inválida.", 400)
