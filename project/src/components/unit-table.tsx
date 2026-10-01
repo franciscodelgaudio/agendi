@@ -82,9 +82,9 @@ export function UnitTable({ units, query, pathname, workspaceId, canManage, team
             </TableRow>
           ) : (
             units.map((unit) => (
-              <TableRow key={unit.id} data-tour="unit-row" className="relative cursor-pointer">
+              <TableRow key={unit.id} data-tour="unit-row">
                 <CodeCell id={unit.id} className="@max-2xl:hidden" />
-                <TableCell className="max-w-0 px-4">
+                <TableCell className="relative max-w-0 cursor-pointer px-4">
                   <div className="flex items-center gap-3">
                     <Avatar className="size-8 rounded-lg after:rounded-lg">
                       {unit.avatarUrl && (
@@ -92,7 +92,7 @@ export function UnitTable({ units, query, pathname, workspaceId, canManage, team
                       )}
                       <InitialFallback name={unit.name} className="rounded-lg" />
                     </Avatar>
-                    {/* O ::after estica o link sobre a linha inteira; a célula de ações fica por cima. */}
+                    {/* O ::after estica o link sobre a célula; relative no <tr> é ignorado pelo Safari do iOS. */}
                     <Link
                       href={`${pathname}/${unit.id}`}
                       className="truncate font-medium after:absolute after:inset-0 hover:underline"
