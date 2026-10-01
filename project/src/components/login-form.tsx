@@ -11,6 +11,7 @@ import {
   FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
 
 type LoginFormProps = Omit<React.ComponentProps<"form">, "action"> & {
   credentialsAction: (formData: FormData) => Promise<void>
@@ -63,10 +64,9 @@ export function LoginForm({
               Esqueceu sua senha?
             </a>
           </div>
-          <Input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             autoComplete="current-password"
             required
           />
