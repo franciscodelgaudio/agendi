@@ -2,6 +2,7 @@ import { UserIcon } from "lucide-react"
 import { can, type Actor } from "@/lib/permissions"
 import { nextPayrollDate } from "@/lib/payroll"
 import type { UnitTeamListItem, UnitTeamListQuery } from "@/lib/unit-team-list"
+import type { CommissionBase } from "@/lib/unit-member"
 import { CodeCell, CodeHead } from "@/components/record-code"
 import { SortableHead } from "@/components/sortable-head"
 import { UnitMemberActions } from "@/components/unit-member-actions"
@@ -14,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 const percentFormat = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 const dayFormat = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" })
 
-export type TeamRow = UnitTeamListItem & { unitId: string; unitName: string; attends: boolean }
+export type TeamRow = UnitTeamListItem & { unitId: string; unitName: string; commissionBase: CommissionBase }
 
 function payParts({ commissionPercent, salaryCents, bonuses }: UnitTeamListItem) {
   const parts: string[] = []
@@ -122,7 +123,7 @@ export function TeamTable({
                         member={{
                           id: member.id,
                           label,
-                          attends: member.attends,
+                          commissionBase: member.commissionBase,
                           startDate: member.startDate,
                           payDay: member.payDay,
                           commissionPercent: member.commissionPercent,

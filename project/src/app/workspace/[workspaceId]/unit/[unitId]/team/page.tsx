@@ -5,6 +5,7 @@ import { parseCashFlowQuery } from "@/lib/cash-flow"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { parseUnitTeamListQuery, UNIT_TEAM_PAGE_SIZE, unitTeamListPage, type UnitTeamListItem } from "@/lib/unit-team-list"
+import type { CommissionBase } from "@/lib/unit-member"
 import { memberAttendsStages, memberRoleNameStages, rolesLookup, type RoleOption } from "@/lib/unit-team"
 import { Workspace } from "@/models/Workspace"
 import { ListPagination } from "@/components/list-pagination"
@@ -25,12 +26,12 @@ export default async function UnitTeamPage({
   if (!access || !isObjectIdOrHexString(unitId)) notFound()
   const unitObjectId = new Types.ObjectId(unitId)
 
-  // Parte do workspace para garantir o acesso. Só quem não é administrador e foi vinculado
-  // (no formulário da unidade), por nome.
+  // Parte do workspace para garantir o acesso. Só quem foi vinculado (no formulário da
+  // unidade), por nome.
   const [workspace] = await Workspace.aggregate<{
     actor: Actor
     unit: { name: string } | null
-    members: (UnitTeamListItem & { attends: boolean })[]
+    members: (UnitTeamListItem & { commissionBase: CommissionBase })[]
     roles: RoleOption[]
   }>([
     ...access,
@@ -52,10 +53,7 @@ export default async function UnitTeamPage({
         as: "members",
         pipeline: [
           {
-            $match: {
-              admin: { $ne: true },
-              "units.unitId": unitObjectId,
-            },
+            $match: { "units.unitId": unitObjectId },
           },
           ...memberAttendsStages(),
           ...memberRoleNameStages(),
@@ -74,9 +72,11 @@ export default async function UnitTeamPage({
             $project: {
               _id: 0,
               id: { $toString: "$_id" },
+              admin: { $eq: ["$admin", true] },
               roleId: { $ifNull: [{ $toString: "$roleId" }, null] },
               roleName: 1,
-              attends: 1,
+              // Vínculo antigo, sem base guardada: a da função.
+              commissionBase: { $ifNull: ["$link.commissionBase", { $cond: ["$attends", "services", "gross"] }] },
               email: { $ifNull: ["$user.email", "$email"] },
               name: { $ifNull: ["$user.name", null] },
               image: { $ifNull: ["$user.image", null] },

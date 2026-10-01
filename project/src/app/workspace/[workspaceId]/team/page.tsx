@@ -4,6 +4,7 @@ import { parseCashFlowQuery } from "@/lib/cash-flow"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { parseUnitTeamListQuery, UNIT_TEAM_PAGE_SIZE, unitTeamListPage, type UnitTeamListItem } from "@/lib/unit-team-list"
+import type { CommissionBase } from "@/lib/unit-member"
 import { memberAttendsStages, memberRoleNameStages, rolesLookup, type RoleOption } from "@/lib/unit-team"
 import { Workspace } from "@/models/Workspace"
 import { ListPagination } from "@/components/list-pagination"
@@ -24,7 +25,7 @@ export default async function TeamPage({ params, searchParams }: PageProps<"/wor
   const [workspace] = await Workspace.aggregate<{
     actor: Actor
     units: { id: string; name: string }[]
-    members: (UnitTeamListItem & { unitId: string; attends: boolean })[]
+    members: (UnitTeamListItem & { unitId: string; commissionBase: CommissionBase })[]
     roles: RoleOption[]
   }>([
     ...access,
@@ -45,7 +46,6 @@ export default async function TeamPage({ params, searchParams }: PageProps<"/wor
         foreignField: "workspaceId",
         as: "members",
         pipeline: [
-          { $match: { admin: { $ne: true } } },
           ...memberAttendsStages(),
           ...memberRoleNameStages(),
           { $unwind: "$units" },
@@ -56,9 +56,11 @@ export default async function TeamPage({ params, searchParams }: PageProps<"/wor
               _id: 0,
               id: { $toString: "$_id" },
               unitId: { $toString: "$units.unitId" },
+              admin: { $eq: ["$admin", true] },
               roleId: { $ifNull: [{ $toString: "$roleId" }, null] },
               roleName: 1,
-              attends: 1,
+              // Vínculo antigo, sem base guardada: a da função.
+              commissionBase: { $ifNull: ["$units.commissionBase", { $cond: ["$attends", "services", "gross"] }] },
               email: { $ifNull: ["$user.email", "$email"] },
               name: { $ifNull: ["$user.name", null] },
               image: { $ifNull: ["$user.image", null] },

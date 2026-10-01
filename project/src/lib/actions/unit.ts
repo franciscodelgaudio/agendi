@@ -45,7 +45,7 @@ const errorMessages: Record<CreateUnitError | UpdateUnitError | PlanUnitTeamErro
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unit_not_found: "Unidade não encontrada ou sem permissão.",
   forbidden: "Sem permissão para alterar a equipe.",
-  invalid_team: "Escolha só pessoas da equipe deste workspace (administradores não entram na equipe das unidades).",
+  invalid_team: "Escolha só usuários deste workspace.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
@@ -63,12 +63,11 @@ async function findManagedAccess(workspaceId: string, userId: string) {
 // Sem permissão de gerenciar a equipe, a equipe fica como está (o formulário nem mostra o campo).
 async function planTeam(formData: FormData, workspaceId: string, actor: Actor, unitId: string | null) {
   if (!can(actor, "team.manage")) return undefined
-  const members = await WorkspaceMember.find({ workspaceId }).select({ admin: 1, units: 1 }).lean()
+  const members = await WorkspaceMember.find({ workspaceId }).select({ units: 1 }).lean()
   return planUnitTeam(
     formData.getAll("teamMemberId"),
     members.map((member) => ({
       id: member._id.toString(),
-      admin: !!member.admin,
       linked: !!unitId && member.units.some((unit) => unit.unitId.equals(unitId)),
     })),
     actor,

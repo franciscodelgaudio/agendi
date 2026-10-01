@@ -58,7 +58,7 @@ export function UnitTeamFields({ idPrefix, team, unitId }: Props) {
         </ComboboxChips>
         <ComboboxContent anchor={anchor}>
           <ComboboxEmpty>
-            {team.length ? "Ninguém encontrado." : "Ninguém convidado além dos administradores. Convide em Usuários."}
+            {team.length ? "Ninguém encontrado." : "Ninguém convidado ainda. Convide em Usuários."}
           </ComboboxEmpty>
           <ComboboxList>
             {(member: TeamCandidate) => (

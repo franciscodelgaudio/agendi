@@ -3,13 +3,14 @@
 import { useActionState, useState } from "react"
 import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
 import { updateUnitMemberAction, type UnitMemberFormState } from "@/lib/actions/unit-member"
-import { MAX_BONUS_DESCRIPTION_LENGTH, type UnitMemberBonus } from "@/lib/unit-member"
+import { MAX_BONUS_DESCRIPTION_LENGTH, type CommissionBase, type UnitMemberBonus } from "@/lib/unit-member"
 
 import { AmountInput } from "@/components/amount-input"
 import { DayField } from "@/components/day-field"
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Sheet,
   SheetContent,
@@ -19,12 +20,17 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 
+const commissionBaseItems: { value: CommissionBase; label: string }[] = [
+  { value: "services", label: "Sobre os serviços que a pessoa fez" },
+  { value: "gross", label: "Sobre o faturamento bruto da unidade" },
+]
+
 // Comissão, salário e bônus combináveis; null/vazio enquanto não foi definido.
 type Member = {
   id: string
   label: string
-  // Realiza atendimentos (permissão da role): comissão sobre os próprios serviços.
-  attends: boolean
+  // A do vínculo; em vínculos antigos, a da função (quem realiza atendimentos: serviços).
+  commissionBase: CommissionBase
   // "2026-02-15"
   startDate: string | null
   payDay: number | null
@@ -112,9 +118,7 @@ function UnitMemberForm({ workspaceId, unitId, unitName, member, onDone }: Props
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${idPrefix}-commission`}>
-            {member.attends ? "Comissão sobre os serviços" : "Comissão sobre o bruto"}
-          </FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-commission`}>Comissão</FieldLabel>
           <AmountInput
             id={`${idPrefix}-commission`}
             mode="percent"
@@ -123,6 +127,21 @@ function UnitMemberForm({ workspaceId, unitId, unitName, member, onDone }: Props
             placeholder="0,00%"
             defaultValue={member.commissionPercent === null ? null : Math.round(member.commissionPercent * 100)}
           />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-commission-base`}>Base da comissão</FieldLabel>
+          <Select name="commissionBase" items={commissionBaseItems} defaultValue={member.commissionBase}>
+            <SelectTrigger id={`${idPrefix}-commission-base`} className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {commissionBaseItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Field>
           <FieldLabel htmlFor={`${idPrefix}-salary`}>Salário mensal</FieldLabel>

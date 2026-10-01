@@ -35,18 +35,17 @@ export function groupLimitsOf(group: {
   };
 }
 
-// Remuneração da equipe (administradores não têm), só a vinculada à unidade quando ela vem.
+// Remuneração da equipe (administradores inclusive), só a vinculada à unidade quando ela vem.
 export function findTeamPayMembers(workspaceId: string, unitId?: string) {
   return WorkspaceMember.aggregate<TeamPayMember>([
     {
       $match: {
         workspaceId: new Types.ObjectId(workspaceId),
-        admin: { $ne: true },
         ...(unitId && { "units.unitId": new Types.ObjectId(unitId) }),
       },
     },
     ...memberAttendsStages(),
-    { $project: { _id: 0, userId: 1, admin: 1, attends: 1, units: 1 } },
+    { $project: { _id: 0, userId: 1, attends: 1, units: 1 } },
   ]);
 }
 
