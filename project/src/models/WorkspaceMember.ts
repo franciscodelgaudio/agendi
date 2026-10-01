@@ -1,6 +1,6 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 import { connectOnUse } from "@/lib/mongoose";
-import { MAX_BONUS_DESCRIPTION_LENGTH } from "@/lib/unit-member";
+import { COMMISSION_BASES, MAX_BONUS_DESCRIPTION_LENGTH } from "@/lib/unit-member";
 
 // Bônus fixo mensal, somado ao salário no caixa.
 const bonusSchema = new Schema(
@@ -12,13 +12,15 @@ const bonusSchema = new Schema(
 );
 
 // Unidade em que o membro trabalha e como é pago nela: comissão, salário mensal e bônus,
-// combináveis (null/vazio até ser definido na Equipe). Comissão de quem realiza
-// atendimentos é sobre os serviços que fez; dos demais, sobre o faturamento bruto da unidade.
+// combináveis (null/vazio até ser definido na Equipe). A comissão é sobre os serviços que a
+// pessoa fez ou sobre o faturamento bruto da unidade (commissionBase); vínculos antigos, sem
+// base, usam a da função (quem realiza atendimentos ganha sobre os serviços).
 // Salário e bônus contam a partir de startDate ("2026-02-15"); null conta sempre. O mês
 // de trabalho é pago no payDay (1 a 31) do mês seguinte.
 const unitLinkSchema = new Schema(
   {
     unitId: { type: Schema.Types.ObjectId, ref: "Unit", required: true },
+    commissionBase: { type: String, enum: COMMISSION_BASES, default: null },
     commissionPercent: { type: Number, default: null, min: 0, max: 100 },
     salaryCents: { type: Number, default: null, min: 1 },
     bonuses: { type: [bonusSchema], default: [] },

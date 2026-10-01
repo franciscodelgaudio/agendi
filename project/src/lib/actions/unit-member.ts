@@ -10,10 +10,11 @@ import { WorkspaceMember } from "@/models/WorkspaceMember"
 
 const errorMessages: Record<UpdateUnitMemberPayError | "unauthenticated", string> = {
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
-  forbidden: "Só o proprietário e administradores definem a remuneração; de massagistas, só o proprietário.",
+  forbidden: "Sua função não pode definir a remuneração da equipe.",
   member_not_found: "Usuário não encontrado nesta unidade.",
   invalid_input: "Dados inválidos.",
   invalid_commission: "Informe uma comissão entre 0% e 100%.",
+  invalid_commission_base: "Escolha se a comissão é sobre os serviços da pessoa ou sobre o bruto da unidade.",
   invalid_salary: "Informe um salário mensal maior que zero.",
   invalid_bonus: "Cada bônus precisa de descrição (até 80 caracteres) e valor maior que zero.",
   invalid_start_date: "Data de início inválida.",
@@ -51,7 +52,9 @@ export async function updateUnitMemberAction(
     {
       startDate: formData.get("startDate"),
       payDay: formData.get("payDay"),
-      commissionPercent: formData.get("commissionPercent"),       salary: formData.get("salary"),
+      commissionBase: formData.get("commissionBase"),
+      commissionPercent: formData.get("commissionPercent"),
+      salary: formData.get("salary"),
       bonuses,
     },
     memberId,
@@ -62,11 +65,12 @@ export async function updateUnitMemberAction(
         const member = await WorkspaceMember.findOne(filter).select({ _id: 1 }).lean()
         return member && { id: member._id.toString() }
       },
-      update: async (_id, { startDate, payDay, commissionPercent, salaryCents, bonuses }) => {
+      update: async (_id, { startDate, payDay, commissionBase, commissionPercent, salaryCents, bonuses }) => {
         await WorkspaceMember.updateOne(filter!, {
           $set: {
             "units.$.startDate": startDate,
             "units.$.payDay": payDay,
+            "units.$.commissionBase": commissionBase,
             "units.$.commissionPercent": commissionPercent,
             "units.$.salaryCents": salaryCents,
             "units.$.bonuses": bonuses,
