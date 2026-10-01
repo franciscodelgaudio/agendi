@@ -1,6 +1,6 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
-import { DELIVERY_STATUSES, MESSAGE_TYPES } from "@/lib/messaging-types";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
+import { DELIVERY_STATUSES, MESSAGE_TYPES } from "@/service/workspace/[workspaceId]/inbox/messaging-types";
 
 // Mensagem de uma conversa. externalMessageId é o id da Meta (wamid / mid): fica null
 // enquanto a resposta ainda não foi aceita pela API. status só existe em mensagens enviadas.

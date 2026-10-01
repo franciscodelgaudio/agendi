@@ -1,5 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 // Grupo de despesas da unidade (impostos, insumos, aluguel...). O limite é do gasto previsto
 // por mês, em centavos; null = sem limite. monthlyLimitCents vale até a primeira mudança, e cada

@@ -1,12 +1,12 @@
 import { generateText, isStepCount } from "ai"
 import { z } from "zod"
-import { loadAgeniaModel, NOT_CONFIGURED_MESSAGE } from "@/lib/agenia-model"
-import { recordAiUsage } from "@/lib/ai-usage-store"
-import { smartComposePrompt } from "@/lib/agenia-prompts"
-import { buildReadTools, loadConversation, loadWorkspaceContext } from "@/lib/agenia-read"
-import { can } from "@/lib/permissions"
-import { getSessionUserId } from "@/lib/session"
-import { findWorkspaceAccess } from "@/lib/workspace-access"
+import { loadAgeniaModel, NOT_CONFIGURED_MESSAGE } from "@/service/workspace/[workspaceId]/agenia/agenia-model"
+import { recordAiUsage } from "@/service/workspace/[workspaceId]/ai-costs/ai-usage-store"
+import { smartComposePrompt } from "@/service/workspace/[workspaceId]/agenia/agenia-prompts"
+import { buildReadTools, loadConversation, loadWorkspaceContext } from "@/service/workspace/[workspaceId]/agenia/agenia-read"
+import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 
 export const maxDuration = 60
 

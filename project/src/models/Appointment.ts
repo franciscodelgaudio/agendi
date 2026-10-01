@@ -1,5 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 // Nome, valor e duração do serviço e o nome do profissional são cópias do momento
 // do registro, para que mudanças futuras não alterem o histórico.

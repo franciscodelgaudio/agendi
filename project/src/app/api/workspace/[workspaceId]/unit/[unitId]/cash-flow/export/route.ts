@@ -1,10 +1,10 @@
-import { parseCashFlowQuery } from "@/lib/cash-flow"
-import { cashFlowReport, parseExportFormat } from "@/lib/cash-flow-export"
-import { parseTherapistListQuery, therapistListPage } from "@/lib/cash-flow-list"
-import { allPages, loadCashFlowSummaryScreen } from "@/lib/cash-flow-screen-store"
-import { findVisiblePages } from "@/lib/page-guard"
-import { reportResponse } from "@/lib/report-file"
-import { getSessionUserId } from "@/lib/session"
+import { parseCashFlowQuery } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow"
+import { cashFlowReport, parseExportFormat } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow-export"
+import { parseTherapistListQuery, therapistListPage } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow-list"
+import { allPages, loadCashFlowSummaryScreen } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow-screen-store"
+import { findVisiblePages } from "@/service/workspace/[workspaceId]/page-guard"
+import { reportResponse } from "@/service/_shared/report-file"
+import { getSessionUserId } from "@/service/(auth)/session"
 
 // Resumo do caixa do ano em PDF ou XLSX (?format=), com o ano e a busca da tela e todos os profissionais encontrados.
 export async function GET(

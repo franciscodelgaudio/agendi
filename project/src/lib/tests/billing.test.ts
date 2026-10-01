@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { handleAbacateEvent, hasActiveSubscription, startCheckout } from "@/lib/billing";
+import { handleAbacateEvent, hasActiveSubscription, startCheckout } from "@/service/subscribe/billing";
 
 const USER_ID = "64b7f0c2a1b2c3d4e5f60720";
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";

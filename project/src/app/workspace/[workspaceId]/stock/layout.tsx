@@ -1,4 +1,4 @@
-import { StockNav } from "@/components/stock-nav"
+import { StockNav } from "@/components/workspace/[workspaceId]/stock/stock-nav"
 
 // Título e abas do estoque (quantidades e catálogo de produtos); cada aba verifica o acesso por
 // conta própria.

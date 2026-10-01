@@ -2,9 +2,9 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { LandingLogo } from "@/components/landing/landing-logo"
+import { LandingLogo } from "@/components/shared/landing/landing-logo"
 import { TERMS_MARKDOWN } from "@/content/terms"
-import { cn } from "@/lib/utils"
+import { cn } from "@/service/_shared/utils"
 
 export const metadata: Metadata = {
   title: "Termos de Uso · Agendi",

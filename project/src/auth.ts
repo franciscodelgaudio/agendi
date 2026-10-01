@@ -2,9 +2,9 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
-import client from "@/lib/mongodb";
+import client from "@/service/_shared/database/mongodb";
 import { User } from "@/models/User";
-import { verifyCredentials } from "@/lib/credentials";
+import { verifyCredentials } from "@/service/(auth)/login/credentials";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: MongoDBAdapter(client),

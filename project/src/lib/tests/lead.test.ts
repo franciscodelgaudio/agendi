@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createLead } from "@/lib/lead";
+import { createLead } from "@/service/_shared/landing/lead";
 
 const validInput = {
   name: "Marina Souza",

@@ -6,7 +6,7 @@ import {
   BOOKING_PAGE_SIZE,
   parseBookingListQuery,
   parseBookingRange,
-} from "@/lib/booking-list";
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const ANA_ID = "64b7f0c2a1b2c3d4e5f60751";

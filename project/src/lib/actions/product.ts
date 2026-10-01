@@ -2,11 +2,11 @@
 
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { getSessionUserId } from "@/lib/session"
-import { findManagedUnit } from "@/lib/unit-access"
-import { forbiddenMessage, type UnitAccessError } from "@/lib/access-check"
-import type { Permission } from "@/lib/permissions"
-import { findManagedWorkspace } from "@/lib/workspace-access"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { findManagedUnit } from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-access"
+import { forbiddenMessage, type UnitAccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
+import type { Permission } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
 import {
   addStockItem,
   adjustStock,
@@ -22,20 +22,20 @@ import {
   type CreateProductError,
   type RegisterPurchaseResult,
   type UpdateProductError,
-} from "@/lib/product"
-import { loadExpenseGroupIcons } from "@/lib/expense-group-icon-store"
-import { findUnitProducts } from "@/lib/product-lookup"
-import { PRODUCT_SEARCH_LIMIT, productSearchPipeline } from "@/lib/product-search"
-import { recordStockPurchase } from "@/lib/stock-purchase"
-import { addLots, consumeLots, type Lot } from "@/lib/stock-lots"
-import { transferProduct, type TransferProductError } from "@/lib/stock-movement"
-import { findUnitHolder, recordMovement, updateItemLots } from "@/lib/stock-store"
+} from "@/service/workspace/[workspaceId]/stock/products/product"
+import { loadExpenseGroupIcons } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/expense-group-icon-store"
+import { findUnitProducts } from "@/service/workspace/[workspaceId]/stock/products/product-lookup"
+import { PRODUCT_SEARCH_LIMIT, productSearchPipeline } from "@/service/workspace/[workspaceId]/stock/products/product-search"
+import { recordStockPurchase } from "@/service/workspace/[workspaceId]/stock/stock-purchase"
+import { addLots, consumeLots, type Lot } from "@/service/workspace/[workspaceId]/stock/stock-lots"
+import { transferProduct, type TransferProductError } from "@/service/workspace/[workspaceId]/stock/stock-movement"
+import { findUnitHolder, recordMovement, updateItemLots } from "@/service/workspace/[workspaceId]/stock/stock-store"
 import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Product } from "@/models/Product"
 import { StockItem } from "@/models/StockItem"
 import { Unit } from "@/models/Unit"
-import type { ProductOption } from "@/components/product-picker"
+import type { ProductOption } from "@/components/workspace/[workspaceId]/shared/stock/product-picker"
 
 type AddStockItemError = Extract<AddStockItemResult, { ok: false }>["error"]
 type CreateCatalogProductError = Extract<CreateCatalogProductResult, { ok: false }>["error"]

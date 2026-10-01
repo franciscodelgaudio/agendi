@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, it, expect } from "vitest";
-import { isValidWebhookSignature, parseMetaWebhook, verifyWebhookSubscription } from "@/lib/meta-webhook";
+import { isValidWebhookSignature, parseMetaWebhook, verifyWebhookSubscription } from "@/service/api/webhooks/meta/meta-webhook";
 
 const VERIFY_TOKEN = "meu-token-de-verificacao";
 const APP_SECRET = "segredo-do-app-meta";

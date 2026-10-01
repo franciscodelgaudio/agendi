@@ -4,7 +4,7 @@ import {
   PageSkeleton,
   PaginationSkeleton,
   TableSkeleton,
-} from "@/components/page-skeletons"
+} from "@/components/shared/page-skeletons"
 
 export default function Loading() {
   return (

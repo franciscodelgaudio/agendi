@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { unitListPipeline, parseUnitListQuery } from "@/lib/unit-list";
+import { unitListPipeline, parseUnitListQuery } from "@/service/workspace/[workspaceId]/unit/unit-list";
 
 describe("parseUnitListQuery", () => {
   it("usa busca vazia e ordenação por nome crescente quando não há parâmetros", () => {

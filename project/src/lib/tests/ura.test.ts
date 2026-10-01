@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createUra, deleteUra, saveUra, setUraActive } from "@/lib/ura";
+import { createUra, deleteUra, saveUra, setUraActive } from "@/service/workspace/[workspaceId]/uras/ura";
 import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
 const URA_ID = "64b7f0c2a1b2c3d4e5f60792";

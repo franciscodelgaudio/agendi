@@ -1,5 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton"
-import { LoadingRegion } from "@/components/page-skeletons"
+import { LoadingRegion } from "@/components/shared/page-skeletons"
 
 export default function Loading() {
   return (

@@ -2,7 +2,7 @@
 // e só com REDIS_URL definida.
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs" && process.env.REDIS_URL) {
-    const { registerUraWorker } = await import("@/lib/ura-worker")
+    const { registerUraWorker } = await import("@/service/workspace/[workspaceId]/uras/ura-worker")
     registerUraWorker()
   }
 }

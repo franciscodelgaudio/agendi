@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createStock, deleteStock, mergeStockItems, updateStock } from "@/lib/stock";
+import { createStock, deleteStock, mergeStockItems, updateStock } from "@/service/workspace/[workspaceId]/stock/stock";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const STOCK_ID = "64b7f0c2a1b2c3d4e5f60790";

@@ -4,7 +4,7 @@ import {
   PRODUCT_HISTORY_PAGE_SIZE,
   parseProductHistoryQuery,
   productHistoryPipeline,
-} from "@/lib/product-history";
+} from "@/service/workspace/[workspaceId]/stock/products/product-history";
 
 const PRODUCT_ID = "64b7f0c2a1b2c3d4e5f60761";
 const OID = new Types.ObjectId(PRODUCT_ID);

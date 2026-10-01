@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { EXPENSE_GROUP_ICONS, listExpenseGroupIcons } from "@/lib/expense-group-icon";
+import { EXPENSE_GROUP_ICONS, listExpenseGroupIcons } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/expense-group-icon";
 
 const saved = [
   { id: "64b7f0c2a1b2c3d4e5f60760", key: "receipt", name: "Impostos", color: "#dc2626" },

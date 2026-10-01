@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { updateWorkspace } from "@/lib/workspace";
+import { updateWorkspace } from "@/service/workspace/workspace";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 

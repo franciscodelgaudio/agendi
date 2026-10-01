@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { describe, it, expect } from "vitest";
-import { decryptSecret, encryptSecret } from "@/lib/secret-box";
+import { decryptSecret, encryptSecret } from "@/service/_shared/security/secret-box";
 
 // Chave como fica no ambiente: 32 bytes em base64 (openssl rand -base64 32).
 const KEY = randomBytes(32).toString("base64");

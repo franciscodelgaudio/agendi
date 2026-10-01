@@ -1,6 +1,6 @@
 "use server"
 
-import { getSessionUserId } from "@/lib/session"
+import { getSessionUserId } from "@/service/(auth)/session"
 import { User } from "@/models/User"
 
 // Concluir ou sair do tutorial conta igual: ele não abre mais sozinho, mas segue no menu do usuário.

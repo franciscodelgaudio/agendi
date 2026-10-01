@@ -10,9 +10,9 @@ import {
   removeUnreachable,
   updateNode,
   uraGraphIndex,
-} from "@/lib/agenia-ura";
-import { MAX_NODES, type UraGraph } from "@/lib/ura-graph";
-import { defaultNodeData } from "@/lib/ura-nodes";
+} from "@/service/workspace/[workspaceId]/uras/agenia-ura";
+import { MAX_NODES, type UraGraph } from "@/service/workspace/[workspaceId]/uras/ura-graph";
+import { defaultNodeData } from "@/service/workspace/[workspaceId]/uras/ura-nodes";
 
 function ids() {
   let n = 0;

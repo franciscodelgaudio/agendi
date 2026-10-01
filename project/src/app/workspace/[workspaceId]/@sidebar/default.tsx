@@ -1,12 +1,12 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
-import { AppSidebar } from "@/components/app-sidebar"
+import { AppSidebar } from "@/components/workspace/[workspaceId]/@sidebar/app-sidebar"
 import { logoutAction } from "@/lib/actions/auth"
-import { visiblePages } from "@/lib/page-access"
-import type { Actor } from "@/lib/permissions"
-import { requireUser, workspaceAccessStages } from "@/lib/session"
+import { visiblePages } from "@/service/workspace/[workspaceId]/page-access"
+import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { Workspace } from "@/models/Workspace"
-import { SidebarSkeleton } from "@/components/sidebar-skeleton"
+import { SidebarSkeleton } from "@/components/workspace/[workspaceId]/@sidebar/sidebar-skeleton"
 
 // Único arquivo do slot: o default.tsx é renderizado para qualquer sub-rota
 // de /workspace/[workspaceId], então a sidebar aparece em todas elas.

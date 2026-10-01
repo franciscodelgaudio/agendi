@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createAppointment, deleteAppointment, updateAppointment } from "@/lib/appointment";
+import { createAppointment, deleteAppointment, updateAppointment } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const APPOINTMENT_ID = "64b7f0c2a1b2c3d4e5f60740";

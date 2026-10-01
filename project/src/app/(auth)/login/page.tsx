@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { AuthError } from "next-auth"
 import { signIn } from "@/auth"
-import { LoginForm } from "@/components/login-form"
+import { LoginForm } from "@/components/(auth)/login/login-form"
 
 const errorMessages: Record<string, string> = {
   CredentialsSignin: "Email ou senha inválidos.",

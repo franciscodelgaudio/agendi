@@ -1,5 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 // purchase: entrou no estoque; adjustment: diminuiu na edição; depletion: uma unidade do
 // produto acabou; transfer: foi do estoque de unitId para o de toUnitId.

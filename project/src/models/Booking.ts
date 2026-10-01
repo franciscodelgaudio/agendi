@@ -1,5 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 // Produto usado, com cópia do nome do momento da escolha. Não mexe na quantidade em estoque.
 const selectedProductSchema = new Schema(

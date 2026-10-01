@@ -1,9 +1,9 @@
 "use server"
 
 import { refresh } from "next/cache"
-import { createTicket, type CreateTicketError } from "@/lib/ticket"
-import { getSessionUserId } from "@/lib/session"
-import { findWorkspaceAccess } from "@/lib/workspace-access"
+import { createTicket, type CreateTicketError } from "@/service/workspace/[workspaceId]/tickets/ticket"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 import { Ticket } from "@/models/Ticket"
 
 const errorMessages: Record<CreateTicketError | "unauthenticated", string> = {

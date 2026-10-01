@@ -6,7 +6,7 @@ import {
   isAgeniaAction,
   mergePatch,
   parseAgeniaAction,
-} from "@/lib/agenia-actions";
+} from "@/service/workspace/[workspaceId]/agenia/agenia-actions";
 
 const UNIT = "64b7f0c2a1b2c3d4e5f60719";
 const ID_A = "64b7f0c2a1b2c3d4e5f6071a";

@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation"
-import { can, type Actor } from "@/lib/permissions"
-import { requirePage } from "@/lib/page-guard"
-import { requireUser, workspaceAccessStages } from "@/lib/session"
-import { therapistOptionsStages } from "@/lib/therapist"
+import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
+import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
+import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
 import { Workspace } from "@/models/Workspace"
-import { BookingCalendar, type BookingOptions } from "@/components/booking-calendar"
-import { CalendarNav } from "@/components/calendar-nav"
+import { BookingCalendar, type BookingOptions } from "@/components/workspace/[workspaceId]/shared/calendar/booking-calendar"
+import { CalendarNav } from "@/components/workspace/[workspaceId]/shared/calendar/calendar-nav"
 
 // Agenda de todas as unidades do workspace. Os agendamentos são buscados pelo próprio
 // calendário, conforme o período visível; aqui vêm só as opções dos filtros e do formulário.

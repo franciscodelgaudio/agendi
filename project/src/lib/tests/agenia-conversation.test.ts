@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatTranscript, type TranscriptMessage } from "@/lib/agenia-conversation";
+import { formatTranscript, type TranscriptMessage } from "@/service/workspace/[workspaceId]/agenia/agenia-conversation";
 
 // 14:30 em Brasília (UTC-3).
 const at = (minute: number) => new Date(Date.UTC(2026, 8, 24, 17, minute));

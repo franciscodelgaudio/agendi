@@ -1,5 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 export const ACTIVE_SESSION_STATUSES = ["running", "waiting", "sleeping"] as const;
 

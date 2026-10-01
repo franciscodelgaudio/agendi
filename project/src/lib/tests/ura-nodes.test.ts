@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { evaluateCondition, isValidAnswer, matchOption } from "@/lib/ura-nodes";
+import { evaluateCondition, isValidAnswer, matchOption } from "@/service/workspace/[workspaceId]/uras/ura-nodes";
 
 describe("isValidAnswer", () => {
   it("sem validação aceita qualquer resposta", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { resolveProducts } from "@/lib/product-selection";
+import { resolveProducts } from "@/service/workspace/[workspaceId]/stock/products/product-selection";
 
 const OIL_ID = "64b7f0c2a1b2c3d4e5f60761";
 const TOWEL_ID = "64b7f0c2a1b2c3d4e5f60762";

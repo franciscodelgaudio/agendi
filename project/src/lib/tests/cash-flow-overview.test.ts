@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { mergeCashFlowSummaries, mergeGroupsByName, sumBalances } from "@/lib/cash-flow-overview";
-import type { ExpenseCashFlowAmounts } from "@/lib/cash-flow";
+import { mergeCashFlowSummaries, mergeGroupsByName, sumBalances } from "@/service/workspace/[workspaceId]/cash-flow/cash-flow-overview";
+import type { ExpenseCashFlowAmounts } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
 
 const WEEK_1 = { from: "2026-09-01", to: "2026-09-06" };
 const WEEK_2 = { from: "2026-09-07", to: "2026-09-13" };

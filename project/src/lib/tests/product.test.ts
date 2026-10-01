@@ -8,7 +8,7 @@ import {
   depleteProduct,
   registerPurchase,
   updateCatalogProduct,
-} from "@/lib/product";
+} from "@/service/workspace/[workspaceId]/stock/products/product";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const PRODUCT_ID = "64b7f0c2a1b2c3d4e5f60740";

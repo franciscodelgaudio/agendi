@@ -4,7 +4,7 @@ import {
   APPOINTMENT_PAGE_SIZE,
   appointmentSearchPipeline,
   parseAppointmentListQuery,
-} from "@/lib/appointment-list";
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-list";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const ANA_ID = "64b7f0c2a1b2c3d4e5f60751";

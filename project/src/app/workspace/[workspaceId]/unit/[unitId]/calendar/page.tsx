@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { can, type Actor } from "@/lib/permissions"
-import { requirePage } from "@/lib/page-guard"
-import { requireUser, workspaceAccessStages } from "@/lib/session"
-import { therapistOptionsStages } from "@/lib/therapist"
+import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
+import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
+import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
 import { Workspace } from "@/models/Workspace"
-import { BookingCalendar, type BookingOptions } from "@/components/booking-calendar"
-import { CalendarNav } from "@/components/calendar-nav"
+import { BookingCalendar, type BookingOptions } from "@/components/workspace/[workspaceId]/shared/calendar/booking-calendar"
+import { CalendarNav } from "@/components/workspace/[workspaceId]/shared/calendar/calendar-nav"
 
 // Agenda de uma unidade: o mesmo calendário do workspace, fixo nesta unidade.
 // Layout e página podem renderizar em paralelo, então a página refaz a verificação de acesso.

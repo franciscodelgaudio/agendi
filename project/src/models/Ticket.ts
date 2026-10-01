@@ -1,6 +1,6 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
-import { TICKET_STATUSES, TICKET_TYPES } from "@/lib/ticket";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
+import { TICKET_STATUSES, TICKET_TYPES } from "@/service/workspace/[workspaceId]/tickets/ticket";
 
 // Bug ou sugestão de melhoria enviada para a equipe da Agendi. O workspace é só o
 // contexto de onde o usuário abriu; o status é mudado pela equipe direto no banco.

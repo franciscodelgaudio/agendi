@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import bcrypt from "bcryptjs";
-import { registerUser } from "@/lib/register";
+import { registerUser } from "@/service/(auth)/signup/register";
 
 const validInput = {
   name: "Ana Souza",

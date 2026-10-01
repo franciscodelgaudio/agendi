@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createExpenseGroup, deleteExpenseGroup, updateExpenseGroup, updateGroupMonthLimit } from "@/lib/expense-group";
+import { createExpenseGroup, deleteExpenseGroup, updateExpenseGroup, updateGroupMonthLimit } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/expense-group";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const GROUP_ID = "64b7f0c2a1b2c3d4e5f60740";

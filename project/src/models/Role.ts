@@ -1,7 +1,7 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
-import { UNIT_PAGES, WORKSPACE_PAGES } from "@/lib/page-access";
-import { PERMISSIONS } from "@/lib/permissions";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
+import { UNIT_PAGES, WORKSPACE_PAGES } from "@/service/workspace/[workspaceId]/page-access";
+import { PERMISSIONS } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
 
 // Função criada pelo administrador do workspace, com o que ela pode fazer e as páginas que
 // ela vê. O administrador é fixo e não tem documento aqui.

@@ -1,10 +1,10 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
-import { can, type Actor } from "@/lib/permissions"
-import { requireUser, workspaceAccessStages } from "@/lib/session"
+import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { Workspace } from "@/models/Workspace"
-import { InboxShell, type ConversationListItem } from "@/components/inbox-shell"
-import { InboxSkeleton } from "@/components/page-skeletons"
+import { InboxShell, type ConversationListItem } from "@/components/workspace/[workspaceId]/inbox/inbox-shell"
+import { InboxSkeleton } from "@/components/shared/page-skeletons"
 
 // Conversas mais recentes primeiro; as mais antigas ficam de fora da lista.
 const CONVERSATION_LIMIT = 100

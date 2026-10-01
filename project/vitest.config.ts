@@ -7,5 +7,12 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    coverage: {
+      provider: "v8",
+      reportOnFailure: true,
+      reporter: ["text-summary", "html", "lcov"],
+      include: ["src/**/*.{js,jsx,ts,tsx}"],
+      exclude: ["**/*.d.ts", "**/*.{test,spec}.{js,jsx,ts,tsx}", "**/tests/**"],
+    },
   },
 });

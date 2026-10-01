@@ -1,5 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 // Compra que ainda tem unidades no estoque, com o preço pago por unidade. O estoque sai pelo
 // PEPS: o lote mais antigo primeiro.

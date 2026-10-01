@@ -15,7 +15,7 @@ import {
   staffExpenseGroups,
   summarizeExpenseGroups,
   updateExpense,
-} from "@/lib/expense";
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const GROUP_ID = "64b7f0c2a1b2c3d4e5f60740";

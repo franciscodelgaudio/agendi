@@ -1,6 +1,6 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
-import { MESSAGING_PLATFORMS } from "@/lib/messaging-types";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
+import { MESSAGING_PLATFORMS } from "@/service/workspace/[workspaceId]/inbox/messaging-types";
 
 // Número do WhatsApp Business ou conta profissional do Instagram conectada a um workspace.
 // externalId é o phone_number_id (WhatsApp) ou o id da conta (Instagram): é por ele que o

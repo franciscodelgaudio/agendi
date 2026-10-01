@@ -1,4 +1,4 @@
-import { CashFlowSubNav } from "@/components/cash-flow-sub-nav"
+import { CashFlowSubNav } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow-sub-nav"
 
 // Título e abas do caixa (resumo, despesas e planejamento); cada aba verifica o acesso por conta própria.
 export default async function CashFlowLayout({

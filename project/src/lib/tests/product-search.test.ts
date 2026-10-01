@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Types } from "mongoose";
-import { PRODUCT_SEARCH_LIMIT, productSearchPipeline } from "@/lib/product-search";
+import { PRODUCT_SEARCH_LIMIT, productSearchPipeline } from "@/service/workspace/[workspaceId]/stock/products/product-search";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const WORKSPACE = { workspaceId: new Types.ObjectId(WORKSPACE_ID) };

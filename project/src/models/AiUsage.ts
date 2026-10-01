@@ -1,6 +1,6 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
-import { AI_USAGE_ACTIONS } from "@/lib/ai-usage";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
+import { AI_USAGE_ACTIONS } from "@/service/workspace/[workspaceId]/ai-costs/ai-usage";
 
 // Uma chamada a um modelo de IA (uma resposta da AgenIA, com todos os passos de ferramenta).
 // costUsd vem da tabela de lib/ai-usage no momento da chamada; null quando o modelo não tem preço.

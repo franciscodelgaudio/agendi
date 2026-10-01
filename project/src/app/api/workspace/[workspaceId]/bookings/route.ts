@@ -1,6 +1,6 @@
-import { bookingListPipeline, parseBookingRange, type BookingRow } from "@/lib/booking-list"
-import { findVisiblePages } from "@/lib/page-guard"
-import { getSessionUserId, workspaceAccessStages } from "@/lib/session"
+import { bookingListPipeline, parseBookingRange, type BookingRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
+import { findVisiblePages } from "@/service/workspace/[workspaceId]/page-guard"
+import { getSessionUserId, workspaceAccessStages } from "@/service/(auth)/session"
 import { Workspace } from "@/models/Workspace"
 
 // Agendamentos do intervalo visível no calendário (?start=&end=&unit=&therapist=), de todas

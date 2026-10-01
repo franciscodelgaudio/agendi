@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { uploadImage, MAX_IMAGE_BYTES } from "@/lib/image-upload";
+import { uploadImage, MAX_IMAGE_BYTES } from "@/service/workspace/[workspaceId]/uploads/image-upload";
 
 const FOLDER = "workspaces/665f1c2e8b3a4d0012345678/products";
 

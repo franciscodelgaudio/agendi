@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createWallet, deleteWallet, updateWallet, walletBalance } from "@/lib/wallet";
+import { createWallet, deleteWallet, updateWallet, walletBalance } from "@/service/workspace/[workspaceId]/cash-flow/wallet";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const WALLET_ID = "64b7f0c2a1b2c3d4e5f60780";

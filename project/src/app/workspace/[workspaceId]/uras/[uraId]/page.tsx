@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { can, type Actor } from "@/lib/permissions"
-import type { UraGraph } from "@/lib/ura-graph"
-import { requireUser, workspaceAccessStages } from "@/lib/session"
+import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import type { UraGraph } from "@/service/workspace/[workspaceId]/uras/ura-graph"
+import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { Workspace } from "@/models/Workspace"
-import { UraEditor } from "@/components/ura-editor"
+import { UraEditor } from "@/components/workspace/[workspaceId]/uras/[uraId]/ura-editor"
 
 type Option = { id: string; name: string }
 

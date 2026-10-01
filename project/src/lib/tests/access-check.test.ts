@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { checkAccess, checkUnitAccess } from "@/lib/access-check";
+import { checkAccess, checkUnitAccess } from "@/service/workspace/[workspaceId]/users/permissions/access-check";
 import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";

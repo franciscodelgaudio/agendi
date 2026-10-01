@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseTreatmentRooms } from "@/lib/treatment-room";
+import { parseTreatmentRooms } from "@/service/workspace/[workspaceId]/unit/[unitId]/treatment-room";
 
 const SINGLE_ID = "64b7f0c2a1b2c3d4e5f60781";
 const COUPLE_ID = "64b7f0c2a1b2c3d4e5f60782";

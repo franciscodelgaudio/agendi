@@ -18,7 +18,7 @@ import bcrypt from "bcryptjs"
 import { MongoClient, ObjectId, type Db } from "mongodb"
 import { chromium, type Page } from "playwright"
 import sharp from "sharp"
-import { EXPENSE_GROUP_ICONS } from "../src/lib/expense-group-icon"
+import { EXPENSE_GROUP_ICONS } from "../src/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/expense-group-icon"
 
 const ROOT = path.resolve(__dirname, "..")
 const DEMO_DB = "agendi_demo"

@@ -1,7 +1,7 @@
 import { Types } from "mongoose"
 import { auth } from "@/auth"
-import { createPlanCharge } from "@/lib/abacatepay"
-import { startCheckout } from "@/lib/billing"
+import { createPlanCharge } from "@/service/subscribe/abacatepay"
+import { startCheckout } from "@/service/subscribe/billing"
 import { Checkout } from "@/models/Checkout"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 

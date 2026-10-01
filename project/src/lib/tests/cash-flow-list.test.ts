@@ -8,9 +8,9 @@ import {
   parseTherapistListQuery,
   therapistListPage,
   type ExpenseListItem,
-} from "@/lib/cash-flow-list";
-import type { ExpenseGroupSummary } from "@/lib/expense";
-import type { TherapistSummary } from "@/lib/cash-flow";
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow-list";
+import type { ExpenseGroupSummary } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense";
+import type { TherapistSummary } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
 
 const ids = (rows: { id: string }[]) => rows.map((row) => row.id);
 

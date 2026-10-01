@@ -2,9 +2,9 @@
 
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { getSessionUserId } from "@/lib/session"
-import { forbiddenMessage, type UnitAccessError } from "@/lib/access-check"
-import { findManagedUnit } from "@/lib/unit-access"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { forbiddenMessage, type UnitAccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
+import { findManagedUnit } from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-access"
 import {
   createExpense,
   deleteExpense,
@@ -15,7 +15,7 @@ import {
   type CreateExpenseError,
   type ExpenseScope,
   type UpdateExpenseError,
-} from "@/lib/expense"
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
 import {
   createExpenseGroup,
   deleteExpenseGroup,
@@ -24,9 +24,9 @@ import {
   type CreateExpenseGroupError,
   type DeleteExpenseGroupResult,
   type UpdateExpenseGroupError,
-} from "@/lib/expense-group"
-import { expenseGroupIconExists } from "@/lib/expense-group-icon-store"
-import { groupLimitsOf } from "@/lib/unit-cash-flow-store"
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/expense-group"
+import { expenseGroupIconExists } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/expense-group-icon-store"
+import { groupLimitsOf } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
 import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
 

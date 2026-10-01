@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, it, expect } from "vitest";
-import { isAuthorizedAbacateWebhook } from "@/lib/abacatepay-webhook";
+import { isAuthorizedAbacateWebhook } from "@/service/api/webhooks/abacatepay/abacatepay-webhook";
 
 const PUBLIC_KEY = "chave-publica-de-teste";
 const SECRET = "segredo-do-webhook";

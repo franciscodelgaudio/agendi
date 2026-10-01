@@ -1,5 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 // Fato ou preferência que a AgenIA guardou sobre o workspace; entra no contexto de toda conversa.
 const ageniaMemorySchema = new Schema(

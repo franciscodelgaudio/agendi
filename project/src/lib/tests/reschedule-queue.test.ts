@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createRescheduleQueue, type RescheduleTimes } from "@/lib/reschedule-queue";
+import { createRescheduleQueue, type RescheduleTimes } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/reschedule-queue";
 
 const T9 = { startsAt: "2026-09-24T09:00", endsAt: "2026-09-24T10:00" };
 const T10 = { startsAt: "2026-09-24T10:00", endsAt: "2026-09-24T11:00" };

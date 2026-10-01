@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { recordStockPurchase, stockPurchaseExpense, SUPPLIES_GROUP_NAME } from "@/lib/stock-purchase";
+import { recordStockPurchase, stockPurchaseExpense, SUPPLIES_GROUP_NAME } from "@/service/workspace/[workspaceId]/stock/stock-purchase";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const PRODUCT_ID = "64b7f0c2a1b2c3d4e5f60761";

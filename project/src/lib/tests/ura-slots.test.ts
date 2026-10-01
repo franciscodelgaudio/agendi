@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { availableSlots } from "@/lib/ura-slots";
+import { availableSlots } from "@/service/workspace/[workspaceId]/uras/ura-slots";
 
 const ANA = { id: "therapist-ana", name: "Ana" };
 const BIA = { id: "therapist-bia", name: "Bia" };

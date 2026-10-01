@@ -1,18 +1,18 @@
 "use server"
 
 import { isObjectIdOrHexString } from "mongoose"
-import { forbiddenMessage, type UnitAccessError } from "@/lib/access-check"
-import { getSessionUserId } from "@/lib/session"
-import { bookingLookups, conflictChecker, findUnitTreatmentRoom, roomBookingsFinder } from "@/lib/booking-store"
-import { findManagedUnit } from "@/lib/unit-access"
-import { findManagedWorkspace } from "@/lib/workspace-access"
+import { forbiddenMessage, type UnitAccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { bookingLookups, conflictChecker, findUnitTreatmentRoom, roomBookingsFinder } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-store"
+import { findManagedUnit } from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-access"
+import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
 import {
   createBooking,
   deleteBooking,
   rescheduleBooking,
   updateBooking,
   type BookingError,
-} from "@/lib/booking"
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking"
 import { Booking } from "@/models/Booking"
 import { Unit } from "@/models/Unit"
 

@@ -4,6 +4,68 @@ Plataforma de gestão para negócios de beleza e bem-estar.
 
 Repositório: [franciscodelgaudio/agendi](https://github.com/franciscodelgaudio/agendi).
 
+## Análise de código com SonarQube
+
+O SonarQube Community Build roda localmente com PostgreSQL pelo Docker Compose.
+Ele analisa problemas de qualidade e segurança, duplicação e cobertura. Os testes
+são executados pelo Vitest, que gera o relatório LCOV importado pelo SonarQube.
+
+Com o Docker Desktop iniciado no modo de containers Linux, execute nesta pasta:
+
+```powershell
+npm install
+npm run sonar:up
+```
+
+Aguarde o servidor iniciar e abra [http://localhost:9000](http://localhost:9000).
+Se esta máquina já possui `.env.sonar.local`, entre como `admin` com a senha em
+`SONAR_ADMIN_PASSWORD`. O scanner carrega `SONAR_TOKEN` desse arquivo
+automaticamente, então basta executar `npm run sonar`. O arquivo é ignorado
+pelo Git; mantenha as credenciais apenas na sua máquina.
+
+Em uma instalação nova, o primeiro acesso usa `admin` / `admin` e pede a troca da senha. Crie um projeto
+local com chave `agendi` e branch principal igual à do repositório. Em **Minha
+conta → Segurança**, gere um token de análise para esse projeto.
+
+Defina o token apenas na sessão do terminal e execute a análise:
+
+```powershell
+$env:SONAR_TOKEN = "seu-token"
+npm run sonar
+```
+
+`npm run sonar` executa todos os testes com cobertura e envia a análise somente
+se os testes passarem. O scanner aguarda o Quality Gate e retorna erro se os
+critérios de qualidade não forem atendidos; os resultados continuam disponíveis
+no painel. Não salve o token no repositório.
+
+Comandos adicionais:
+
+- `npm run test:coverage`: gera `coverage/lcov.info` e o relatório HTML em `coverage/`.
+- `npm run sonar:scan`: envia a análise usando a cobertura já gerada.
+- `npm run sonar:down`: para os serviços, preservando os dados nos volumes.
+- `docker compose -f compose.sonar.yml logs --tail 100 sonarqube`: mostra os logs.
+
+O comando de cobertura permite até 15 segundos por teste, pois a instrumentação
+torna os testes com bcrypt mais lentos. Falhas continuam interrompendo o comando
+`sonar`, mas o relatório de cobertura é gerado também quando um teste falha.
+
+A cobertura considera todos os arquivos de aplicação em `src`, incluindo os
+ainda sem testes. Os testes e declarações de tipos são separados da análise de
+código de produção. Os scripts são analisados, mas não entram na cobertura.
+O painel fica acessível somente nesta máquina; a configuração é para uso local.
+
+Se o Elasticsearch não iniciar e os logs mencionarem `vm.max_map_count`, ajuste
+o limite no ambiente Linux do Docker Desktop e reinicie os serviços:
+
+```powershell
+wsl -d docker-desktop -u root sysctl -w vm.max_map_count=524288
+npm run sonar:up
+```
+
+Referências: [SonarScanner CLI](https://docs.sonarsource.com/sonarqube-community-build/analyzing-source-code/scanners/sonarscanner)
+e [cobertura JavaScript/TypeScript](https://docs.sonarsource.com/sonarqube-community-build/analyzing-source-code/test-coverage/javascript-typescript-test-coverage).
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

@@ -1,5 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 // Ícone que um grupo de despesas pode usar. key é o desenho (mapeado na tela) e color o fundo;
 // order é a posição na grade de escolha.

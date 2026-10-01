@@ -1,6 +1,6 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
-import { MESSAGING_PLATFORMS } from "@/lib/messaging-types";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
+import { MESSAGING_PLATFORMS } from "@/service/workspace/[workspaceId]/inbox/messaging-types";
 
 // Conversa com um cliente num canal. contactExternalId é o wa_id (WhatsApp) ou o id do
 // cliente no escopo da conta (Instagram). lastInboundAt abre a janela de 24h para responder.

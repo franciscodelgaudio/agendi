@@ -1,10 +1,10 @@
 "use server"
 
-import { THREAD_MODES, type ThreadMode } from "@/lib/agenia-history"
-import { deleteThread, forgetMemory, listMemories, listThreads, loadThreadMessages } from "@/lib/agenia-store"
-import { can } from "@/lib/permissions"
-import { getSessionUserId } from "@/lib/session"
-import { findWorkspaceAccess } from "@/lib/workspace-access"
+import { THREAD_MODES, type ThreadMode } from "@/service/workspace/[workspaceId]/agenia/agenia-history"
+import { deleteThread, forgetMemory, listMemories, listThreads, loadThreadMessages } from "@/service/workspace/[workspaceId]/agenia/agenia-store"
+import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 
 async function findActor(workspaceId: string) {
   const userId = await getSessionUserId()

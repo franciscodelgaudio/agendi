@@ -2,9 +2,9 @@
 
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { getSessionUserId } from "@/lib/session"
-import { updateUnitMemberPay, type UpdateUnitMemberPayError } from "@/lib/unit-member"
-import { findWorkspaceAccess } from "@/lib/workspace-access"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { updateUnitMemberPay, type UpdateUnitMemberPayError } from "@/service/workspace/[workspaceId]/unit/[unitId]/team/unit-member"
+import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 import { Unit } from "@/models/Unit"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 

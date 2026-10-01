@@ -1,14 +1,14 @@
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { LeafIcon } from "lucide-react"
-import { can, type Actor } from "@/lib/permissions"
-import { requirePage } from "@/lib/page-guard"
-import { requireUser, workspaceAccessStages } from "@/lib/session"
-import { parseServiceListQuery, serviceListPipeline } from "@/lib/service-list"
+import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
+import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
+import { parseServiceListQuery, serviceListPipeline } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service-list"
 import { Workspace } from "@/models/Workspace"
-import { CreateServiceSheet } from "@/components/create-service-sheet"
-import { ListSearch } from "@/components/list-search"
-import { ServiceTable } from "@/components/service-table"
+import { CreateServiceSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/services/create-service-sheet"
+import { ListSearch } from "@/components/shared/list-search"
+import { ServiceTable } from "@/components/workspace/[workspaceId]/unit/[unitId]/services/service-table"
 import {
   Empty,
   EmptyContent,

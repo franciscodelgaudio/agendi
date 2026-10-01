@@ -8,7 +8,7 @@ import {
   saveThread,
   threadTitle,
   type ThreadRecord,
-} from "@/lib/agenia-history";
+} from "@/service/workspace/[workspaceId]/agenia/agenia-history";
 
 const WORKSPACE = "64b7f0c2a1b2c3d4e5f60718";
 const USER = "64b7f0c2a1b2c3d4e5f60719";

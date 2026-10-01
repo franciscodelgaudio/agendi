@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { bookingAppointmentInput, convertBooking } from "@/lib/booking-convert";
+import { bookingAppointmentInput, convertBooking } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/booking-convert";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const BOOKING_ID = "64b7f0c2a1b2c3d4e5f60740";

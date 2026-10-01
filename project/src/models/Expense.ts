@@ -1,6 +1,6 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { EXPENSE_REPEATS } from "@/lib/expense";
-import { connectOnUse } from "@/lib/mongoose";
+import { EXPENSE_REPEATS } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 // Lançamento de uma série parcelada ou recorrente; number vai de 1 a count.
 const expenseSeriesSchema = new Schema(

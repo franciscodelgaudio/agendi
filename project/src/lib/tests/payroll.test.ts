@@ -7,7 +7,7 @@ import {
   recordPayrollPayment,
   removePayrollPayment,
   type PayrollMember,
-} from "@/lib/payroll";
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/team/payroll";
 import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
 const MEMBER_ID = "64b7f0c2a1b2c3d4e5f60721";

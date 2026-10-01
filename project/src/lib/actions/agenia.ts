@@ -1,7 +1,7 @@
 "use server"
 
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { actionFormEntries, mergePatch, parseAgeniaAction, type AgeniaActionName } from "@/lib/agenia-actions"
+import { actionFormEntries, mergePatch, parseAgeniaAction, type AgeniaActionName } from "@/service/workspace/[workspaceId]/agenia/agenia-actions"
 import { createAppointmentAction, deleteAppointmentAction } from "@/lib/actions/appointment"
 import { createBookingAction, deleteBookingAction, rescheduleBookingAction } from "@/lib/actions/booking"
 import { createExpenseAction, deleteExpenseAction, setExpensePaidAction } from "@/lib/actions/expense"
@@ -18,7 +18,7 @@ import {
   takeConversationAction,
 } from "@/lib/actions/ura"
 import { Product } from "@/models/Product"
-import { findUnitHolder } from "@/lib/stock-store"
+import { findUnitHolder } from "@/service/workspace/[workspaceId]/stock/stock-store"
 import { StockItem } from "@/models/StockItem"
 import { Service } from "@/models/Service"
 import { Unit } from "@/models/Unit"

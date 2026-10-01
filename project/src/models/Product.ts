@@ -1,5 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 // Produto do catálogo do workspace, cadastrado uma vez só. A quantidade fica em cada estoque
 // (StockItem). O custo fica em centavos para evitar erro de arredondamento.

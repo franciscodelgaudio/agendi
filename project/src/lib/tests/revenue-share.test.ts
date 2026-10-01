@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculatePartnerShareCents, parseRevenueShare, type RevenueShare } from "@/lib/revenue-share";
+import { calculatePartnerShareCents, parseRevenueShare, type RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share";
 
 describe("parseRevenueShare", () => {
   it("aceita percentual fixo (uma faixa sem limite)", () => {

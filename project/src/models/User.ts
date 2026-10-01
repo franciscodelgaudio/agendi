@@ -1,5 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 // Mesma coleção "users" usada pelo @auth/mongodb-adapter. Os campos
 // name/email/image/emailVerified são os que o adapter grava; passwordHash

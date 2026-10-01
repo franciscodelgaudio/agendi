@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { transferProduct } from "@/lib/stock-movement";
+import { transferProduct } from "@/service/workspace/[workspaceId]/stock/stock-movement";
 
 const PRODUCT_ID = "64b7f0c2a1b2c3d4e5f60800";
 const UNIT_A = "64b7f0c2a1b2c3d4e5f60720";

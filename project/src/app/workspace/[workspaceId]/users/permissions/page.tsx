@@ -1,10 +1,10 @@
 import { notFound, redirect } from "next/navigation"
-import type { Actor } from "@/lib/permissions"
-import { visiblePages } from "@/lib/page-access"
-import { requirePage } from "@/lib/page-guard"
-import { requireUser, workspaceAccessStages } from "@/lib/session"
+import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { visiblePages } from "@/service/workspace/[workspaceId]/page-access"
+import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
+import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { Workspace } from "@/models/Workspace"
-import { RolePermissionsForm, type RoleView } from "@/components/role-permissions-form"
+import { RolePermissionsForm, type RoleView } from "@/components/workspace/[workspaceId]/users/permissions/role-permissions-form"
 
 export default async function PermissionsPage({ params }: PageProps<"/workspace/[workspaceId]/users/permissions">) {
   const { workspaceId } = await params

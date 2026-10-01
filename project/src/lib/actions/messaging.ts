@@ -2,22 +2,22 @@
 
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { can } from "@/lib/permissions"
+import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import {
   createChannel,
   deleteChannel,
   updateChannel,
   type CreateChannelError,
   type UpdateChannelError,
-} from "@/lib/messaging-channel"
-import { decryptChannelToken, encryptChannelToken, messagingEnv } from "@/lib/messaging-config"
-import { sendReply, type ReplyConversation, type SendReplyError } from "@/lib/messaging-send"
-import { insertMessage, touchConversation } from "@/lib/messaging-store"
-import type { MessagingPlatform } from "@/lib/messaging-types"
-import { sendMetaMessage } from "@/lib/meta-graph"
-import { endConversationSessions } from "@/lib/ura-store"
-import { getSessionUserId } from "@/lib/session"
-import { findWorkspaceAccess } from "@/lib/workspace-access"
+} from "@/service/workspace/[workspaceId]/channels/messaging-channel"
+import { decryptChannelToken, encryptChannelToken, messagingEnv } from "@/service/workspace/[workspaceId]/channels/messaging-config"
+import { sendReply, type ReplyConversation, type SendReplyError } from "@/service/workspace/[workspaceId]/inbox/messaging-send"
+import { insertMessage, touchConversation } from "@/service/workspace/[workspaceId]/inbox/messaging-store"
+import type { MessagingPlatform } from "@/service/workspace/[workspaceId]/inbox/messaging-types"
+import { sendMetaMessage } from "@/service/workspace/[workspaceId]/channels/meta-graph"
+import { endConversationSessions } from "@/service/workspace/[workspaceId]/uras/ura-store"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 import { Conversation } from "@/models/Conversation"
 import { Message } from "@/models/Message"
 import { MessagingChannel } from "@/models/MessagingChannel"

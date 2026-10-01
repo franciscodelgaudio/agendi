@@ -1,27 +1,27 @@
 import { notFound, redirect } from "next/navigation"
 import { CalendarIcon } from "lucide-react"
-import { can, type Actor } from "@/lib/permissions"
-import { requirePage } from "@/lib/page-guard"
-import { requireUser, workspaceAccessStages } from "@/lib/session"
+import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
+import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import {
   BOOKING_PAGE_SIZE,
   bookingSearchPipeline,
   parseBookingListQuery,
   type BookingPage,
-} from "@/lib/booking-list"
-import { BRT_OFFSET_HOURS } from "@/lib/timezone"
-import { therapistOptionsStages } from "@/lib/therapist"
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
+import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
+import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
 import { Workspace } from "@/models/Workspace"
-import type { BookingOptions } from "@/components/booking-calendar"
-import { BookingTable } from "@/components/booking-table"
-import { CalendarNav } from "@/components/calendar-nav"
-import { CreateBookingSheet } from "@/components/create-booking-sheet"
-import { ListPagination } from "@/components/list-pagination"
-import { ListSearch } from "@/components/list-search"
-import { BookingStatusFilter } from "@/components/booking-status-filter"
-import { PeriodFilter } from "@/components/period-filter"
-import { TherapistFilter } from "@/components/therapist-filter"
-import { UnitFilter } from "@/components/unit-filter"
+import type { BookingOptions } from "@/components/workspace/[workspaceId]/shared/calendar/booking-calendar"
+import { BookingTable } from "@/components/workspace/[workspaceId]/shared/calendar/list/booking-table"
+import { CalendarNav } from "@/components/workspace/[workspaceId]/shared/calendar/calendar-nav"
+import { CreateBookingSheet } from "@/components/workspace/[workspaceId]/shared/calendar/create-booking-sheet"
+import { ListPagination } from "@/components/shared/list-pagination"
+import { ListSearch } from "@/components/shared/list-search"
+import { BookingStatusFilter } from "@/components/workspace/[workspaceId]/shared/calendar/booking-status-filter"
+import { PeriodFilter } from "@/components/shared/period-filter"
+import { TherapistFilter } from "@/components/workspace/[workspaceId]/shared/team/therapist-filter"
+import { UnitFilter } from "@/components/workspace/[workspaceId]/shared/calendar/unit-filter"
 import {
   Empty,
   EmptyContent,

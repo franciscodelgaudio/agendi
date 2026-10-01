@@ -1,5 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 const stockUnitSchema = new Schema(
   { unitId: { type: Schema.Types.ObjectId, ref: "Unit", required: true } },

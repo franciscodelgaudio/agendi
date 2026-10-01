@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planUnitTeam } from "@/lib/unit-team";
+import { planUnitTeam } from "@/service/workspace/[workspaceId]/team/unit-team";
 import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
 const member = (id: string, linked = false) => ({ id, linked });

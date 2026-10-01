@@ -2,9 +2,9 @@
 
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { getSessionUserId } from "@/lib/session"
-import { forbiddenMessage } from "@/lib/access-check"
-import { findManagedWorkspace } from "@/lib/workspace-access"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
+import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
 import {
   createWallet,
   deleteWallet,
@@ -12,7 +12,7 @@ import {
   type CreateWalletError,
   type UpdateWalletError,
   type WalletUnit,
-} from "@/lib/wallet"
+} from "@/service/workspace/[workspaceId]/cash-flow/wallet"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
 

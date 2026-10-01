@@ -1,12 +1,12 @@
 "use server"
 
 import { refresh } from "next/cache"
-import { ageniaProviders } from "@/lib/agenia-model"
-import { updateAgeniaModel, type UpdateAgeniaModelError } from "@/lib/agenia-models"
-import { forbiddenMessage } from "@/lib/access-check"
-import { getSessionUserId } from "@/lib/session"
-import { updateWorkspace, type UpdateWorkspaceError } from "@/lib/workspace"
-import { findManagedWorkspace } from "@/lib/workspace-access"
+import { ageniaProviders } from "@/service/workspace/[workspaceId]/agenia/agenia-model"
+import { updateAgeniaModel, type UpdateAgeniaModelError } from "@/service/workspace/[workspaceId]/agenia/agenia-models"
+import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { updateWorkspace, type UpdateWorkspaceError } from "@/service/workspace/workspace"
+import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
 import { Workspace } from "@/models/Workspace"
 
 const errorMessages: Record<UpdateWorkspaceError | "unauthenticated", string> = {

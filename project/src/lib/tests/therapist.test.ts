@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { therapistOptionsStages } from "@/lib/therapist";
+import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist";
 
 describe("therapistOptionsStages", () => {
   // Aplicadas sobre o documento do workspace: quem pode atender são os membros que

@@ -4,7 +4,7 @@ import {
   UNIT_TEAM_PAGE_SIZE,
   unitTeamListPage,
   type UnitTeamListItem,
-} from "@/lib/unit-team-list";
+} from "@/service/workspace/[workspaceId]/team/unit-team-list";
 
 const BASE = { q: "", dir: "asc", role: "", status: "", pay: "", page: 1 } as const;
 // Roles do workspace: o filtro de função usa "admin" ou o id da role.

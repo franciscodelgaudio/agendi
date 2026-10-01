@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { metaMessageBodies } from "@/lib/meta-message";
+import { metaMessageBodies } from "@/service/workspace/[workspaceId]/inbox/meta-message";
 
 const TO = "5511988887777";
 const WA = { messaging_product: "whatsapp", recipient_type: "individual", to: TO };

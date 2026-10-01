@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { sendReply } from "@/lib/messaging-send";
-import type { Actor } from "@/lib/permissions";
+import { sendReply } from "@/service/workspace/[workspaceId]/inbox/messaging-send";
+import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
 import { ADMIN, actorWith } from "@/lib/tests/actors";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { openingBalanceRange, parseOpeningBalance } from "@/lib/opening-balance";
+import { openingBalanceRange, parseOpeningBalance } from "@/service/workspace/[workspaceId]/cash-flow/opening-balance";
 
 describe("parseOpeningBalance", () => {
   it.each([

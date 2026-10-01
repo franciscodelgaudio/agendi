@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { ingestWebhookEvents, messagePreview, statusesBefore } from "@/lib/messaging-inbox";
-import type { WebhookEvent } from "@/lib/meta-webhook";
+import { ingestWebhookEvents, messagePreview, statusesBefore } from "@/service/workspace/[workspaceId]/inbox/messaging-inbox";
+import type { WebhookEvent } from "@/service/api/webhooks/meta/meta-webhook";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const CHANNEL_ID = "64b7f0c2a1b2c3d4e5f60790";

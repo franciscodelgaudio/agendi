@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createChannel, deleteChannel, updateChannel } from "@/lib/messaging-channel";
+import { createChannel, deleteChannel, updateChannel } from "@/service/workspace/[workspaceId]/channels/messaging-channel";
 import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";

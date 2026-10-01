@@ -2,17 +2,17 @@
 
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString } from "mongoose"
-import { getSessionUserId } from "@/lib/session"
-import { forbiddenMessage } from "@/lib/access-check"
-import { findUnitProducts } from "@/lib/product-lookup"
-import { findManagedUnit } from "@/lib/unit-access"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
+import { findUnitProducts } from "@/service/workspace/[workspaceId]/stock/products/product-lookup"
+import { findManagedUnit } from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-access"
 import {
   createService,
   deleteService,
   updateService,
   type CreateServiceError,
   type UpdateServiceError,
-} from "@/lib/service"
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service"
 import { Service } from "@/models/Service"
 
 const errorMessages: Record<CreateServiceError | UpdateServiceError | "workspace_not_found" | "unauthenticated", string> = {

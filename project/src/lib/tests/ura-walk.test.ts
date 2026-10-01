@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { parseUraGraph } from "@/lib/ura-graph";
-import { walkUra } from "@/lib/ura-walk";
+import { parseUraGraph } from "@/service/workspace/[workspaceId]/uras/ura-graph";
+import { walkUra } from "@/service/workspace/[workspaceId]/uras/ura-walk";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60719";
 const SERVICE_ID = "64b7f0c2a1b2c3d4e5f60720";

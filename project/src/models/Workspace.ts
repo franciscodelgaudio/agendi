@@ -1,6 +1,6 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
-import { PLAN_IDS } from "@/lib/plans";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
+import { PLAN_IDS } from "@/service/subscribe/plans";
 
 // Plano pago pela AbacatePay; sem assinatura ativa, o workspace mostra a tela de planos.
 const subscriptionSchema = new Schema(

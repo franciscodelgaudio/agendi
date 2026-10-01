@@ -1,10 +1,10 @@
-import { parseCashFlowQuery } from "@/lib/cash-flow"
-import { expenseReport, parseExportFormat } from "@/lib/cash-flow-export"
-import { expenseListPage, parseExpenseListQuery } from "@/lib/cash-flow-list"
-import { allPages, loadExpensesScreen } from "@/lib/cash-flow-screen-store"
-import { findVisiblePages } from "@/lib/page-guard"
-import { reportResponse } from "@/lib/report-file"
-import { getSessionUserId } from "@/lib/session"
+import { parseCashFlowQuery } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow"
+import { expenseReport, parseExportFormat } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow-export"
+import { expenseListPage, parseExpenseListQuery } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow-list"
+import { allPages, loadExpensesScreen } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow-screen-store"
+import { findVisiblePages } from "@/service/workspace/[workspaceId]/page-guard"
+import { reportResponse } from "@/service/_shared/report-file"
+import { getSessionUserId } from "@/service/(auth)/session"
 
 // Despesas do mês em PDF ou XLSX (?format=), com a busca, os filtros e a ordenação da tela, sem paginar.
 export async function GET(

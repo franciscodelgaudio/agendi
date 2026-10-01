@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { summarizeProductUsage } from "@/lib/product-usage";
+import { summarizeProductUsage } from "@/service/workspace/[workspaceId]/stock/products/product-usage";
 
 const NOW = new Date("2026-09-24T12:00:00.000Z");
 

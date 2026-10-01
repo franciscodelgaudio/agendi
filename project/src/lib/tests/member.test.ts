@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, it, expect, vi } from "vitest";
-import { acceptInvite, inviteMember, removeMember, updateMember } from "@/lib/member";
-import type { Actor } from "@/lib/permissions";
+import { acceptInvite, inviteMember, removeMember, updateMember } from "@/service/workspace/[workspaceId]/users/member";
+import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const USER_ID = "64b7f0c2a1b2c3d4e5f60719";

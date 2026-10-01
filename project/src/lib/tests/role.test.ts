@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { UNIT_PAGES, WORKSPACE_PAGES } from "@/lib/page-access";
-import type { Actor } from "@/lib/permissions";
-import { createRole, deleteRole, renameRole, updateRolePermissions } from "@/lib/role";
+import { UNIT_PAGES, WORKSPACE_PAGES } from "@/service/workspace/[workspaceId]/page-access";
+import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
+import { createRole, deleteRole, renameRole, updateRolePermissions } from "@/service/workspace/[workspaceId]/users/permissions/role";
 
 const ROLE_ID = "64b7f0c2a1b2c3d4e5f60731";
 const OTHER_ROLE_ID = "64b7f0c2a1b2c3d4e5f60732";

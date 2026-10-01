@@ -7,8 +7,8 @@ import {
   type CashFlowReportInput,
   type ExpenseGroupReportInput,
   type ExpenseReportInput,
-} from "@/lib/cash-flow-export";
-import type { ExpenseCashFlowAmounts } from "@/lib/cash-flow";
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow-export";
+import type { ExpenseCashFlowAmounts } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
 
 function amounts(overrides: Partial<ExpenseCashFlowAmounts> = {}): ExpenseCashFlowAmounts {
   return {

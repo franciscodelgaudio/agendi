@@ -1,14 +1,14 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { visiblePages } from "@/lib/page-access"
-import { can, type Actor } from "@/lib/permissions"
-import { requireUser, workspaceAccessStages } from "@/lib/session"
+import { visiblePages } from "@/service/workspace/[workspaceId]/page-access"
+import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { Workspace } from "@/models/Workspace"
 import { Avatar, AvatarImage } from "@/components/ui/avatar"
-import { InitialFallback } from "@/components/initial-fallback"
-import { ServicesSetupNotice, UnitNav } from "@/components/unit-nav"
-import { UnitHeaderSkeleton } from "@/components/page-skeletons"
+import { InitialFallback } from "@/components/shared/initial-fallback"
+import { ServicesSetupNotice, UnitNav } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-nav"
+import { UnitHeaderSkeleton } from "@/components/shared/page-skeletons"
 
 // O cabeçalho da unidade carrega à parte, para a aba mostrar seu skeleton logo abaixo dele.
 // As páginas verificam o acesso por conta própria.

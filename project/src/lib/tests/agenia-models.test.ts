@@ -5,7 +5,7 @@ import {
   configuredProviders,
   resolveAgeniaModel,
   updateAgeniaModel,
-} from "@/lib/agenia-models";
+} from "@/service/workspace/[workspaceId]/agenia/agenia-models";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 

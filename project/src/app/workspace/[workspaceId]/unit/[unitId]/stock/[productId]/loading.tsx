@@ -1,4 +1,4 @@
-import { FiltersSkeleton, PageSkeleton, PaginationSkeleton, TableSkeleton } from "@/components/page-skeletons"
+import { FiltersSkeleton, PageSkeleton, PaginationSkeleton, TableSkeleton } from "@/components/shared/page-skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function Loading() {

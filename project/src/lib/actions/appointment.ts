@@ -2,18 +2,18 @@
 
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString } from "mongoose"
-import { getSessionUserId } from "@/lib/session"
-import { findWorkspaceTherapists, objectIds } from "@/lib/therapist-lookup"
-import { findUnitProducts } from "@/lib/product-lookup"
-import { forbiddenMessage, type UnitAccessError } from "@/lib/access-check"
-import { findManagedUnit } from "@/lib/unit-access"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { findWorkspaceTherapists, objectIds } from "@/service/workspace/[workspaceId]/team/therapist-lookup"
+import { findUnitProducts } from "@/service/workspace/[workspaceId]/stock/products/product-lookup"
+import { forbiddenMessage, type UnitAccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
+import { findManagedUnit } from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-access"
 import {
   createAppointment,
   deleteAppointment,
   updateAppointment,
   type CreateAppointmentError,
-} from "@/lib/appointment"
-import { bookingAppointmentInput, convertBooking } from "@/lib/booking-convert"
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment"
+import { bookingAppointmentInput, convertBooking } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/booking-convert"
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
 import { Unit } from "@/models/Unit"

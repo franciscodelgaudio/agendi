@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { sendMetaMessage } from "@/lib/meta-graph";
+import { sendMetaMessage } from "@/service/workspace/[workspaceId]/channels/meta-graph";
 
 const TOKEN = "EAAGm0PX4ZCpsBA";
 

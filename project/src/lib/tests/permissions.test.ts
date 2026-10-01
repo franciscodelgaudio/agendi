@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { can, PERMISSIONS, type Actor, type Permission } from "@/lib/permissions";
+import { can, PERMISSIONS, type Actor, type Permission } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
 
 const ADMIN: Actor = { admin: true };
 const member = (permissions: Permission[]): Actor => ({

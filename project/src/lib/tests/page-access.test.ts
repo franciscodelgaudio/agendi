@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { UNIT_PAGES, WORKSPACE_PAGE_PATHS, WORKSPACE_PAGES, visiblePages } from "@/lib/page-access";
+import { UNIT_PAGES, WORKSPACE_PAGE_PATHS, WORKSPACE_PAGES, visiblePages } from "@/service/workspace/[workspaceId]/page-access";
 
 const ALL = { workspace: [...WORKSPACE_PAGES], unit: [...UNIT_PAGES] };
 

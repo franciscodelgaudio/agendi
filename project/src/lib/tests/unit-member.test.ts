@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { updateUnitMemberPay } from "@/lib/unit-member";
+import { updateUnitMemberPay } from "@/service/workspace/[workspaceId]/unit/[unitId]/team/unit-member";
 import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
 const MEMBER_ID = "64b7f0c2a1b2c3d4e5f60721";

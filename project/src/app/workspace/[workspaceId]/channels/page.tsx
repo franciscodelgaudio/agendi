@@ -1,14 +1,14 @@
 import { notFound } from "next/navigation"
 import { CircleAlertIcon, HashIcon, LinkIcon, RadioTowerIcon, SettingsIcon, TagIcon } from "lucide-react"
-import { can, type Actor } from "@/lib/permissions"
-import { missingMessagingEnv, webhookUrl } from "@/lib/messaging-config"
-import type { MessagingPlatform } from "@/lib/messaging-types"
-import { requireUser, workspaceAccessStages } from "@/lib/session"
+import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { missingMessagingEnv, webhookUrl } from "@/service/workspace/[workspaceId]/channels/messaging-config"
+import type { MessagingPlatform } from "@/service/workspace/[workspaceId]/inbox/messaging-types"
+import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { Workspace } from "@/models/Workspace"
-import { ChannelActions } from "@/components/channel-actions"
-import { CreateChannelSheet } from "@/components/create-channel-sheet"
-import { PlatformIcon, platformLabels } from "@/components/platform-labels"
-import { CodeCell, CodeHead } from "@/components/record-code"
+import { ChannelActions } from "@/components/workspace/[workspaceId]/channels/channel-actions"
+import { CreateChannelSheet } from "@/components/workspace/[workspaceId]/channels/create-channel-sheet"
+import { PlatformIcon, platformLabels } from "@/components/workspace/[workspaceId]/shared/messaging/platform-labels"
+import { CodeCell, CodeHead } from "@/components/shared/record-code"
 import {
   Empty,
   EmptyContent,

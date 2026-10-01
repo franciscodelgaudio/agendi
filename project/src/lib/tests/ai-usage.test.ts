@@ -14,7 +14,7 @@ import {
   summarizeCosts,
   TOP_SERIES,
   usageCostUsd,
-} from "@/lib/ai-usage";
+} from "@/service/workspace/[workspaceId]/ai-costs/ai-usage";
 
 // 28/09/2026 10:00 em Brasília (13:00 UTC).
 const NOW = new Date("2026-09-28T13:00:00Z");

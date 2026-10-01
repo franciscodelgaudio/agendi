@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createTicket } from "@/lib/ticket";
+import { createTicket } from "@/service/workspace/[workspaceId]/tickets/ticket";
 import { ADMIN, STAFF } from "@/lib/tests/actors";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";

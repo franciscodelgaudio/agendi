@@ -1,6 +1,6 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
-import { REVENUE_SHARE_PERIODS } from "@/lib/revenue-share";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
+import { REVENUE_SHARE_PERIODS } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share";
 
 // upToCents é inclusivo; a última faixa fica sem limite (null).
 const revenueShareTierSchema = new Schema(

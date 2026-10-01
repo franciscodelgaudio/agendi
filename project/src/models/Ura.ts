@@ -1,6 +1,6 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
-import { URA_NODE_TYPES } from "@/lib/ura-nodes";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
+import { URA_NODE_TYPES } from "@/service/workspace/[workspaceId]/uras/ura-nodes";
 
 // Fluxo automático de atendimento (URA) de um workspace, montado no editor visual.
 // O grafo é validado e normalizado por lib/ura-graph antes de salvar; data de cada

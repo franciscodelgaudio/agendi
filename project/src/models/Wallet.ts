@@ -1,5 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 // Valor em caixa no início do dia `date` ("2026-09-01"); o saldo soma o líquido real a partir dele.
 const openingBalanceSchema = new Schema(

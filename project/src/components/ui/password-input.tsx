@@ -3,7 +3,7 @@
 import { useState, type ComponentProps } from "react"
 import { Eye, EyeOff } from "lucide-react"
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/service/_shared/utils"
 import { Input } from "@/components/ui/input"
 
 export function PasswordInput({

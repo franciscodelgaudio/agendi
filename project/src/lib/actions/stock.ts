@@ -2,9 +2,9 @@
 
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { getSessionUserId } from "@/lib/session"
-import { forbiddenMessage } from "@/lib/access-check"
-import { findManagedWorkspace } from "@/lib/workspace-access"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
+import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
 import {
   createStock,
   deleteStock,
@@ -14,8 +14,8 @@ import {
   type DeleteStockResult,
   type StockUnit,
   type UpdateStockError,
-} from "@/lib/stock"
-import { toLots } from "@/lib/stock-store"
+} from "@/service/workspace/[workspaceId]/stock/stock"
+import { toLots } from "@/service/workspace/[workspaceId]/stock/stock-store"
 import { Stock } from "@/models/Stock"
 import { StockItem } from "@/models/StockItem"
 import { Unit } from "@/models/Unit"

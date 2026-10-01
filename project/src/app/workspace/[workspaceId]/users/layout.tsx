@@ -1,9 +1,9 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
-import { findVisiblePages } from "@/lib/page-guard"
-import { requireUser } from "@/lib/session"
-import { UsersNav } from "@/components/users-nav"
-import { TabsNavSkeleton } from "@/components/page-skeletons"
+import { findVisiblePages } from "@/service/workspace/[workspaceId]/page-guard"
+import { requireUser } from "@/service/(auth)/session"
+import { UsersNav } from "@/components/workspace/[workspaceId]/users/users-nav"
+import { TabsNavSkeleton } from "@/components/shared/page-skeletons"
 
 // Título e abas de usuários (lista e permissões); cada aba verifica o acesso por conta própria.
 export default async function UsersLayout({ children, params }: LayoutProps<"/workspace/[workspaceId]/users">) {

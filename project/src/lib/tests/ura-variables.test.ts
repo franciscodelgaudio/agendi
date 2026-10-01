@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { builtinVariables, resolveTemplate } from "@/lib/ura-variables";
+import { builtinVariables, resolveTemplate } from "@/service/workspace/[workspaceId]/uras/ura-variables";
 
 describe("resolveTemplate", () => {
   it("troca {{variavel}} pelo valor, aceitando espaços dentro das chaves", () => {

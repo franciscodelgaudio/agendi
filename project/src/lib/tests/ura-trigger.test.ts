@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideInbound, pickUraToStart } from "@/lib/ura-trigger";
+import { decideInbound, pickUraToStart } from "@/service/workspace/[workspaceId]/uras/ura-trigger";
 
 const CHANNEL_ID = "64b7f0c2a1b2c3d4e5f60718";
 const OTHER_CHANNEL_ID = "64b7f0c2a1b2c3d4e5f60799";

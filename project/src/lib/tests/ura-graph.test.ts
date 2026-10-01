@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { graphIssues, nextNodeId, nodeHandles, parseUraGraph, type UraGraph } from "@/lib/ura-graph";
-import { defaultNodeData } from "@/lib/ura-nodes";
+import { graphIssues, nextNodeId, nodeHandles, parseUraGraph, type UraGraph } from "@/service/workspace/[workspaceId]/uras/ura-graph";
+import { defaultNodeData } from "@/service/workspace/[workspaceId]/uras/ura-nodes";
 
 const CHANNEL_ID = "64b7f0c2a1b2c3d4e5f60718";
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60719";

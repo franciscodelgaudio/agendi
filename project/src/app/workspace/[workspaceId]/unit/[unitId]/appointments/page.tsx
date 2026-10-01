@@ -1,25 +1,25 @@
-import Link from "@/components/link"
+import Link from "@/components/shared/link"
 import { notFound, redirect } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { ArrowRightIcon, CircleCheckIcon } from "lucide-react"
-import { can, type Actor } from "@/lib/permissions"
-import { requirePage } from "@/lib/page-guard"
-import { requireUser, workspaceAccessStages } from "@/lib/session"
+import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
+import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import {
   APPOINTMENT_PAGE_SIZE,
   appointmentSearchPipeline,
   BRT_OFFSET_HOURS,
   parseAppointmentListQuery,
   type AppointmentPage,
-} from "@/lib/appointment-list"
-import { therapistOptionsStages } from "@/lib/therapist"
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-list"
+import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
 import { Workspace } from "@/models/Workspace"
-import { AppointmentTable, type AppointmentRow } from "@/components/appointment-table"
-import { CreateAppointmentSheet } from "@/components/create-appointment-sheet"
-import { ListPagination } from "@/components/list-pagination"
-import { ListSearch } from "@/components/list-search"
-import { PeriodFilter } from "@/components/period-filter"
-import { TherapistFilter } from "@/components/therapist-filter"
+import { AppointmentTable, type AppointmentRow } from "@/components/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-table"
+import { CreateAppointmentSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/appointments/create-appointment-sheet"
+import { ListPagination } from "@/components/shared/list-pagination"
+import { ListSearch } from "@/components/shared/list-search"
+import { PeriodFilter } from "@/components/shared/period-filter"
+import { TherapistFilter } from "@/components/workspace/[workspaceId]/shared/team/therapist-filter"
 import { Button } from "@/components/ui/button"
 import {
   Empty,

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { parseUraGraph } from "@/lib/ura-graph";
-import { handleInbound, handleTimer, StaleSessionError } from "@/lib/ura-runner";
+import { parseUraGraph } from "@/service/workspace/[workspaceId]/uras/ura-graph";
+import { handleInbound, handleTimer, StaleSessionError } from "@/service/workspace/[workspaceId]/uras/ura-runner";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const CHANNEL_ID = "64b7f0c2a1b2c3d4e5f60790";

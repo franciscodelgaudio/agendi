@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseBusinessHours } from "@/lib/business-hours";
+import { parseBusinessHours } from "@/service/workspace/[workspaceId]/unit/[unitId]/business-hours";
 
 describe("parseBusinessHours", () => {
   it("devolve abertura e fechamento como chegam do formulário", () => {

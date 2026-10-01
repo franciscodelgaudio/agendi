@@ -11,9 +11,9 @@ import {
   type DeleteRoleResult,
   type RenameRoleResult,
   type UpdateRolePermissionsError,
-} from "@/lib/role"
-import { getSessionUserId } from "@/lib/session"
-import { findWorkspaceAccess } from "@/lib/workspace-access"
+} from "@/service/workspace/[workspaceId]/users/permissions/role"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 import { Role } from "@/models/Role"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 

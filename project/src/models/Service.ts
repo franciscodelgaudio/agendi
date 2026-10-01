@@ -1,5 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 // Serviço prestado numa unidade. O preço fica em centavos para evitar erro de arredondamento.
 const serviceSchema = new Schema(

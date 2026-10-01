@@ -3,7 +3,7 @@
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { auth } from "@/auth"
-import { sendInviteEmail } from "@/lib/email"
+import { sendInviteEmail } from "@/service/_shared/email"
 import {
   acceptInvite,
   inviteMember,
@@ -12,9 +12,9 @@ import {
   type AcceptInviteError,
   type InviteMemberError,
   type UpdateMemberError,
-} from "@/lib/member"
-import { getSessionUserId } from "@/lib/session"
-import { findWorkspaceAccess } from "@/lib/workspace-access"
+} from "@/service/workspace/[workspaceId]/users/member"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 import { Role } from "@/models/Role"
 import { User } from "@/models/User"
 import { WorkspaceMember } from "@/models/WorkspaceMember"

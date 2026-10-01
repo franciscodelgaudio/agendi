@@ -1,17 +1,17 @@
 import { notFound, redirect } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import type { Actor } from "@/lib/permissions"
-import { parseCashFlowQuery } from "@/lib/cash-flow"
-import { requirePage } from "@/lib/page-guard"
-import { requireUser, workspaceAccessStages } from "@/lib/session"
-import { parseUnitTeamListQuery, UNIT_TEAM_PAGE_SIZE, unitTeamListPage, type UnitTeamListItem } from "@/lib/unit-team-list"
-import type { CommissionBase } from "@/lib/unit-member"
-import { memberAttendsStages, memberRoleNameStages, rolesLookup, type RoleOption } from "@/lib/unit-team"
+import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { parseCashFlowQuery } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow"
+import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
+import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
+import { parseUnitTeamListQuery, UNIT_TEAM_PAGE_SIZE, unitTeamListPage, type UnitTeamListItem } from "@/service/workspace/[workspaceId]/team/unit-team-list"
+import type { CommissionBase } from "@/service/workspace/[workspaceId]/unit/[unitId]/team/unit-member"
+import { memberAttendsStages, memberRoleNameStages, rolesLookup, type RoleOption } from "@/service/workspace/[workspaceId]/team/unit-team"
 import { Workspace } from "@/models/Workspace"
-import { ListPagination } from "@/components/list-pagination"
-import { ListSearch } from "@/components/list-search"
-import { TeamTable } from "@/components/team-table"
-import { UnitTeamFilters } from "@/components/unit-team-filters"
+import { ListPagination } from "@/components/shared/list-pagination"
+import { ListSearch } from "@/components/shared/list-search"
+import { TeamTable } from "@/components/workspace/[workspaceId]/shared/team/team-table"
+import { UnitTeamFilters } from "@/components/workspace/[workspaceId]/shared/team/unit-team-filters"
 
 // Layout e página podem renderizar em paralelo, então a página refaz a verificação de acesso.
 export default async function UnitTeamPage({
@@ -95,7 +95,21 @@ export default async function UnitTeamPage({
   ])
   if (!workspace?.unit) notFound()
   const { actor, unit } = workspace
-  const members = workspace.members.map((member) => ({ ...member, unitId, unitName: unit.name }))
+  const members = workspace.members.map(({ commissionBase, ...member }) => ({
+    ...member,
+    links: [
+      {
+        unitId,
+        unitName: unit.name,
+        commissionBase,
+        startDate: member.startDate,
+        payDay: member.payDay,
+        commissionPercent: member.commissionPercent,
+        salaryCents: member.salaryCents,
+        bonuses: member.bonuses,
+      },
+    ],
+  }))
   // Busca, filtros e paginação são feitos aqui (poucas pessoas por unidade).
   const result = unitTeamListPage(members, query)
 

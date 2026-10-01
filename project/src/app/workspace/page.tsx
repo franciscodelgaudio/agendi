@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation"
 import { Types } from "mongoose"
-import { PlansSection } from "@/components/landing/plans-section"
-import { SignedInAs } from "@/components/signed-in-as"
-import { requireUser } from "@/lib/session"
+import { PlansSection } from "@/components/shared/landing/plans-section"
+import { SignedInAs } from "@/components/shared/signed-in-as"
+import { requireUser } from "@/service/(auth)/session"
 import { Workspace } from "@/models/Workspace"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 

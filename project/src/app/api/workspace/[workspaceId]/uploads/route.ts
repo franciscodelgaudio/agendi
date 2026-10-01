@@ -1,8 +1,8 @@
-import { can } from "@/lib/permissions"
-import { uploadImage, type UploadImageError } from "@/lib/image-upload"
-import { missingR2Env, r2UploadDeps } from "@/lib/r2-storage"
-import { getSessionUserId } from "@/lib/session"
-import { findWorkspaceAccess } from "@/lib/workspace-access"
+import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { uploadImage, type UploadImageError } from "@/service/workspace/[workspaceId]/uploads/image-upload"
+import { missingR2Env, r2UploadDeps } from "@/service/_shared/storage/r2-storage"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 
 const errorMessages: Record<UploadImageError, string> = {
   missing_file: "Escolha uma imagem.",

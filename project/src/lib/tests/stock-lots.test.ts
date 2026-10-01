@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addLots, consumeLots, summarizeLots } from "@/lib/stock-lots";
+import { addLots, consumeLots, summarizeLots } from "@/service/workspace/[workspaceId]/stock/stock-lots";
 
 const day = (d: number) => new Date(Date.UTC(2026, 8, d));
 

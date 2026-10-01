@@ -2,19 +2,19 @@
 
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { getSessionUserId } from "@/lib/session"
-import { forbiddenMessage } from "@/lib/access-check"
-import { can, type Actor } from "@/lib/permissions"
-import { planUnitTeam, type PlanUnitTeamError, type UnitTeamPlan } from "@/lib/unit-team"
-import { findManagedWorkspace } from "@/lib/workspace-access"
-import type { TreatmentRoomInput } from "@/lib/treatment-room"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
+import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { planUnitTeam, type PlanUnitTeamError, type UnitTeamPlan } from "@/service/workspace/[workspaceId]/team/unit-team"
+import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
+import type { TreatmentRoomInput } from "@/service/workspace/[workspaceId]/unit/[unitId]/treatment-room"
 import {
   createUnit,
   deleteUnit,
   updateUnit,
   type CreateUnitError,
   type UpdateUnitError,
-} from "@/lib/unit"
+} from "@/service/workspace/[workspaceId]/unit/unit"
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
 import { StockItem } from "@/models/StockItem"

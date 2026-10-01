@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseServiceListQuery, serviceListPipeline } from "@/lib/service-list";
+import { parseServiceListQuery, serviceListPipeline } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service-list";
 
 describe("parseServiceListQuery", () => {
   it("usa busca vazia e ordenação por nome crescente quando não há parâmetros", () => {

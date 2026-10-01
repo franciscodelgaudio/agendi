@@ -4,7 +4,7 @@ import { Types } from "mongoose";
 // session.ts importa o Auth.js, que não roda fora do Next; só o pipeline importa aqui.
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 
-const { workspaceAccessStages } = await import("@/lib/session");
+const { workspaceAccessStages } = await import("@/service/(auth)/session");
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const USER_ID = "64b7f0c2a1b2c3d4e5f60719";

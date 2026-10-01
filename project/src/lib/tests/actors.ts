@@ -1,4 +1,4 @@
-import type { Actor, Permission } from "@/lib/permissions";
+import type { Actor, Permission } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
 
 // Acessos usados nos testes: o administrador pode tudo; os demais, só o que a role libera.
 export const ADMIN: Actor = { admin: true };

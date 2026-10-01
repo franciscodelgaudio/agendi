@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import bcrypt from "bcryptjs";
-import { verifyCredentials } from "@/lib/credentials";
+import { verifyCredentials } from "@/service/(auth)/login/credentials";
 
 const PASSWORD = "senha-correta-123";
 let passwordHash: string;

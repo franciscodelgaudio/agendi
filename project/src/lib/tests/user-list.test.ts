@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseUserListQuery, USER_PAGE_SIZE, userListPage, type UserListItem } from "@/lib/user-list";
+import { parseUserListQuery, USER_PAGE_SIZE, userListPage, type UserListItem } from "@/service/workspace/[workspaceId]/users/user-list";
 
 const BASE = { q: "", sort: "name", dir: "asc", role: "", status: "", page: 1 } as const;
 // Roles do workspace: o filtro de função usa "admin" ou o id da role.

@@ -1,6 +1,6 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
-import { THREAD_MODES } from "@/lib/agenia-history";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
+import { THREAD_MODES } from "@/service/workspace/[workspaceId]/agenia/agenia-history";
 
 // Conversa de um usuário com a AgenIA. key é o id gerado no navegador (uuid) e vira o id do chat;
 // scopeId é a URA ou a conversa com cliente (null na AgenIA global). messages guarda as

@@ -1,6 +1,6 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
-import { connectOnUse } from "@/lib/mongoose";
-import { COMMISSION_BASES, MAX_BONUS_DESCRIPTION_LENGTH } from "@/lib/unit-member";
+import { connectOnUse } from "@/service/_shared/database/mongoose";
+import { COMMISSION_BASES, MAX_BONUS_DESCRIPTION_LENGTH } from "@/service/workspace/[workspaceId]/unit/[unitId]/team/unit-member";
 
 // Bônus fixo mensal, somado ao salário no caixa.
 const bonusSchema = new Schema(

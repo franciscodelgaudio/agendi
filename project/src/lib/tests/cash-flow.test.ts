@@ -18,8 +18,8 @@ import {
   summarizeServices,
   summarizeTherapists,
   teamPayRates,
-} from "@/lib/cash-flow";
-import type { RevenueShare } from "@/lib/revenue-share";
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
+import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share";
 
 // 24/09/2026 (quinta-feira) às 23:30 em Brasília (já é dia 25 em UTC).
 const NOW = new Date("2026-09-25T02:30:00.000Z");

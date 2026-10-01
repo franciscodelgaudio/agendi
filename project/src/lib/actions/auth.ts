@@ -1,7 +1,7 @@
 "use server"
 
 import { signIn, signOut } from "@/auth"
-import { registerUser, type RegisterError } from "@/lib/register"
+import { registerUser, type RegisterError } from "@/service/(auth)/signup/register"
 import { User } from "@/models/User"
 
 const errorMessages: Record<RegisterError, string> = {

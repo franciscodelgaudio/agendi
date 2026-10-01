@@ -1,8 +1,8 @@
 "use server"
 
-import type { ContactFormState } from "@/components/landing/contact-form"
-import { sendLeadEmail } from "@/lib/email"
-import { createLead, type CreateLeadError } from "@/lib/lead"
+import type { ContactFormState } from "@/components/shared/landing/contact-form"
+import { sendLeadEmail } from "@/service/_shared/email"
+import { createLead, type CreateLeadError } from "@/service/_shared/landing/lead"
 import { Lead } from "@/models/Lead"
 
 const errorMessages: Record<CreateLeadError, string> = {

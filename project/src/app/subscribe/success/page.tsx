@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation"
 import { Types } from "mongoose"
-import { AutoRefresh } from "@/components/auto-refresh"
+import { AutoRefresh } from "@/components/shared/auto-refresh"
 import { Spinner } from "@/components/ui/spinner"
-import { requireUser } from "@/lib/session"
+import { requireUser } from "@/service/(auth)/session"
 import { Checkout } from "@/models/Checkout"
 
 // completionUrl do checkout da AbacatePay. O acesso é liberado pelo webhook, que pode chegar

@@ -1,14 +1,14 @@
-import { messagingEnv } from "@/lib/messaging-config"
-import { ingestWebhookEvents } from "@/lib/messaging-inbox"
+import { messagingEnv } from "@/service/workspace/[workspaceId]/channels/messaging-config"
+import { ingestWebhookEvents } from "@/service/workspace/[workspaceId]/inbox/messaging-inbox"
 import {
   findChannelByExternalId,
   insertMessage,
   touchConversation,
   updateOutboundStatus,
   upsertConversation,
-} from "@/lib/messaging-store"
-import { isValidWebhookSignature, parseMetaWebhook, verifyWebhookSubscription } from "@/lib/meta-webhook"
-import { enqueueInbound } from "@/lib/ura-queue"
+} from "@/service/workspace/[workspaceId]/inbox/messaging-store"
+import { isValidWebhookSignature, parseMetaWebhook, verifyWebhookSubscription } from "@/service/api/webhooks/meta/meta-webhook"
+import { enqueueInbound } from "@/service/workspace/[workspaceId]/uras/ura-queue"
 import { Conversation } from "@/models/Conversation"
 import { Message } from "@/models/Message"
 

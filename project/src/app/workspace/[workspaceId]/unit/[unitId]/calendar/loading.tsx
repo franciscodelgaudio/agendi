@@ -1,4 +1,4 @@
-import { CalendarHeadingSkeleton, CalendarSkeleton, PageSkeleton } from "@/components/page-skeletons"
+import { CalendarHeadingSkeleton, CalendarSkeleton, PageSkeleton } from "@/components/shared/page-skeletons"
 
 export default function Loading() {
   return (

@@ -1,7 +1,7 @@
 import * as React from "react"
 import { cn } from "cn"
 
-import Link from "@/components/link"
+import Link from "@/components/shared/link"
 import { Button } from "@/components/ui/button"
 import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from "lucide-react"
 

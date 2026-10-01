@@ -1,4 +1,4 @@
-import { HeadingSkeleton, OverviewSkeleton, PageSkeleton } from "@/components/page-skeletons"
+import { HeadingSkeleton, OverviewSkeleton, PageSkeleton } from "@/components/shared/page-skeletons"
 
 export default function Loading() {
   return (

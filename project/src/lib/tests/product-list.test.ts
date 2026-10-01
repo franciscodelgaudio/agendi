@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Types } from "mongoose";
-import { parseProductListQuery, productListPipeline } from "@/lib/product-list";
+import { parseProductListQuery, productListPipeline } from "@/service/workspace/[workspaceId]/stock/products/product-list";
 
 describe("parseProductListQuery", () => {
   it("usa busca vazia e ordenação por nome crescente quando não há parâmetros", () => {
