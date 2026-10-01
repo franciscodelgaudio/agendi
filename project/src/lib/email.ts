@@ -1,6 +1,11 @@
 import { Resend } from "resend"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Instanciado sob demanda: o construtor lança sem a chave, e criar no topo do
+// módulo quebra o build (o Next avalia o módulo ao coletar dados das páginas).
+function resend() {
+  if (!process.env.RESEND_API_KEY) throw new Error("RESEND_API_KEY não definido no ambiente")
+  return new Resend(process.env.RESEND_API_KEY)
+}
 
 // APP_URL vem do ambiente (e não do header Host da requisição) para que o link
 // do convite não possa apontar para outro domínio.
@@ -30,7 +35,7 @@ export async function sendInviteEmail({
   const inviter = escapeHtml(inviterName)
 
   // O SDK do Resend não lança em erro de API: devolve { error }.
-  const { error } = await resend.emails.send({
+  const { error } = await resend().emails.send({
     from: process.env.EMAIL_FROM,
     to: email,
     subject: `Convite para o workspace ${workspaceName}`,
@@ -46,7 +51,7 @@ export async function sendLeadEmail(lead: { name: string; whatsapp: string; mess
   if (!process.env.LEADS_NOTIFY_EMAIL) throw new Error("LEADS_NOTIFY_EMAIL não definido no ambiente")
   const message = lead.message ?? "(sem mensagem)"
 
-  const { error } = await resend.emails.send({
+  const { error } = await resend().emails.send({
     from: process.env.EMAIL_FROM,
     to: process.env.LEADS_NOTIFY_EMAIL,
     subject: `Novo contato pela landing: ${lead.name}`,
