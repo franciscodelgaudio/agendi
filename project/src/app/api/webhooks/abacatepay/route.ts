@@ -3,7 +3,9 @@ import { abacatePayEnv } from "@/lib/abacatepay"
 import { isAuthorizedAbacateWebhook } from "@/lib/abacatepay-webhook"
 import { handleAbacateEvent } from "@/lib/billing"
 import { Checkout } from "@/models/Checkout"
+import { User } from "@/models/User"
 import { Workspace } from "@/models/Workspace"
+import { WorkspaceMember } from "@/models/WorkspaceMember"
 
 // Webhook da AbacatePay (cadastrar como APP_URL/api/webhooks/abacatepay?webhookSecret=...).
 // Fica fora do login (proxy.ts); a autenticidade vem do segredo na URL e da assinatura HMAC.
@@ -67,8 +69,18 @@ export async function POST(request: Request) {
       setSubscription: async (workspaceId, subscription) => {
         await Workspace.updateOne({ _id: workspaceId }, { $set: { subscription } })
       },
+      // Quem paga é o primeiro membro, sempre administrador.
       createWorkspace: async (data) => {
+        const user = await User.findById(data.userId).select({ email: 1 }).lean()
+        if (!user?.email) throw new Error(`Usuário ${data.userId} sem email`)
         const workspace = await Workspace.create(data)
+        await WorkspaceMember.create({
+          workspaceId: workspace._id,
+          email: user.email,
+          admin: true,
+          userId: data.userId,
+          acceptedAt: new Date(),
+        })
         return { id: workspace._id.toString() }
       },
     },

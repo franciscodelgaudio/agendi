@@ -3,7 +3,7 @@
 import { refresh } from "next/cache"
 import { ageniaProviders } from "@/lib/agenia-model"
 import { updateAgeniaModel, type UpdateAgeniaModelError } from "@/lib/agenia-models"
-import { canManageMembers } from "@/lib/member"
+import { can } from "@/lib/permissions"
 import { getSessionUserId } from "@/lib/session"
 import { updateWorkspace, type UpdateWorkspaceError } from "@/lib/workspace"
 import { findWorkspaceAccess } from "@/lib/workspace-access"
@@ -20,7 +20,7 @@ const errorMessages: Record<UpdateWorkspaceError | "unauthenticated", string> = 
 
 export type UpdateWorkspaceState = { error: string | null }
 
-// workspaceId vem via argumento do cliente; só dono e administradores podem editar.
+// workspaceId vem via argumento do cliente; exige a permissão de editar o workspace.
 export async function updateWorkspaceAction(
   workspaceId: string,
   _prev: UpdateWorkspaceState,
@@ -32,7 +32,7 @@ export async function updateWorkspaceAction(
   const access = await findWorkspaceAccess(workspaceId, userId)
   const result = await updateWorkspace(
     { name: formData.get("name"), avatarUrl: formData.get("avatarUrl") },
-    access && canManageMembers(access.role) ? access.id : null,
+    access && can(access.actor, "workspace.manage") ? access.id : null,
     async (id, { name, avatarUrl }) => {
       // Sem imagem, o campo sai do documento em vez de ficar gravado como null.
       const { matchedCount } = await Workspace.updateOne(
@@ -56,7 +56,7 @@ const ageniaModelErrors: Record<UpdateAgeniaModelError | "unauthenticated", stri
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
-// Modelo usado pela AgenIA em todo o workspace; só dono e administradores trocam.
+// Modelo usado pela AgenIA em todo o workspace; exige a permissão de editar o workspace.
 export async function updateAgeniaModelAction(workspaceId: string, modelId: string): Promise<{ error: string | null }> {
   const userId = await getSessionUserId()
   if (!userId) return { error: ageniaModelErrors.unauthenticated }
@@ -64,7 +64,7 @@ export async function updateAgeniaModelAction(workspaceId: string, modelId: stri
   const access = await findWorkspaceAccess(workspaceId, userId)
   const result = await updateAgeniaModel(
     modelId,
-    access && canManageMembers(access.role) ? access.id : null,
+    access && can(access.actor, "workspace.manage") ? access.id : null,
     ageniaProviders(),
     async (id, ageniaModel) => (await Workspace.updateOne({ _id: id }, { $set: { ageniaModel } })).matchedCount > 0,
   )

@@ -15,7 +15,7 @@ type Workspace = { id: string; name: string; avatarUrl: string | null }
 
 type Props = {
   workspace: Workspace
-  // Dono e administradores abrem a edição ao clicar.
+  // Quem pode editar o workspace abre a edição ao clicar.
   canManage: boolean
 }
 

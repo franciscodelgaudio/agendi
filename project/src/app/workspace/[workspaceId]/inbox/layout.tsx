@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
-import { canUseInbox, type WorkspaceRole } from "@/lib/member-role"
+import { can, type Actor } from "@/lib/permissions"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { Workspace } from "@/models/Workspace"
 import { InboxShell, type ConversationListItem } from "@/components/inbox-shell"
@@ -25,7 +25,7 @@ async function Inbox({ workspaceId, children }: { workspaceId: string; children:
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access) notFound()
 
-  const [workspace] = await Workspace.aggregate<{ role: WorkspaceRole; conversations: ConversationListItem[] }>([
+  const [workspace] = await Workspace.aggregate<{ actor: Actor; conversations: ConversationListItem[] }>([
     ...access,
     {
       $lookup: {
@@ -61,9 +61,9 @@ async function Inbox({ workspaceId, children }: { workspaceId: string; children:
         ],
       },
     },
-    { $project: { _id: 0, role: 1, conversations: 1 } },
+    { $project: { _id: 0, actor: 1, conversations: 1 } },
   ])
-  if (!workspace || !canUseInbox(workspace.role)) notFound()
+  if (!workspace || !can(workspace.actor, "inbox.use")) notFound()
 
   return (
     <InboxShell workspaceId={workspaceId} conversations={workspace.conversations}>

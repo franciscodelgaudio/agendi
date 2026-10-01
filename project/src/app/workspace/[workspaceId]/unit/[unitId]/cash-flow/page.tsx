@@ -31,7 +31,8 @@ export default async function CashFlowPage({
   await requirePage(workspaceId, user.id, { unit: "cash_flow", unitId })
   const data = await loadCashFlowSummaryScreen(workspaceId, user.id, unitId, query.date, now, search.costs)
   if (!data) notFound()
-  const { today, shown, revenueShare, openingBalance, balanceCents, summary, columns, costMonth, costs, curve } = data
+  const { today, shown, revenueShare, wallet, openingBalance, balanceCents, summary, columns, costMonth, costs, curve } =
+    data
   const therapists = therapistListPage(data.therapists, { ...filters, page })
 
   const pathname = `/workspace/${workspaceId}/unit/${unitId}/cash-flow`
@@ -60,7 +61,18 @@ export default async function CashFlowPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <OpeningBalanceCard openingBalance={openingBalance} balanceCents={balanceCents} />
+      <OpeningBalanceCard
+        openingBalance={openingBalance}
+        balanceCents={balanceCents}
+        wallet={
+          wallet && {
+            name: wallet.name,
+            // Só na compartilhada (sem divisão) o saldo mostrado é o da carteira toda.
+            sharedWith:
+              wallet.undistributedCents === null ? wallet.units.filter((u) => u.id !== unitId).map((u) => u.name) : [],
+          }
+        }
+      />
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 flex-1">
           <CashFlowNav

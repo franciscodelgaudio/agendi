@@ -1,4 +1,4 @@
-import { canManageMembers } from "@/lib/member"
+import { can } from "@/lib/permissions"
 import { uploadImage, type UploadImageError } from "@/lib/image-upload"
 import { missingR2Env, r2UploadDeps } from "@/lib/r2-storage"
 import { getSessionUserId } from "@/lib/session"
@@ -12,17 +12,19 @@ const errorMessages: Record<UploadImageError, string> = {
   upload_failed: "Não foi possível enviar a imagem. Tente novamente.",
 }
 
-// Pasta no bucket, conferindo a permissão de quem envia: imagem do workspace ou de unidade exige
-// gerenciar o workspace (também a de nó de mídia da URA); de produto, gerenciar a unidade dele. null = sem permissão.
+// Pasta no bucket, conferindo a permissão de quem envia: imagem do workspace exige editar o
+// workspace; de unidade, gerenciar unidades; de nó de mídia, gerenciar URAs; de produto,
+// gerenciar o estoque da unidade dele. null = sem permissão.
 async function resolveFolder(workspaceId: string, userId: string, target: FormDataEntryValue | null, unitId: FormDataEntryValue | null) {
   if (target === "workspace" || target === "unit" || target === "ura") {
     const access = await findWorkspaceAccess(workspaceId, userId)
-    if (!access || !canManageMembers(access.role)) return null
+    const permission = target === "ura" ? "uras.manage" : target === "unit" ? "units.manage" : "workspace.manage"
+    if (!access || !can(access.actor, permission)) return null
     if (target === "ura") return `workspaces/${access.id}/uras`
     return target === "unit" ? `workspaces/${access.id}/units` : `workspaces/${access.id}`
   }
   if (target === "product" && typeof unitId === "string") {
-    const unit = await findManagedUnit(workspaceId, unitId, userId)
+    const unit = await findManagedUnit(workspaceId, unitId, userId, "stock.manage")
     return unit ? `workspaces/${unit.workspaceId}/units/${unit.unitId}/products` : null
   }
   return null

@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { CalendarIcon } from "lucide-react"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member"
+import { can, type Actor } from "@/lib/permissions"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import {
@@ -51,7 +51,7 @@ export default async function UnitCalendarListPage({
   // Parte do workspace -> unidade -> agendamentos/serviços para que o acesso seja garantido em
   // cada nível. O total sem busca nem filtros separa "sem agendamentos" de "filtro sem resultado".
   const [workspace] = await Workspace.aggregate<Pick<BookingOptions, "therapists"> & {
-    role: WorkspaceRole
+    actor: Actor
     unit: {
       bookings: BookingPage
       total: number
@@ -132,12 +132,12 @@ export default async function UnitCalendarListPage({
       },
     },
     ...therapistOptionsStages(),
-    { $project: { _id: 0, role: 1, therapists: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
+    { $project: { _id: 0, actor: 1, therapists: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   if (!workspace?.unit) notFound()
   const { bookings: result, total, services, treatmentRooms } = workspace.unit
   const { therapists } = workspace
-  const canManage = canManageMembers(workspace.role)
+  const canManage = can(workspace.actor, "bookings.manage")
   const options = { services, therapists, treatmentRooms }
 
   const base = `/workspace/${workspaceId}/unit/${unitId}/calendar`

@@ -2,7 +2,7 @@
 
 import { THREAD_MODES, type ThreadMode } from "@/lib/agenia-history"
 import { deleteThread, forgetMemory, listMemories, listThreads, loadThreadMessages } from "@/lib/agenia-store"
-import { canManageMembers } from "@/lib/member-role"
+import { can } from "@/lib/permissions"
 import { getSessionUserId } from "@/lib/session"
 import { findWorkspaceAccess } from "@/lib/workspace-access"
 
@@ -10,7 +10,7 @@ async function findActor(workspaceId: string) {
   const userId = await getSessionUserId()
   if (!userId) return null
   const access = await findWorkspaceAccess(workspaceId, userId)
-  return access ? { workspaceId, userId, role: access.role } : null
+  return access ? { workspaceId, userId, access: access.actor } : null
 }
 
 const OBJECT_ID = /^[0-9a-f]{24}$/i
@@ -41,12 +41,12 @@ export type AgeniaMemoryItem = { id: string; content: string; createdAt: Date }
 // A memória é do workspace e só o proprietário e administradores a veem e apagam.
 export async function listAgeniaMemoriesAction(workspaceId: string): Promise<AgeniaMemoryItem[]> {
   const actor = await findActor(workspaceId)
-  if (!actor || !canManageMembers(actor.role)) return []
+  if (!actor || !can(actor.access, "agenia.use")) return []
   return listMemories(workspaceId)
 }
 
 export async function deleteAgeniaMemoryAction(workspaceId: string, memoryId: string): Promise<boolean> {
   const actor = await findActor(workspaceId)
-  if (!actor || !canManageMembers(actor.role)) return false
+  if (!actor || !can(actor.access, "agenia.use")) return false
   return (await forgetMemory(workspaceId, memoryId)).ok
 }

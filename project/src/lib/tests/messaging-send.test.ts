@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { sendReply } from "@/lib/messaging-send";
+import type { Actor } from "@/lib/permissions";
+import { ADMIN, actorWith } from "@/lib/tests/actors";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const USER_ID = "64b7f0c2a1b2c3d4e5f60719";
@@ -17,7 +19,7 @@ const conversation = {
 };
 
 function makeCtx(overrides: Partial<Parameters<typeof sendReply>[1]> = {}) {
-  return { workspaceId: WORKSPACE_ID, userId: USER_ID, actorRole: "receptionist" as const, conversation, ...overrides };
+  return { workspaceId: WORKSPACE_ID, userId: USER_ID, actor: actorWith("inbox.use") as Actor | null, conversation, ...overrides };
 }
 
 function makeDeps() {
@@ -88,19 +90,22 @@ describe("sendReply", () => {
     expect(deps.markFailed).toHaveBeenCalledWith(MESSAGE_ID, null);
   });
 
-  it.each(["owner", "admin", "receptionist"] as const)("%s pode responder", async (actorRole) => {
-    const result = await sendReply({ text: "Oi" }, makeCtx({ actorRole }), makeDeps());
+  it.each([
+    ["administrador", ADMIN],
+    ["role que usa as Conversas", actorWith("inbox.use")],
+  ] as const)("%s pode responder", async (_label, actor) => {
+    const result = await sendReply({ text: "Oi" }, makeCtx({ actor }), makeDeps());
 
     expect(result).toEqual({ ok: true, messageId: MESSAGE_ID });
   });
 
   it.each([
-    ["sem papel no workspace", null, "workspace_not_found"],
-    ["massoterapeuta", "massage_therapist", "forbidden"],
-  ] as const)("recusa sem salvar quando o autor é %s", async (_label, actorRole, error) => {
+    ["sem acesso ao workspace", null, "workspace_not_found"],
+    ["role sem a permissão das Conversas", actorWith("bookings.manage", "attends"), "forbidden"],
+  ] as const)("recusa sem salvar quando o autor é %s", async (_label, actor, error) => {
     const deps = makeDeps();
 
-    const result = await sendReply({ text: "Oi" }, makeCtx({ actorRole }), deps);
+    const result = await sendReply({ text: "Oi" }, makeCtx({ actor }), deps);
 
     expect(result).toEqual({ ok: false, error });
     expect(deps.insertMessage).not.toHaveBeenCalled();

@@ -74,9 +74,9 @@ function cashFlowInput(overrides: Partial<CashFlowReportInput> = {}): CashFlowRe
         from: "2026-10-01",
         to: "2026-10-31",
         plannedCents: 60000,
-        spentCents: null,
+        spentCents: 5000,
         plannedCumulativeCents: 120000,
-        spentCumulativeCents: null,
+        spentCumulativeCents: 45000,
       },
     ],
     costs: {
@@ -193,7 +193,7 @@ describe("cashFlowReport", () => {
     expect(year.rows.map((row) => row[0])).toEqual(["Setembro", "Setembro"]);
   });
 
-  it("o custo por mês tem planejado e gasto, no mês e acumulados; meses futuros sem gasto", () => {
+  it("o custo por mês tem planejado e gasto, no mês e acumulados", () => {
     const curve = cashFlowReport(cashFlowInput()).tables[1];
     expect(curve.title).toBe("Custo por mês");
     expect(curve.columns).toEqual([
@@ -205,7 +205,7 @@ describe("cashFlowReport", () => {
     ]);
     expect(curve.rows).toEqual([
       ["Agosto", 60000, 40000, 60000, 40000],
-      ["Outubro", 60000, null, 120000, null],
+      ["Outubro", 60000, 5000, 120000, 45000],
     ]);
     expect(curve.total).toBeUndefined();
   });

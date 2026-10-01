@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation"
-import { canManageMembers } from "@/lib/member-role"
+import { can } from "@/lib/permissions"
 import { requireUser } from "@/lib/session"
 import { findWorkspaceAccess } from "@/lib/workspace-access"
 import { AgeniaFullPage } from "@/components/agenia/agenia-full-page"
@@ -9,7 +9,7 @@ export default async function AgeniaPage({ params }: PageProps<"/workspace/[work
   const { workspaceId } = await params
   const user = await requireUser()
   const access = await findWorkspaceAccess(workspaceId, user.id)
-  if (!access || !canManageMembers(access.role)) notFound()
+  if (!access || !can(access.actor, "agenia.use")) notFound()
 
   return <AgeniaFullPage />
 }

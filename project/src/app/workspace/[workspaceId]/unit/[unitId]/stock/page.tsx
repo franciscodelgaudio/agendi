@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { PackageIcon } from "lucide-react"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member"
+import { can, type Actor } from "@/lib/permissions"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { parseProductListQuery, productListPipeline } from "@/lib/product-list"
@@ -44,7 +44,7 @@ export default async function StockPage({
   // Parte do workspace -> unidade -> produtos para que o acesso seja garantido em cada nível.
   // O total sem filtro separa "unidade sem produtos" de "busca sem resultado".
   const [workspace] = await Workspace.aggregate<{
-    role: WorkspaceRole
+    actor: Actor
     unit: { products: ProductRow[]; productCount: number } | null
   }>([
     ...access,
@@ -84,11 +84,11 @@ export default async function StockPage({
         ],
       },
     },
-    { $project: { _id: 0, role: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
+    { $project: { _id: 0, actor: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   if (!workspace?.unit) notFound()
   const { products: rows, productCount } = workspace.unit
-  const canManage = canManageMembers(workspace.role)
+  const canManage = can(workspace.actor, "stock.manage")
 
   const usageOf = await findProductUsage(unitId)
   const products = rows.map((product) => ({ ...product, usage: usageOf(product.id) }))

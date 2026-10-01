@@ -12,7 +12,7 @@ import {
 } from "react"
 import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
-import { MousePointerClickIcon } from "lucide-react"
+import { LightbulbIcon, MousePointerClickIcon } from "lucide-react"
 import { completeTutorialAction } from "@/lib/actions/tutorial"
 import { TOURS, type Tour, type TourAccess, type TourId, type TourStep } from "@/components/tour/tour-steps"
 import { Button } from "@/components/ui/button"
@@ -180,6 +180,14 @@ function holePath(box: Box | null, viewport: Frame["viewport"]) {
   return `path(evenodd, "M0 0H${viewport.width}V${viewport.height}H0Z M${x + r} ${y}H${x + w - r}A${r} ${r} 0 0 1 ${x + w} ${y + r}V${y + h - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}H${x + r}A${r} ${r} 0 0 1 ${x} ${y + h - r}V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z")`
 }
 
+// No celular, um destaque alto (ex.: o formulário num sheet) não deixa meia tela livre e a caixa fica por cima dele.
+function coversTarget(box: Box | null, viewport: Frame["viewport"]) {
+  if (!box || viewport.width >= 640) return false
+  const below = box.y + box.height / 2 < viewport.height / 2
+  const space = below ? viewport.height - box.y - box.height : box.y
+  return space < CARD_HEIGHT + MARGIN
+}
+
 function cardPosition(box: Box | null, viewport: Frame["viewport"], side: TourStep["side"]): CSSProperties {
   if (!box) return { left: "50%", top: "50%", transform: "translate(-50%, -50%)" }
   // No celular a caixa ocupa a largura toda, na metade da tela oposta ao destaque.
@@ -240,12 +248,16 @@ function TourOverlay({
   const { isMobile, setOpenMobile } = useSidebar()
   const mounted = useSyncExternalStore(subscribeNothing, () => true, () => false)
   const [measured, setMeasured] = useState<Frame | null>(null)
+  // Passo em que a caixa foi recolhida para não tapar o destaque.
+  const [collapsedStep, setCollapsedStep] = useState<string | null>(null)
   const step = tour.steps[index]
   // A medição de outro passo ainda não vale: até a primeira do passo atual, está procurando.
   const frame = measured?.stepId === step.id ? measured : null
   const status = step.target ? (frame?.status ?? "searching") : "ready"
   const box = status === "ready" ? (frame?.box ?? null) : null
   const viewport = frame?.viewport ?? measured?.viewport ?? null
+  const covers = !!viewport && coversTarget(box, viewport)
+  const collapsed = covers && collapsedStep === step.id
 
   const advance = useEffectEvent(() => onGoTo(index + 1))
   const back = useEffectEvent(() => onGoTo(index - 1))
@@ -308,6 +320,18 @@ function TourOverlay({
     return () => document.removeEventListener("click", onClick, true)
   }, [step])
 
+  // Quando a caixa tapa o destaque, ela se recolhe assim que o usuário mexe nele (ex.: começa a preencher).
+  useEffect(() => {
+    if (!covers || !step.target) return
+    const target = step.target
+    const onPointerDown = (event: PointerEvent) => {
+      const element = findTarget(target)
+      if (element && event.target instanceof Node && element.contains(event.target)) setCollapsedStep(step.id)
+    }
+    document.addEventListener("pointerdown", onPointerDown, true)
+    return () => document.removeEventListener("pointerdown", onPointerDown, true)
+  }, [covers, step])
+
   // No celular a sidebar é um sheet: abre nos passos dela e fecha nos outros.
   useEffect(() => {
     if (isMobile) setOpenMobile(!!step.sidebar)
@@ -352,7 +376,20 @@ function TourOverlay({
         <Spinner className="absolute top-1/2 left-1/2 size-6 -translate-x-1/2 -translate-y-1/2 text-white" />
       )}
 
-      {showCard && viewport && (
+      {showCard && collapsed && (
+        <Button
+          data-keeps-draft=""
+          size="icon-lg"
+          className="pointer-events-auto absolute rounded-full shadow-xl animate-in fade-in-0 zoom-in-95"
+          style={{ left: MARGIN, bottom: MARGIN }}
+          aria-label="Mostrar dica do tutorial"
+          onClick={() => setCollapsedStep(null)}
+        >
+          <LightbulbIcon />
+        </Button>
+      )}
+
+      {showCard && !collapsed && viewport && (
         <div
           key={`${step.id}-${status}`}
           // O balão do agendamento não fecha com cliques em elementos marcados assim.
@@ -374,9 +411,16 @@ function TourOverlay({
               )}
             </span>
             {!intro && !last && (
-              <button type="button" className="shrink-0 hover:text-foreground hover:underline" onClick={onFinish}>
-                Sair
-              </button>
+              <div className="flex shrink-0 gap-3">
+                {covers && (
+                  <button type="button" className="hover:text-foreground hover:underline" onClick={() => setCollapsedStep(step.id)}>
+                    Ocultar
+                  </button>
+                )}
+                <button type="button" className="hover:text-foreground hover:underline" onClick={onFinish}>
+                  Sair
+                </button>
+              </div>
             )}
           </div>
           <TourProgress tour={tour} index={index} />

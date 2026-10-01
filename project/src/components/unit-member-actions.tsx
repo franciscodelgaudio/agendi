@@ -3,7 +3,6 @@
 import { useActionState, useState } from "react"
 import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
 import { updateUnitMemberAction, type UnitMemberFormState } from "@/lib/actions/unit-member"
-import type { MemberRole } from "@/lib/member-role"
 import { MAX_BONUS_DESCRIPTION_LENGTH, type UnitMemberBonus } from "@/lib/unit-member"
 
 import { AmountInput } from "@/components/amount-input"
@@ -24,7 +23,8 @@ import {
 type Member = {
   id: string
   label: string
-  role: MemberRole
+  // Realiza atendimentos (permissão da role): comissão sobre os próprios serviços.
+  attends: boolean
   // "2026-02-15"
   startDate: string | null
   payDay: number | null
@@ -113,7 +113,7 @@ function UnitMemberForm({ workspaceId, unitId, unitName, member, onDone }: Props
         </Field>
         <Field>
           <FieldLabel htmlFor={`${idPrefix}-commission`}>
-            {member.role === "massage_therapist" ? "Comissão sobre os serviços" : "Comissão sobre o bruto"}
+            {member.attends ? "Comissão sobre os serviços" : "Comissão sobre o bruto"}
           </FieldLabel>
           <AmountInput
             id={`${idPrefix}-commission`}

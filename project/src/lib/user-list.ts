@@ -1,20 +1,20 @@
-import { MEMBER_ROLES, type WorkspaceRole } from "@/lib/member-role";
 import { first, type SearchParams, type SortDir } from "@/lib/unit-list";
 
 export const USER_PAGE_SIZE = 20;
 const SORT_FIELDS = ["name", "email"] as const;
-const ROLES: readonly WorkspaceRole[] = ["owner", ...MEMBER_ROLES];
-// active: dono ou membro que aceitou; pending/expired: convite ainda sem conta.
+// Filtro de função: "admin" ou o id de uma role.
+const ROLE_ID_PATTERN = /^[0-9a-f]{24}$/i;
+// active: membro que aceitou; pending/expired: convite ainda sem conta.
 const STATUSES = ["active", "pending", "expired"] as const;
 
 export type UserSortField = (typeof SORT_FIELDS)[number];
 export type UserStatus = (typeof STATUSES)[number];
-// role/status vazios = todos.
+// role/status vazios = todos; role é "admin" ou o id de uma role.
 export type UserListQuery = {
   q: string;
   sort: UserSortField;
   dir: SortDir;
-  role: WorkspaceRole | "";
+  role: string;
   status: UserStatus | "";
   page: number;
 };
@@ -24,7 +24,10 @@ export type UserListItem = {
   name: string | null;
   email: string;
   image: string | null;
-  role: WorkspaceRole;
+  admin: boolean;
+  // null para administradores e para membros que ainda não têm role.
+  roleId: string | null;
+  roleName: string | null;
   status: UserStatus;
 };
 
@@ -37,7 +40,7 @@ export function parseUserListQuery(params: SearchParams): UserListQuery {
     q: first(params.q)?.trim() ?? "",
     sort: SORT_FIELDS.includes(sort as UserSortField) ? (sort as UserSortField) : "name",
     dir: first(params.dir) === "desc" ? "desc" : "asc",
-    role: ROLES.includes(role as WorkspaceRole) ? (role as WorkspaceRole) : "",
+    role: role === "admin" || ROLE_ID_PATTERN.test(role ?? "") ? role! : "",
     status: STATUSES.includes(status as UserStatus) ? (status as UserStatus) : "",
     page: page && /^[1-9]\d*$/.test(page) ? Number(page) : 1,
   };
@@ -48,14 +51,14 @@ function normalize(value: string) {
   return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 }
 
-// Busca, filtros e ordenação sobre dono + membros (poucos por workspace), e a página pedida.
+// Busca, filtros e ordenação sobre os membros (poucos por workspace), e a página pedida.
 export function userListPage(people: UserListItem[], { q, sort, dir, role, status, page }: UserListQuery) {
   const term = normalize(q);
   const sortKey = (person: UserListItem) => (sort === "name" ? (person.name ?? person.email) : person.email);
   const filtered = people
     .filter(
       (person) =>
-        (!role || person.role === role) &&
+        (!role || (role === "admin" ? person.admin : person.roleId === role)) &&
         (!status || person.status === status) &&
         (!term || normalize(person.name ?? "").includes(term) || normalize(person.email).includes(term)),
     )

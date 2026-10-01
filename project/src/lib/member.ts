@@ -1,15 +1,9 @@
 import { createHash, randomBytes } from "node:crypto";
-import { canManageMembers, MEMBER_ROLES, type MemberRole, type WorkspaceRole } from "@/lib/member-role";
+import { can, type Actor } from "@/lib/permissions";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_NAME_LENGTH = 80;
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-export { canManageMembers, MEMBER_ROLES, type MemberRole, type WorkspaceRole } from "@/lib/member-role";
-
-function isMemberRole(value: unknown): value is MemberRole {
-  return MEMBER_ROLES.includes(value as MemberRole);
-}
 
 export function hashInviteToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -17,10 +11,32 @@ export function hashInviteToken(token: string) {
 
 type ActorError = "workspace_not_found" | "forbidden";
 
-// Sem papel = sem acesso (404); com papel sem permissão = forbidden.
-function checkActor(actorRole: WorkspaceRole | null): ActorError | null {
-  if (!actorRole) return "workspace_not_found";
-  return canManageMembers(actorRole) ? null : "forbidden";
+// Sem acesso = 404; com acesso sem permissão = forbidden.
+function checkActor(actor: Actor | null): ActorError | null {
+  if (!actor) return "workspace_not_found";
+  return can(actor, "users.manage") ? null : "forbidden";
+}
+
+// "admin" ou o id de uma role do workspace (roleExists confirma); null quando inválido.
+async function parseRole(value: unknown, roleExists: (roleId: string) => Promise<boolean>) {
+  if (value === "admin") return { admin: true, roleId: null };
+  if (typeof value !== "string" || !value || !(await roleExists(value))) return null;
+  return { admin: false, roleId: value };
+}
+
+type FoundMember = { id: string; userId: string | null; admin: boolean };
+
+// Só um administrador mexe em administradores (inclusive para promover alguém); e sempre
+// sobra ao menos um administrador que já aceitou o convite.
+async function checkAdminChange(
+  member: FoundMember,
+  admin: boolean,
+  actor: Actor,
+  countActiveAdmins: () => Promise<number>,
+): Promise<"forbidden" | "last_admin" | null> {
+  if ((member.admin || admin) && !actor.admin) return "forbidden";
+  if (member.admin && !admin && member.userId && (await countActiveAdmins()) <= 1) return "last_admin";
+  return null;
 }
 
 export type InviteMemberError =
@@ -36,12 +52,14 @@ export type InviteMemberResult =
   | { ok: false; error: InviteMemberError };
 
 type InviteMemberDeps = {
-  // true se o email já é do dono, de um membro ou de um convite pendente.
+  // true se o email já é de um membro ou de um convite pendente.
   isAlreadyInWorkspace: (email: string) => Promise<boolean>;
+  roleExists: (roleId: string) => Promise<boolean>;
   createInvite: (data: {
     workspaceId: string;
     email: string;
-    role: MemberRole;
+    admin: boolean;
+    roleId: string | null;
     tokenHash: string;
     expiresAt: Date;
   }) => Promise<{ id: string }>;
@@ -52,10 +70,10 @@ type InviteMemberDeps = {
 
 export async function inviteMember(
   input: unknown,
-  ctx: { workspaceId: string; actorRole: WorkspaceRole | null },
+  ctx: { workspaceId: string; actor: Actor | null },
   deps: InviteMemberDeps,
 ): Promise<InviteMemberResult> {
-  const actorError = checkActor(ctx.actorRole);
+  const actorError = checkActor(ctx.actor);
   if (actorError) return { ok: false, error: actorError };
 
   const { email, role } = (input ?? {}) as Record<string, unknown>;
@@ -63,7 +81,9 @@ export async function inviteMember(
 
   const normalizedEmail = email.trim().toLowerCase();
   if (!EMAIL_PATTERN.test(normalizedEmail)) return { ok: false, error: "invalid_email" };
-  if (!isMemberRole(role)) return { ok: false, error: "invalid_role" };
+  const parsedRole = await parseRole(role, deps.roleExists);
+  if (!parsedRole) return { ok: false, error: "invalid_role" };
+  if (parsedRole.admin && !ctx.actor!.admin) return { ok: false, error: "forbidden" };
 
   if (await deps.isAlreadyInWorkspace(normalizedEmail)) return { ok: false, error: "already_member" };
 
@@ -72,7 +92,7 @@ export async function inviteMember(
   const invite = await deps.createInvite({
     workspaceId: ctx.workspaceId,
     email: normalizedEmail,
-    role,
+    ...parsedRole,
     tokenHash: hashInviteToken(token),
     expiresAt: new Date(deps.now().getTime() + INVITE_TTL_MS),
   });
@@ -127,36 +147,43 @@ export type UpdateMemberError =
   | "invalid_input"
   | "invalid_role"
   | "invalid_name"
-  | "name_too_long";
+  | "name_too_long"
+  | "last_admin";
 
 export type UpdateMemberResult = { ok: true } | { ok: false; error: UpdateMemberError };
 
 type UpdateMemberDeps = {
   // null quando o membro não existe (ou não é do workspace); userId null = convite pendente.
-  findMember: (memberId: string) => Promise<{ id: string; userId: string | null } | null>;
+  findMember: (memberId: string) => Promise<FoundMember | null>;
+  roleExists: (roleId: string) => Promise<boolean>;
+  // Administradores que já aceitaram o convite.
+  countActiveAdmins: () => Promise<number>;
   // name só vem quando há conta vinculada; ele é da conta, não do workspace.
-  update: (memberId: string, data: { role: MemberRole; name?: string }) => Promise<void>;
+  update: (memberId: string, data: { admin: boolean; roleId: string | null; name?: string }) => Promise<void>;
 };
 
 export async function updateMember(
   input: unknown,
   memberId: string | null | undefined,
-  ctx: { actorRole: WorkspaceRole | null },
+  ctx: { actor: Actor | null },
   deps: UpdateMemberDeps,
 ): Promise<UpdateMemberResult> {
-  const actorError = checkActor(ctx.actorRole);
+  const actorError = checkActor(ctx.actor);
   if (actorError) return { ok: false, error: actorError };
   if (!memberId) return { ok: false, error: "member_not_found" };
 
   if (input == null || typeof input !== "object") return { ok: false, error: "invalid_input" };
   const { name, role } = input as Record<string, unknown>;
-  if (!isMemberRole(role)) return { ok: false, error: "invalid_role" };
+  const parsedRole = await parseRole(role, deps.roleExists);
+  if (!parsedRole) return { ok: false, error: "invalid_role" };
 
   const member = await deps.findMember(memberId);
   if (!member) return { ok: false, error: "member_not_found" };
+  const adminError = await checkAdminChange(member, parsedRole.admin, ctx.actor!, deps.countActiveAdmins);
+  if (adminError) return { ok: false, error: adminError };
 
   if (!member.userId) {
-    await deps.update(memberId, { role });
+    await deps.update(memberId, parsedRole);
     return { ok: true };
   }
 
@@ -165,22 +192,34 @@ export async function updateMember(
   if (!normalizedName) return { ok: false, error: "invalid_name" };
   if (normalizedName.length > MAX_NAME_LENGTH) return { ok: false, error: "name_too_long" };
 
-  await deps.update(memberId, { name: normalizedName, role });
+  await deps.update(memberId, { name: normalizedName, ...parsedRole });
   return { ok: true };
 }
 
-export type RemoveMemberResult = { ok: true } | { ok: false; error: ActorError | "member_not_found" };
+export type RemoveMemberResult =
+  | { ok: true }
+  | { ok: false; error: ActorError | "member_not_found" | "last_admin" };
 
-// remove devolve false quando o membro não existe (ou não é do workspace).
 export async function removeMember(
   memberId: string | null | undefined,
-  ctx: { actorRole: WorkspaceRole | null },
-  remove: (memberId: string) => Promise<boolean>,
+  ctx: { actor: Actor | null },
+  deps: {
+    // null quando o membro não existe (ou não é do workspace).
+    findMember: (memberId: string) => Promise<FoundMember | null>;
+    countActiveAdmins: () => Promise<number>;
+    remove: (memberId: string) => Promise<void>;
+  },
 ): Promise<RemoveMemberResult> {
-  const actorError = checkActor(ctx.actorRole);
+  const actorError = checkActor(ctx.actor);
   if (actorError) return { ok: false, error: actorError };
   if (!memberId) return { ok: false, error: "member_not_found" };
 
-  const found = await remove(memberId);
-  return found ? { ok: true } : { ok: false, error: "member_not_found" };
+  const member = await deps.findMember(memberId);
+  if (!member) return { ok: false, error: "member_not_found" };
+  // Remover vale como deixar de ser administrador.
+  const adminError = await checkAdminChange(member, false, ctx.actor!, deps.countActiveAdmins);
+  if (adminError) return { ok: false, error: adminError };
+
+  await deps.remove(memberId);
+  return { ok: true };
 }

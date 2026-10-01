@@ -8,52 +8,86 @@ import {
   teamPayRates,
   type DayRange,
   type DayTotal,
+  type TeamPayMember,
 } from "@/lib/cash-flow";
 import {
   dailyExpenseTotalsPipeline,
-  expenseBudgetCents,
   expenseGroupTotalsPipeline,
   type ExpenseDayTotal,
   type ExpenseGroupTotal,
+  type GroupLimits,
 } from "@/lib/expense";
-import { openingBalanceRange, type OpeningBalance } from "@/lib/opening-balance";
 import type { RevenueShare } from "@/lib/revenue-share";
+import { memberAttendsStages } from "@/lib/unit-team";
 import { Appointment } from "@/models/Appointment";
 import { Expense } from "@/models/Expense";
 import { ExpenseGroup } from "@/models/ExpenseGroup";
 import { WorkspaceMember } from "@/models/WorkspaceMember";
 
-export type CashFlowUnit = { id: string; revenueShare: RevenueShare | null; openingBalance: OpeningBalance | null };
+// Limites por mês do grupo como vêm do banco.
+export function groupLimitsOf(group: {
+  monthlyLimitCents?: number | null;
+  limitChanges?: { month: string; cents?: number | null }[];
+}): GroupLimits {
+  return {
+    monthlyLimitCents: group.monthlyLimitCents ?? null,
+    limitChanges: (group.limitChanges ?? []).map(({ month, cents }) => ({ month, cents: cents ?? null })),
+  };
+}
+
+// Remuneração da equipe (administradores não têm), só a vinculada à unidade quando ela vem.
+export function findTeamPayMembers(workspaceId: string, unitId?: string) {
+  return WorkspaceMember.aggregate<TeamPayMember>([
+    {
+      $match: {
+        workspaceId: new Types.ObjectId(workspaceId),
+        admin: { $ne: true },
+        ...(unitId && { "units.unitId": new Types.ObjectId(unitId) }),
+      },
+    },
+    ...memberAttendsStages(),
+    { $project: { _id: 0, userId: 1, admin: 1, attends: 1, units: 1 } },
+  ]);
+}
+
+export type CashFlowUnit = { id: string; revenueShare: RevenueShare | null };
+
+// Líquido real da unidade nos dias do saldo da carteira (até hoje), com as mesmas regras do
+// caixa; team é a equipe do workspace.
+export async function loadUnitNet(unit: CashFlowUnit, range: DayRange, today: string, team: TeamPayMember[]) {
+  const { revenueShare } = unit;
+  const unitMatch = { $match: { unitId: new Types.ObjectId(unit.id) } };
+  const [appointments, expenses] = await Promise.all([
+    Appointment.aggregate<DayTotal>([
+      unitMatch,
+      ...dailyAppointmentTotalsPipeline(cashFlowFetchRange([range], revenueShare?.period ?? null)),
+    ]),
+    Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(range)]),
+  ]);
+  const { commissionRates, grossCommissionPercent, salaries } = teamPayRates(team, unit.id);
+  return applyExpenses(
+    applyStaffCosts(summarizeCashFlow([range], appointments, [], revenueShare, commissionRates), {
+      grossCommissionPercent,
+      salaries,
+      today,
+    }),
+    expenses,
+  ).total.real.netCents;
+}
 
 // Caixa de uma unidade nos intervalos exibidos, com as regras dela (repasse, equipe e
-// despesas), e o saldo em caixa de hoje. O acesso à unidade é verificado por quem chama.
+// despesas). O acesso à unidade é verificado por quem chama.
 export async function loadUnitCashFlow(workspaceId: string, unit: CashFlowUnit, buckets: DayRange[], today: string) {
-  const { revenueShare, openingBalance } = unit;
-  // Dias cujo líquido real soma no saldo em caixa de hoje.
-  const balanceRange = openingBalance && openingBalanceRange(openingBalance, today);
+  const { revenueShare } = unit;
   const shown = { from: buckets[0].from, to: buckets.at(-1)!.to };
   const range = cashFlowFetchRange(buckets, revenueShare?.period ?? null);
   const unitMatch = { $match: { unitId: new Types.ObjectId(unit.id) } };
-  const [appointments, team, balanceAppointments, expenses, balanceExpenses, groups, groupTotals] = await Promise.all([
+  const [appointments, team, expenses, groups, groupTotals] = await Promise.all([
     Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
-    // Remuneração da equipe vinculada a esta unidade (o proprietário não tem).
-    WorkspaceMember.find({
-      workspaceId,
-      role: { $in: ["massage_therapist", "receptionist"] },
-      "units.unitId": unit.id,
-    })
-      .select({ userId: 1, role: 1, units: 1 })
-      .lean(),
-    balanceRange
-      ? Appointment.aggregate<DayTotal>([
-          unitMatch,
-          ...dailyAppointmentTotalsPipeline(cashFlowFetchRange([balanceRange], revenueShare?.period ?? null)),
-        ])
-      : [],
+    findTeamPayMembers(workspaceId, unit.id),
     Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(shown)]),
-    balanceRange ? Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(balanceRange)]) : [],
     ExpenseGroup.find({ unitId: new Types.ObjectId(unit.id) })
-      .select({ name: 1, iconId: 1, monthlyLimitCents: 1 })
+      .select({ name: 1, iconId: 1, monthlyLimitCents: 1, limitChanges: 1 })
       .sort({ name: 1 })
       .lean(),
     Expense.aggregate<ExpenseGroupTotal>([unitMatch, ...expenseGroupTotalsPipeline(shown)]),
@@ -64,24 +98,11 @@ export async function loadUnitCashFlow(workspaceId: string, unit: CashFlowUnit, 
     applyStaffCosts(summarizeCashFlow(buckets, appointments, [], revenueShare, commissionRates), staffCosts),
     expenses,
   );
-  const balanceCents = !openingBalance
-    ? null
-    : openingBalance.amountCents +
-      (balanceRange
-        ? applyExpenses(
-            applyStaffCosts(
-              summarizeCashFlow([balanceRange], balanceAppointments, [], revenueShare, commissionRates),
-              staffCosts,
-            ),
-            balanceExpenses,
-          ).total.real.netCents
-        : 0);
   // Mesmos valores reais da tabela: das despesas, só as pagas.
   const paidByGroup = new Map(groupTotals.map((total) => [total.groupId, total.paidCents]));
 
   return {
     summary,
-    balanceCents,
     appointments,
     commissionRates,
     groups: groups.map((group) => ({
@@ -90,7 +111,7 @@ export async function loadUnitCashFlow(workspaceId: string, unit: CashFlowUnit, 
       iconId: group.iconId?.toString() ?? null,
       paidCents: paidByGroup.get(group._id.toString()) ?? 0,
     })),
-    monthlyBudgetCents: expenseBudgetCents(groups.map((group) => ({ monthlyLimitCents: group.monthlyLimitCents ?? null }))),
+    groupLimits: groups.map(groupLimitsOf),
     hasCommission: Object.keys(commissionRates).length > 0 || grossCommissionPercent > 0,
     hasSalary: salaries.length > 0,
     hasExpenses: expenses.length > 0,

@@ -1,8 +1,8 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member"
-import { visiblePages, type HiddenPages } from "@/lib/page-access"
+import { visiblePages } from "@/lib/page-access"
+import { can, type Actor } from "@/lib/permissions"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { Workspace } from "@/models/Workspace"
 import { Avatar, AvatarImage } from "@/components/ui/avatar"
@@ -36,8 +36,7 @@ async function UnitHeader({ workspaceId, unitId }: { workspaceId: string; unitId
   // Parte do workspace (e não de units) para que o acesso ao workspace seja garantido.
   // Basta saber se há algum serviço: sem eles a unidade não agenda nem registra atendimentos.
   const [workspace] = await Workspace.aggregate<{
-    role: WorkspaceRole
-    hiddenPages: HiddenPages | null
+    actor: Actor
     unit: { id: string; name: string; avatarUrl: string | null; hasServices: boolean } | null
   }>([
     ...access,
@@ -70,7 +69,7 @@ async function UnitHeader({ workspaceId, unitId }: { workspaceId: string; unitId
         ],
       },
     },
-    { $project: { _id: 0, role: 1, hiddenPages: { $ifNull: ["$hiddenPages", null] }, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
+    { $project: { _id: 0, actor: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   const unit = workspace?.unit
   if (!unit) notFound()
@@ -85,13 +84,13 @@ async function UnitHeader({ workspaceId, unitId }: { workspaceId: string; unitId
         <h2 className="min-w-0 truncate text-2xl font-semibold tracking-tight">{unit.name}</h2>
       </div>
       {!unit.hasServices && (
-        <ServicesSetupNotice workspaceId={workspaceId} unitId={unitId} canManage={canManageMembers(workspace.role)} />
+        <ServicesSetupNotice workspaceId={workspaceId} unitId={unitId} canManage={can(workspace.actor, "services.manage")} />
       )}
       <UnitNav
         workspaceId={workspaceId}
         unitId={unitId}
         hasServices={unit.hasServices}
-        pages={visiblePages(workspace.role, workspace.hiddenPages).unit}
+        pages={visiblePages(workspace.actor).unit}
       />
     </>
   )

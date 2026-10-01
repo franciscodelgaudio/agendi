@@ -2,18 +2,24 @@ import { describe, it, expect } from "vitest";
 import { parseUserListQuery, USER_PAGE_SIZE, userListPage, type UserListItem } from "@/lib/user-list";
 
 const BASE = { q: "", sort: "name", dir: "asc", role: "", status: "", page: 1 } as const;
+// Roles do workspace: o filtro de função usa "admin" ou o id da role.
+const THERAPIST_ROLE = "64b7f0c2a1b2c3d4e5f60731";
+const RECEPTION_ROLE = "64b7f0c2a1b2c3d4e5f60732";
+const therapist = { admin: false, roleId: THERAPIST_ROLE, roleName: "Massagista" };
+const reception = { admin: false, roleId: RECEPTION_ROLE, roleName: "Recepção" };
+const admin = { admin: true, roleId: null, roleName: null };
 
 function person(overrides: Partial<UserListItem> & { id: string }): UserListItem {
-  return { name: null, email: `${overrides.id}@x.com`, image: null, role: "receptionist", status: "active", ...overrides };
+  return { name: null, email: `${overrides.id}@x.com`, image: null, ...reception, status: "active", ...overrides };
 }
 
-const OWNER = person({ id: "owner", name: "Carla Dona", email: "carla@x.com", role: "owner" });
-const ANA = person({ id: "ana", name: "Ana Souza", email: "ana@x.com", role: "massage_therapist" });
-const BRUNO = person({ id: "bruno", name: "bruno lima", email: "bruno@spa.com", role: "admin" });
+const CARLA = person({ id: "carla", name: "Carla Dona", email: "carla@x.com", ...admin });
+const ANA = person({ id: "ana", name: "Ana Souza", email: "ana@x.com", ...therapist });
+const BRUNO = person({ id: "bruno", name: "bruno lima", email: "bruno@spa.com", ...admin });
 // Convite sem conta: sem nome, ordena e busca pelo email.
-const INVITE = person({ id: "invite", email: "davi@x.com", role: "massage_therapist", status: "pending" });
-const EXPIRED = person({ id: "expired", email: "eva@x.com", role: "receptionist", status: "expired" });
-const PEOPLE = [OWNER, ANA, BRUNO, INVITE, EXPIRED];
+const INVITE = person({ id: "invite", email: "davi@x.com", ...therapist, status: "pending" });
+const EXPIRED = person({ id: "expired", email: "eva@x.com", ...reception, status: "expired" });
+const PEOPLE = [CARLA, ANA, BRUNO, INVITE, EXPIRED];
 
 const ids = (rows: UserListItem[]) => rows.map((row) => row.id);
 
@@ -28,8 +34,12 @@ describe("parseUserListQuery", () => {
     ).toEqual({ q: "ana", sort: "email", dir: "desc", role: "admin", status: "pending", page: 3 });
   });
 
-  it.each(["owner", "admin", "massage_therapist", "receptionist"])("aceita a função %s", (role) => {
+  it.each(["admin", THERAPIST_ROLE])("aceita a função %s (administrador ou id de role)", (role) => {
     expect(parseUserListQuery({ role }).role).toBe(role);
+  });
+
+  it.each(["owner", "massage_therapist", "receptionist", "64b7f0c2a1b2c3d4e5f6073"])("ignora a função %s", (role) => {
+    expect(parseUserListQuery({ role }).role).toBe("");
   });
 
   it.each(["active", "pending", "expired"])("aceita o status %s", (status) => {
@@ -41,7 +51,7 @@ describe("parseUserListQuery", () => {
   });
 
   it("usa o primeiro valor quando o parâmetro vem repetido", () => {
-    expect(parseUserListQuery({ q: ["ana", "bruno"], role: ["admin", "owner"] })).toEqual(
+    expect(parseUserListQuery({ q: ["ana", "bruno"], role: ["admin", THERAPIST_ROLE] })).toEqual(
       expect.objectContaining({ q: "ana", role: "admin" }),
     );
   });
@@ -64,7 +74,7 @@ describe("userListPage", () => {
 
   it("sem busca nem filtros, devolve todos ordenados pelo nome (ou email, sem nome), sem diferenciar maiúsculas", () => {
     expect(userListPage(PEOPLE, BASE)).toEqual({
-      rows: [ANA, BRUNO, OWNER, INVITE, EXPIRED],
+      rows: [ANA, BRUNO, CARLA, INVITE, EXPIRED],
       total: 5,
     });
   });
@@ -73,7 +83,7 @@ describe("userListPage", () => {
     expect(ids(userListPage(PEOPLE, { ...BASE, dir: "desc" }).rows)).toEqual([
       "expired",
       "invite",
-      "owner",
+      "carla",
       "bruno",
       "ana",
     ]);
@@ -83,7 +93,7 @@ describe("userListPage", () => {
     expect(ids(userListPage(PEOPLE, { ...BASE, sort: "email" }).rows)).toEqual([
       "ana",
       "bruno",
-      "owner",
+      "carla",
       "invite",
       "expired",
     ]);
@@ -100,19 +110,26 @@ describe("userListPage", () => {
     expect(ids(userListPage([joao, ANA], { ...BASE, q: "joao araujo" }).rows)).toEqual(["joao"]);
   });
 
-  it("filtra por função, incluindo o proprietário", () => {
-    expect(ids(userListPage(PEOPLE, { ...BASE, role: "massage_therapist" }).rows)).toEqual(["ana", "invite"]);
-    expect(ids(userListPage(PEOPLE, { ...BASE, role: "owner" }).rows)).toEqual(["owner"]);
+  it("filtra pela role ou pelos administradores", () => {
+    expect(ids(userListPage(PEOPLE, { ...BASE, role: THERAPIST_ROLE }).rows)).toEqual(["ana", "invite"]);
+    expect(ids(userListPage(PEOPLE, { ...BASE, role: "admin" }).rows)).toEqual(["bruno", "carla"]);
+  });
+
+  it("membro sem role não aparece no filtro de nenhuma role nem no de administradores", () => {
+    const noRole = person({ id: "norole", admin: false, roleId: null, roleName: null });
+
+    expect(ids(userListPage([noRole, ANA], { ...BASE, role: THERAPIST_ROLE }).rows)).toEqual(["ana"]);
+    expect(ids(userListPage([noRole, CARLA], { ...BASE, role: "admin" }).rows)).toEqual(["carla"]);
   });
 
   it("filtra por status", () => {
-    expect(ids(userListPage(PEOPLE, { ...BASE, status: "active" }).rows)).toEqual(["ana", "bruno", "owner"]);
+    expect(ids(userListPage(PEOPLE, { ...BASE, status: "active" }).rows)).toEqual(["ana", "bruno", "carla"]);
     expect(ids(userListPage(PEOPLE, { ...BASE, status: "pending" }).rows)).toEqual(["invite"]);
     expect(ids(userListPage(PEOPLE, { ...BASE, status: "expired" }).rows)).toEqual(["expired"]);
   });
 
   it("combina busca e filtros; o total conta só os que passaram", () => {
-    expect(userListPage(PEOPLE, { ...BASE, q: "x.com", role: "massage_therapist", status: "active" })).toEqual({
+    expect(userListPage(PEOPLE, { ...BASE, q: "x.com", role: THERAPIST_ROLE, status: "active" })).toEqual({
       rows: [ANA],
       total: 1,
     });

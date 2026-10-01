@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { LeafIcon } from "lucide-react"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member"
+import { can, type Actor } from "@/lib/permissions"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { parseServiceListQuery, serviceListPipeline } from "@/lib/service-list"
@@ -35,7 +35,7 @@ export default async function ServicesPage({
   // Parte do workspace -> unidade -> serviços para que o acesso seja garantido em cada nível.
   // O total sem filtro separa "unidade sem serviços" de "busca sem resultado".
   const [workspace] = await Workspace.aggregate<{
-    role: WorkspaceRole
+    actor: Actor
     unit: { services: ServiceRow[]; serviceCount: number } | null
   }>([
     ...access,
@@ -75,11 +75,11 @@ export default async function ServicesPage({
         ],
       },
     },
-    { $project: { _id: 0, role: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
+    { $project: { _id: 0, actor: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   if (!workspace?.unit) notFound()
   const { services, serviceCount } = workspace.unit
-  const canManage = canManageMembers(workspace.role)
+  const canManage = can(workspace.actor, "services.manage")
 
   return (
     <div className="flex flex-col gap-4">

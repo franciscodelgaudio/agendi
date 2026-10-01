@@ -1,6 +1,6 @@
 import { parseDay } from "@/lib/timezone";
 import type { DayTotal } from "@/lib/cash-flow";
-import { canManageMembers, type MemberRole, type WorkspaceRole } from "@/lib/member-role";
+import { can, type Actor } from "@/lib/permissions";
 import { parsePriceCents } from "@/lib/service";
 
 // Folha da unidade: cada mês de trabalho ("2026-09") é pago no dia de pagamento do mês
@@ -12,7 +12,8 @@ export const PAYROLL_REMINDER_DAYS = 5;
 export type PayrollMember = {
   memberId: string;
   userId: string | null;
-  role: MemberRole;
+  // Realiza atendimentos (permissão da role): comissão sobre os próprios serviços.
+  attends: boolean;
   // "2026-02-15"
   startDate: string | null;
   // 1 a 31; null sem dia de pagamento definido.
@@ -61,7 +62,7 @@ export function nextPayrollDate({ startDate, payDay }: Pick<PayrollMember, "star
   return payrollDueDate(month, payDay);
 }
 
-// Massagista ganha comissão sobre os próprios serviços; recepcionista, sobre o bruto.
+// Quem realiza atendimentos ganha comissão sobre os próprios serviços; os demais, sobre o bruto.
 export function payrollAmount(member: PayrollMember, month: string, appointments: DayTotal[]): PayrollAmount {
   const [year, monthNumber] = parseMonth(month)!;
   const days = daysInMonth(year, monthNumber);
@@ -74,11 +75,11 @@ export function payrollAmount(member: PayrollMember, month: string, appointments
   const salaryCents = Math.round((monthlyCents * (days - startDay + 1)) / days);
 
   let baseCents = 0;
-  const receptionist = member.role === "receptionist";
-  if (member.commissionPercent !== null && (receptionist || member.userId)) {
+  const gross = !member.attends;
+  if (member.commissionPercent !== null && (gross || member.userId)) {
     for (const { date, therapistId, cents } of appointments) {
       if (date < first || date > last) continue;
-      if (receptionist || therapistId === member.userId) baseCents += cents;
+      if (gross || therapistId === member.userId) baseCents += cents;
     }
   }
   const commissionCents = Math.round((baseCents * (member.commissionPercent ?? 0)) / 100);
@@ -126,23 +127,22 @@ export type PayrollPaymentError =
 export type PayrollPaymentResult = { ok: true } | { ok: false; error: PayrollPaymentError };
 export type PayrollPayment = PayrollAmount & { month: string; paidOn: string };
 
-type FindMember = (memberId: string) => Promise<{ id: string; role: MemberRole } | null>;
+type FindMember = (memberId: string) => Promise<{ id: string } | null>;
 
-// Mesmas regras da remuneração: proprietário e administradores; de massagistas, só o proprietário.
+// Mesma permissão da remuneração: gerenciar a equipe.
 async function checkAccess(
   memberId: string | null | undefined,
-  { actorRole }: { actorRole: WorkspaceRole | null },
+  { actor }: { actor: Actor | null },
   findMember: FindMember,
   validate: () => PayrollPaymentError | null,
 ): Promise<PayrollPaymentError | null> {
-  if (!actorRole) return "workspace_not_found";
-  if (!canManageMembers(actorRole)) return "forbidden";
+  if (!actor) return "workspace_not_found";
+  if (!can(actor, "team.manage")) return "forbidden";
   if (!memberId) return "member_not_found";
   const invalid = validate();
   if (invalid) return invalid;
   const member = await findMember(memberId);
   if (!member) return "member_not_found";
-  if (member.role === "massage_therapist" && actorRole !== "owner") return "forbidden";
   return null;
 }
 
@@ -156,7 +156,7 @@ function parseAmount(value: unknown) {
 export async function recordPayrollPayment(
   input: unknown,
   memberId: string | null | undefined,
-  ctx: { actorRole: WorkspaceRole | null },
+  ctx: { actor: Actor | null },
   deps: { findMember: FindMember; save: (memberId: string, payment: PayrollPayment) => Promise<void> },
 ): Promise<PayrollPaymentResult> {
   const { month, paidOn, salary, commission } = (input ?? {}) as Record<string, unknown>;
@@ -185,7 +185,7 @@ export async function recordPayrollPayment(
 export async function removePayrollPayment(
   month: string,
   memberId: string | null | undefined,
-  ctx: { actorRole: WorkspaceRole | null },
+  ctx: { actor: Actor | null },
   deps: { findMember: FindMember; remove: (memberId: string, month: string) => Promise<void> },
 ): Promise<PayrollPaymentResult> {
   const error = await checkAccess(memberId, ctx, deps.findMember, () => (parseMonth(month) ? null : "invalid_month"));

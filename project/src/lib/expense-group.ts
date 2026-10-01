@@ -1,11 +1,21 @@
+import { parseDay } from "@/lib/appointment-list";
+import type { GroupLimitChange } from "@/lib/expense";
 import { parsePriceCents } from "@/lib/service";
 
 const MAX_NAME_LENGTH = 40;
 
-export type ExpenseGroupInputError = "invalid_input" | "invalid_name" | "name_too_long" | "invalid_monthly_limit" | "invalid_icon";
+export type ExpenseGroupInputError =
+  | "invalid_input"
+  | "invalid_name"
+  | "name_too_long"
+  | "invalid_monthly_limit"
+  | "invalid_limit_month"
+  | "invalid_icon";
 
-// monthlyLimitCents é null quando o grupo não tem limite de gasto por mês.
-export type ExpenseGroupData = { name: string; monthlyLimitCents: number | null; iconId: string };
+export type ExpenseGroupData = { name: string; iconId: string };
+
+// Limite de gasto por mês a partir do mês ("AAAA-MM"); cents é null quando fica sem limite.
+type ParsedGroupInput = ExpenseGroupData & { limit: GroupLimitChange };
 
 // Confere se outro grupo da unidade já usa o nome; excludeId é o próprio grupo na edição.
 type IsNameTaken = (unitId: string, name: string, excludeId: string | null) => Promise<boolean>;
@@ -14,8 +24,8 @@ type IsNameTaken = (unitId: string, name: string, excludeId: string | null) => P
 type IconExists = (iconId: string) => Promise<boolean>;
 
 // Valida e normaliza os campos como chegam do FormData; limite vazio vira null.
-function parseExpenseGroupInput(input: unknown): ({ ok: true } & ExpenseGroupData) | { ok: false; error: ExpenseGroupInputError } {
-  const { name, monthlyLimit, iconId } = (input ?? {}) as Record<string, unknown>;
+function parseExpenseGroupInput(input: unknown): ({ ok: true } & ParsedGroupInput) | { ok: false; error: ExpenseGroupInputError } {
+  const { name, monthlyLimit, limitFrom, iconId } = (input ?? {}) as Record<string, unknown>;
   if (typeof name !== "string") return { ok: false, error: "invalid_input" };
   if (monthlyLimit != null && typeof monthlyLimit !== "string") return { ok: false, error: "invalid_input" };
 
@@ -26,10 +36,11 @@ function parseExpenseGroupInput(input: unknown): ({ ok: true } & ExpenseGroupDat
   const limit = monthlyLimit?.trim();
   const monthlyLimitCents = limit ? parsePriceCents(limit) : null;
   if (limit && !monthlyLimitCents) return { ok: false, error: "invalid_monthly_limit" };
+  if (typeof limitFrom !== "string" || !parseDay(`${limitFrom}-01`)) return { ok: false, error: "invalid_limit_month" };
 
   if (typeof iconId !== "string" || !iconId) return { ok: false, error: "invalid_icon" };
 
-  return { ok: true, name: normalizedName, monthlyLimitCents, iconId };
+  return { ok: true, name: normalizedName, iconId, limit: { month: limitFrom, cents: monthlyLimitCents } };
 }
 
 export type CreateExpenseGroupError = ExpenseGroupInputError | "duplicate_group_name" | "unit_not_found";
@@ -44,7 +55,9 @@ export async function createExpenseGroup(
     isNameTaken,
     iconExists,
   }: {
-    insert: (data: ExpenseGroupData & { unitId: string }) => Promise<{ id: string }>;
+    insert: (
+      data: ExpenseGroupData & { unitId: string; monthlyLimitCents: null; limitChanges: GroupLimitChange[] },
+    ) => Promise<{ id: string }>;
     isNameTaken: IsNameTaken;
     iconExists: IconExists;
   },
@@ -56,8 +69,10 @@ export async function createExpenseGroup(
   if (!(await iconExists(parsed.iconId))) return { ok: false, error: "invalid_icon" };
   if (await isNameTaken(unitId, parsed.name, null)) return { ok: false, error: "duplicate_group_name" };
 
-  const { name, monthlyLimitCents, iconId } = parsed;
-  const group = await insert({ name, monthlyLimitCents, iconId, unitId });
+  // Antes do mês escolhido, o grupo fica sem limite.
+  const { name, iconId, limit } = parsed;
+  const limitChanges = limit.cents === null ? [] : [limit];
+  const group = await insert({ name, monthlyLimitCents: null, limitChanges, iconId, unitId });
   return { ok: true, groupId: group.id };
 }
 
@@ -65,7 +80,8 @@ export type UpdateExpenseGroupError = ExpenseGroupInputError | "duplicate_group_
 
 export type UpdateExpenseGroupResult = { ok: true } | { ok: false; error: UpdateExpenseGroupError };
 
-// update devolve false quando o grupo não existe (ou não é da unidade).
+// update grava nome e ícone e aplica a mudança de limite; devolve false quando o grupo não
+// existe (ou não é da unidade).
 export async function updateExpenseGroup(
   input: unknown,
   unitId: string | null | undefined,
@@ -75,7 +91,7 @@ export async function updateExpenseGroup(
     isNameTaken,
     iconExists,
   }: {
-    update: (groupId: string, data: ExpenseGroupData) => Promise<boolean>;
+    update: (groupId: string, data: ExpenseGroupData, limit: GroupLimitChange) => Promise<boolean>;
     isNameTaken: IsNameTaken;
     iconExists: IconExists;
   },
@@ -87,8 +103,33 @@ export async function updateExpenseGroup(
   if (!(await iconExists(parsed.iconId))) return { ok: false, error: "invalid_icon" };
   if (await isNameTaken(unitId, parsed.name, groupId)) return { ok: false, error: "duplicate_group_name" };
 
-  const { name, monthlyLimitCents, iconId } = parsed;
-  const found = await update(groupId, { name, monthlyLimitCents, iconId });
+  const { name, iconId, limit } = parsed;
+  const found = await update(groupId, { name, iconId }, limit);
+  return found ? { ok: true } : { ok: false, error: "group_not_found" };
+}
+
+export type UpdateGroupMonthLimitResult =
+  | { ok: true }
+  | { ok: false; error: "invalid_input" | "invalid_monthly_limit" | "invalid_limit_month" | "group_not_found" };
+
+// Limite de um mês só ("AAAA-MM"), editado na tabela mês a mês; limite vazio deixa o mês sem
+// limite. setMonthLimit devolve false quando o grupo não existe (ou não é da unidade).
+export async function updateGroupMonthLimit(
+  input: unknown,
+  unitId: string | null | undefined,
+  groupId: string | null | undefined,
+  { setMonthLimit }: { setMonthLimit: (groupId: string, month: string, cents: number | null) => Promise<boolean> },
+): Promise<UpdateGroupMonthLimitResult> {
+  if (!unitId || !groupId) return { ok: false, error: "group_not_found" };
+
+  const { month, limit } = (input ?? {}) as Record<string, unknown>;
+  if (limit != null && typeof limit !== "string") return { ok: false, error: "invalid_input" };
+  const trimmed = limit?.trim();
+  const cents = trimmed ? parsePriceCents(trimmed) : null;
+  if (trimmed && !cents) return { ok: false, error: "invalid_monthly_limit" };
+  if (typeof month !== "string" || !parseDay(`${month}-01`)) return { ok: false, error: "invalid_limit_month" };
+
+  const found = await setMonthLimit(groupId, month, cents);
   return found ? { ok: true } : { ok: false, error: "group_not_found" };
 }
 

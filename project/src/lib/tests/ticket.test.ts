@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createTicket } from "@/lib/ticket";
+import { ADMIN, STAFF } from "@/lib/tests/actors";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const USER_ID = "64b7f0c2a1b2c3d4e5f60720";
@@ -12,7 +13,7 @@ const validInput = {
 };
 
 describe("createTicket", () => {
-  const ctx = { workspaceId: WORKSPACE_ID, userId: USER_ID, actorRole: "massage_therapist" } as const;
+  const ctx = { workspaceId: WORKSPACE_ID, userId: USER_ID, actor: STAFF };
   const makeInsert = () => vi.fn().mockResolvedValue({ id: TICKET_ID });
 
   it("registra o ticket do usuário no workspace e retorna o id", async () => {
@@ -46,8 +47,11 @@ describe("createTicket", () => {
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ title: "Título", description: "Texto" }));
   });
 
-  it.each(["owner", "admin", "receptionist", "massage_therapist"] as const)("qualquer função abre ticket (%s)", async (role) => {
-    const result = await createTicket(validInput, { ...ctx, actorRole: role }, makeInsert());
+  it.each([
+    ["administrador", ADMIN],
+    ["role sem permissões", STAFF],
+  ] as const)("qualquer membro abre ticket (%s)", async (_label, actor) => {
+    const result = await createTicket(validInput, { ...ctx, actor }, makeInsert());
 
     expect(result.ok).toBe(true);
   });
@@ -55,7 +59,7 @@ describe("createTicket", () => {
   it("sem acesso ao workspace → workspace_not_found", async () => {
     const insert = makeInsert();
 
-    const result = await createTicket(validInput, { ...ctx, actorRole: null }, insert);
+    const result = await createTicket(validInput, { ...ctx, actor: null }, insert);
 
     expect(result).toEqual({ ok: false, error: "workspace_not_found" });
     expect(insert).not.toHaveBeenCalled();

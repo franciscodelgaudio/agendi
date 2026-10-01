@@ -15,18 +15,19 @@ import {
 } from "@/lib/member"
 import { getSessionUserId } from "@/lib/session"
 import { findWorkspaceAccess } from "@/lib/workspace-access"
+import { Role } from "@/models/Role"
 import { User } from "@/models/User"
-import { Workspace } from "@/models/Workspace"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 
 const MONGO_DUPLICATE_KEY = 11000
 
 const errorMessages: Record<InviteMemberError | UpdateMemberError | "unauthenticated", string> = {
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
-  forbidden: "Só o proprietário e administradores podem gerenciar usuários.",
+  forbidden: "Sua função não pode fazer isso. Só administradores convidam, editam ou removem administradores.",
   invalid_input: "Preencha todos os campos.",
   invalid_email: "Informe um email válido.",
   invalid_role: "Escolha uma função.",
+  last_admin: "O workspace precisa de ao menos um administrador ativo.",
   already_member: "Este email já faz parte do workspace ou tem um convite pendente.",
   email_failed: "Não foi possível enviar o email de convite. Tente novamente.",
   member_not_found: "Usuário não encontrado neste workspace.",
@@ -36,6 +37,21 @@ const errorMessages: Record<InviteMemberError | UpdateMemberError | "unauthentic
 }
 
 export type MemberFormState = { error: string | null }
+
+// Role escolhida no formulário, se for do workspace.
+async function roleExists(workspaceId: string, roleId: string) {
+  return isObjectIdOrHexString(roleId) && !!(await Role.exists({ _id: roleId, workspaceId }))
+}
+
+// Administradores que já aceitaram o convite.
+function countActiveAdmins(workspaceId: string) {
+  return WorkspaceMember.countDocuments({ workspaceId, admin: true, userId: { $ne: null } })
+}
+
+async function findMember(filter: ReturnType<typeof memberFilter>) {
+  const member = await WorkspaceMember.findOne(filter!).select({ userId: 1, admin: 1 }).lean()
+  return member && { id: member._id.toString(), userId: member.userId?.toString() ?? null, admin: !!member.admin }
+}
 
 // Só encontra o membro se ele for do workspace; id inválido vira null.
 function memberFilter(workspaceId: string, memberId: string) {
@@ -56,20 +72,10 @@ export async function inviteMemberAction(
 
   const result = await inviteMember(
     { email: formData.get("email"), role: formData.get("role") },
-    { workspaceId, actorRole: access?.role ?? null },
+    { workspaceId, actor: access?.actor ?? null },
     {
-      isAlreadyInWorkspace: async (email) => {
-        const [owner, member] = await Promise.all([
-          Workspace.aggregate([
-            { $match: { _id: new Types.ObjectId(workspaceId) } },
-            { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "owner" } },
-            { $match: { "owner.email": email } },
-            { $limit: 1 },
-          ]),
-          WorkspaceMember.exists({ workspaceId, email }),
-        ])
-        return owner.length > 0 || !!member
-      },
+      isAlreadyInWorkspace: async (email) => !!(await WorkspaceMember.exists({ workspaceId, email })),
+      roleExists: (roleId) => roleExists(workspaceId, roleId),
       createInvite: async (data) => {
         const invite = await WorkspaceMember.create(data)
         return { id: invite._id.toString() }
@@ -116,16 +122,17 @@ export async function updateMemberAction(
   const result = await updateMember(
     { name: formData.get("name"), role: formData.get("role") },
     filter && memberId,
-    { actorRole: access?.role ?? null },
+    { actor: access?.actor ?? null },
     {
       findMember: async () => {
-        const member = await WorkspaceMember.findOne(filter!).select("userId").lean()
-        if (!member) return null
-        linkedUserId = member.userId?.toString() ?? null
-        return { id: member._id.toString(), userId: linkedUserId }
+        const member = await findMember(filter)
+        linkedUserId = member?.userId ?? null
+        return member
       },
-      update: async (_id, { role, name }) => {
-        await WorkspaceMember.updateOne(filter!, { $set: { role } })
+      roleExists: (roleId) => roleExists(workspaceId, roleId),
+      countActiveAdmins: () => countActiveAdmins(workspaceId),
+      update: async (_id, { admin, roleId, name }) => {
+        await WorkspaceMember.updateOne(filter!, { $set: { admin, roleId } })
         // O nome é da conta: muda em todos os workspaces da pessoa.
         if (name && linkedUserId) await User.updateOne({ _id: linkedUserId }, { $set: { name } })
       },
@@ -144,9 +151,12 @@ export async function removeMemberAction(workspaceId: string, memberId: string):
   const access = await findWorkspaceAccess(workspaceId, userId)
   const filter = memberFilter(workspaceId, memberId)
 
-  const result = await removeMember(filter && memberId, { actorRole: access?.role ?? null }, async () => {
-    const { deletedCount } = await WorkspaceMember.deleteOne(filter!)
-    return deletedCount > 0
+  const result = await removeMember(filter && memberId, { actor: access?.actor ?? null }, {
+    findMember: () => findMember(filter),
+    countActiveAdmins: () => countActiveAdmins(workspaceId),
+    remove: async () => {
+      await WorkspaceMember.deleteOne(filter!)
+    },
   })
 
   if (!result.ok) return { error: errorMessages[result.error] }

@@ -3,7 +3,7 @@ import type { ExpenseGroupIcon } from "@/lib/expense-group-icon"
 import type { GroupSortField } from "@/lib/cash-flow-list"
 import type { SortDir } from "@/lib/unit-list"
 import { ExpenseGroupIconBadge } from "@/components/expense-group-icon"
-import { ExpenseGroupActions } from "@/components/expense-group-sheets"
+import { ExpenseGroupActions, type LimitMonths } from "@/components/expense-group-sheets"
 import { currencyFormat } from "@/components/service-format"
 import { SortableHead } from "@/components/sortable-head"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -14,9 +14,13 @@ function money(cents: number) {
 }
 
 type Props = {
-  // Grupos automáticos (equipe e repasse) não são editados nem excluídos.
-  groups: ExpenseGroupSummary<ExpenseGroupInfo & { icon: ExpenseGroupIcon | null; automatic?: boolean }>[]
+  // Grupos automáticos (equipe e repasse) não são editados nem excluídos. limits: o limite em
+  // cada mês de limitMonths, para a edição.
+  groups: ExpenseGroupSummary<
+    ExpenseGroupInfo & { icon: ExpenseGroupIcon | null; automatic?: boolean; limits: (number | null)[] }
+  >[]
   icons: ExpenseGroupIcon[]
+  limitMonths: LimitMonths
   // Busca, filtro e ordenação atuais, preservados nos links de ordenação.
   query: { q: string; sort: GroupSortField; dir: SortDir } & Record<string, string>
   pathname: string
@@ -28,7 +32,17 @@ type Props = {
 }
 
 // Gasto do período por grupo: o lançado (pago ou não) comparado ao limite do período.
-export function ExpenseGroupsTable({ groups, icons, query, pathname, workspaceId, unitId, canManage, limitLabel }: Props) {
+export function ExpenseGroupsTable({
+  groups,
+  icons,
+  limitMonths,
+  query,
+  pathname,
+  workspaceId,
+  unitId,
+  canManage,
+  limitLabel,
+}: Props) {
   return (
     <div className="border">
       <Table>
@@ -95,7 +109,13 @@ export function ExpenseGroupsTable({ groups, icons, query, pathname, workspaceId
               {canManage && (
                 <TableCell className="px-4 text-right">
                   {!group.automatic && (
-                    <ExpenseGroupActions workspaceId={workspaceId} unitId={unitId} icons={icons} group={group} />
+                    <ExpenseGroupActions
+                      workspaceId={workspaceId}
+                      unitId={unitId}
+                      icons={icons}
+                      limitMonths={limitMonths}
+                      group={group}
+                    />
                   )}
                 </TableCell>
               )}

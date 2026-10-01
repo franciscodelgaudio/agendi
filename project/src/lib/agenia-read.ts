@@ -5,11 +5,12 @@ import { formatTranscript, type TranscriptMessage } from "@/lib/agenia-conversat
 import { uraGraphIndex } from "@/lib/agenia-ura"
 import { parsePerformedAt } from "@/lib/appointment"
 import { cashFlowBuckets } from "@/lib/cash-flow"
+import { groupLimitForMonth, nextMonth } from "@/lib/expense"
 import type { WorkspaceContext } from "@/lib/agenia-prompts"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member-role"
+import { can, type Actor } from "@/lib/permissions"
 import { forgetMemory, listMemories, saveMemory } from "@/lib/agenia-store"
-import { loadUnitCashFlow } from "@/lib/unit-cash-flow-store"
-import type { OpeningBalance } from "@/lib/opening-balance"
+import { groupLimitsOf, loadUnitCashFlow } from "@/lib/unit-cash-flow-store"
+import { loadWallets } from "@/lib/wallet-store"
 import type { RevenueShare } from "@/lib/revenue-share"
 import type { UraGraph } from "@/lib/ura-graph"
 import { toBrt } from "@/lib/ura-variables"
@@ -21,6 +22,7 @@ import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Message } from "@/models/Message"
 import { MessagingChannel } from "@/models/MessagingChannel"
 import { Product } from "@/models/Product"
+import { Role } from "@/models/Role"
 import { Service } from "@/models/Service"
 import { Ticket } from "@/models/Ticket"
 import { Unit } from "@/models/Unit"
@@ -53,27 +55,32 @@ function dayRange(from: string, to: string) {
 
 export async function loadWorkspaceContext(
   workspaceId: string,
-  user: { id: string; role: WorkspaceRole },
+  user: { id: string; actor: Actor },
   page: string | null,
 ): Promise<WorkspaceContext> {
   const wid = oid(workspaceId)
-  const [workspace, units, members, channels, uras, me, memories] = await Promise.all([
-    Workspace.findById(wid).select({ name: 1, userId: 1 }).lean(),
+  const [workspace, units, members, roles, channels, uras, me, memories] = await Promise.all([
+    Workspace.findById(wid).select({ name: 1 }).lean(),
     Unit.find({ workspaceId: wid }).select({ name: 1, businessHours: 1, treatmentRooms: 1 }).sort({ name: 1 }).lean(),
-    WorkspaceMember.find({ workspaceId: wid }).select({ email: 1, role: 1, userId: 1, units: 1 }).lean(),
+    WorkspaceMember.find({ workspaceId: wid }).select({ email: 1, admin: 1, roleId: 1, userId: 1, units: 1 }).lean(),
+    Role.find({ workspaceId: wid }).select({ name: 1, permissions: 1 }).sort({ name: 1 }).lean(),
     MessagingChannel.find({ workspaceId: wid }).select({ name: 1, platform: 1 }).lean(),
     Ura.find({ workspaceId: wid }).select({ name: 1, active: 1 }).lean(),
     User.findById(user.id).select({ name: 1, email: 1 }).lean(),
     listMemories(workspaceId),
   ])
-  const userIds = [workspace?.userId, ...members.map((m) => m.userId)].filter((id) => id != null)
+  const userIds = members.map((m) => m.userId).filter((id) => id != null)
   const users = await User.find({ _id: { $in: userIds } }).select({ name: 1, email: 1 }).lean()
   const nameOf = new Map(users.map((u) => [u._id.toString(), u.name ?? u.email]))
+  const roleName = new Map(roles.map((r) => [r._id.toString(), r.name]))
+  const memberRole = (m: { admin?: boolean | null; roleId?: Types.ObjectId | null }) =>
+    m.admin ? "administrador" : ((m.roleId && roleName.get(m.roleId.toString())) ?? "sem função")
+  const myMember = members.find((m) => m.userId?.toString() === user.id)
   const now = new Date()
 
   return {
     workspace: workspace?.name ?? "",
-    user: { name: me?.name ?? me?.email ?? "", role: user.role },
+    user: { name: me?.name ?? me?.email ?? "", role: myMember ? memberRole(myMember) : "sem função" },
     today: `${brtToday(now)} (${WEEKDAYS[toBrt(now).getUTCDay()]}), ${brtDateTime(now).slice(11)}`,
     page,
     units: units.map((u) => ({
@@ -83,22 +90,18 @@ export async function loadWorkspaceContext(
       closesAt: u.businessHours.closesAt,
       rooms: u.treatmentRooms.map((r) => ({ id: r._id.toString(), name: r.name, beds: r.beds })),
     })),
-    team: [
-      ...(workspace
-        ? [{ userId: workspace.userId.toString(), memberId: null, name: nameOf.get(workspace.userId.toString()) ?? "", role: "owner", unitIds: [] }]
-        : []),
-      ...members.map((m) => ({
-        userId: m.userId?.toString() ?? null,
-        memberId: m._id.toString(),
-        name: (m.userId && nameOf.get(m.userId.toString())) || m.email,
-        role: m.role,
-        unitIds: m.units.map((link) => link.unitId.toString()),
-      })),
-    ],
+    team: members.map((m) => ({
+      userId: m.userId?.toString() ?? null,
+      memberId: m._id.toString(),
+      name: (m.userId && nameOf.get(m.userId.toString())) || m.email,
+      role: memberRole(m),
+      unitIds: m.units.map((link) => link.unitId.toString()),
+    })),
+    roles: roles.map((r) => ({ id: r._id.toString(), name: r.name, attends: r.permissions.includes("attends") })),
     channels: channels.map((c) => ({ id: c._id.toString(), name: c.name, platform: c.platform })),
     uras: uras.map((u) => ({ id: u._id.toString(), name: u.name, active: u.active })),
     memories: memories.map((m) => ({ id: m.id, content: m.content })),
-    canRemember: canManageMembers(user.role),
+    canRemember: can(user.actor, "agenia.use"),
   }
 }
 
@@ -305,7 +308,8 @@ export function buildReadTools(workspaceId: string) {
     }),
 
     listExpenses: tool({
-      description: "Lista os grupos de despesa de uma unidade e as despesas lançadas entre dois dias (inclusive).",
+      description:
+        "Lista os grupos de despesa de uma unidade, com o limite de cada mês do período (AAAA-MM; null = sem limite), e as despesas lançadas entre dois dias (inclusive).",
       inputSchema: z.object({ unitId: objectId, from: day, to: day }),
       execute: async ({ unitId, from, to }) => {
         if (!(await ownUnit(unitId))) return noUnit
@@ -313,8 +317,17 @@ export function buildReadTools(workspaceId: string) {
           ExpenseGroup.find({ unitId }).sort({ name: 1 }).lean(),
           Expense.find({ unitId, date: { $gte: from, $lte: to } }).sort({ date: 1 }).limit(MAX_ROWS).lean(),
         ])
+        // Meses do período, do primeiro ao último.
+        const months: string[] = []
+        for (let month = from.slice(0, 7); month <= to.slice(0, 7); month = nextMonth(month)) months.push(month)
         return {
-          groups: groups.map((g) => ({ id: g._id.toString(), name: g.name, monthlyLimit: reais(g.monthlyLimitCents) })),
+          groups: groups.map((g) => ({
+            id: g._id.toString(),
+            name: g.name,
+            monthlyLimits: Object.fromEntries(
+              months.map((month) => [month, reais(groupLimitForMonth(groupLimitsOf(g), month))]),
+            ),
+          })),
           expenses: expenses.map((e) => ({
             id: e._id.toString(),
             groupId: e.groupId.toString(),
@@ -330,33 +343,41 @@ export function buildReadTools(workspaceId: string) {
 
     getCashFlow: tool({
       description:
-        "Resumo do caixa de uma unidade no período (semana, mês ou ano que contém a data): bruto, repasse ao parceiro, comissões, salários, despesas e líquido, realizado e previsto, além do saldo em caixa de hoje. Valores em reais.",
+        "Resumo do caixa de uma unidade no período (semana, mês ou ano que contém a data): bruto, repasse ao parceiro, comissões, salários, despesas e líquido, realizado e previsto, além do saldo em caixa de hoje e da carteira (conta) da unidade, que pode ser compartilhada com outras unidades. Valores em reais.",
       inputSchema: z.object({
         unitId: objectId,
         view: z.enum(["week", "month", "year"]).default("month"),
         date: day.optional().describe("Um dia do período; padrão hoje."),
       }),
       execute: async ({ unitId, view, date }) => {
-        const unit = await Unit.findOne({ _id: unitId, workspaceId: wid }).select({ revenueShare: 1, openingBalance: 1 }).lean()
+        const unit = await Unit.findOne({ _id: unitId, workspaceId: wid }).select({ revenueShare: 1 }).lean()
         if (!unit) return noUnit
         const today = brtToday()
         const buckets = cashFlowBuckets({ view, date: date ?? today })
-        const data = await loadUnitCashFlow(
-          workspaceId,
-          {
-            id: unitId,
-            revenueShare: (unit.revenueShare ?? null) as RevenueShare | null,
-            openingBalance: (unit.openingBalance ?? null) as OpeningBalance | null,
-          },
-          buckets,
-          today,
-        )
+        const [data, [wallet]] = await Promise.all([
+          loadUnitCashFlow(
+            workspaceId,
+            { id: unitId, revenueShare: (unit.revenueShare ?? null) as RevenueShare | null },
+            buckets,
+            today,
+          ),
+          loadWallets(workspaceId, today, unitId),
+        ])
+        const walletUnit = wallet?.units.find((u) => u.id === unitId)
         const amounts = (a: Record<string, number>) => Object.fromEntries(Object.entries(a).map(([k, v]) => [k.replace(/Cents$/, ""), v / 100]))
         return {
           period: { from: buckets[0].from, to: buckets.at(-1)!.to },
           real: amounts(data.summary.total.real),
           forecast: amounts(data.summary.total.forecast),
-          balanceToday: reais(data.balanceCents),
+          // Saldo da unidade; na carteira compartilhada só existe o da carteira (sharedWith).
+          balanceToday: reais(walletUnit?.balanceCents),
+          wallet: wallet
+            ? {
+                name: wallet.name,
+                balance: reais(wallet.balanceCents),
+                sharedWith: wallet.units.filter((u) => u.id !== unitId).map((u) => u.name),
+              }
+            : null,
           expensesByGroup: data.groups.map((g) => ({ name: g.name, paid: reais(g.paidCents) })),
         }
       },

@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import type { TeamCandidate } from "@/lib/unit-team"
-import { roleLabels } from "@/components/role-labels"
 import { TherapistAvatar } from "@/components/therapist-avatar"
 import {
   Combobox,
@@ -16,34 +15,28 @@ import {
   ComboboxValue,
   useComboboxAnchor,
 } from "@/components/ui/combobox"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Field, FieldLabel } from "@/components/ui/field"
 
 type Props = {
   idPrefix: string
   team: TeamCandidate[]
   // Unidade em edição; ausente ao cadastrar.
   unitId?: string
-  // Só o proprietário vincula massagistas; para o admin elas ficam fixas.
-  canLinkTherapists: boolean
 }
 
-// Escolha com busca de quem trabalha na unidade. Envia um teamMemberId por pessoa
-// escolhida que o usuário pode alterar; as fixas o servidor mantém como estão.
-export function UnitTeamFields({ idPrefix, team, unitId, canLinkTherapists }: Props) {
+// Escolha com busca de quem trabalha na unidade. Envia um teamMemberId por pessoa escolhida.
+export function UnitTeamFields({ idPrefix, team, unitId }: Props) {
   const anchor = useComboboxAnchor()
-  const isEditable = (member: TeamCandidate) => canLinkTherapists || member.role !== "massage_therapist"
   const [selected, setSelected] = useState(() => team.filter((member) => !!unitId && member.unitIds.includes(unitId)))
-  const fixed = selected.filter((member) => !isEditable(member))
 
   return (
     <Field>
       <FieldLabel htmlFor={`${idPrefix}-team`}>Equipe</FieldLabel>
       <Combobox
         multiple
-        items={team.filter(isEditable)}
+        items={team}
         value={selected}
-        // Quem não pode ser alterado continua escolhido.
-        onValueChange={(next: TeamCandidate[]) => setSelected([...fixed, ...next.filter(isEditable)])}
+        onValueChange={(next: TeamCandidate[]) => setSelected(next)}
         itemToStringLabel={(member: TeamCandidate) => member.name}
         isItemEqualToValue={(a: TeamCandidate, b: TeamCandidate) => a.id === b.id}
       >
@@ -51,7 +44,7 @@ export function UnitTeamFields({ idPrefix, team, unitId, canLinkTherapists }: Pr
           <ComboboxValue>
             {(members: TeamCandidate[]) =>
               members.map((member) => (
-                <ComboboxChip key={member.id} showRemove={isEditable(member)}>
+                <ComboboxChip key={member.id}>
                   <TherapistAvatar therapist={member} className="size-4" />
                   {member.name}
                 </ComboboxChip>
@@ -60,12 +53,12 @@ export function UnitTeamFields({ idPrefix, team, unitId, canLinkTherapists }: Pr
           </ComboboxValue>
           <ComboboxChipsInput
             id={`${idPrefix}-team`}
-            placeholder={selected.length ? "" : "Buscar massagista ou recepcionista..."}
+            placeholder={selected.length ? "" : "Buscar pessoa da equipe..."}
           />
         </ComboboxChips>
         <ComboboxContent anchor={anchor}>
           <ComboboxEmpty>
-            {team.length ? "Ninguém encontrado." : "Nenhuma massagista ou recepcionista convidada. Convide em Usuários."}
+            {team.length ? "Ninguém encontrado." : "Ninguém convidado além dos administradores. Convide em Usuários."}
           </ComboboxEmpty>
           <ComboboxList>
             {(member: TeamCandidate) => (
@@ -74,8 +67,7 @@ export function UnitTeamFields({ idPrefix, team, unitId, canLinkTherapists }: Pr
                   <TherapistAvatar therapist={member} className="size-6" />
                   <span className="truncate">{member.name}</span>
                   <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                    {roleLabels[member.role]}
-                    {member.pending && " · convite pendente"}
+                    {[member.roleName ?? "Sem função", member.pending && "convite pendente"].filter(Boolean).join(" · ")}
                   </span>
                 </span>
               </ComboboxItem>
@@ -83,10 +75,9 @@ export function UnitTeamFields({ idPrefix, team, unitId, canLinkTherapists }: Pr
           </ComboboxList>
         </ComboboxContent>
       </Combobox>
-      {selected.filter(isEditable).map((member) => (
+      {selected.map((member) => (
         <input key={member.id} type="hidden" name="teamMemberId" value={member.id} />
       ))}
-      {!canLinkTherapists && <FieldDescription>Só o proprietário vincula massagistas.</FieldDescription>}
     </Field>
   )
 }

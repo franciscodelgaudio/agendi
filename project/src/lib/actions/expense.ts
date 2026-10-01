@@ -8,6 +8,8 @@ import {
   createExpense,
   deleteExpense,
   setExpensePaid,
+  setGroupLimitForMonth,
+  setGroupLimitFrom,
   updateExpense,
   type CreateExpenseError,
   type ExpenseScope,
@@ -17,11 +19,13 @@ import {
   createExpenseGroup,
   deleteExpenseGroup,
   updateExpenseGroup,
+  updateGroupMonthLimit,
   type CreateExpenseGroupError,
   type DeleteExpenseGroupResult,
   type UpdateExpenseGroupError,
 } from "@/lib/expense-group"
 import { expenseGroupIconExists } from "@/lib/expense-group-icon-store"
+import { groupLimitsOf } from "@/lib/unit-cash-flow-store"
 import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
 
@@ -35,6 +39,7 @@ const groupErrorMessages: Record<GroupError | "unauthenticated", string> = {
   invalid_name: "Informe o nome do grupo.",
   name_too_long: "O nome pode ter no máximo 40 caracteres.",
   invalid_monthly_limit: "Informe um limite maior que zero, de até R$ 1.000.000,00.",
+  invalid_limit_month: "Escolha o mês a partir do qual o limite vale.",
   invalid_icon: "Escolha um ícone da lista.",
   duplicate_group_name: "Já existe um grupo com esse nome nesta unidade.",
   group_has_expenses: "Este grupo tem despesas lançadas. Exclua ou mova as despesas antes.",
@@ -63,7 +68,7 @@ export type ExpenseActionState = { error: string | null }
 async function resolveUnit(workspaceId: string, unitId: string) {
   const userId = await getSessionUserId()
   if (!userId) return null
-  return { userId, unitId: (await findManagedUnit(workspaceId, unitId, userId))?.unitId }
+  return { userId, unitId: (await findManagedUnit(workspaceId, unitId, userId, "cash_flow.manage"))?.unitId }
 }
 
 // Só repassa o id do registro quando a unidade é gerenciável; a escrita ainda filtra por unitId.
@@ -93,7 +98,12 @@ async function scopeFilter(unitId: string, expenseId: string, scope: ExpenseScop
 }
 
 function groupInput(formData: FormData) {
-  return { name: formData.get("name"), monthlyLimit: formData.get("monthlyLimit"), iconId: formData.get("iconId") }
+  return {
+    name: formData.get("name"),
+    monthlyLimit: formData.get("monthlyLimit"),
+    limitFrom: formData.get("limitFrom"),
+    iconId: formData.get("iconId"),
+  }
 }
 
 function expenseInput(formData: FormData) {
@@ -141,12 +151,49 @@ export async function updateExpenseGroupAction(
   if (!target) return { error: groupErrorMessages.unauthenticated }
 
   const result = await updateExpenseGroup(groupInput(formData), target.unitId, ownedId(target.unitId, groupId), {
-    update: async (id, data) => {
-      const { matchedCount } = await ExpenseGroup.updateOne({ _id: id, unitId: target.unitId }, { $set: data })
+    update: async (id, data, limit) => {
+      const group = await ExpenseGroup.findOne({ _id: id, unitId: target.unitId }).select({ limitChanges: 1 }).lean()
+      if (!group) return false
+      const limitChanges = setGroupLimitFrom(groupLimitsOf(group).limitChanges, limit.month, limit.cents)
+      const { matchedCount } = await ExpenseGroup.updateOne(
+        { _id: id, unitId: target.unitId },
+        { $set: { ...data, limitChanges } },
+      )
       return matchedCount > 0
     },
     isNameTaken: isGroupNameTaken,
     iconExists: expenseGroupIconExists,
+  })
+  if (!result.ok) return { error: groupErrorMessages[result.error] }
+
+  refresh()
+  return { error: null }
+}
+
+// Limite de um mês só, editado na tabela mês a mês. limit vem como o do AmountInput ("150.00") ou vazio.
+export async function updateGroupMonthLimitAction(
+  workspaceId: string,
+  unitId: string,
+  groupId: string,
+  month: string,
+  limit: string,
+): Promise<ExpenseActionState> {
+  const target = await resolveUnit(workspaceId, unitId)
+  if (!target) return { error: groupErrorMessages.unauthenticated }
+
+  const result = await updateGroupMonthLimit({ month, limit }, target.unitId, ownedId(target.unitId, groupId), {
+    setMonthLimit: async (id, limitMonth, cents) => {
+      const group = await ExpenseGroup.findOne({ _id: id, unitId: target.unitId })
+        .select({ monthlyLimitCents: 1, limitChanges: 1 })
+        .lean()
+      if (!group) return false
+      const limitChanges = setGroupLimitForMonth(groupLimitsOf(group), limitMonth, cents)
+      const { matchedCount } = await ExpenseGroup.updateOne(
+        { _id: id, unitId: target.unitId },
+        { $set: { limitChanges } },
+      )
+      return matchedCount > 0
+    },
   })
   if (!result.ok) return { error: groupErrorMessages[result.error] }
 

@@ -8,20 +8,21 @@ import {
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import { WorkspaceHeader } from "@/components/workspace-header"
+import { can } from "@/lib/permissions"
 
 type Props = React.ComponentProps<typeof NavUser> &
-  Pick<React.ComponentProps<typeof NavMain>, "pages" | "canManage" | "inbox"> & {
+  Pick<React.ComponentProps<typeof NavMain>, "pages" | "actor"> & {
     workspace: React.ComponentProps<typeof WorkspaceHeader>["workspace"]
   }
 
-export function AppSidebar({ workspace, pages, canManage, inbox, user, logoutAction }: Props) {
+export function AppSidebar({ workspace, pages, actor, user, logoutAction }: Props) {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <WorkspaceHeader workspace={workspace} canManage={canManage} />
+        <WorkspaceHeader workspace={workspace} canManage={can(actor, "workspace.manage")} />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain workspaceId={workspace.id} pages={pages} canManage={canManage} inbox={inbox} />
+        <NavMain workspaceId={workspace.id} pages={pages} actor={actor} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user} logoutAction={logoutAction} />

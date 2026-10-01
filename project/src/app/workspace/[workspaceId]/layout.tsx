@@ -6,8 +6,8 @@ import { TourProvider } from "@/components/tour/tour"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { WorkspacePaywall } from "@/components/workspace-paywall"
 import { hasActiveSubscription } from "@/lib/billing"
-import { canManageMembers, canUseInbox, type WorkspaceRole } from "@/lib/member-role"
-import { visiblePages, type HiddenPages } from "@/lib/page-access"
+import { visiblePages } from "@/lib/page-access"
+import { can, type Actor } from "@/lib/permissions"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { User } from "@/models/User"
 import { Workspace } from "@/models/Workspace"
@@ -28,19 +28,18 @@ export default async function WorkspaceLayout({
   const [[workspace], tutorial] = await Promise.all([
     Workspace.aggregate<{
       name: string
-      role: WorkspaceRole
-      hiddenPages: HiddenPages | null
+      actor: Actor
       subscription: { status: string; currentPeriodEnd: Date } | null
     }>([
       ...access,
-      { $project: { _id: 0, name: 1, role: 1, hiddenPages: { $ifNull: ["$hiddenPages", null] }, subscription: 1 } },
+      { $project: { _id: 0, name: 1, actor: 1, subscription: 1 } },
     ]),
     User.findById(user.id).select({ _id: 0, tutorialCompletedAt: 1 }).lean(),
   ])
   if (!workspace) notFound()
 
   if (!hasActiveSubscription(workspace.subscription, new Date())) {
-    return <WorkspacePaywall workspaceId={workspaceId} name={workspace.name} isOwner={workspace.role === "owner"} email={user.email} />
+    return <WorkspacePaywall workspaceId={workspaceId} name={workspace.name} isAdmin={workspace.actor.admin} email={user.email} />
   }
 
   // Mesmo cookie que o SidebarProvider grava ao abrir/fechar.
@@ -48,16 +47,12 @@ export default async function WorkspaceLayout({
 
   return (
     <NavigationProgressProvider>
-      <AgeniaProvider workspaceId={workspaceId} enabled={canManageMembers(workspace.role)}>
+      <AgeniaProvider workspaceId={workspaceId} enabled={can(workspace.actor, "agenia.use")}>
       <SidebarProvider defaultOpen={defaultOpen}>
         {/* Dentro do SidebarProvider: no celular o tutorial abre a sidebar nos passos dela. */}
         <TourProvider
           workspaceId={workspaceId}
-          access={{
-            canManage: canManageMembers(workspace.role),
-            inbox: canUseInbox(workspace.role),
-            pages: visiblePages(workspace.role, workspace.hiddenPages),
-          }}
+          access={{ actor: workspace.actor, pages: visiblePages(workspace.actor) }}
           autoStart={!tutorial?.tutorialCompletedAt}
         >
           {sidebar}

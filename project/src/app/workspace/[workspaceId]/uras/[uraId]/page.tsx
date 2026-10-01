@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member-role"
+import { can, type Actor } from "@/lib/permissions"
 import type { UraGraph } from "@/lib/ura-graph"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { Workspace } from "@/models/Workspace"
@@ -9,11 +9,10 @@ import { UraEditor } from "@/components/ura-editor"
 type Option = { id: string; name: string }
 
 type EditorData = {
-  role: WorkspaceRole
+  actor: Actor
   ura: ({ id: string; name: string; active: boolean } & UraGraph) | null
   channels: Option[]
   units: Option[]
-  owner: Option[]
   members: Option[]
 }
 
@@ -55,16 +54,7 @@ export default async function UraEditorPage({ params }: PageProps<"/workspace/[w
         pipeline: [{ $sort: { name: 1 } }, { $project: { _id: 0, id: { $toString: "$_id" }, name: 1 } }],
       },
     },
-    // Quem pode receber a conversa na transferência: o proprietário e quem atende Conversas.
-    {
-      $lookup: {
-        from: "users",
-        localField: "userId",
-        foreignField: "_id",
-        as: "owner",
-        pipeline: [{ $project: { _id: 0, id: { $toString: "$_id" }, name: { $ifNull: ["$name", "$email"] } } }],
-      },
-    },
+    // Quem pode receber a conversa na transferência: administradores e quem usa as Conversas.
     {
       $lookup: {
         from: "workspace_members",
@@ -72,7 +62,9 @@ export default async function UraEditorPage({ params }: PageProps<"/workspace/[w
         foreignField: "workspaceId",
         as: "members",
         pipeline: [
-          { $match: { role: { $in: ["admin", "receptionist"] }, userId: { $ne: null } } },
+          { $match: { userId: { $ne: null } } },
+          { $lookup: { from: "roles", localField: "roleId", foreignField: "_id", as: "role" } },
+          { $match: { $or: [{ admin: true }, { "role.permissions": "inbox.use" }] } },
           { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
           { $unwind: "$user" },
           { $project: { _id: 0, id: { $toString: "$user._id" }, name: { $ifNull: ["$user.name", "$user.email"] } } },
@@ -80,9 +72,9 @@ export default async function UraEditorPage({ params }: PageProps<"/workspace/[w
         ],
       },
     },
-    { $project: { _id: 0, role: 1, ura: { $first: "$ura" }, channels: 1, units: 1, owner: 1, members: 1 } },
+    { $project: { _id: 0, actor: 1, ura: { $first: "$ura" }, channels: 1, units: 1, members: 1 } },
   ])
-  if (!workspace || !canManageMembers(workspace.role) || !workspace.ura) notFound()
+  if (!workspace || !can(workspace.actor, "uras.manage") || !workspace.ura) notFound()
 
   return (
     <UraEditor
@@ -90,7 +82,7 @@ export default async function UraEditorPage({ params }: PageProps<"/workspace/[w
       ura={workspace.ura}
       channels={workspace.channels}
       units={workspace.units}
-      users={[...workspace.owner, ...workspace.members]}
+      users={workspace.members}
     />
   )
 }

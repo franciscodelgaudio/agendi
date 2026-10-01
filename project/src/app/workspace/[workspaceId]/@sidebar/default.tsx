@@ -2,8 +2,8 @@ import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { logoutAction } from "@/lib/actions/auth"
-import { canManageMembers, canUseInbox, type WorkspaceRole } from "@/lib/member-role"
-import { visiblePages, type HiddenPages } from "@/lib/page-access"
+import { visiblePages } from "@/lib/page-access"
+import type { Actor } from "@/lib/permissions"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { Workspace } from "@/models/Workspace"
 import { SidebarSkeleton } from "@/components/sidebar-skeleton"
@@ -33,8 +33,7 @@ async function WorkspaceSidebar({ workspaceId }: { workspaceId: string }) {
     id: string
     name: string
     avatarUrl: string | null
-    role: WorkspaceRole
-    hiddenPages: HiddenPages | null
+    actor: Actor
   }>([
     ...access,
     {
@@ -43,20 +42,18 @@ async function WorkspaceSidebar({ workspaceId }: { workspaceId: string }) {
         id: { $toString: "$_id" },
         name: 1,
         avatarUrl: { $ifNull: ["$avatarUrl", null] },
-        role: 1,
-        hiddenPages: { $ifNull: ["$hiddenPages", null] },
+        actor: 1,
       },
     },
   ])
   if (!workspace) notFound()
 
-  const { role, hiddenPages, ...header } = workspace
+  const { actor, ...header } = workspace
   return (
     <AppSidebar
       workspace={header}
-      pages={visiblePages(role, hiddenPages).workspace}
-      canManage={canManageMembers(role)}
-      inbox={canUseInbox(role)}
+      pages={visiblePages(actor).workspace}
+      actor={actor}
       user={user}
       logoutAction={logoutAction}
     />

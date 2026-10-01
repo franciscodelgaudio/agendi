@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member"
+import { can, type Actor } from "@/lib/permissions"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { therapistOptionsStages } from "@/lib/therapist"
@@ -19,7 +19,7 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
 
   const [workspace] = await Workspace.aggregate<
     Omit<BookingOptions, "units"> & {
-      role: WorkspaceRole
+      actor: Actor
       units: (BookingOptions["units"][number] & { businessHours: BusinessHours })[]
     }
   >([
@@ -59,7 +59,7 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
     {
       $project: {
         _id: 0,
-        role: 1,
+        actor: 1,
         units: {
           $map: {
             input: "$units",
@@ -97,7 +97,7 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
     },
   ])
   if (!workspace) notFound()
-  const { role, ...options } = workspace
+  const { actor, ...options } = workspace
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
@@ -105,7 +105,7 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
         <h2 className="text-2xl font-semibold tracking-tight">Calendário</h2>
         <CalendarNav base={`/workspace/${workspaceId}/calendar`} />
       </div>
-      <BookingCalendar workspaceId={workspaceId} canManage={canManageMembers(role)} {...options} />
+      <BookingCalendar workspaceId={workspaceId} canManage={can(actor, "bookings.manage")} {...options} />
     </div>
   )
 }

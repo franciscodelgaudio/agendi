@@ -1,4 +1,4 @@
-import { canManageMembers, type WorkspaceRole } from "@/lib/member-role";
+import { can, type Actor } from "@/lib/permissions";
 import { MESSAGING_PLATFORMS, type MessagingPlatform } from "@/lib/messaging-types";
 
 const MAX_NAME_LENGTH = 60;
@@ -8,10 +8,9 @@ const EXTERNAL_ID_PATTERN = /^\d{5,32}$/;
 
 type ActorError = "workspace_not_found" | "forbidden";
 
-// Canais seguem a mesma permissão de gerenciar usuários: dono e admin.
-function checkActor(actorRole: WorkspaceRole | null): ActorError | null {
-  if (!actorRole) return "workspace_not_found";
-  return canManageMembers(actorRole) ? null : "forbidden";
+function checkActor(actor: Actor | null): ActorError | null {
+  if (!actor) return "workspace_not_found";
+  return can(actor, "channels.manage") ? null : "forbidden";
 }
 
 type NameError = "invalid_name" | "name_too_long";
@@ -48,7 +47,7 @@ export type ChannelData = {
 
 export async function createChannel(
   input: unknown,
-  ctx: { workspaceId: string; actorRole: WorkspaceRole | null },
+  ctx: { workspaceId: string; actor: Actor | null },
   deps: {
     // O webhook identifica o canal pelo id externo, então ele só pode estar em um workspace.
     isExternalIdTaken: (platform: MessagingPlatform, externalId: string) => Promise<boolean>;
@@ -56,7 +55,7 @@ export async function createChannel(
     encrypt: (token: string) => string;
   },
 ): Promise<CreateChannelResult> {
-  const actorError = checkActor(ctx.actorRole);
+  const actorError = checkActor(ctx.actor);
   if (actorError) return { ok: false, error: actorError };
 
   if (!input || typeof input !== "object") return { ok: false, error: "invalid_input" };
@@ -96,14 +95,14 @@ export type UpdateChannelResult = { ok: true } | { ok: false; error: UpdateChann
 // Token vazio mantém o atual.
 export async function updateChannel(
   input: unknown,
-  ctx: { actorRole: WorkspaceRole | null; channelId: string | null | undefined },
+  ctx: { actor: Actor | null; channelId: string | null | undefined },
   deps: {
     // false quando o canal não existe (ou não é do workspace).
     update: (channelId: string, data: { name: string; accessTokenEncrypted?: string }) => Promise<boolean>;
     encrypt: (token: string) => string;
   },
 ): Promise<UpdateChannelResult> {
-  const actorError = checkActor(ctx.actorRole);
+  const actorError = checkActor(ctx.actor);
   if (actorError) return { ok: false, error: actorError };
   if (!ctx.channelId) return { ok: false, error: "channel_not_found" };
 
@@ -127,10 +126,10 @@ export type DeleteChannelResult = { ok: true } | { ok: false; error: ActorError 
 
 // remove devolve false quando o canal não existe (ou não é do workspace).
 export async function deleteChannel(
-  ctx: { actorRole: WorkspaceRole | null; channelId: string | null | undefined },
+  ctx: { actor: Actor | null; channelId: string | null | undefined },
   remove: (channelId: string) => Promise<boolean>,
 ): Promise<DeleteChannelResult> {
-  const actorError = checkActor(ctx.actorRole);
+  const actorError = checkActor(ctx.actor);
   if (actorError) return { ok: false, error: actorError };
   if (!ctx.channelId) return { ok: false, error: "channel_not_found" };
 

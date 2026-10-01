@@ -85,7 +85,7 @@ const Y_AXIS = {
   tickFormatter: (cents: number) => compactFormat.format(cents / 100),
 } as const
 
-// Custo de cada período (repasse, comissões, salários e despesas): gasto em coluna, planejado em linha.
+// Despesas de cada período: gasto (pago) em coluna, planejado (limite dos grupos) em linha.
 export function CostPeriodChart(props: Props) {
   return (
     <ChartContainer config={periodConfig} className="aspect-auto h-56 w-full">
@@ -108,7 +108,7 @@ export function CostPeriodChart(props: Props) {
   )
 }
 
-// Curva S: gasto acumulado em coluna (para no período de hoje), planejado acumulado em linha.
+// Curva S: gasto acumulado em coluna, planejado acumulado em linha.
 export function CostCumulativeChart(props: Props) {
   return (
     <ChartContainer config={cumulativeConfig} className="aspect-auto h-56 w-full">

@@ -2,11 +2,12 @@
 // Ações que a AgenIA pode propor e que só rodam depois da autorização do usuário. A entrada
 // é validada aqui e convertida nos campos do FormData que as server actions já esperam.
 import { z } from "zod";
-import { MEMBER_ROLES } from "@/lib/member-role";
 import { TICKET_TYPES } from "@/lib/ticket";
 
 const objectId = z.string().regex(/^[0-9a-f]{24}$/i, "id inválido");
 const ids = z.array(objectId);
+// "admin" ou o id de uma role do workspace; a existência da role é checada ao executar.
+const memberRole = z.union([z.literal("admin"), objectId]);
 // Reais com até duas casas: 150.5 vira "150.50".
 const money = z
   .number()
@@ -152,13 +153,13 @@ export const AGENIA_ACTIONS = {
   }),
   inviteMember: spec("Convidar membro", "Convida uma pessoa por e-mail para o workspace.", {
     email: z.email(),
-    role: z.enum(MEMBER_ROLES),
+    role: memberRole,
     summary,
   }),
   updateMember: spec("Editar membro", "Muda o nome e a função de um membro.", {
     memberId: objectId,
     name: z.string().min(1),
-    role: z.enum(MEMBER_ROLES),
+    role: memberRole,
     summary,
   }),
   removeMember: spec("Remover membro", "Remove um membro do workspace.", { memberId: objectId, summary }),

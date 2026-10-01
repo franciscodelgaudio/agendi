@@ -10,12 +10,22 @@ import {
 } from "@/lib/cash-flow"
 import { CASH_FLOW_PAGE_SIZE } from "@/lib/cash-flow-list"
 import { loadExpenseGroupIcons } from "@/lib/expense-group-icon-store"
-import { expenseGroupTotalsPipeline, staffExpenseGroups, summarizeExpenseGroups, type ExpenseGroupTotal, type ExpenseSeries } from "@/lib/expense"
-import type { WorkspaceRole } from "@/lib/member"
-import type { OpeningBalance } from "@/lib/opening-balance"
+import {
+  expenseGroupMonthTotalsPipeline,
+  expenseGroupTotalsPipeline,
+  expenseGroupYearOverview,
+  groupLimitForMonth,
+  staffExpenseGroups,
+  summarizeExpenseGroups,
+  type ExpenseGroupMonthTotal,
+  type ExpenseGroupTotal,
+  type ExpenseSeries,
+} from "@/lib/expense"
+import type { Actor } from "@/lib/permissions"
 import type { RevenueShare } from "@/lib/revenue-share"
 import { workspaceAccessStages } from "@/lib/session"
-import { loadUnitCashFlow } from "@/lib/unit-cash-flow-store"
+import { groupLimitsOf, loadUnitCashFlow } from "@/lib/unit-cash-flow-store"
+import { loadWallets } from "@/lib/wallet-store"
 import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Workspace } from "@/models/Workspace"
@@ -47,7 +57,7 @@ export async function loadCashFlowSummaryScreen(
   // Parte do workspace para garantir o acesso; a regra de repasse define quantos dias buscar.
   const [workspace] = await Workspace.aggregate<{
     id: string
-    unit: { name: string; revenueShare: RevenueShare | null; openingBalance: OpeningBalance | null } | null
+    unit: { name: string; revenueShare: RevenueShare | null } | null
   }>([
     ...access,
     {
@@ -63,7 +73,6 @@ export async function loadCashFlowSummaryScreen(
               _id: 0,
               name: 1,
               revenueShare: { $ifNull: ["$revenueShare", null] },
-              openingBalance: { $ifNull: ["$openingBalance", null] },
             },
           },
         ],
@@ -72,30 +81,31 @@ export async function loadCashFlowSummaryScreen(
     { $project: { _id: 0, id: { $toString: "$_id" }, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   if (!workspace?.unit) return null
-  const { name, revenueShare, openingBalance } = workspace.unit
+  const { name, revenueShare } = workspace.unit
   const today = parseCashFlowQuery({}, now).date
   const buckets = cashFlowBuckets({ view: "year", date })
   const shown = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const costBuckets = cashFlowBuckets({ view: "month", date: costMonthDate(costMonthParam, shown, today) })
   const costMonth = { from: costBuckets[0].from, to: costBuckets.at(-1)!.to }
-  const unit = { id: unitId, revenueShare, openingBalance }
+  const unit = { id: unitId, revenueShare }
   const [
     {
       summary,
-      balanceCents,
       appointments,
       commissionRates,
-      monthlyBudgetCents,
+      groupLimits,
       hasCommission,
       hasSalary,
       hasExpenses,
     },
     month,
     icons,
+    [wallet],
   ] = await Promise.all([
     loadUnitCashFlow(workspace.id, unit, buckets, today),
     loadUnitCashFlow(workspace.id, unit, costBuckets, today),
     loadExpenseGroupIcons(),
+    loadWallets(workspace.id, today, unitId),
   ])
   const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
   const costs = summarizeCosts(
@@ -103,19 +113,30 @@ export async function loadCashFlowSummaryScreen(
     month.groups.map(({ iconId, ...group }) => ({ ...group, icon: (iconId && iconsById.get(iconId)) || null })),
   )
 
+  // Na carteira compartilhada a unidade não tem saldo próprio: vale o da carteira.
+  const walletUnit = wallet?.units.find((unit) => unit.id === unitId)
+  const ownShare = walletUnit?.amountCents ?? null
+
   return {
     unitName: name,
     today,
     shown,
     revenueShare,
-    openingBalance,
-    balanceCents,
+    // Carteira da unidade; null quando ela não está em nenhuma.
+    wallet: wallet ?? null,
+    balanceCents: wallet ? (walletUnit?.balanceCents ?? wallet.balanceCents) : null,
+    // Na carteira distribuída, o saldo inicial é a parte da unidade.
+    openingBalance: wallet
+      ? ownShare !== null
+        ? { amountCents: ownShare, date: wallet.openingBalance.date }
+        : wallet.openingBalance
+      : null,
     summary,
     columns: { partnerShare: !!revenueShare, commission: hasCommission, salary: hasSalary, expenses: hasExpenses },
     therapists: summarizeTherapists(shown, appointments, [], commissionRates),
     costMonth,
     costs,
-    curve: costCurve([{ buckets: summary.buckets, monthlyBudgetCents }], today),
+    curve: costCurve([{ buckets: summary.buckets, groups: groupLimits }]),
   }
 }
 
@@ -124,7 +145,7 @@ export async function loadExpensesScreen(workspaceId: string, userId: string, un
   if (!access || !isObjectIdOrHexString(unitId)) return null
 
   // Parte do workspace para garantir o acesso à unidade.
-  const [workspace] = await Workspace.aggregate<{ role: WorkspaceRole; unit: { name: string } | null }>([
+  const [workspace] = await Workspace.aggregate<{ actor: Actor; unit: { name: string } | null }>([
     ...access,
     {
       $lookup: {
@@ -135,7 +156,7 @@ export async function loadExpensesScreen(workspaceId: string, userId: string, un
         pipeline: [{ $match: { _id: new Types.ObjectId(unitId) } }, { $project: { _id: 0, name: 1 } }],
       },
     },
-    { $project: { _id: 0, role: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
+    { $project: { _id: 0, actor: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   if (!workspace?.unit) return null
 
@@ -176,7 +197,7 @@ export async function loadExpensesScreen(workspaceId: string, userId: string, un
       : null,
   }))
 
-  return { unitName: workspace.unit.name, role: workspace.role, month, groups, expenses }
+  return { unitName: workspace.unit.name, actor: workspace.actor, month, groups, expenses }
 }
 
 // Ícones dos grupos automáticos, fora do catálogo.
@@ -185,7 +206,8 @@ const STAFF_GROUP_ICONS = {
   partner_share: { id: "partner_share", key: "handshake", name: "Repasse", color: "#1f5a4e" },
 }
 
-// O limite é mensal: no ano, vale 12 vezes. Equipe e repasse entram como grupos automáticos.
+// O limite é de cada mês: no ano, soma os 12. Equipe e repasse entram como grupos automáticos.
+// No ano, também vem o mês a mês de cada grupo cadastrado.
 export async function loadExpenseGroupsScreen(
   workspaceId: string,
   userId: string,
@@ -199,7 +221,7 @@ export async function loadExpenseGroupsScreen(
   // Parte do workspace para garantir o acesso à unidade; a regra de repasse entra nos custos da equipe.
   const [workspace] = await Workspace.aggregate<{
     id: string
-    role: WorkspaceRole
+    actor: Actor
     unit: { name: string; revenueShare: RevenueShare | null } | null
   }>([
     ...access,
@@ -215,7 +237,7 @@ export async function loadExpenseGroupsScreen(
         ],
       },
     },
-    { $project: { _id: 0, id: { $toString: "$_id" }, role: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
+    { $project: { _id: 0, id: { $toString: "$_id" }, actor: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   if (!workspace?.unit) return null
 
@@ -223,27 +245,59 @@ export async function loadExpenseGroupsScreen(
   const buckets = cashFlowBuckets(query)
   const period = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const unitObjectId = new Types.ObjectId(unitId)
-  const unit = { id: unitId, revenueShare: workspace.unit.revenueShare, openingBalance: null }
-  const [groups, totals, icons, cashFlow] = await Promise.all([
-    ExpenseGroup.find({ unitId: unitObjectId }).select({ name: 1, monthlyLimitCents: 1, iconId: 1 }).lean(),
+  const unit = { id: unitId, revenueShare: workspace.unit.revenueShare }
+  const year = query.date.slice(0, 4)
+  const yearRange = { from: `${year}-01-01`, to: `${year}-12-31` }
+  const yearMonths = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`)
+  const months = query.view === "year" ? yearMonths : [query.date.slice(0, 7)]
+  const [groups, totals, monthTotals, icons, cashFlow] = await Promise.all([
+    ExpenseGroup.find({ unitId: unitObjectId })
+      .select({ name: 1, monthlyLimitCents: 1, limitChanges: 1, iconId: 1 })
+      .lean(),
     Expense.aggregate<ExpenseGroupTotal>([{ $match: { unitId: unitObjectId } }, ...expenseGroupTotalsPipeline(period)]),
+    query.view === "year"
+      ? Expense.aggregate<ExpenseGroupMonthTotal>([
+          { $match: { unitId: unitObjectId } },
+          ...expenseGroupMonthTotalsPipeline(yearRange),
+        ])
+      : [],
     loadExpenseGroupIcons(),
     loadUnitCashFlow(workspace.id, unit, buckets, today),
   ])
   const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
+  const infos = groups.map((group) => ({
+    id: group._id.toString(),
+    name: group.name,
+    ...groupLimitsOf(group),
+  }))
   const summary = [
     ...summarizeExpenseGroups(
-      groups.map((group) => ({
-        id: group._id.toString(),
-        name: group.name,
-        monthlyLimitCents: group.monthlyLimitCents ?? null,
-        icon: (group.iconId && iconsById.get(group.iconId.toString())) || null,
+      infos.map((group, i) => ({
+        ...group,
+        icon: (groups[i].iconId && iconsById.get(groups[i].iconId.toString())) || null,
+        limits: yearMonths.map((month) => groupLimitForMonth(group, month)),
       })),
       totals,
-      query.view === "year" ? 12 : 1,
+      months,
     ),
-    ...staffExpenseGroups(cashFlow.summary.total).map((group) => ({ ...group, icon: STAFF_GROUP_ICONS[group.id] })),
+    ...staffExpenseGroups(cashFlow.summary.total).map((group) => ({
+      ...group,
+      icon: STAFF_GROUP_ICONS[group.id],
+      limits: [],
+    })),
   ]
+  // O limite novo vale, por padrão, do mês exibido; no ano, do mês de hoje se estiver nele.
+  const defaultMonth =
+    query.view === "month" ? query.date.slice(0, 7) : today.startsWith(year) ? today.slice(0, 7) : `${year}-01`
+  const overview = query.view === "year" ? expenseGroupYearOverview(infos, monthTotals, year) : null
 
-  return { unitName: workspace.unit.name, role: workspace.role, period, icons, summary }
+  return {
+    unitName: workspace.unit.name,
+    actor: workspace.actor,
+    period,
+    icons,
+    summary,
+    limitMonths: { months: yearMonths, defaultMonth },
+    overview,
+  }
 }

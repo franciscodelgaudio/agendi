@@ -3,7 +3,7 @@
 import { refresh } from "next/cache"
 import { redirect } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { canUseInbox } from "@/lib/member-role"
+import { can } from "@/lib/permissions"
 import { getSessionUserId } from "@/lib/session"
 import { createUra, deleteUra, saveUra, setUraActive, type UraError } from "@/lib/ura"
 import { endConversationSessions } from "@/lib/ura-store"
@@ -32,7 +32,7 @@ async function findActor(workspaceId: string) {
   const userId = await getSessionUserId()
   if (!userId) return null
   const access = await findWorkspaceAccess(workspaceId, userId)
-  return { userId, role: access?.role ?? null }
+  return { userId, access: access?.actor ?? null }
 }
 
 const uraFilter = (workspaceId: string, uraId: string) => ({ _id: uraId, workspaceId: new Types.ObjectId(workspaceId) })
@@ -43,7 +43,7 @@ export async function createUraAction(workspaceId: string, _prev: UraActionState
   const actor = await findActor(workspaceId)
   if (!actor) return { error: errorMessages.unauthenticated }
 
-  const result = await createUra({ name: formData.get("name") }, { actorRole: actor.role }, async (data) => {
+  const result = await createUra({ name: formData.get("name") }, { actor: actor.access }, async (data) => {
     const ura = await Ura.create({ ...data, workspaceId, createdBy: actor.userId })
     return { id: ura._id.toString() }
   })
@@ -56,7 +56,7 @@ export async function saveUraAction(workspaceId: string, uraId: string, input: {
   const actor = await findActor(workspaceId)
   if (!actor) return { error: errorMessages.unauthenticated }
 
-  const result = await saveUra(input, { actorRole: actor.role, uraId: validId(uraId) }, async (id, data) => {
+  const result = await saveUra(input, { actor: actor.access, uraId: validId(uraId) }, async (id, data) => {
     const { matchedCount } = await Ura.updateOne(uraFilter(workspaceId, id), { $set: data })
     return matchedCount > 0
   })
@@ -69,7 +69,7 @@ export async function setUraActiveAction(workspaceId: string, uraId: string, act
   const actor = await findActor(workspaceId)
   if (!actor) return { error: errorMessages.unauthenticated }
 
-  const result = await setUraActive(active, { actorRole: actor.role, uraId: validId(uraId) }, async (id, value) => {
+  const result = await setUraActive(active, { actor: actor.access, uraId: validId(uraId) }, async (id, value) => {
     const { matchedCount } = await Ura.updateOne(uraFilter(workspaceId, id), { $set: { active: value } })
     return matchedCount > 0
   })
@@ -83,7 +83,7 @@ export async function deleteUraAction(workspaceId: string, uraId: string): Promi
   const actor = await findActor(workspaceId)
   if (!actor) return { error: errorMessages.unauthenticated }
 
-  const result = await deleteUra({ actorRole: actor.role, uraId: validId(uraId) }, async (id) => {
+  const result = await deleteUra({ actor: actor.access, uraId: validId(uraId) }, async (id) => {
     const { deletedCount } = await Ura.deleteOne(uraFilter(workspaceId, id))
     if (!deletedCount) return false
     await UraSession.deleteMany({ uraId: id })
@@ -97,7 +97,7 @@ export async function deleteUraAction(workspaceId: string, uraId: string): Promi
 // Conversa do workspace que a função do usuário pode atender; null se não existir.
 async function findInboxConversation(workspaceId: string, conversationId: string) {
   const actor = await findActor(workspaceId)
-  if (!actor || !canUseInbox(actor.role) || !isObjectIdOrHexString(conversationId)) return null
+  if (!actor || !can(actor.access, "inbox.use") || !isObjectIdOrHexString(conversationId)) return null
   const exists = await Conversation.exists({ _id: conversationId, workspaceId: new Types.ObjectId(workspaceId) })
   return exists ? { conversationId, userId: actor.userId } : null
 }

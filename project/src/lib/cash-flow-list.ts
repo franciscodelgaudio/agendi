@@ -130,7 +130,7 @@ export function expenseGroupListPage<T extends ExpenseGroupSummary>(
 ) {
   const term = normalize(q);
   const limitOf = (group: T): GroupLimitFilter =>
-    group.monthlyLimitCents === null ? "none" : group.overLimit ? "over" : "within";
+    group.limitCents === null ? "none" : group.overLimit ? "over" : "within";
   const filtered = groups.filter(
     (group) => (!limit || limitOf(group) === limit) && (!term || normalize(group.name).includes(term)),
   );

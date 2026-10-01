@@ -1,5 +1,6 @@
 import type { PipelineStage } from "mongoose";
 import { parseDay } from "@/lib/appointment-list";
+import { groupLimitForMonth, type GroupLimits } from "@/lib/expense";
 import { calculatePartnerShareCents, type RevenueShare, type RevenueSharePeriod } from "@/lib/revenue-share";
 import { BRT_OFFSET_HOURS } from "@/lib/timezone";
 import { first, type SearchParams } from "@/lib/unit-list";
@@ -419,7 +420,7 @@ export function summarizeTherapists(
 }
 
 // Custos da equipe que não dependem de quem fez o serviço: comissão sobre o bruto
-// (recepcionistas) e salários mensais, que somados à equipe toda saem do líquido.
+// (de quem não realiza atendimentos) e salários mensais, que somados à equipe toda saem do líquido.
 // Cada salário (com os bônus) conta a partir da data de início; sem ela, conta sempre.
 export type StaffSalary = { monthlyCents: number; startDate: string | null };
 export type StaffCosts = { grossCommissionPercent: number; salaries: StaffSalary[]; today: string };
@@ -472,7 +473,9 @@ export function applyExpenses(summary: StaffCashFlowSummary, expenses: ExpenseDa
 
 export type TeamPayMember = {
   userId?: { toString(): string } | null;
-  role: string;
+  admin?: boolean | null;
+  // Realiza atendimentos (permissão da role).
+  attends: boolean;
   units: {
     unitId: { toString(): string };
     commissionPercent?: number | null;
@@ -485,21 +488,22 @@ export type TeamPayRates = Pick<StaffCosts, "grossCommissionPercent" | "salaries
   commissionRates: CommissionRates;
 };
 
-// Comissão de massagista vai pelo id de usuário, que identifica quem fez o serviço.
-// Comissão de recepcionista é sobre o bruto; salário e bônus fixos mensais valem mesmo
-// com convite pendente e entram juntos no custo mensal de cada vínculo.
+// Comissão de quem realiza atendimentos vai pelo id de usuário, que identifica quem fez o
+// serviço; a dos demais é sobre o bruto. Salário e bônus fixos mensais valem mesmo com
+// convite pendente e entram juntos no custo mensal de cada vínculo. Administradores não
+// entram na equipe paga.
 export function teamPayRates(team: TeamPayMember[], unitId: string): TeamPayRates {
   const commissionRates: CommissionRates = {};
   let grossCommissionPercent = 0;
   const salaries: StaffSalary[] = [];
   for (const member of team) {
-    if (member.role !== "massage_therapist" && member.role !== "receptionist") continue;
+    if (member.admin) continue;
     const link = member.units.find((unit) => unit.unitId.toString() === unitId);
     let monthlyCents = link?.salaryCents ?? 0;
     for (const bonus of link?.bonuses ?? []) monthlyCents += bonus.amountCents;
     if (monthlyCents > 0) salaries.push({ monthlyCents, startDate: link?.startDate ?? null });
     if (link?.commissionPercent == null) continue;
-    if (member.role === "receptionist") grossCommissionPercent += link.commissionPercent;
+    if (!member.attends) grossCommissionPercent += link.commissionPercent;
     else if (member.userId) commissionRates[member.userId.toString()] = link.commissionPercent;
   }
   return { commissionRates, grossCommissionPercent, salaries };
@@ -580,46 +584,38 @@ export function summarizeCosts<T extends { paidCents: number }>(
   };
 }
 
-// Um intervalo da curva S: planejado (orçamento dos grupos mais repasse, comissão e salário
-// previstos) e gasto (real), no intervalo e
-// acumulados. Depois de hoje ainda não há gasto, então fica null para a linha parar no atual.
+// Um intervalo da curva S: planejado (limite mensal dos grupos de despesa) e gasto (despesas
+// pagas, no dia do lançamento, mesmo que futuro), no intervalo e acumulados.
 export type CostCurvePoint = DayRange & {
   plannedCents: number;
-  spentCents: number | null;
+  spentCents: number;
   plannedCumulativeCents: number;
-  spentCumulativeCents: number | null;
+  spentCumulativeCents: number;
 };
 
-function costsOf({ partnerShareCents, commissionCents, salaryCents, expenseCents }: ExpenseCashFlowAmounts) {
-  return partnerShareCents + commissionCents + salaryCents + expenseCents;
+// Limites (sem arredondar) dos grupos nos dias do intervalo: cada dia vale 1/n do limite do
+// mês dele, de n dias.
+function limitsForDays({ from, to }: DayRange, groups: GroupLimits[]) {
+  let limit = 0;
+  for (let date = from; date <= to; date = addDays(date, 1)) {
+    const [year, month] = parseDay(date)!;
+    const daysInMonth = Number(utcDay(year, month + 1, 0).slice(8));
+    for (const group of groups) limit += (groupLimitForMonth(group, date.slice(0, 7)) ?? 0) / daysInMonth;
+  }
+  return limit;
 }
 
 // Recebe os mesmos intervalos de cada unidade e soma as unidades intervalo a intervalo. O
-// orçamento mensal é rateado pelos dias, como o salário; arredonda por intervalo. Das despesas
-// previstas, o planejado é só o orçamento.
-export function costCurve(
-  units: { buckets: ExpenseCashFlowBucket[]; monthlyBudgetCents: number }[],
-  today: string,
-): CostCurvePoint[] {
-  const monthlyBudgetCents = units.reduce((sum, unit) => sum + unit.monthlyBudgetCents, 0);
-  const budget = [{ monthlyCents: monthlyBudgetCents, startDate: null }];
+// limite de cada grupo é rateado pelos dias, como o salário; arredonda por intervalo.
+export function costCurve(units: { buckets: ExpenseCashFlowBucket[]; groups: GroupLimits[] }[]): CostCurvePoint[] {
+  const groups = units.flatMap((unit) => unit.groups);
   let planned = 0;
   let spent = 0;
   return (units[0]?.buckets ?? []).map(({ from, to }, index) => {
-    const plannedCents =
-      Math.round(monthlyForDays({ from, to }, budget)) +
-      units.reduce((sum, unit) => sum + costsOf({ ...unit.buckets[index].forecast, expenseCents: 0 }), 0);
-    const spentCents = units.reduce((sum, unit) => sum + costsOf(unit.buckets[index].real), 0);
+    const plannedCents = Math.round(limitsForDays({ from, to }, groups));
+    const spentCents = units.reduce((sum, unit) => sum + unit.buckets[index].real.expenseCents, 0);
     planned += plannedCents;
     spent += spentCents;
-    const started = from <= today;
-    return {
-      from,
-      to,
-      plannedCents,
-      spentCents: started ? spentCents : null,
-      plannedCumulativeCents: planned,
-      spentCumulativeCents: started ? spent : null,
-    };
+    return { from, to, plannedCents, spentCents, plannedCumulativeCents: planned, spentCumulativeCents: spent };
   });
 }

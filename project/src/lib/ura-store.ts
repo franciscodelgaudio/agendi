@@ -13,6 +13,7 @@ import { scheduleTimer } from "@/lib/ura-queue"
 import type { RunnerConversation, RunnerDeps, RunnerSession, SessionEndReason } from "@/lib/ura-runner"
 import { availableSlots } from "@/lib/ura-slots"
 import type { TriggerUra } from "@/lib/ura-trigger"
+import { memberAttendsStages } from "@/lib/unit-team"
 import { toBrt } from "@/lib/ura-variables"
 import type { Outgoing, WalkDeps } from "@/lib/ura-walk"
 import { Booking } from "@/models/Booking"
@@ -148,24 +149,23 @@ async function sendUraMessage(conversation: RunnerConversation, outgoing: Outgoi
   await Message.updateOne({ _id: message.id, status: "pending" }, { $set: { status: "sent", externalMessageId } })
 }
 
-// Quem atende na unidade: massagistas ligadas a ela, por nome, e o proprietário por último.
+// Quem atende na unidade: membros ligados a ela cuja role realiza atendimentos, por nome, e
+// os administradores (que não são ligados às unidades) por último.
 async function unitTherapists(workspaceId: string, unitId: string) {
-  const [workspace, members] = await Promise.all([
-    Workspace.findById(workspaceId).select({ userId: 1 }).lean(),
-    WorkspaceMember.find({ workspaceId, role: "massage_therapist", userId: { $ne: null }, "units.unitId": unitId })
-      .select({ userId: 1 })
-      .lean(),
+  const members = await WorkspaceMember.aggregate<{ userId: Types.ObjectId; admin?: boolean }>([
+    { $match: { workspaceId: new Types.ObjectId(workspaceId), userId: { $ne: null } } },
+    ...memberAttendsStages(),
+    { $match: { $or: [{ admin: true }, { attends: true, "units.unitId": new Types.ObjectId(unitId) }] } },
+    { $project: { _id: 0, userId: 1, admin: 1 } },
   ])
-  const memberIds = members.map((member) => member.userId!)
-  const users = await User.find({ _id: { $in: workspace ? [...memberIds, workspace.userId] : memberIds } })
+  const adminIds = new Set(members.filter((member) => member.admin).map((member) => member.userId.toString()))
+  const users = await User.find({ _id: { $in: members.map((member) => member.userId) } })
     .select({ name: 1, email: 1 })
     .lean()
-  const named = users.map((user) => ({ id: user._id.toString(), name: user.name ?? user.email }))
-  const ownerId = workspace?.userId.toString()
-  return [
-    ...named.filter((user) => user.id !== ownerId).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
-    ...named.filter((user) => user.id === ownerId),
-  ]
+  const named = users
+    .map((user) => ({ id: user._id.toString(), name: user.name ?? user.email }))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+  return [...named.filter((user) => !adminIds.has(user.id)), ...named.filter((user) => adminIds.has(user.id))]
 }
 
 // "2026-09-29T09:00" em Brasília, formato do formulário que lib/booking espera.
@@ -240,7 +240,7 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
         unitId,
         {
           ...bookingLookups({ workspaceId, unitId }, unitIds),
-          // Agendamento feito pela URA fica em nome do proprietário.
+          // Agendamento feito pela URA fica em nome de quem criou o workspace.
           insert: async (data) => {
             const booking = await Booking.create({ ...data, createdBy: workspace.userId })
             return { id: booking._id.toString() }

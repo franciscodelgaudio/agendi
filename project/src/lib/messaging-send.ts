@@ -1,4 +1,4 @@
-import { canUseInbox, type WorkspaceRole } from "@/lib/member-role";
+import { can, type Actor } from "@/lib/permissions";
 import type { SendMessageParams, SendMessageResult } from "@/lib/meta-graph";
 import { messagePreview, type ConversationTouch, type StoredMessage } from "@/lib/messaging-inbox";
 import type { MessagingPlatform } from "@/lib/messaging-types";
@@ -41,7 +41,7 @@ export async function sendReply(
   ctx: {
     workspaceId: string;
     userId: string;
-    actorRole: WorkspaceRole | null;
+    actor: Actor | null;
     conversation: ReplyConversation | null;
   },
   deps: {
@@ -53,8 +53,8 @@ export async function sendReply(
     markFailed: (messageId: string, detail: string | null) => Promise<void>;
   },
 ): Promise<SendReplyResult> {
-  if (!ctx.actorRole) return { ok: false, error: "workspace_not_found" };
-  if (!canUseInbox(ctx.actorRole)) return { ok: false, error: "forbidden" };
+  if (!ctx.actor) return { ok: false, error: "workspace_not_found" };
+  if (!can(ctx.actor, "inbox.use")) return { ok: false, error: "forbidden" };
   const { conversation } = ctx;
   if (!conversation) return { ok: false, error: "conversation_not_found" };
 

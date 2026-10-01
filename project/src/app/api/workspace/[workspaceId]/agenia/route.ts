@@ -18,7 +18,7 @@ import { isThreadTaken, persistThread } from "@/lib/agenia-store"
 import { recordAiUsage } from "@/lib/ai-usage-store"
 import { uraGraphIndex } from "@/lib/agenia-ura"
 import { buildUraTools } from "@/lib/agenia-ura-tools"
-import { canManageMembers, canUseInbox } from "@/lib/member-role"
+import { can } from "@/lib/permissions"
 import { isReplyWindowOpen } from "@/lib/messaging-send"
 import { getSessionUserId } from "@/lib/session"
 import { parseUraGraph } from "@/lib/ura-graph"
@@ -81,12 +81,13 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
   const parsed = bodySchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return fail("Requisição inválida.", 400)
   const body = parsed.data
-  const manager = canManageMembers(access.role)
-  if (body.mode === "conversation" ? !canUseInbox(access.role) : !manager) {
+  // As ações sugeridas rodam pelas server actions, que conferem a permissão de cada uma.
+  const manager = can(access.actor, "agenia.use")
+  if (body.mode === "conversation" ? !can(access.actor, "inbox.use") : !manager) {
     return fail("Sua função não pode usar a AgenIA aqui.", 403)
   }
 
-  const ctx = await loadWorkspaceContext(workspaceId, { id: userId, role: access.role }, body.page ?? null)
+  const ctx = await loadWorkspaceContext(workspaceId, { id: userId, actor: access.actor }, body.page ?? null)
   const reads = buildReadTools(workspaceId)
   const tools: ToolSet = manager
     ? { ...reads, ...actionTools(AGENIA_ACTION_NAMES) }

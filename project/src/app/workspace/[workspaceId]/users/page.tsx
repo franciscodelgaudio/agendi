@@ -1,15 +1,15 @@
 import { notFound, redirect } from "next/navigation"
 import { MailIcon, SettingsIcon, ShieldIcon, UserIcon } from "lucide-react"
-import { canManageMembers, type MemberRole, type WorkspaceRole } from "@/lib/member-role"
+import { ADMIN_ROLE_NAME, can, type Actor } from "@/lib/permissions"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
+import { memberRoleNameStages, rolesLookup, type RoleOption } from "@/lib/unit-team"
 import { parseUserListQuery, USER_PAGE_SIZE, userListPage, type UserListItem } from "@/lib/user-list"
 import { Workspace } from "@/models/Workspace"
 import { InviteMemberSheet } from "@/components/invite-member-sheet"
 import { ListPagination } from "@/components/list-pagination"
 import { ListSearch } from "@/components/list-search"
 import { MemberActions } from "@/components/member-actions"
-import { roleLabels } from "@/components/role-labels"
 import { CodeCell, CodeHead } from "@/components/record-code"
 import { SortableHead } from "@/components/sortable-head"
 import { UserRoleFilter, UserStatusFilter } from "@/components/user-filters"
@@ -26,7 +26,13 @@ import {
 } from "@/components/ui/table"
 
 type Person = { id: string; name: string | null; email: string; image: string | null }
-type Member = Person & { role: MemberRole; pending: boolean; expiresAt: Date | null }
+type Member = Person & {
+  admin: boolean
+  roleId: string | null
+  roleName: string | null
+  pending: boolean
+  expiresAt: Date | null
+}
 
 export default async function UsersPage({ params, searchParams }: PageProps<"/workspace/[workspaceId]/users">) {
   const { workspaceId } = await params
@@ -36,21 +42,10 @@ export default async function UsersPage({ params, searchParams }: PageProps<"/wo
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access) notFound()
 
-  // Layout e página renderizam em paralelo, então o acesso é verificado aqui
-  // também. O dono vem de Workspace.userId; membros e convites, de workspace_members.
-  const [workspace] = await Workspace.aggregate<{ role: WorkspaceRole; owner: Person | null; members: Member[] }>([
+  // Layout e página renderizam em paralelo, então o acesso é verificado aqui também.
+  const [workspace] = await Workspace.aggregate<{ actor: Actor; roles: RoleOption[]; members: Member[] }>([
     ...access,
-    {
-      $lookup: {
-        from: "users",
-        localField: "userId",
-        foreignField: "_id",
-        as: "owner",
-        pipeline: [
-          { $project: { _id: 0, name: { $ifNull: ["$name", null] }, email: 1, image: { $ifNull: ["$image", null] } } },
-        ],
-      },
-    },
+    rolesLookup(),
     {
       $lookup: {
         from: "workspace_members",
@@ -60,13 +55,16 @@ export default async function UsersPage({ params, searchParams }: PageProps<"/wo
         pipeline: [
           { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
           { $set: { user: { $first: "$user" } } },
+          ...memberRoleNameStages(),
           // Aceitos primeiro, depois convites; cada grupo por ordem de criação.
           { $sort: { acceptedAt: -1, createdAt: 1 } },
           {
             $project: {
               _id: 0,
               id: { $toString: "$_id" },
-              role: 1,
+              admin: { $eq: ["$admin", true] },
+              roleId: { $ifNull: [{ $toString: "$roleId" }, null] },
+              roleName: 1,
               email: { $ifNull: ["$user.email", "$email"] },
               name: { $ifNull: ["$user.name", null] },
               image: { $ifNull: ["$user.image", null] },
@@ -77,20 +75,20 @@ export default async function UsersPage({ params, searchParams }: PageProps<"/wo
         ],
       },
     },
-    { $project: { _id: 0, role: 1, owner: { $first: "$owner" }, members: 1 } },
+    { $project: { _id: 0, actor: 1, roles: 1, members: 1 } },
   ])
   if (!workspace) notFound()
-  const canManage = canManageMembers(workspace.role)
+  const { actor } = workspace
+  const canManage = can(actor, "users.manage")
+  // Só administradores atribuem a função de administrador e mexem em administradores.
+  const choices = { roles: workspace.roles, allowAdmin: actor.admin }
   const now = new Date()
 
-  // Dono + membros numa lista só; busca, filtros e paginação são feitos aqui (poucos por workspace).
-  const people: UserListItem[] = [
-    ...(workspace.owner ? [{ ...workspace.owner, id: "owner", role: "owner" as const, status: "active" as const }] : []),
-    ...workspace.members.map(({ pending, expiresAt, ...member }) => ({
-      ...member,
-      status: !pending ? ("active" as const) : expiresAt && expiresAt <= now ? ("expired" as const) : ("pending" as const),
-    })),
-  ]
+  // Busca, filtros e paginação são feitos aqui (poucos por workspace).
+  const people: UserListItem[] = workspace.members.map(({ pending, expiresAt, ...member }) => ({
+    ...member,
+    status: !pending ? ("active" as const) : expiresAt && expiresAt <= now ? ("expired" as const) : ("pending" as const),
+  }))
   const result = userListPage(people, query)
 
   const pathname = `/workspace/${workspaceId}/users`
@@ -110,10 +108,10 @@ export default async function UsersPage({ params, searchParams }: PageProps<"/wo
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
           <ListSearch query={filters} placeholder="Buscar nome ou email..." />
-          <UserRoleFilter query={filters} />
+          <UserRoleFilter query={filters} roles={workspace.roles} />
           <UserStatusFilter query={filters} />
         </div>
-        {canManage && <InviteMemberSheet workspaceId={workspaceId} />}
+        {canManage && <InviteMemberSheet workspaceId={workspaceId} choices={choices} />}
       </div>
       <div className="border">
         <Table>
@@ -141,34 +139,39 @@ export default async function UsersPage({ params, searchParams }: PageProps<"/wo
                 </TableCell>
               </TableRow>
             ) : (
-              result.rows.map((person) =>
-                person.role === "owner" ? (
-                  <PersonRow key={person.id} person={person} canManage={canManage}>
-                    <Badge>{roleLabels.owner}</Badge>
-                  </PersonRow>
-                ) : (
-                  <PersonRow
-                    key={person.id}
-                    person={person}
-                    canManage={canManage}
-                    actions={
+              result.rows.map((person) => (
+                <PersonRow
+                  key={person.id}
+                  person={person}
+                  canManage={canManage}
+                  actions={
+                    (actor.admin || !person.admin) && (
                       <MemberActions
                         workspaceId={workspaceId}
-                        member={{ ...person, role: person.role, pending: person.status !== "active" }}
+                        member={{
+                          ...person,
+                          role: person.admin ? "admin" : person.roleId,
+                          pending: person.status !== "active",
+                        }}
+                        choices={choices}
                       />
-                    }
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <Badge variant="secondary">{roleLabels[person.role]}</Badge>
-                      {person.status !== "active" && (
-                        <Badge variant="outline">
-                          {person.status === "expired" ? "Convite expirado" : "Convite pendente"}
-                        </Badge>
-                      )}
-                    </div>
-                  </PersonRow>
-                ),
-              )
+                    )
+                  }
+                >
+                  <div className="flex items-center gap-1.5">
+                    {person.admin ? (
+                      <Badge>{ADMIN_ROLE_NAME}</Badge>
+                    ) : (
+                      <Badge variant={person.roleName ? "secondary" : "outline"}>{person.roleName ?? "Sem função"}</Badge>
+                    )}
+                    {person.status !== "active" && (
+                      <Badge variant="outline">
+                        {person.status === "expired" ? "Convite expirado" : "Convite pendente"}
+                      </Badge>
+                    )}
+                  </div>
+                </PersonRow>
+              ))
             )}
           </TableBody>
         </Table>

@@ -8,19 +8,24 @@ import { cn } from "@/lib/utils"
 // O dia é do calendário, então é formatado em UTC para não deslocar.
 const dayFormat = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
 
-function toDate(day: string) {
+export function dayLabel(day: string) {
   const [year, month, date] = day.split("-").map(Number)
-  return new Date(Date.UTC(year, month - 1, date))
+  return dayFormat.format(new Date(Date.UTC(year, month - 1, date)))
 }
 
-// balanceCents: saldo inicial mais o líquido real desde o dia dele (null sem saldo inicial).
-// O saldo inicial é informado no cadastro da unidade; sem ele (ex.: soma das unidades), só o saldo aparece.
+const listFormat = new Intl.ListFormat("pt-BR")
+
+// balanceCents: saldo inicial mais o líquido real desde o dia dele (null sem carteira).
+// Sem saldo inicial (ex.: soma das carteiras), só o saldo aparece. wallet: carteira da unidade;
+// sharedWith são as outras unidades quando a carteira é compartilhada, sem divisão.
 export function OpeningBalanceCard({
   openingBalance,
   balanceCents,
+  wallet,
 }: {
   openingBalance: OpeningBalance | null
   balanceCents: number | null
+  wallet?: { name: string; sharedWith: string[] } | null
 }) {
   return (
     <Card size="sm">
@@ -40,13 +45,18 @@ export function OpeningBalanceCard({
             </div>
             {openingBalance && (
               <div className="text-xs text-muted-foreground">
-                {currencyFormat.format(openingBalance.amountCents / 100)} em{" "}
-                {dayFormat.format(toDate(openingBalance.date))}
+                {currencyFormat.format(openingBalance.amountCents / 100)} em {dayLabel(openingBalance.date)}
+              </div>
+            )}
+            {wallet && (
+              <div className="text-xs text-muted-foreground">
+                Carteira {wallet.name}
+                {wallet.sharedWith.length > 0 && `, compartilhada com ${listFormat.format(wallet.sharedWith)}`}
               </div>
             )}
           </>
         ) : (
-          <div className="text-sm text-muted-foreground">Saldo não informado</div>
+          <div className="text-sm text-muted-foreground">Sem carteira</div>
         )}
       </CardContent>
     </Card>

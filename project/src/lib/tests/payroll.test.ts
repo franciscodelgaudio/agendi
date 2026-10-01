@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from "vitest";
-import type { MemberRole } from "@/lib/member-role";
 import {
   nextPayrollDate,
   payrollAmount,
@@ -9,13 +8,15 @@ import {
   removePayrollPayment,
   type PayrollMember,
 } from "@/lib/payroll";
+import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
 const MEMBER_ID = "64b7f0c2a1b2c3d4e5f60721";
 
 const member = (overrides: Partial<PayrollMember> = {}): PayrollMember => ({
   memberId: MEMBER_ID,
   userId: "ana",
-  role: "massage_therapist",
+  // Base da comissão (do vínculo, ou da função em vínculos antigos): os próprios serviços.
+  commissionBase: "services",
   startDate: null,
   payDay: 5,
   commissionPercent: null,
@@ -100,7 +101,7 @@ describe("payrollAmount", () => {
     expect(payrollAmount(member({ startDate: "2026-10-01" }), "2026-09", []).salaryCents).toBe(0);
   });
 
-  it("massagista: comissão sobre os próprios serviços do mês", () => {
+  it("comissão sobre os serviços: só os que a pessoa fez no mês", () => {
     const appointments = [
       total("2026-09-01", 10_000),
       total("2026-09-30", 20_000),
@@ -114,17 +115,17 @@ describe("payrollAmount", () => {
     expect(amount).toEqual({ salaryCents: 0, commissionCents: 9_000 });
   });
 
-  it("massagista com convite pendente não tem comissão", () => {
+  it("comissão sobre os serviços com convite pendente não rende nada", () => {
     const amount = payrollAmount(member({ userId: null, commissionPercent: 30 }), "2026-09", [total("2026-09-01", 10_000)]);
 
     expect(amount.commissionCents).toBe(0);
   });
 
-  it("recepcionista: comissão sobre o bruto do mês, arredondada", () => {
+  it("comissão sobre o bruto do mês, arredondada", () => {
     const appointments = [total("2026-09-01", 10_001), total("2026-09-02", 20_000, "bia"), total("2026-10-01", 99_000)];
 
     const amount = payrollAmount(
-      member({ role: "receptionist", userId: "rita", salaryCents: 180_000, commissionPercent: 2.5 }),
+      member({ commissionBase: "gross", userId: "rita", salaryCents: 180_000, commissionPercent: 2.5 }),
       "2026-09",
       appointments,
     );
@@ -223,7 +224,7 @@ describe("payrollReminders", () => {
 });
 
 describe("recordPayrollPayment", () => {
-  function makeDeps(found: { id: string; role: MemberRole } | null = { id: MEMBER_ID, role: "massage_therapist" }) {
+  function makeDeps(found: { id: string } | null = { id: MEMBER_ID }) {
     return {
       findMember: vi.fn().mockResolvedValue(found),
       save: vi.fn().mockResolvedValue(undefined),
@@ -234,7 +235,7 @@ describe("recordPayrollPayment", () => {
   it("registra o pagamento do mês com salário e comissão", async () => {
     const deps = makeDeps();
 
-    const result = await recordPayrollPayment(INPUT, MEMBER_ID, { actorRole: "owner" }, deps);
+    const result = await recordPayrollPayment(INPUT, MEMBER_ID, { actor: ADMIN }, deps);
 
     expect(result).toEqual({ ok: true });
     expect(deps.findMember).toHaveBeenCalledWith(MEMBER_ID);
@@ -249,22 +250,22 @@ describe("recordPayrollPayment", () => {
   it("valor vazio vale zero", async () => {
     const deps = makeDeps();
 
-    const result = await recordPayrollPayment({ ...INPUT, salary: " ", commission: "120" }, MEMBER_ID, { actorRole: "owner" }, deps);
+    const result = await recordPayrollPayment({ ...INPUT, salary: " ", commission: "120" }, MEMBER_ID, { actor: ADMIN }, deps);
 
     expect(result).toEqual({ ok: true });
     expect(deps.save).toHaveBeenCalledWith(MEMBER_ID, expect.objectContaining({ salaryCents: 0, commissionCents: 12_000 }));
   });
 
-  it("admin registra o pagamento de recepcionista", async () => {
-    const deps = makeDeps({ id: MEMBER_ID, role: "receptionist" });
+  it("role com permissão de gerenciar a equipe registra o pagamento", async () => {
+    const deps = makeDeps();
 
-    expect(await recordPayrollPayment(INPUT, MEMBER_ID, { actorRole: "admin" }, deps)).toEqual({ ok: true });
+    expect(await recordPayrollPayment(INPUT, MEMBER_ID, { actor: actorWith("team.manage") }, deps)).toEqual({ ok: true });
   });
 
   it("salário e comissão zerados → invalid_amount", async () => {
     const deps = makeDeps();
 
-    const result = await recordPayrollPayment({ ...INPUT, salary: "0", commission: "" }, MEMBER_ID, { actorRole: "owner" }, deps);
+    const result = await recordPayrollPayment({ ...INPUT, salary: "0", commission: "" }, MEMBER_ID, { actor: ADMIN }, deps);
 
     expect(result).toEqual({ ok: false, error: "invalid_amount" });
     expect(deps.save).not.toHaveBeenCalled();
@@ -273,7 +274,7 @@ describe("recordPayrollPayment", () => {
   it.each(["abc", "-10", "10.123", 100])("valor %j → invalid_amount", async (salary) => {
     const deps = makeDeps();
 
-    const result = await recordPayrollPayment({ ...INPUT, salary }, MEMBER_ID, { actorRole: "owner" }, deps);
+    const result = await recordPayrollPayment({ ...INPUT, salary }, MEMBER_ID, { actor: ADMIN }, deps);
 
     expect(result).toEqual({ ok: false, error: "invalid_amount" });
     expect(deps.save).not.toHaveBeenCalled();
@@ -282,7 +283,7 @@ describe("recordPayrollPayment", () => {
   it.each(["2026-13", "2026-9", "09/2026", "", null])("mês %j → invalid_month", async (month) => {
     const deps = makeDeps();
 
-    const result = await recordPayrollPayment({ ...INPUT, month }, MEMBER_ID, { actorRole: "owner" }, deps);
+    const result = await recordPayrollPayment({ ...INPUT, month }, MEMBER_ID, { actor: ADMIN }, deps);
 
     expect(result).toEqual({ ok: false, error: "invalid_month" });
     expect(deps.save).not.toHaveBeenCalled();
@@ -291,42 +292,36 @@ describe("recordPayrollPayment", () => {
   it.each(["2026-02-30", "05/10/2026", "", null])("dia do pagamento %j → invalid_date", async (paidOn) => {
     const deps = makeDeps();
 
-    const result = await recordPayrollPayment({ ...INPUT, paidOn }, MEMBER_ID, { actorRole: "owner" }, deps);
+    const result = await recordPayrollPayment({ ...INPUT, paidOn }, MEMBER_ID, { actor: ADMIN }, deps);
 
     expect(result).toEqual({ ok: false, error: "invalid_date" });
-    expect(deps.save).not.toHaveBeenCalled();
-  });
-
-  it("admin não registra pagamento de massagista", async () => {
-    const deps = makeDeps();
-
-    const result = await recordPayrollPayment(INPUT, MEMBER_ID, { actorRole: "admin" }, deps);
-
-    expect(result).toEqual({ ok: false, error: "forbidden" });
     expect(deps.save).not.toHaveBeenCalled();
   });
 
   it("sem acesso ao workspace → workspace_not_found sem buscar", async () => {
     const deps = makeDeps();
 
-    expect(await recordPayrollPayment(INPUT, MEMBER_ID, { actorRole: null }, deps)).toEqual({
+    expect(await recordPayrollPayment(INPUT, MEMBER_ID, { actor: null }, deps)).toEqual({
       ok: false,
       error: "workspace_not_found",
     });
     expect(deps.findMember).not.toHaveBeenCalled();
   });
 
-  it.each(["massage_therapist", "receptionist"] as const)("%s não registra pagamentos → forbidden", async (actorRole) => {
+  it.each([
+    ["role sem permissões", STAFF],
+    ["role que só gerencia o caixa", actorWith("cash_flow.manage")],
+  ] as const)("%s não registra pagamentos → forbidden", async (_label, actor) => {
     const deps = makeDeps();
 
-    expect(await recordPayrollPayment(INPUT, MEMBER_ID, { actorRole }, deps)).toEqual({ ok: false, error: "forbidden" });
+    expect(await recordPayrollPayment(INPUT, MEMBER_ID, { actor }, deps)).toEqual({ ok: false, error: "forbidden" });
     expect(deps.findMember).not.toHaveBeenCalled();
   });
 
   it("membro inexistente ou fora da unidade → member_not_found", async () => {
     const deps = makeDeps(null);
 
-    expect(await recordPayrollPayment(INPUT, MEMBER_ID, { actorRole: "owner" }, deps)).toEqual({
+    expect(await recordPayrollPayment(INPUT, MEMBER_ID, { actor: ADMIN }, deps)).toEqual({
       ok: false,
       error: "member_not_found",
     });
@@ -336,7 +331,7 @@ describe("recordPayrollPayment", () => {
   it.each([null, "texto"])("entrada %j → invalid_input", async (input) => {
     const deps = makeDeps();
 
-    expect(await recordPayrollPayment(input, MEMBER_ID, { actorRole: "owner" }, deps)).toEqual({
+    expect(await recordPayrollPayment(input, MEMBER_ID, { actor: ADMIN }, deps)).toEqual({
       ok: false,
       error: "invalid_input",
     });
@@ -344,7 +339,7 @@ describe("recordPayrollPayment", () => {
 });
 
 describe("removePayrollPayment", () => {
-  function makeDeps(found: { id: string; role: MemberRole } | null = { id: MEMBER_ID, role: "receptionist" }) {
+  function makeDeps(found: { id: string } | null = { id: MEMBER_ID }) {
     return {
       findMember: vi.fn().mockResolvedValue(found),
       remove: vi.fn().mockResolvedValue(undefined),
@@ -354,24 +349,24 @@ describe("removePayrollPayment", () => {
   it("desfaz o pagamento do mês", async () => {
     const deps = makeDeps();
 
-    expect(await removePayrollPayment("2026-09", MEMBER_ID, { actorRole: "admin" }, deps)).toEqual({ ok: true });
+    expect(await removePayrollPayment("2026-09", MEMBER_ID, { actor: ADMIN }, deps)).toEqual({ ok: true });
     expect(deps.remove).toHaveBeenCalledWith(MEMBER_ID, "2026-09");
   });
 
   it("mês inválido → invalid_month", async () => {
     const deps = makeDeps();
 
-    expect(await removePayrollPayment("2026-00", MEMBER_ID, { actorRole: "owner" }, deps)).toEqual({
+    expect(await removePayrollPayment("2026-00", MEMBER_ID, { actor: ADMIN }, deps)).toEqual({
       ok: false,
       error: "invalid_month",
     });
     expect(deps.remove).not.toHaveBeenCalled();
   });
 
-  it("admin não desfaz pagamento de massagista", async () => {
-    const deps = makeDeps({ id: MEMBER_ID, role: "massage_therapist" });
+  it("role sem permissão de gerenciar a equipe não desfaz pagamento", async () => {
+    const deps = makeDeps();
 
-    expect(await removePayrollPayment("2026-09", MEMBER_ID, { actorRole: "admin" }, deps)).toEqual({
+    expect(await removePayrollPayment("2026-09", MEMBER_ID, { actor: STAFF }, deps)).toEqual({
       ok: false,
       error: "forbidden",
     });
@@ -381,7 +376,7 @@ describe("removePayrollPayment", () => {
   it("membro inexistente → member_not_found", async () => {
     const deps = makeDeps(null);
 
-    expect(await removePayrollPayment("2026-09", MEMBER_ID, { actorRole: "owner" }, deps)).toEqual({
+    expect(await removePayrollPayment("2026-09", MEMBER_ID, { actor: ADMIN }, deps)).toEqual({
       ok: false,
       error: "member_not_found",
     });

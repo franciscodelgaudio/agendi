@@ -1,15 +1,11 @@
 "use client"
 
 import { useReplaceQuery } from "@/components/navigation-progress"
-import { roleLabels } from "@/components/role-labels"
+import { ADMIN_ROLE_NAME } from "@/lib/permissions"
+import type { RoleOption } from "@/lib/unit-team"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const ALL = "all"
-
-const roleItems = [
-  { value: ALL, label: "Todas as funções" },
-  ...Object.entries(roleLabels).map(([value, label]) => ({ value, label })),
-]
 
 const statusItems = [
   { value: ALL, label: "Todos os status" },
@@ -23,7 +19,12 @@ type Props = {
   query: { role: string; status: string } & Record<string, string>
 }
 
-export function UserRoleFilter({ query }: Props) {
+export function UserRoleFilter({ query, roles }: Props & { roles: RoleOption[] }) {
+  const roleItems = [
+    { value: ALL, label: "Todas as funções" },
+    { value: "admin", label: ADMIN_ROLE_NAME },
+    ...roles.map((role) => ({ value: role.id, label: role.name })),
+  ]
   return <QuerySelect query={query} field="role" items={roleItems} label="Filtrar por função" />
 }
 

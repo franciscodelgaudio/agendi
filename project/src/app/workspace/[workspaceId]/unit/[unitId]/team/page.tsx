@@ -1,10 +1,11 @@
 import { notFound, redirect } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import type { WorkspaceRole } from "@/lib/member-role"
+import type { Actor } from "@/lib/permissions"
 import { parseCashFlowQuery } from "@/lib/cash-flow"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { parseUnitTeamListQuery, UNIT_TEAM_PAGE_SIZE, unitTeamListPage, type UnitTeamListItem } from "@/lib/unit-team-list"
+import { memberAttendsStages, memberRoleNameStages, rolesLookup, type RoleOption } from "@/lib/unit-team"
 import { Workspace } from "@/models/Workspace"
 import { ListPagination } from "@/components/list-pagination"
 import { ListSearch } from "@/components/list-search"
@@ -24,14 +25,16 @@ export default async function UnitTeamPage({
   if (!access || !isObjectIdOrHexString(unitId)) notFound()
   const unitObjectId = new Types.ObjectId(unitId)
 
-  // Parte do workspace para garantir o acesso. Só massagistas e recepcionistas vinculadas
+  // Parte do workspace para garantir o acesso. Só quem não é administrador e foi vinculado
   // (no formulário da unidade), por nome.
   const [workspace] = await Workspace.aggregate<{
-    role: WorkspaceRole
+    actor: Actor
     unit: { name: string } | null
-    members: UnitTeamListItem[]
+    members: (UnitTeamListItem & { attends: boolean })[]
+    roles: RoleOption[]
   }>([
     ...access,
+    rolesLookup(),
     {
       $lookup: {
         from: "units",
@@ -50,10 +53,12 @@ export default async function UnitTeamPage({
         pipeline: [
           {
             $match: {
-              role: { $in: ["massage_therapist", "receptionist"] },
+              admin: { $ne: true },
               "units.unitId": unitObjectId,
             },
           },
+          ...memberAttendsStages(),
+          ...memberRoleNameStages(),
           { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
           { $set: { user: { $first: "$user" } } },
           {
@@ -69,7 +74,9 @@ export default async function UnitTeamPage({
             $project: {
               _id: 0,
               id: { $toString: "$_id" },
-              role: 1,
+              roleId: { $ifNull: [{ $toString: "$roleId" }, null] },
+              roleName: 1,
+              attends: 1,
               email: { $ifNull: ["$user.email", "$email"] },
               name: { $ifNull: ["$user.name", null] },
               image: { $ifNull: ["$user.image", null] },
@@ -84,10 +91,10 @@ export default async function UnitTeamPage({
         ],
       },
     },
-    { $project: { _id: 0, role: 1, unit: { $ifNull: [{ $first: "$unit" }, null] }, members: 1 } },
+    { $project: { _id: 0, actor: 1, unit: { $ifNull: [{ $first: "$unit" }, null] }, members: 1, roles: 1 } },
   ])
   if (!workspace?.unit) notFound()
-  const { role, unit } = workspace
+  const { actor, unit } = workspace
   const members = workspace.members.map((member) => ({ ...member, unitId, unitName: unit.name }))
   // Busca, filtros e paginação são feitos aqui (poucas pessoas por unidade).
   const result = unitTeamListPage(members, query)
@@ -110,12 +117,12 @@ export default async function UnitTeamPage({
       {members.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <ListSearch query={filters} placeholder="Buscar nome ou email..." />
-          <UnitTeamFilters query={filters} />
+          <UnitTeamFilters query={filters} roles={workspace.roles} />
         </div>
       )}
       <TeamTable
         workspaceId={workspaceId}
-        role={role}
+        actor={actor}
         rows={result.rows}
         filters={filters}
         pathname={pathname}
@@ -134,9 +141,6 @@ export default async function UnitTeamPage({
         pathname={pathname}
         itemLabel="pessoas"
       />
-      {role === "admin" && (
-        <p className="text-sm text-muted-foreground">Só o proprietário define a remuneração de massagistas.</p>
-      )}
     </div>
   )
 }

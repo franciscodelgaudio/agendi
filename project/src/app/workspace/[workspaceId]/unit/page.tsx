@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member"
+import { can, type Actor } from "@/lib/permissions"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { unitListPipeline, parseUnitListQuery } from "@/lib/unit-list"
@@ -38,7 +38,7 @@ export default async function UnitsPage({
       updatedAt: Date
     }[]
     unitCount: number
-    role: WorkspaceRole
+    actor: Actor
     team: TeamCandidate[]
   }>([
     ...access,
@@ -65,7 +65,7 @@ export default async function UnitsPage({
       $project: {
         _id: 0,
         units: 1,
-        role: 1,
+        actor: 1,
         team: 1,
         unitCount: { $ifNull: [{ $first: "$unitCount.n" }, 0] },
       },
@@ -73,8 +73,8 @@ export default async function UnitsPage({
   ])
   if (!workspace) notFound()
   const { units, unitCount } = workspace
-  const canManage = canManageMembers(workspace.role)
-  const team = { candidates: workspace.team, canLinkTherapists: workspace.role === "owner" }
+  const canManage = can(workspace.actor, "units.manage")
+  const team = { candidates: workspace.team, canEdit: can(workspace.actor, "team.manage") }
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">

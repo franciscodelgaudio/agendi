@@ -1,7 +1,7 @@
 "use server"
 
 import { isObjectIdOrHexString } from "mongoose"
-import { canManageMembers } from "@/lib/member"
+import { can } from "@/lib/permissions"
 import { getSessionUserId } from "@/lib/session"
 import { bookingLookups, conflictChecker, findUnitTreatmentRoom, roomBookingsFinder } from "@/lib/booking-store"
 import { findManagedUnit } from "@/lib/unit-access"
@@ -56,10 +56,10 @@ function bookingInput(formData: FormData) {
   }
 }
 
-// Unidades do workspace, se o usuário o gerencia (dono ou administrador); senão null.
+// Unidades do workspace, se o usuário pode gerenciar agendamentos; senão null.
 async function findManagedUnitIds(workspaceId: string, userId: string) {
   const access = await findWorkspaceAccess(workspaceId, userId)
-  if (!access || !canManageMembers(access.role)) return null
+  if (!access || !can(access.actor, "bookings.manage")) return null
   return Unit.find({ workspaceId: access.id }).distinct("_id")
 }
 
@@ -72,7 +72,7 @@ export async function createBookingAction(
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
   const unitId = formData.get("unitId")
-  const unit = await findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId)
+  const unit = await findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId, "bookings.manage")
   const unitIds = unit ? await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id") : []
 
   const result = await createBooking(bookingInput(formData), unit?.unitId, {
@@ -97,7 +97,7 @@ export async function updateBookingAction(
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
   const unitId = formData.get("unitId")
-  const unit = await findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId)
+  const unit = await findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId, "bookings.manage")
   if (!unit) return { error: errorMessages.unit_not_found }
   const unitIds = await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id")
 

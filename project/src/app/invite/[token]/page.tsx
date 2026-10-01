@@ -3,8 +3,7 @@ import { hashInviteToken } from "@/lib/member"
 import { requireUser } from "@/lib/session"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 import { AcceptInviteButton } from "@/components/accept-invite-button"
-import { roleLabels } from "@/components/role-labels"
-import type { MemberRole } from "@/lib/member-role"
+import { memberRoleNameStages } from "@/lib/unit-team"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -17,17 +16,18 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
 
   const [invite] = await WorkspaceMember.aggregate<{
     email: string
-    role: MemberRole
+    roleName: string | null
     expiresAt: Date
     workspaceName: string | null
   }>([
     { $match: { tokenHash: hashInviteToken(token), userId: null } },
+    ...memberRoleNameStages(),
     { $lookup: { from: "workspaces", localField: "workspaceId", foreignField: "_id", as: "workspace" } },
     {
       $project: {
         _id: 0,
         email: 1,
-        role: 1,
+        roleName: 1,
         expiresAt: 1,
         workspaceName: { $ifNull: [{ $first: "$workspace.name" }, null] },
       },
@@ -51,7 +51,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
             <CardHeader>
               <CardTitle>Convite para {invite.workspaceName}</CardTitle>
               <CardDescription>
-                Você foi convidado como <strong>{roleLabels[invite.role]}</strong>. Convite enviado para{" "}
+                Você foi convidado{invite.roleName && <> como <strong>{invite.roleName}</strong></>}. Convite enviado para{" "}
                 <strong>{invite.email}</strong>.
               </CardDescription>
             </CardHeader>

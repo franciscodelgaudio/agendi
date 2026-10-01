@@ -1,7 +1,7 @@
 import Link from "@/components/link"
 import { notFound } from "next/navigation"
 import { ActivityIcon, CircleAlertIcon, CircleDotIcon, SettingsIcon, TagIcon, WorkflowIcon, ZapIcon } from "lucide-react"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member-role"
+import { can, type Actor } from "@/lib/permissions"
 import type { StartData, UraTrigger } from "@/lib/ura-nodes"
 import { isUraQueueConfigured } from "@/lib/ura-queue"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
@@ -26,7 +26,7 @@ export default async function UrasPage({ params }: PageProps<"/workspace/[worksp
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access) notFound()
 
-  const [workspace] = await Workspace.aggregate<{ role: WorkspaceRole; uras: UraRow[] }>([
+  const [workspace] = await Workspace.aggregate<{ actor: Actor; uras: UraRow[] }>([
     ...access,
     {
       $lookup: {
@@ -61,9 +61,9 @@ export default async function UrasPage({ params }: PageProps<"/workspace/[worksp
         ],
       },
     },
-    { $project: { _id: 0, role: 1, uras: 1 } },
+    { $project: { _id: 0, actor: 1, uras: 1 } },
   ])
-  if (!workspace || !canManageMembers(workspace.role)) notFound()
+  if (!workspace || !can(workspace.actor, "uras.manage")) notFound()
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">

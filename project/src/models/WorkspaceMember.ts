@@ -1,6 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 import { connectOnUse } from "@/lib/mongoose";
-import { MEMBER_ROLES } from "@/lib/member-role";
 import { MAX_BONUS_DESCRIPTION_LENGTH } from "@/lib/unit-member";
 
 // Bônus fixo mensal, somado ao salário no caixa.
@@ -13,8 +12,8 @@ const bonusSchema = new Schema(
 );
 
 // Unidade em que o membro trabalha e como é pago nela: comissão, salário mensal e bônus,
-// combináveis (null/vazio até ser definido na Equipe). Comissão de massagista é sobre
-// os serviços que ela fez; de recepcionista, sobre o faturamento bruto da unidade.
+// combináveis (null/vazio até ser definido na Equipe). Comissão de quem realiza
+// atendimentos é sobre os serviços que fez; dos demais, sobre o faturamento bruto da unidade.
 // Salário e bônus contam a partir de startDate ("2026-02-15"); null conta sempre. O mês
 // de trabalho é pago no payDay (1 a 31) do mês seguinte.
 const unitLinkSchema = new Schema(
@@ -31,12 +30,14 @@ const unitLinkSchema = new Schema(
 
 // Membro ou convite pendente de um workspace. Enquanto userId é null, é um
 // convite: tokenHash/expiresAt identificam o link enviado por email. Ao aceitar,
-// userId é preenchido e o token é removido. O dono não tem documento aqui.
+// userId é preenchido e o token é removido. Administrador (admin) pode tudo e não tem role;
+// os demais têm o acesso da role (roleId). Sem os dois, o membro não entra no workspace.
 const workspaceMemberSchema = new Schema(
   {
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
     email: { type: String, required: true, lowercase: true, trim: true },
-    role: { type: String, enum: MEMBER_ROLES, required: true },
+    admin: { type: Boolean, default: false },
+    roleId: { type: Schema.Types.ObjectId, ref: "Role", default: null, index: true },
     userId: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
     tokenHash: { type: String, unique: true, sparse: true },
     expiresAt: Date,

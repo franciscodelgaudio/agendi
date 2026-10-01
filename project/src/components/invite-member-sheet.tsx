@@ -7,7 +7,7 @@ import { inviteMemberAction, type MemberFormState } from "@/lib/actions/member"
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { RoleField } from "@/components/member-fields"
+import { RoleField, type RoleChoices } from "@/components/member-fields"
 import {
   Sheet,
   SheetContent,
@@ -18,7 +18,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 
-export function InviteMemberSheet({ workspaceId }: { workspaceId: string }) {
+export function InviteMemberSheet({ workspaceId, choices }: { workspaceId: string; choices: RoleChoices }) {
   const [open, setOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário vazio e sem erro antigo.
   const [formKey, setFormKey] = useState(0)
@@ -36,13 +36,21 @@ export function InviteMemberSheet({ workspaceId }: { workspaceId: string }) {
         Convidar usuário
       </SheetTrigger>
       <SheetContent>
-        <InviteMemberForm key={formKey} workspaceId={workspaceId} onDone={() => setOpen(false)} />
+        <InviteMemberForm key={formKey} workspaceId={workspaceId} choices={choices} onDone={() => setOpen(false)} />
       </SheetContent>
     </Sheet>
   )
 }
 
-function InviteMemberForm({ workspaceId, onDone }: { workspaceId: string; onDone: () => void }) {
+function InviteMemberForm({
+  workspaceId,
+  choices,
+  onDone,
+}: {
+  workspaceId: string
+  choices: RoleChoices
+  onDone: () => void
+}) {
   const [state, formAction, pending] = useActionState(
     async (prev: MemberFormState, formData: FormData) => {
       const next = await inviteMemberAction(workspaceId, prev, formData)
@@ -75,7 +83,7 @@ function InviteMemberForm({ workspaceId, onDone }: { workspaceId: string; onDone
           />
           <FieldDescription>Ela precisa entrar ou se cadastrar com este email para aceitar.</FieldDescription>
         </Field>
-        <RoleField idPrefix="invite-member" />
+        <RoleField idPrefix="invite-member" choices={choices} />
       </FieldGroup>
       <SheetFooter>
         <Button type="submit" loading={pending}>

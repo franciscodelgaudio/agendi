@@ -25,24 +25,15 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { WORKSPACE_PAGE_PATHS, type WorkspacePage } from "@/lib/page-access"
+import { can, type Actor } from "@/lib/permissions"
 import { useAgenia } from "@/components/agenia/agenia-provider"
 
 // tour: marca do item para o tutorial destacá-lo.
 type NavItem = { title: string; href: string; icon: LucideIcon; tour: string }
 
-// pages: páginas do sistema liberadas para a função do usuário; Canais e URAs são só de
-// quem gerencia. inbox: a função atende clientes pelas Conversas. Tickets é de todos.
-export function NavMain({
-  workspaceId,
-  pages,
-  canManage,
-  inbox,
-}: {
-  workspaceId: string
-  pages: WorkspacePage[]
-  canManage: boolean
-  inbox: boolean
-}) {
+// pages: páginas do sistema liberadas para a role do usuário; Conversas, Canais, URAs e
+// Custos de IA seguem as permissões dela (actor). Tickets é de todos.
+export function NavMain({ workspaceId, pages, actor }: { workspaceId: string; pages: WorkspacePage[]; actor: Actor }) {
   const pathname = usePathname()
   const agenia = useAgenia()
   const base = `/workspace/${workspaceId}`
@@ -62,19 +53,17 @@ export function NavMain({
     {
       label: "Atendimento",
       items: [
-        ...(inbox ? [{ title: "Conversas", href: `${base}/inbox`, icon: MessagesSquareIcon, tour: "nav-inbox" }] : []),
-        ...(canManage ? [{ title: "Canais", href: `${base}/channels`, icon: RadioTowerIcon, tour: "nav-channels" }] : []),
+        ...(can(actor, "inbox.use") ? [{ title: "Conversas", href: `${base}/inbox`, icon: MessagesSquareIcon, tour: "nav-inbox" }] : []),
+        ...(can(actor, "channels.manage") ? [{ title: "Canais", href: `${base}/channels`, icon: RadioTowerIcon, tour: "nav-channels" }] : []),
       ],
     },
     {
       label: "AgenIA",
       items: [
         ...(agenia ? [{ title: "AgenIA", href: agenia.pageHref, icon: SparklesIcon, tour: "nav-agenia" }] : []),
-        ...(canManage
-          ? [
-              { title: "URAs", href: `${base}/uras`, icon: WorkflowIcon, tour: "nav-uras" },
-              { title: "Custos de IA", href: `${base}/ai-costs`, icon: CoinsIcon, tour: "nav-ai-costs" },
-            ]
+        ...(can(actor, "uras.manage") ? [{ title: "URAs", href: `${base}/uras`, icon: WorkflowIcon, tour: "nav-uras" }] : []),
+        ...(can(actor, "agenia.use")
+          ? [{ title: "Custos de IA", href: `${base}/ai-costs`, icon: CoinsIcon, tour: "nav-ai-costs" }]
           : []),
       ],
     },

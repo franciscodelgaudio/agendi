@@ -5,7 +5,7 @@ import { PlusIcon, Trash2Icon } from "lucide-react"
 import { REVENUE_SHARE_PERIODS, type RevenueShare } from "@/lib/revenue-share"
 
 import { Button } from "@/components/ui/button"
-import { Field, FieldLabel, FieldSeparator } from "@/components/ui/field"
+import { Field, FieldDescription, FieldLabel, FieldSeparator } from "@/components/ui/field"
 import { AmountInput } from "@/components/amount-input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ownershipLabels, periodLabels, type Ownership } from "@/components/revenue-share-labels"
@@ -69,6 +69,10 @@ export function RevenueShareFields({ idPrefix, defaultValue = null }: Props) {
       {ownership === "partner" && (
         <>
           <FieldSeparator>Repasse ao estabelecimento</FieldSeparator>
+          <FieldDescription>
+            Informe o percentual do faturamento que fica com o estabelecimento parceiro. O restante fica com
+            a sua empresa.
+          </FieldDescription>
 
           <Field>
             <FieldLabel htmlFor={`${idPrefix}-period`}>Período do faturamento</FieldLabel>
@@ -137,8 +141,8 @@ export function RevenueShareFields({ idPrefix, defaultValue = null }: Props) {
                       mode="percent"
                       name="tierPercent"
                       max={10_000}
-                      placeholder="% de repasse"
-                      aria-label={`Percentual da faixa ${index + 1}`}
+                      placeholder="% do estabelecimento"
+                      aria-label={`Percentual da faixa ${index + 1} que fica com o estabelecimento`}
                       className={isLast ? "col-span-2" : undefined}
                       value={tier.percent}
                       onValueChange={(percent) => updateTier(tier.key, { percent })}

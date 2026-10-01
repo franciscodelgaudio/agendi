@@ -33,7 +33,7 @@ export type ServiceActionState = { error: string | null }
 async function findManagedUnitId(workspaceId: string, unitId: string) {
   const userId = await getSessionUserId()
   if (!userId) return null
-  return (await findManagedUnit(workspaceId, unitId, userId))?.unitId
+  return (await findManagedUnit(workspaceId, unitId, userId, "services.manage"))?.unitId
 }
 
 function serviceInput(formData: FormData) {

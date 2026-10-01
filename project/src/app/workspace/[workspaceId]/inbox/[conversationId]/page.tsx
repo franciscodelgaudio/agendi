@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { ArrowLeftIcon, BotIcon, CheckCheckIcon, CheckIcon, CircleAlertIcon, ClockIcon, PaperclipIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { canUseInbox, type WorkspaceRole } from "@/lib/member-role"
+import { can, type Actor } from "@/lib/permissions"
 import { messageTypeLabels } from "@/lib/messaging-inbox"
 import { isReplyWindowOpen, MAX_TEXT_LENGTH } from "@/lib/messaging-send"
 import type { DeliveryStatus, MessageDirection, MessageType, MessagingPlatform } from "@/lib/messaging-types"
@@ -66,7 +66,7 @@ export default async function ConversationPage({
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access || !isObjectIdOrHexString(conversationId)) notFound()
 
-  const [workspace] = await Workspace.aggregate<{ role: WorkspaceRole; conversation: ConversationView | null }>([
+  const [workspace] = await Workspace.aggregate<{ actor: Actor; conversation: ConversationView | null }>([
     ...access,
     {
       $lookup: {
@@ -159,9 +159,9 @@ export default async function ConversationPage({
         ],
       },
     },
-    { $project: { _id: 0, role: 1, conversation: { $first: "$conversation" } } },
+    { $project: { _id: 0, actor: 1, conversation: { $first: "$conversation" } } },
   ])
-  if (!workspace || !canUseInbox(workspace.role) || !workspace.conversation) notFound()
+  if (!workspace || !can(workspace.actor, "inbox.use") || !workspace.conversation) notFound()
 
   const { conversation } = workspace
   const name = contactDisplayName(conversation)

@@ -35,15 +35,6 @@ const businessHoursSchema = new Schema(
   { _id: false },
 );
 
-// Valor em caixa no início do dia `date` ("2026-09-01"); o saldo soma o líquido real a partir dele.
-const openingBalanceSchema = new Schema(
-  {
-    amountCents: { type: Number, required: true, min: 0 },
-    date: { type: String, required: true },
-  },
-  { _id: false },
-);
-
 const unitSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -52,8 +43,6 @@ const unitSchema = new Schema(
     revenueShare: { type: revenueShareSchema },
     treatmentRooms: { type: [treatmentRoomSchema], default: [] },
     businessHours: { type: businessHoursSchema, required: true },
-    // Ausente enquanto o saldo em caixa não foi informado.
-    openingBalance: { type: openingBalanceSchema },
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true, index: true },
   },
   { collection: "units", timestamps: true },

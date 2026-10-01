@@ -1,10 +1,10 @@
 import { parseDay } from "@/lib/timezone";
-import { canManageMembers, type MemberRole, type WorkspaceRole } from "@/lib/member-role";
+import { can, type Actor } from "@/lib/permissions";
 import { parsePercent } from "@/lib/revenue-share";
 import { parsePriceCents } from "@/lib/service";
 
 // Remuneração de quem trabalha na unidade: comissão (%), salário mensal e bônus fixos
-// mensais, combináveis e todos opcionais. Só o proprietário define a de massagistas.
+// mensais, combináveis e todos opcionais.
 // Salário e bônus contam no caixa a partir da data de início; sem ela, contam sempre.
 
 export const MAX_BONUS_DESCRIPTION_LENGTH = 80;
@@ -34,7 +34,7 @@ export type UnitMemberPay = {
 
 type UpdateUnitMemberPayDeps = {
   // null quando o membro não existe, não é do workspace ou não está vinculado à unidade.
-  findMember: (memberId: string) => Promise<{ id: string; role: MemberRole } | null>;
+  findMember: (memberId: string) => Promise<{ id: string } | null>;
   update: (memberId: string, data: UnitMemberPay) => Promise<void>;
 };
 
@@ -58,11 +58,11 @@ function parseBonus(value: unknown): UnitMemberBonus | null {
 export async function updateUnitMemberPay(
   input: unknown,
   memberId: string | null | undefined,
-  ctx: { actorRole: WorkspaceRole | null },
+  ctx: { actor: Actor | null },
   deps: UpdateUnitMemberPayDeps,
 ): Promise<UpdateUnitMemberPayResult> {
-  if (!ctx.actorRole) return { ok: false, error: "workspace_not_found" };
-  if (!canManageMembers(ctx.actorRole)) return { ok: false, error: "forbidden" };
+  if (!ctx.actor) return { ok: false, error: "workspace_not_found" };
+  if (!can(ctx.actor, "team.manage")) return { ok: false, error: "forbidden" };
   if (!memberId) return { ok: false, error: "member_not_found" };
 
   if (input == null || typeof input !== "object") return { ok: false, error: "invalid_input" };
@@ -71,7 +71,6 @@ export async function updateUnitMemberPay(
 
   const member = await deps.findMember(memberId);
   if (!member) return { ok: false, error: "member_not_found" };
-  if (member.role === "massage_therapist" && ctx.actorRole !== "owner") return { ok: false, error: "forbidden" };
 
   const start = typeof startDate === "string" ? startDate.trim() || null : startDate;
   if (start != null && (typeof start !== "string" || !parseDay(start))) return { ok: false, error: "invalid_start_date" };

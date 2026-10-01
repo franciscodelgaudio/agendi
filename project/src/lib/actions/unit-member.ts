@@ -55,12 +55,12 @@ export async function updateUnitMemberAction(
       bonuses,
     },
     memberId,
-    { actorRole: access?.role ?? null },
+    { actor: access?.actor ?? null },
     {
       findMember: async () => {
         if (!filter || !(await Unit.exists({ _id: unitObjectId, workspaceId: filter.workspaceId }))) return null
-        const member = await WorkspaceMember.findOne(filter).select("role").lean()
-        return member && { id: member._id.toString(), role: member.role }
+        const member = await WorkspaceMember.findOne(filter).select({ _id: 1 }).lean()
+        return member && { id: member._id.toString() }
       },
       update: async (_id, { startDate, payDay, commissionPercent, salaryCents, bonuses }) => {
         await WorkspaceMember.updateOne(filter!, {

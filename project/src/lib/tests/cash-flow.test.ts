@@ -790,10 +790,10 @@ describe("teamPayRates", () => {
     });
   });
 
-  it("comissão de massagista vai pelo id de usuário", () => {
+  it("comissão de quem realiza atendimentos vai pelo id de usuário", () => {
     const team = [
-      { userId: ANA, role: "massage_therapist", units: [link(30, null)] },
-      { userId: BIA, role: "massage_therapist", units: [link(12.5, null)] },
+      { userId: ANA, attends: true, units: [link(30, null)] },
+      { userId: BIA, attends: true, units: [link(12.5, null)] },
     ];
 
     expect(teamPayRates(team, UNIT.toString()).commissionRates).toEqual({
@@ -802,10 +802,10 @@ describe("teamPayRates", () => {
     });
   });
 
-  it("comissões de recepcionistas somam no percentual sobre o bruto", () => {
+  it("comissões de quem não realiza atendimentos somam no percentual sobre o bruto", () => {
     const team = [
-      { userId: ANA, role: "receptionist", units: [link(2, null)] },
-      { userId: null, role: "receptionist", units: [link(1.5, null)] },
+      { userId: ANA, attends: false, units: [link(2, null)] },
+      { userId: null, attends: false, units: [link(1.5, null)] },
     ];
 
     expect(teamPayRates(team, UNIT.toString())).toEqual({
@@ -817,8 +817,8 @@ describe("teamPayRates", () => {
 
   it("salários de qualquer função somam, mesmo com convite pendente", () => {
     const team = [
-      { userId: ANA, role: "massage_therapist", units: [link(null, 250_000)] },
-      { userId: null, role: "receptionist", units: [link(null, 180_000)] },
+      { userId: ANA, attends: true, units: [link(null, 250_000)] },
+      { userId: null, attends: false, units: [link(null, 180_000)] },
     ];
 
     expect(teamPayRates(team, UNIT.toString())).toEqual({
@@ -833,8 +833,8 @@ describe("teamPayRates", () => {
 
   it("comissão e salário do mesmo vínculo valem juntos", () => {
     const team = [
-      { userId: ANA, role: "massage_therapist", units: [link(20, 150_000)] },
-      { userId: BIA, role: "receptionist", units: [link(2, 180_000)] },
+      { userId: ANA, attends: true, units: [link(20, 150_000)] },
+      { userId: BIA, attends: false, units: [link(2, 180_000)] },
     ];
 
     expect(teamPayRates(team, UNIT.toString())).toEqual({
@@ -850,9 +850,9 @@ describe("teamPayRates", () => {
   it("bônus fixos mensais somam com os salários, mesmo com convite pendente", () => {
     const bonus = (amountCents: number) => ({ description: "Bônus", amountCents });
     const team = [
-      { userId: ANA, role: "massage_therapist", units: [{ ...link(30, null), bonuses: [bonus(20_000), bonus(5_000)] }] },
-      { userId: null, role: "receptionist", units: [{ ...link(null, 180_000), bonuses: [bonus(10_000)] }] },
-      { userId: BIA, role: "receptionist", units: [{ ...link(null, null, OTHER_UNIT), bonuses: [bonus(99_000)] }] },
+      { userId: ANA, attends: true, units: [{ ...link(30, null), bonuses: [bonus(20_000), bonus(5_000)] }] },
+      { userId: null, attends: false, units: [{ ...link(null, 180_000), bonuses: [bonus(10_000)] }] },
+      { userId: BIA, attends: false, units: [{ ...link(null, null, OTHER_UNIT), bonuses: [bonus(99_000)] }] },
     ];
 
     expect(teamPayRates(team, UNIT.toString())).toEqual({
@@ -866,15 +866,15 @@ describe("teamPayRates", () => {
   });
 
   it("ignora comissão de massagista com convite pendente, que ainda não faz serviços", () => {
-    const team = [{ userId: null, role: "massage_therapist", units: [link(30, null)] }];
+    const team = [{ userId: null, attends: true, units: [link(30, null)] }];
 
     expect(teamPayRates(team, UNIT.toString()).commissionRates).toEqual({});
   });
 
   it("usa só o vínculo com a unidade pedida", () => {
     const team = [
-      { userId: ANA, role: "massage_therapist", units: [link(40, null, OTHER_UNIT), link(30, null)] },
-      { userId: BIA, role: "receptionist", units: [link(5, 200_000, OTHER_UNIT)] },
+      { userId: ANA, attends: true, units: [link(40, null, OTHER_UNIT), link(30, null)] },
+      { userId: BIA, attends: false, units: [link(5, 200_000, OTHER_UNIT)] },
     ];
 
     expect(teamPayRates(team, UNIT.toString())).toEqual({
@@ -887,9 +887,9 @@ describe("teamPayRates", () => {
   it("cada vínculo com salário ou bônus leva a própria data de início", () => {
     const bonus = { description: "Bônus", amountCents: 10_000 };
     const team = [
-      { userId: ANA, role: "massage_therapist", units: [link(20, 300_000, UNIT, "2026-02-15")] },
-      { userId: BIA, role: "receptionist", units: [{ ...link(null, null, UNIT, "2026-03-01"), bonuses: [bonus] }] },
-      { userId: null, role: "receptionist", units: [link(2, null, UNIT, "2026-04-01")] },
+      { userId: ANA, attends: true, units: [link(20, 300_000, UNIT, "2026-02-15")] },
+      { userId: BIA, attends: false, units: [{ ...link(null, null, UNIT, "2026-03-01"), bonuses: [bonus] }] },
+      { userId: null, attends: false, units: [link(2, null, UNIT, "2026-04-01")] },
     ];
 
     expect(teamPayRates(team, UNIT.toString()).salaries).toEqual([
@@ -898,13 +898,41 @@ describe("teamPayRates", () => {
     ]);
   });
 
-  it("ignora administradores", () => {
-    const team = [{ userId: ANA, role: "admin", units: [link(10, 300_000)] }];
+  // A base escolhida no vínculo vale mais que a da função (attends), que só vale para
+  // vínculos antigos, sem base guardada.
+  it("comissão sobre o bruto ou sobre os serviços conforme a base do vínculo", () => {
+    const team = [
+      { userId: ANA, attends: true, units: [{ ...link(3, null), commissionBase: "gross" as const }] },
+      { userId: BIA, attends: false, units: [{ ...link(25, null), commissionBase: "services" as const }] },
+    ];
 
     expect(teamPayRates(team, UNIT.toString())).toEqual({
-      commissionRates: {},
-      grossCommissionPercent: 0,
+      commissionRates: { [BIA.toString()]: 25 },
+      grossCommissionPercent: 3,
       salaries: [],
+    });
+  });
+
+  it("vínculo sem base guardada usa a da função", () => {
+    const team = [
+      { userId: ANA, attends: true, units: [{ ...link(30, null), commissionBase: null }] },
+      { userId: BIA, attends: false, units: [{ ...link(2, null), commissionBase: null }] },
+    ];
+
+    expect(teamPayRates(team, UNIT.toString())).toEqual({
+      commissionRates: { [ANA.toString()]: 30 },
+      grossCommissionPercent: 2,
+      salaries: [],
+    });
+  });
+
+  it("administrador vinculado à unidade entra como qualquer pessoa da equipe", () => {
+    const team = [{ userId: ANA, admin: true, attends: true, units: [link(10, 300_000)] }];
+
+    expect(teamPayRates(team, UNIT.toString())).toEqual({
+      commissionRates: { [ANA.toString()]: 10 },
+      grossCommissionPercent: 0,
+      salaries: [{ monthlyCents: 300_000, startDate: null }],
     });
   });
 });
@@ -1028,39 +1056,36 @@ describe("summarizeCosts", () => {
 });
 
 describe("costCurve", () => {
-  // Custos de um mês: repasse, comissão, salário e despesas; bruto e líquido não entram na curva.
-  const costs = (partnerShareCents: number, commissionCents: number, salaryCents: number, expenseCents: number) => ({
+  // Custos de um mês. Repasse, comissão e salário ficam altos para mostrar que não entram na curva.
+  const costs = (expenseCents: number) => ({
     grossCents: 999_999,
-    partnerShareCents,
-    commissionCents,
-    salaryCents,
+    partnerShareCents: 1_111,
+    commissionCents: 2_222,
+    salaryCents: 3_333,
     expenseCents,
     netCents: -1,
   });
-  // Do previsto, só repasse, comissão e salário entram no planejado; as despesas previstas
-  // não, porque o planejado delas é o orçamento dos grupos.
-  const NO_STAFF = costs(0, 0, 0, 9_999);
-  const month = (from: string, to: string, real: ReturnType<typeof costs>, forecast = NO_STAFF) => ({
+  // Real: despesas pagas, que são o gasto da curva. Previsto: todas as lançadas, que não entram.
+  const month = (from: string, to: string, paidCents: number, launchedCents = 9_999) => ({
     from,
     to,
-    real,
-    forecast,
+    real: costs(paidCents),
+    forecast: costs(launchedCents),
+  });
+  // Grupo de despesas com o limite antes de qualquer mudança e as mudanças por mês.
+  const group = (monthlyLimitCents: number | null, limitChanges: { month: string; cents: number | null }[] = []) => ({
+    monthlyLimitCents,
+    limitChanges,
   });
   const JUL = { from: "2026-07-01", to: "2026-07-31" };
   const AUG = { from: "2026-08-01", to: "2026-08-31" };
   const SEP = { from: "2026-09-01", to: "2026-09-30" };
-  const OCT = { from: "2026-10-01", to: "2026-10-31" };
+  const DEC = { from: "2026-12-01", to: "2026-12-31" };
 
-  it("planejado é o orçamento mensal e gasto soma repasse, comissão, salário e despesas reais, com o acumulado", () => {
-    const result = costCurve(
-      [
-        {
-          monthlyBudgetCents: 1_500,
-          buckets: [month(JUL.from, JUL.to, costs(100, 200, 300, 400)), month(AUG.from, AUG.to, costs(0, 50, 300, 0))],
-        },
-      ],
-      "2026-09-24",
-    );
+  it("planejado é o limite mensal dos grupos e gasto são as despesas pagas, com o acumulado", () => {
+    const result = costCurve([
+      { groups: [group(1_500)], buckets: [month(JUL.from, JUL.to, 1_000), month(AUG.from, AUG.to, 350)] },
+    ]);
 
     expect(result).toEqual([
       { ...JUL, plannedCents: 1_500, spentCents: 1_000, plannedCumulativeCents: 1_500, spentCumulativeCents: 1_000 },
@@ -1068,64 +1093,71 @@ describe("costCurve", () => {
     ]);
   });
 
-  it("depois do mês de hoje não tem gasto nem acumulado gasto; o planejado segue", () => {
-    const result = costCurve(
-      [
-        {
-          monthlyBudgetCents: 100,
-          buckets: [
-            month(AUG.from, AUG.to, costs(0, 0, 100, 0)),
-            month(SEP.from, SEP.to, costs(0, 0, 80, 20)),
-            month(OCT.from, OCT.to, costs(0, 0, 0, 0)),
-          ],
-        },
-      ],
-      "2026-09-24",
-    );
+  it("despesa lançada e não paga não conta no gasto", () => {
+    const result = costCurve([{ groups: [], buckets: [month(JUL.from, JUL.to, 200, 500)] }]);
+
+    expect(result[0].spentCents).toBe(200);
+  });
+
+  it("despesa paga num mês futuro já conta no gasto daquele mês", () => {
+    const result = costCurve([
+      { groups: [group(100)], buckets: [month(SEP.from, SEP.to, 100), month(DEC.from, DEC.to, 70)] },
+    ]);
 
     expect(result).toEqual([
-      { ...AUG, plannedCents: 100, spentCents: 100, plannedCumulativeCents: 100, spentCumulativeCents: 100 },
-      { ...SEP, plannedCents: 100, spentCents: 100, plannedCumulativeCents: 200, spentCumulativeCents: 200 },
-      { ...OCT, plannedCents: 100, spentCents: null, plannedCumulativeCents: 300, spentCumulativeCents: null },
+      { ...SEP, plannedCents: 100, spentCents: 100, plannedCumulativeCents: 100, spentCumulativeCents: 100 },
+      { ...DEC, plannedCents: 100, spentCents: 70, plannedCumulativeCents: 200, spentCumulativeCents: 170 },
     ]);
   });
 
-  it("com várias unidades, soma os orçamentos e os gastos de todas", () => {
-    const result = costCurve(
-      [
-        { monthlyBudgetCents: 200, buckets: [month(JUL.from, JUL.to, costs(100, 0, 0, 0))] },
-        { monthlyBudgetCents: 70, buckets: [month(JUL.from, JUL.to, costs(0, 0, 0, 30))] },
-      ],
-      "2026-09-24",
-    );
+  it("com várias unidades, soma os limites e as despesas pagas de todas", () => {
+    const result = costCurve([
+      { groups: [group(200)], buckets: [month(JUL.from, JUL.to, 100)] },
+      { groups: [group(70)], buckets: [month(JUL.from, JUL.to, 30)] },
+    ]);
 
     expect(result).toEqual([
       { ...JUL, plannedCents: 270, spentCents: 130, plannedCumulativeCents: 270, spentCumulativeCents: 130 },
     ]);
   });
 
-  it("intervalos menores que o mês recebem o orçamento pelos dias, com cada mês dividido pelos próprios dias", () => {
+  it("intervalos menores que o mês recebem o limite pelos dias, com cada mês dividido pelos próprios dias", () => {
     // Setembro tem 30 dias: R$ 3.000 = R$ 100 por dia. Outubro tem 31 dias.
-    const result = costCurve(
-      [
-        {
-          monthlyBudgetCents: 300_000,
-          buckets: [
-            month("2026-09-21", "2026-09-27", costs(0, 0, 0, 0)),
-            month("2026-09-28", "2026-10-04", costs(0, 0, 0, 0)),
-          ],
-        },
-      ],
-      "2026-09-24",
-    );
+    const result = costCurve([
+      {
+        groups: [group(300_000)],
+        buckets: [month("2026-09-21", "2026-09-27", 0), month("2026-09-28", "2026-10-04", 0)],
+      },
+    ]);
 
     // 3 dias de setembro (30.000) + 4 de outubro (4 × 300.000/31 = 38.709,68).
     expect(result.map((point) => point.plannedCents)).toEqual([70_000, 68_710]);
     expect(result[1].plannedCumulativeCents).toBe(138_710);
   });
 
-  it("sem orçamento, o planejado fica zerado", () => {
-    const result = costCurve([{ monthlyBudgetCents: 0, buckets: [month(JUL.from, JUL.to, costs(0, 0, 0, 10))] }], "2026-09-24");
+  it("o planejado de cada mês usa o limite de cada grupo naquele mês", () => {
+    const result = costCurve([
+      {
+        groups: [group(10_000, [{ month: "2026-08", cents: 15_000 }]), group(5_000, [{ month: "2026-09", cents: null }]), group(null)],
+        buckets: [month(JUL.from, JUL.to, 0), month(AUG.from, AUG.to, 0), month(SEP.from, SEP.to, 0)],
+      },
+    ]);
+
+    expect(result.map((point) => point.plannedCents)).toEqual([15_000, 20_000, 15_000]);
+    expect(result.map((point) => point.plannedCumulativeCents)).toEqual([15_000, 35_000, 50_000]);
+  });
+
+  it("intervalo que cruza a mudança de limite usa o limite de cada dia", () => {
+    // 28 a 30 de setembro: 3 × 30.000/30; 1 a 4 de outubro: 4 × 62.000/31.
+    const result = costCurve([
+      { groups: [group(30_000, [{ month: "2026-10", cents: 62_000 }])], buckets: [month("2026-09-28", "2026-10-04", 0)] },
+    ]);
+
+    expect(result[0].plannedCents).toBe(3_000 + 8_000);
+  });
+
+  it("sem limite nos grupos, o planejado fica zerado", () => {
+    const result = costCurve([{ groups: [], buckets: [month(JUL.from, JUL.to, 10)] }]);
 
     expect(result).toEqual([
       { ...JUL, plannedCents: 0, spentCents: 10, plannedCumulativeCents: 0, spentCumulativeCents: 10 },
@@ -1133,51 +1165,6 @@ describe("costCurve", () => {
   });
 
   it("sem unidades, a curva fica vazia", () => {
-    expect(costCurve([], "2026-09-24")).toEqual([]);
-  });
-
-  it("o planejado soma ao orçamento dos grupos o repasse, a comissão e o salário previstos, que variam por intervalo", () => {
-    const result = costCurve(
-      [
-        {
-          monthlyBudgetCents: 1_000,
-          buckets: [
-            month(JUL.from, JUL.to, costs(100, 200, 300, 400), costs(100, 200, 300, 9_999)),
-            month(AUG.from, AUG.to, costs(0, 50, 300, 0), costs(0, 50, 300, 9_999)),
-            month(SEP.from, SEP.to, costs(10, 20, 150, 0), costs(10, 20, 300, 9_999)),
-          ],
-        },
-      ],
-      "2026-09-15",
-    );
-
-    expect(result).toEqual([
-      { ...JUL, plannedCents: 1_600, spentCents: 1_000, plannedCumulativeCents: 1_600, spentCumulativeCents: 1_000 },
-      { ...AUG, plannedCents: 1_350, spentCents: 350, plannedCumulativeCents: 2_950, spentCumulativeCents: 1_350 },
-      { ...SEP, plannedCents: 1_330, spentCents: 180, plannedCumulativeCents: 4_280, spentCumulativeCents: 1_530 },
-    ]);
-  });
-
-  it("depois de hoje, o planejado segue com o salário previsto, sem gasto", () => {
-    const result = costCurve(
-      [{ monthlyBudgetCents: 0, buckets: [month(OCT.from, OCT.to, costs(0, 0, 0, 0), costs(0, 0, 500, 0))] }],
-      "2026-09-24",
-    );
-
-    expect(result).toEqual([
-      { ...OCT, plannedCents: 500, spentCents: null, plannedCumulativeCents: 500, spentCumulativeCents: null },
-    ]);
-  });
-
-  it("com várias unidades, soma também o repasse, a comissão e o salário previstos de todas", () => {
-    const result = costCurve(
-      [
-        { monthlyBudgetCents: 200, buckets: [month(JUL.from, JUL.to, costs(0, 0, 0, 0), costs(100, 0, 0, 0))] },
-        { monthlyBudgetCents: 0, buckets: [month(JUL.from, JUL.to, costs(0, 0, 0, 0), costs(0, 30, 40, 0))] },
-      ],
-      "2026-09-24",
-    );
-
-    expect(result[0].plannedCents).toBe(370);
+    expect(costCurve([])).toEqual([]);
   });
 });

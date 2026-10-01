@@ -31,7 +31,7 @@ export async function createTicketAction(
 
   const result = await createTicket(
     { type: formData.get("type"), title: formData.get("title"), description: formData.get("description") },
-    { workspaceId, userId, actorRole: access?.role ?? null },
+    { workspaceId, userId, actor: access?.actor ?? null },
     async (data) => {
       const ticket = await Ticket.create(data)
       return { id: ticket._id.toString() }

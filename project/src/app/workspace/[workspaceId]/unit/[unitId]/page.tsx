@@ -19,7 +19,8 @@ import {
   type DayTotal,
   type ServiceTotal,
 } from "@/lib/cash-flow"
-import { dailyExpenseTotalsPipeline, expenseBudgetCents, type ExpenseDayTotal } from "@/lib/expense"
+import { dailyExpenseTotalsPipeline, type ExpenseDayTotal } from "@/lib/expense"
+import { findTeamPayMembers, groupLimitsOf } from "@/lib/unit-cash-flow-store"
 import type { RevenueShare } from "@/lib/revenue-share"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
@@ -30,7 +31,6 @@ import { Booking } from "@/models/Booking"
 import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Workspace } from "@/models/Workspace"
-import { WorkspaceMember } from "@/models/WorkspaceMember"
 import { CostCumulativeChart, CostPeriodChart } from "@/components/cost-curve-chart"
 import { timeFormat } from "@/components/service-format"
 import type { TherapistOption } from "@/components/therapist-avatar"
@@ -109,25 +109,24 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
     Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
     Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(month)]),
     Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(month, now)]),
-    // Remuneração da equipe vinculada a esta unidade (o proprietário não tem).
-    WorkspaceMember.find({ workspaceId: workspace.id, role: { $in: ["massage_therapist", "receptionist"] }, "units.unitId": unitId })
-      .select({ userId: 1, role: 1, units: 1 })
-      .lean(),
+    // Remuneração da equipe vinculada a esta unidade (administradores não têm).
+    findTeamPayMembers(workspace.id, unitId),
     Booking.find({ unitId: unitObjectId, startsAt: { $gte: todayStart, $lt: todayEnd } })
       .sort({ startsAt: 1 })
       .select({ startsAt: 1, endsAt: 1, guest: 1, service: 1, therapistId: 1, therapistName: 1, appointmentId: 1 })
       .lean(),
     Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(year)]),
-    ExpenseGroup.find({ unitId: unitObjectId }).select({ monthlyLimitCents: 1 }).lean(),
+    ExpenseGroup.find({ unitId: unitObjectId }).select({ monthlyLimitCents: 1, limitChanges: 1 }).lean(),
   ])
 
   const { commissionRates, ...staffCosts } = teamPayRates(team, unitId)
   const summarize = (buckets: DayRange[]) =>
     applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, revenueShare, commissionRates), { ...staffCosts, today })
   const monthTotal = summarize(monthBuckets).total
-  const monthlyBudgetCents = expenseBudgetCents(groups.map((group) => ({ monthlyLimitCents: group.monthlyLimitCents ?? null })))
-  const curve = costCurve([{ buckets: applyExpenses(summarize(yearBuckets), expenses).buckets, monthlyBudgetCents }], today)
-  const spentCents = curve.findLast((point) => point.spentCumulativeCents !== null)?.spentCumulativeCents ?? 0
+  const curve = costCurve([
+    { buckets: applyExpenses(summarize(yearBuckets), expenses).buckets, groups: groups.map(groupLimitsOf) },
+  ])
+  const spentCents = curve.at(-1)?.spentCumulativeCents ?? 0
   const plannedCents = curve.at(-1)?.plannedCumulativeCents ?? 0
   const services = summarizeServices(serviceAppointments, serviceBookings)
 

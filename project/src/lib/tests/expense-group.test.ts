@@ -1,12 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
-import { createExpenseGroup, deleteExpenseGroup, updateExpenseGroup } from "@/lib/expense-group";
+import { createExpenseGroup, deleteExpenseGroup, updateExpenseGroup, updateGroupMonthLimit } from "@/lib/expense-group";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const GROUP_ID = "64b7f0c2a1b2c3d4e5f60740";
 const ICON_ID = "64b7f0c2a1b2c3d4e5f60760";
 
-// Como chega do FormData: o limite vem do AmountInput ("1500.00") ou vazio.
-const validInput = { name: "Impostos", monthlyLimit: "1500.00", iconId: ICON_ID };
+// Como chega do FormData: o limite vem do AmountInput ("1500.00") ou vazio, e vale a partir
+// do mês escolhido ("AAAA-MM").
+const MONTH = "2026-10";
+const validInput = { name: "Impostos", monthlyLimit: "1500.00", limitFrom: MONTH, iconId: ICON_ID };
 
 describe("createExpenseGroup", () => {
   function makeDeps({ taken = false, iconExists = true } = {}) {
@@ -17,38 +19,51 @@ describe("createExpenseGroup", () => {
     };
   }
 
-  it("cria o grupo na unidade com o ícone escolhido e o limite mensal em centavos", async () => {
+  it("cria o grupo na unidade com o ícone escolhido e o limite em centavos a partir do mês escolhido", async () => {
     const deps = makeDeps();
 
     const result = await createExpenseGroup(validInput, UNIT_ID, deps);
 
     expect(result).toEqual({ ok: true, groupId: GROUP_ID });
     expect(deps.iconExists).toHaveBeenCalledWith(ICON_ID);
+    // Antes do mês escolhido, o grupo fica sem limite.
     expect(deps.insert).toHaveBeenCalledWith({
       name: "Impostos",
-      monthlyLimitCents: 150_000,
+      monthlyLimitCents: null,
+      limitChanges: [{ month: MONTH, cents: 150_000 }],
       iconId: ICON_ID,
       unitId: UNIT_ID,
     });
   });
 
-  it("sem limite, o grupo fica sem limite mensal", async () => {
+  it("sem limite, o grupo fica sem limite em nenhum mês", async () => {
     const deps = makeDeps();
 
-    await createExpenseGroup({ name: "Insumos", monthlyLimit: "", iconId: ICON_ID }, UNIT_ID, deps);
+    await createExpenseGroup({ name: "Insumos", monthlyLimit: "", limitFrom: MONTH, iconId: ICON_ID }, UNIT_ID, deps);
 
-    expect(deps.insert).toHaveBeenCalledWith({ name: "Insumos", monthlyLimitCents: null, iconId: ICON_ID, unitId: UNIT_ID });
+    expect(deps.insert).toHaveBeenCalledWith({
+      name: "Insumos",
+      monthlyLimitCents: null,
+      limitChanges: [],
+      iconId: ICON_ID,
+      unitId: UNIT_ID,
+    });
   });
 
   it("remove espaços das pontas do nome e confere se ele já existe na unidade", async () => {
     const deps = makeDeps();
 
-    await createExpenseGroup({ name: "  Aluguel  ", monthlyLimit: " 3000.00 ", iconId: ICON_ID }, UNIT_ID, deps);
+    await createExpenseGroup(
+      { name: "  Aluguel  ", monthlyLimit: " 3000.00 ", limitFrom: MONTH, iconId: ICON_ID },
+      UNIT_ID,
+      deps,
+    );
 
     expect(deps.isNameTaken).toHaveBeenCalledWith(UNIT_ID, "Aluguel", null);
     expect(deps.insert).toHaveBeenCalledWith({
       name: "Aluguel",
-      monthlyLimitCents: 300_000,
+      monthlyLimitCents: null,
+      limitChanges: [{ month: MONTH, cents: 300_000 }],
       iconId: ICON_ID,
       unitId: UNIT_ID,
     });
@@ -58,21 +73,28 @@ describe("createExpenseGroup", () => {
     const deps = makeDeps();
     const name = "a".repeat(40);
 
-    const result = await createExpenseGroup({ name, monthlyLimit: "", iconId: ICON_ID }, UNIT_ID, deps);
+    const result = await createExpenseGroup({ name, monthlyLimit: "", limitFrom: MONTH, iconId: ICON_ID }, UNIT_ID, deps);
 
     expect(result).toEqual({ ok: true, groupId: GROUP_ID });
   });
 
   it.each([
-    ["nome ausente", { monthlyLimit: "", iconId: ICON_ID }, "invalid_input"],
-    ["limite que não é texto", { name: "Impostos", monthlyLimit: 10, iconId: ICON_ID }, "invalid_input"],
-    ["nome vazio", { name: "   ", monthlyLimit: "", iconId: ICON_ID }, "invalid_name"],
-    ["nome com mais de 40 caracteres", { name: "a".repeat(41), monthlyLimit: "", iconId: ICON_ID }, "name_too_long"],
-    ["limite inválido", { name: "Impostos", monthlyLimit: "abc", iconId: ICON_ID }, "invalid_monthly_limit"],
-    ["limite zerado", { name: "Impostos", monthlyLimit: "0.00", iconId: ICON_ID }, "invalid_monthly_limit"],
-    ["ícone ausente", { name: "Impostos", monthlyLimit: "" }, "invalid_icon"],
-    ["ícone vazio", { name: "Impostos", monthlyLimit: "", iconId: "" }, "invalid_icon"],
-    ["ícone que não é texto", { name: "Impostos", monthlyLimit: "", iconId: 5 }, "invalid_icon"],
+    ["nome ausente", { monthlyLimit: "", limitFrom: MONTH, iconId: ICON_ID }, "invalid_input"],
+    ["limite que não é texto", { name: "Impostos", monthlyLimit: 10, limitFrom: MONTH, iconId: ICON_ID }, "invalid_input"],
+    ["nome vazio", { name: "   ", monthlyLimit: "", limitFrom: MONTH, iconId: ICON_ID }, "invalid_name"],
+    [
+      "nome com mais de 40 caracteres",
+      { name: "a".repeat(41), monthlyLimit: "", limitFrom: MONTH, iconId: ICON_ID },
+      "name_too_long",
+    ],
+    ["limite inválido", { name: "Impostos", monthlyLimit: "abc", limitFrom: MONTH, iconId: ICON_ID }, "invalid_monthly_limit"],
+    ["limite zerado", { name: "Impostos", monthlyLimit: "0.00", limitFrom: MONTH, iconId: ICON_ID }, "invalid_monthly_limit"],
+    ["mês do limite ausente", { name: "Impostos", monthlyLimit: "", iconId: ICON_ID }, "invalid_limit_month"],
+    ["mês do limite inválido", { name: "Impostos", monthlyLimit: "", limitFrom: "2026-13", iconId: ICON_ID }, "invalid_limit_month"],
+    ["mês do limite com dia", { name: "Impostos", monthlyLimit: "", limitFrom: "2026-10-01", iconId: ICON_ID }, "invalid_limit_month"],
+    ["ícone ausente", { name: "Impostos", monthlyLimit: "", limitFrom: MONTH }, "invalid_icon"],
+    ["ícone vazio", { name: "Impostos", monthlyLimit: "", limitFrom: MONTH, iconId: "" }, "invalid_icon"],
+    ["ícone que não é texto", { name: "Impostos", monthlyLimit: "", limitFrom: MONTH, iconId: 5 }, "invalid_icon"],
   ])("retorna erro sem salvar quando %s", async (_label, input, error) => {
     const deps = makeDeps();
 
@@ -119,11 +141,11 @@ describe("updateExpenseGroup", () => {
     };
   }
 
-  it("atualiza nome, limite e ícone, ignorando o próprio grupo ao conferir o nome", async () => {
+  it("atualiza nome e ícone e tira o limite a partir do mês escolhido, ignorando o próprio grupo ao conferir o nome", async () => {
     const deps = makeDeps();
 
     const result = await updateExpenseGroup(
-      { name: "Impostos", monthlyLimit: "", iconId: ICON_ID },
+      { name: "Impostos", monthlyLimit: "", limitFrom: "2026-11", iconId: ICON_ID },
       UNIT_ID,
       GROUP_ID,
       deps,
@@ -132,7 +154,32 @@ describe("updateExpenseGroup", () => {
     expect(result).toEqual({ ok: true });
     expect(deps.isNameTaken).toHaveBeenCalledWith(UNIT_ID, "Impostos", GROUP_ID);
     expect(deps.iconExists).toHaveBeenCalledWith(ICON_ID);
-    expect(deps.update).toHaveBeenCalledWith(GROUP_ID, { name: "Impostos", monthlyLimitCents: null, iconId: ICON_ID });
+    expect(deps.update).toHaveBeenCalledWith(
+      GROUP_ID,
+      { name: "Impostos", iconId: ICON_ID },
+      { month: "2026-11", cents: null },
+    );
+  });
+
+  it("muda o limite a partir do mês escolhido", async () => {
+    const deps = makeDeps();
+
+    await updateExpenseGroup({ ...validInput, monthlyLimit: "150.00", limitFrom: "2026-11" }, UNIT_ID, GROUP_ID, deps);
+
+    expect(deps.update).toHaveBeenCalledWith(
+      GROUP_ID,
+      { name: "Impostos", iconId: ICON_ID },
+      { month: "2026-11", cents: 15_000 },
+    );
+  });
+
+  it("não salva sem o mês a partir do qual o limite vale", async () => {
+    const deps = makeDeps();
+
+    const result = await updateExpenseGroup({ ...validInput, limitFrom: "" }, UNIT_ID, GROUP_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "invalid_limit_month" });
+    expect(deps.update).not.toHaveBeenCalled();
   });
 
   it("não troca para um ícone que não está no catálogo", async () => {
@@ -157,7 +204,7 @@ describe("updateExpenseGroup", () => {
     const deps = makeDeps();
 
     const result = await updateExpenseGroup(
-      { name: "Impostos", monthlyLimit: "-5", iconId: ICON_ID },
+      { name: "Impostos", monthlyLimit: "-5", limitFrom: MONTH, iconId: ICON_ID },
       UNIT_ID,
       GROUP_ID,
       deps,
@@ -183,6 +230,66 @@ describe("updateExpenseGroup", () => {
     const deps = makeDeps({ found: false });
 
     const result = await updateExpenseGroup(validInput, UNIT_ID, GROUP_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "group_not_found" });
+  });
+});
+
+describe("updateGroupMonthLimit", () => {
+  // Edição de uma célula da tabela mês a mês: o limite vem como o do AmountInput ("150.00") ou vazio.
+  function makeDeps({ found = true } = {}) {
+    return { setMonthLimit: vi.fn().mockResolvedValue(found) };
+  }
+
+  it("muda o limite do grupo só no mês, em centavos", async () => {
+    const deps = makeDeps();
+
+    const result = await updateGroupMonthLimit({ month: "2026-11", limit: "150.00" }, UNIT_ID, GROUP_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.setMonthLimit).toHaveBeenCalledWith(GROUP_ID, "2026-11", 15_000);
+  });
+
+  it("limite vazio deixa o mês sem limite", async () => {
+    const deps = makeDeps();
+
+    await updateGroupMonthLimit({ month: "2026-11", limit: " " }, UNIT_ID, GROUP_ID, deps);
+
+    expect(deps.setMonthLimit).toHaveBeenCalledWith(GROUP_ID, "2026-11", null);
+  });
+
+  it.each([
+    ["limite inválido", { month: "2026-11", limit: "abc" }, "invalid_monthly_limit"],
+    ["limite zerado", { month: "2026-11", limit: "0.00" }, "invalid_monthly_limit"],
+    ["limite que não é texto", { month: "2026-11", limit: 150 }, "invalid_input"],
+    ["mês ausente", { limit: "150.00" }, "invalid_limit_month"],
+    ["mês inválido", { month: "2026-13", limit: "150.00" }, "invalid_limit_month"],
+    ["mês com dia", { month: "2026-11-01", limit: "150.00" }, "invalid_limit_month"],
+  ])("retorna erro sem salvar quando %s", async (_label, input, error) => {
+    const deps = makeDeps();
+
+    const result = await updateGroupMonthLimit(input, UNIT_ID, GROUP_ID, deps);
+
+    expect(result).toEqual({ ok: false, error });
+    expect(deps.setMonthLimit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["sem unidade", null, GROUP_ID],
+    ["sem grupo", UNIT_ID, ""],
+  ])("grupo não encontrado quando %s", async (_label, unitId, groupId) => {
+    const deps = makeDeps();
+
+    const result = await updateGroupMonthLimit({ month: "2026-11", limit: "150.00" }, unitId, groupId, deps);
+
+    expect(result).toEqual({ ok: false, error: "group_not_found" });
+    expect(deps.setMonthLimit).not.toHaveBeenCalled();
+  });
+
+  it("grupo não encontrado quando ele não existe na unidade", async () => {
+    const deps = makeDeps({ found: false });
+
+    const result = await updateGroupMonthLimit({ month: "2026-11", limit: "150.00" }, UNIT_ID, GROUP_ID, deps);
 
     expect(result).toEqual({ ok: false, error: "group_not_found" });
   });

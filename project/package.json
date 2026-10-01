@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "postinstall": "patch-package",
-    "capture:landing": "tsx scripts/capture-landing-screens.ts"
+    "capture:landing": "tsx scripts/capture-landing-screens.ts",
+    "migrate:owners": "tsx scripts/migrate-owners-to-admins.ts",
+    "migrate:wallets": "tsx scripts/migrate-unit-balances-to-wallets.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.85",

@@ -3,7 +3,7 @@ import { FolderIcon, ReceiptIcon } from "lucide-react"
 import { parseCashFlowQuery } from "@/lib/cash-flow"
 import { CASH_FLOW_PAGE_SIZE, expenseListPage, parseExpenseListQuery } from "@/lib/cash-flow-list"
 import { loadExpensesScreen } from "@/lib/cash-flow-screen-store"
-import { canManageMembers } from "@/lib/member"
+import { can } from "@/lib/permissions"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser } from "@/lib/session"
 import Link from "@/components/link"
@@ -34,7 +34,7 @@ export default async function ExpensesPage({
   const data = await loadExpensesScreen(workspaceId, user.id, unitId, query)
   if (!data) notFound()
   const { month, groups, expenses } = data
-  const canManage = canManageMembers(data.role)
+  const canManage = can(data.actor, "cash_flow.manage")
   const today = parseCashFlowQuery({}, now).date
   const isCurrent = month.from <= today && today <= month.to
   const base = `/workspace/${workspaceId}/unit/${unitId}/cash-flow`

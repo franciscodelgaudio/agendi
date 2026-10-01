@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation"
 import { CalendarIcon } from "lucide-react"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member"
+import { can, type Actor } from "@/lib/permissions"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import {
@@ -49,7 +49,7 @@ export default async function CalendarListPage({
   // Parte do workspace -> unidades -> agendamentos/serviços, então só entram unidades do
   // workspace. O total sem busca nem filtros separa "sem agendamentos" de "filtro sem resultado".
   const [workspace] = await Workspace.aggregate<BookingOptions & {
-    role: WorkspaceRole
+    actor: Actor
     bookings: BookingPage
     total: number
   }>([
@@ -107,7 +107,7 @@ export default async function CalendarListPage({
     {
       $project: {
         _id: 0,
-        role: 1,
+        actor: 1,
         units: { $map: { input: "$units", as: "unit", in: { id: { $toString: "$$unit._id" }, name: "$$unit.name" } } },
         bookings: { $first: "$bookings" },
         total: { $ifNull: [{ $first: "$total.n" }, 0] },
@@ -141,8 +141,8 @@ export default async function CalendarListPage({
     },
   ])
   if (!workspace) notFound()
-  const { role, bookings: result, total, ...options } = workspace
-  const canManage = canManageMembers(role)
+  const { actor, bookings: result, total, ...options } = workspace
+  const canManage = can(actor, "bookings.manage")
 
   const base = `/workspace/${workspaceId}/calendar`
   const pathname = `${base}/list`

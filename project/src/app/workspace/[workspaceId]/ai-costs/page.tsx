@@ -3,7 +3,7 @@ import { ageniaProviders } from "@/lib/agenia-model"
 import { availableAgeniaModels, resolveAgeniaModel } from "@/lib/agenia-models"
 import { parseCostQuery } from "@/lib/ai-usage"
 import { loadAiCosts } from "@/lib/ai-usage-store"
-import { canManageMembers } from "@/lib/member-role"
+import { can } from "@/lib/permissions"
 import { requireUser } from "@/lib/session"
 import { findWorkspaceAccess } from "@/lib/workspace-access"
 import { AgeniaModelSelect } from "@/components/ai-costs/agenia-model-select"
@@ -15,7 +15,7 @@ export default async function AiCostsPage({ params, searchParams }: PageProps<"/
   const { workspaceId } = await params
   const user = await requireUser()
   const access = await findWorkspaceAccess(workspaceId, user.id)
-  if (!access || !canManageMembers(access.role)) notFound()
+  if (!access || !can(access.actor, "agenia.use")) notFound()
 
   const query = parseCostQuery(await searchParams, new Date())
   const [costs, workspace] = await Promise.all([

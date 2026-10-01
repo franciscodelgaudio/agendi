@@ -1,16 +1,16 @@
 import { PlansSection } from "@/components/landing/plans-section"
 import { SignedInAs } from "@/components/signed-in-as"
 
-// Workspace sem assinatura ativa: o dono escolhe o plano; os demais membros só veem o aviso.
+// Workspace sem assinatura ativa: administradores escolhem o plano; os demais membros só veem o aviso.
 export function WorkspacePaywall({
   workspaceId,
   name,
-  isOwner,
+  isAdmin,
   email,
 }: {
   workspaceId: string
   name: string
-  isOwner: boolean
+  isAdmin: boolean
   email?: string | null
 }) {
   return (
@@ -22,12 +22,12 @@ export function WorkspacePaywall({
             <SignedInAs email={email} />
           </div>
           <p className="text-ld-ink-soft">
-            {isOwner
+            {isAdmin
               ? "Escolha um plano para liberar o acesso ao workspace."
-              : "O acesso a este workspace está suspenso até o pagamento do plano pelo proprietário."}
+              : "O acesso a este workspace está suspenso até um administrador pagar o plano."}
           </p>
         </div>
-        {isOwner && <PlansSection workspaceId={workspaceId} />}
+        {isAdmin && <PlansSection workspaceId={workspaceId} />}
       </div>
     </div>
   )

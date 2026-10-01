@@ -1,9 +1,9 @@
 import type { UnitPage, WorkspacePage } from "@/lib/page-access"
+import { can, type Actor, type Permission } from "@/lib/permissions"
 
-// O que a função do usuário enxerga; passos de páginas que ele não vê ficam de fora.
+// O que o usuário enxerga e pode fazer; passos de páginas que ele não vê ficam de fora.
 export type TourAccess = {
-  canManage: boolean
-  inbox: boolean
+  actor: Actor
   pages: { workspace: WorkspacePage[]; unit: UnitPage[] }
 }
 
@@ -43,9 +43,10 @@ export type Tour = {
 
 const workspacePage = (page: WorkspacePage) => (access: TourAccess) => access.pages.workspace.includes(page)
 const unitPage = (page: UnitPage) => (access: TourAccess) => access.pages.unit.includes(page)
-const manages = (access: TourAccess) => access.canManage
-const managesUnits = (access: TourAccess) => access.canManage && access.pages.workspace.includes("units")
-const managesUnitPage = (page: UnitPage) => (access: TourAccess) => access.canManage && access.pages.unit.includes(page)
+const allows = (permission: Permission) => (access: TourAccess) => can(access.actor, permission)
+const managesUnits = (access: TourAccess) => can(access.actor, "units.manage") && access.pages.workspace.includes("units")
+const managesUnitPage = (page: UnitPage, permission: Permission) => (access: TourAccess) =>
+  can(access.actor, permission) && access.pages.unit.includes(page)
 
 // Passos que levam até uma unidade, repetidos nos tutoriais que mostram as abas dela.
 const openUnit: TourStep[] = [
@@ -78,7 +79,7 @@ const start: Tour = {
   steps: [
     {
       id: "welcome",
-      title: "Boas-vindas ao agendi",
+      title: "Boas-vindas ao Agendi",
       body: "Em três missões rápidas você cria uma unidade, cadastra um serviço e faz o primeiro agendamento.",
     },
     {
@@ -132,7 +133,7 @@ const start: Tour = {
       skipIf: { target: "service-row", to: "unit-tab-calendar" },
       title: "Cadastre um serviço",
       body: "Clique em Cadastrar serviço.",
-      show: managesUnitPage("services"),
+      show: managesUnitPage("services", "services.manage"),
     },
     {
       id: "create-service-form",
@@ -143,7 +144,7 @@ const start: Tour = {
       side: "left",
       title: "Dados do serviço",
       body: "Informe o nome, o valor e a duração média. Depois clique em Cadastrar.",
-      show: managesUnitPage("services"),
+      show: managesUnitPage("services", "services.manage"),
     },
     {
       id: "unit-tab-calendar",
@@ -163,7 +164,7 @@ const start: Tour = {
       side: "top",
       title: "Escolha um horário",
       body: "Clique num horário livre do calendário (ou arraste para escolher a duração).",
-      show: managesUnitPage("calendar"),
+      show: managesUnitPage("calendar", "bookings.manage"),
     },
     {
       id: "booking-form",
@@ -173,12 +174,12 @@ const start: Tour = {
       expect: "booking-event",
       title: "Dados do agendamento",
       body: "Escolha a massagista, a sala e o serviço e informe o hóspede. Depois clique em Agendar.",
-      show: managesUnitPage("calendar"),
+      show: managesUnitPage("calendar", "bookings.manage"),
     },
     {
       id: "done",
       title: "Missões concluídas",
-      body: "Sua unidade já recebe agendamentos. Quando quiser, conheça as outras áreas do agendi:",
+      body: "Sua unidade já recebe agendamentos. Quando quiser, conheça as outras áreas do Agendi:",
     },
   ],
 }
@@ -258,7 +259,7 @@ const general: Tour = {
 const service: Tour = {
   id: "service",
   title: "Atendimento",
-  show: (access) => access.inbox || access.canManage,
+  show: (access) => can(access.actor, "inbox.use") || can(access.actor, "channels.manage"),
   steps: [
     {
       id: "nav-inbox",
@@ -267,7 +268,7 @@ const service: Tour = {
       side: "right",
       title: "Conversas",
       body: "As mensagens dos clientes chegam aqui para a equipe responder.",
-      show: (access) => access.inbox,
+      show: allows("inbox.use"),
     },
     {
       id: "nav-channels",
@@ -278,23 +279,23 @@ const service: Tour = {
       side: "right",
       title: "Canais",
       body: "Clique em Canais.",
-      show: manages,
+      show: allows("channels.manage"),
     },
     {
       id: "create-channel",
       target: "create-channel",
       title: "Conecte um canal",
       body: "Ligue um número do WhatsApp Business ou uma conta do Instagram ao workspace.",
-      show: manages,
+      show: allows("channels.manage"),
     },
   ],
 }
 
-// A AgenIA é de quem gerencia, como as URAs e os custos.
+// A AgenIA e os custos de IA são de quem tem a permissão da AgenIA; as URAs, de quem as gerencia.
 const agenia: Tour = {
   id: "agenia",
   title: "AgenIA",
-  show: manages,
+  show: allows("agenia.use"),
   steps: [
     {
       id: "agenia-button",
@@ -329,12 +330,14 @@ const agenia: Tour = {
       side: "right",
       title: "URAs",
       body: "Clique em URAs.",
+      show: allows("uras.manage"),
     },
     {
       id: "create-ura",
       target: "create-ura",
       title: "Atendimento automático",
       body: "Monte fluxos para os canais: menus, perguntas e agendamento direto pela conversa. No editor, a AgenIA monta e ajusta o fluxo com você.",
+      show: allows("uras.manage"),
     },
     {
       id: "nav-ai-costs",
@@ -351,6 +354,7 @@ const agenia: Tour = {
       target: "agenia-model",
       title: "Modelo e gastos",
       body: "Escolha o modelo que a AgenIA usa e acompanhe quanto ela custou em cada período.",
+      show: allows("workspace.manage"),
     },
   ],
 }
@@ -374,15 +378,15 @@ const settings: Tour = {
       id: "invite-member",
       target: "invite-member",
       title: "Convide a equipe",
-      body: "Convide administradores, recepcionistas e massagistas por email. Cada um entra com a própria conta.",
-      show: (access) => access.canManage && access.pages.workspace.includes("users"),
+      body: "Convide as pessoas por email e escolha a função de cada uma. Cada um entra com a própria conta.",
+      show: (access) => can(access.actor, "users.manage") && access.pages.workspace.includes("users"),
     },
     {
       id: "users-tab-permissions",
       target: "users-tab-permissions",
       title: "Permissões",
-      body: "Escolha quais páginas cada função enxerga.",
-      show: (access) => access.canManage && access.pages.workspace.includes("users"),
+      body: "Crie as funções e escolha o que cada uma enxerga e pode fazer.",
+      show: (access) => access.actor.admin && access.pages.workspace.includes("users"),
     },
     {
       id: "nav-tickets",
@@ -390,7 +394,7 @@ const settings: Tour = {
       sidebar: true,
       side: "right",
       title: "Tickets",
-      body: "Relate bugs e peça melhorias ao time do agendi.",
+      body: "Relate bugs e peça melhorias ao time do Agendi.",
     },
   ],
 }

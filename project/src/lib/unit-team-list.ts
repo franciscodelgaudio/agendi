@@ -1,23 +1,21 @@
-import type { MemberRole } from "@/lib/member-role";
 import type { UnitMemberBonus } from "@/lib/unit-member";
 import { first, type SearchParams, type SortDir } from "@/lib/unit-list";
 
 export const UNIT_TEAM_PAGE_SIZE = 20;
-// Só massagistas e recepcionistas são vinculadas às unidades.
-const ROLES = ["massage_therapist", "receptionist"] as const;
+// Filtro de função: id de uma role (administradores não são vinculados às unidades).
+const ROLE_ID_PATTERN = /^[0-9a-f]{24}$/i;
 // active: aceitou o convite; pending: convite ainda sem conta.
 const STATUSES = ["active", "pending"] as const;
 // Comissão e salário podem valer juntos; none: sem comissão, salário nem bônus nesta unidade.
 const PAYS = ["commission", "salary", "none"] as const;
 
-export type UnitTeamRole = (typeof ROLES)[number];
 export type UnitTeamStatus = (typeof STATUSES)[number];
 export type UnitTeamPay = (typeof PAYS)[number];
 // role/status/pay vazios = todos.
 export type UnitTeamListQuery = {
   q: string;
   dir: SortDir;
-  role: UnitTeamRole | "";
+  role: string;
   status: UnitTeamStatus | "";
   pay: UnitTeamPay | "";
   page: number;
@@ -28,7 +26,8 @@ export type UnitTeamListItem = {
   name: string | null;
   email: string;
   image: string | null;
-  role: MemberRole;
+  roleId: string | null;
+  roleName: string | null;
   pending: boolean;
   commissionPercent: number | null;
   salaryCents: number | null;
@@ -46,7 +45,7 @@ export function parseUnitTeamListQuery(params: SearchParams): UnitTeamListQuery 
   return {
     q: first(params.q)?.trim() ?? "",
     dir: first(params.dir) === "desc" ? "desc" : "asc",
-    role: oneOf(ROLES, first(params.role)),
+    role: ROLE_ID_PATTERN.test(first(params.role) ?? "") ? first(params.role)! : "",
     status: oneOf(STATUSES, first(params.status)),
     pay: oneOf(PAYS, first(params.pay)),
     page: page && /^[1-9]\d*$/.test(page) ? Number(page) : 1,
@@ -71,7 +70,7 @@ export function unitTeamListPage<T extends UnitTeamListItem>(members: T[], { q, 
   const filtered = members
     .filter(
       (member) =>
-        (!role || member.role === role) &&
+        (!role || member.roleId === role) &&
         (!status || (status === "pending") === member.pending) &&
         (!pay || hasPay(member, pay)) &&
         (!term || normalize(member.name ?? "").includes(term) || normalize(member.email).includes(term)),

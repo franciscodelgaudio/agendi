@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { canUseInbox } from "@/lib/member-role";
 import { createChannel, deleteChannel, updateChannel } from "@/lib/messaging-channel";
+import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const CHANNEL_ID = "64b7f0c2a1b2c3d4e5f60790";
@@ -15,18 +15,6 @@ const validInput = {
   accessToken: "EAAGm0PX4ZCpsBA",
 };
 
-describe("canUseInbox", () => {
-  it.each([
-    ["owner", true],
-    ["admin", true],
-    ["receptionist", true],
-    ["massage_therapist", false],
-    [null, false],
-  ] as const)("%s → %s", (role, expected) => {
-    expect(canUseInbox(role)).toBe(expected);
-  });
-});
-
 describe("createChannel", () => {
   function makeDeps() {
     return {
@@ -35,7 +23,7 @@ describe("createChannel", () => {
       encrypt: vi.fn(encrypt),
     };
   }
-  const ctx = { workspaceId: WORKSPACE_ID, actorRole: "owner" } as const;
+  const ctx = { workspaceId: WORKSPACE_ID, actor: ADMIN } as const;
 
   it("cria o canal no workspace com o token encriptado e retorna o id", async () => {
     const deps = makeDeps();
@@ -87,20 +75,20 @@ describe("createChannel", () => {
     expect(result).toEqual({ ok: true, channelId: CHANNEL_ID });
   });
 
-  it("admin também pode criar canais", async () => {
-    const result = await createChannel(validInput, { ...ctx, actorRole: "admin" }, makeDeps());
+  it("role com permissão de gerenciar canais também pode criar", async () => {
+    const result = await createChannel(validInput, { ...ctx, actor: actorWith("channels.manage") }, makeDeps());
 
     expect(result).toEqual({ ok: true, channelId: CHANNEL_ID });
   });
 
   it.each([
-    ["sem papel no workspace", null, "workspace_not_found"],
-    ["recepcionista", "receptionist", "forbidden"],
-    ["massoterapeuta", "massage_therapist", "forbidden"],
-  ] as const)("recusa quando o autor é %s", async (_label, actorRole, error) => {
+    ["sem acesso ao workspace", null, "workspace_not_found"],
+    ["role que só usa as Conversas", actorWith("inbox.use"), "forbidden"],
+    ["role sem permissões", STAFF, "forbidden"],
+  ] as const)("recusa quando o autor é %s", async (_label, actor, error) => {
     const deps = makeDeps();
 
-    const result = await createChannel(validInput, { ...ctx, actorRole }, deps);
+    const result = await createChannel(validInput, { ...ctx, actor }, deps);
 
     expect(result).toEqual({ ok: false, error });
     expect(deps.insert).not.toHaveBeenCalled();
@@ -145,7 +133,7 @@ describe("updateChannel", () => {
   function makeDeps() {
     return { update: vi.fn().mockResolvedValue(true), encrypt: vi.fn(encrypt) };
   }
-  const ctx = { actorRole: "owner", channelId: CHANNEL_ID } as const;
+  const ctx = { actor: ADMIN, channelId: CHANNEL_ID } as const;
 
   it("atualiza o nome e troca o token, encriptado", async () => {
     const deps = makeDeps();
@@ -169,12 +157,12 @@ describe("updateChannel", () => {
   });
 
   it.each([
-    ["sem papel no workspace", null, "workspace_not_found"],
-    ["recepcionista", "receptionist", "forbidden"],
-  ] as const)("recusa quando o autor é %s", async (_label, actorRole, error) => {
+    ["sem acesso ao workspace", null, "workspace_not_found"],
+    ["role que só usa as Conversas", actorWith("inbox.use"), "forbidden"],
+  ] as const)("recusa quando o autor é %s", async (_label, actor, error) => {
     const deps = makeDeps();
 
-    const result = await updateChannel({ name: "X", accessToken: "" }, { ...ctx, actorRole }, deps);
+    const result = await updateChannel({ name: "X", accessToken: "" }, { ...ctx, actor }, deps);
 
     expect(result).toEqual({ ok: false, error });
     expect(deps.update).not.toHaveBeenCalled();
@@ -216,7 +204,7 @@ describe("updateChannel", () => {
 });
 
 describe("deleteChannel", () => {
-  const ctx = { actorRole: "admin", channelId: CHANNEL_ID } as const;
+  const ctx = { actor: ADMIN, channelId: CHANNEL_ID } as const;
 
   it("remove o canal", async () => {
     const remove = vi.fn().mockResolvedValue(true);
@@ -226,12 +214,12 @@ describe("deleteChannel", () => {
   });
 
   it.each([
-    ["sem papel no workspace", null, "workspace_not_found"],
-    ["recepcionista", "receptionist", "forbidden"],
-  ] as const)("recusa quando o autor é %s", async (_label, actorRole, error) => {
+    ["sem acesso ao workspace", null, "workspace_not_found"],
+    ["role que só usa as Conversas", actorWith("inbox.use"), "forbidden"],
+  ] as const)("recusa quando o autor é %s", async (_label, actor, error) => {
     const remove = vi.fn().mockResolvedValue(true);
 
-    expect(await deleteChannel({ ...ctx, actorRole }, remove)).toEqual({ ok: false, error });
+    expect(await deleteChannel({ ...ctx, actor }, remove)).toEqual({ ok: false, error });
     expect(remove).not.toHaveBeenCalled();
   });
 

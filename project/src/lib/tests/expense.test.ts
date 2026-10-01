@@ -6,10 +6,14 @@ import {
   dailyExpenseTotalsPipeline,
   deleteExpense,
   expenseGroupTotalsPipeline,
+  expenseGroupMonthTotalsPipeline,
+  expenseGroupYearOverview,
+  groupLimitForMonth,
+  setGroupLimitFrom,
+  setGroupLimitForMonth,
   setExpensePaid,
   staffExpenseGroups,
   summarizeExpenseGroups,
-  expenseBudgetCents,
   updateExpense,
 } from "@/lib/expense";
 
@@ -385,15 +389,161 @@ describe("expenseGroupTotalsPipeline", () => {
   });
 });
 
+describe("expenseGroupMonthTotalsPipeline", () => {
+  it("soma o pago de cada grupo em cada mês do lançamento", () => {
+    expect(expenseGroupMonthTotalsPipeline({ from: "2026-01-01", to: "2026-12-31" })).toEqual([
+      { $match: { date: { $gte: "2026-01-01", $lte: "2026-12-31" }, paidAt: { $ne: null } } },
+      {
+        $group: {
+          _id: { groupId: "$groupId", month: { $substrBytes: ["$date", 0, 7] } },
+          paidCents: { $sum: "$amountCents" },
+        },
+      },
+      { $project: { _id: 0, groupId: { $toString: "$_id.groupId" }, month: "$_id.month", paidCents: 1 } },
+    ]);
+  });
+});
+
+describe("groupLimitForMonth", () => {
+  it("sem mudanças, vale o limite do grupo em todos os meses", () => {
+    expect(groupLimitForMonth({ monthlyLimitCents: 10_000, limitChanges: [] }, "2026-10")).toBe(10_000);
+    expect(groupLimitForMonth({ monthlyLimitCents: null, limitChanges: [] }, "2026-10")).toBeNull();
+  });
+
+  it("a mudança vale a partir do mês dela; antes, vale o limite do grupo", () => {
+    const group = { monthlyLimitCents: 10_000, limitChanges: [{ month: "2026-11", cents: 15_000 }] };
+
+    expect(groupLimitForMonth(group, "2026-10")).toBe(10_000);
+    expect(groupLimitForMonth(group, "2026-11")).toBe(15_000);
+    expect(groupLimitForMonth(group, "2027-03")).toBe(15_000);
+  });
+
+  it("vale a última mudança até o mês, em qualquer ordem da lista", () => {
+    const group = {
+      monthlyLimitCents: null,
+      limitChanges: [
+        { month: "2026-12", cents: 20_000 },
+        { month: "2026-03", cents: 5_000 },
+      ],
+    };
+
+    expect(groupLimitForMonth(group, "2026-02")).toBeNull();
+    expect(groupLimitForMonth(group, "2026-06")).toBe(5_000);
+    expect(groupLimitForMonth(group, "2026-12")).toBe(20_000);
+  });
+
+  it("uma mudança pode tirar o limite a partir do mês dela", () => {
+    const group = { monthlyLimitCents: 10_000, limitChanges: [{ month: "2026-11", cents: null }] };
+
+    expect(groupLimitForMonth(group, "2026-12")).toBeNull();
+  });
+});
+
+describe("setGroupLimitFrom", () => {
+  it("acrescenta a mudança em ordem de mês, mantendo as outras", () => {
+    const changes = [
+      { month: "2026-03", cents: 5_000 },
+      { month: "2026-12", cents: 20_000 },
+    ];
+
+    expect(setGroupLimitFrom(changes, "2026-07", 8_000)).toEqual([
+      { month: "2026-03", cents: 5_000 },
+      { month: "2026-07", cents: 8_000 },
+      { month: "2026-12", cents: 20_000 },
+    ]);
+  });
+
+  it("troca a mudança que já existe no mesmo mês", () => {
+    expect(setGroupLimitFrom([{ month: "2026-11", cents: 15_000 }], "2026-11", null)).toEqual([
+      { month: "2026-11", cents: null },
+    ]);
+  });
+
+  it("não altera a lista recebida", () => {
+    const changes = [{ month: "2026-11", cents: 15_000 }];
+
+    setGroupLimitFrom(changes, "2026-01", 1_000);
+
+    expect(changes).toEqual([{ month: "2026-11", cents: 15_000 }]);
+  });
+});
+
+describe("setGroupLimitForMonth", () => {
+  const limits = (group: Parameters<typeof groupLimitForMonth>[0], months: string[]) =>
+    months.map((month) => groupLimitForMonth(group, month));
+
+  it("muda só o mês editado; o seguinte volta ao limite que já valia", () => {
+    const group = { monthlyLimitCents: 10_000, limitChanges: [] };
+
+    const limitChanges = setGroupLimitForMonth(group, "2026-11", 15_000);
+
+    expect(limitChanges).toEqual([
+      { month: "2026-11", cents: 15_000 },
+      { month: "2026-12", cents: 10_000 },
+    ]);
+    expect(limits({ ...group, limitChanges }, ["2026-10", "2026-11", "2026-12", "2027-03"])).toEqual([
+      10_000, 15_000, 10_000, 10_000,
+    ]);
+  });
+
+  it("quando o mês seguinte já tem mudança, ela fica como está", () => {
+    const group = { monthlyLimitCents: 10_000, limitChanges: [{ month: "2026-12", cents: 20_000 }] };
+
+    expect(setGroupLimitForMonth(group, "2026-11", 15_000)).toEqual([
+      { month: "2026-11", cents: 15_000 },
+      { month: "2026-12", cents: 20_000 },
+    ]);
+  });
+
+  it("troca a mudança do próprio mês, sem levar o valor novo para os meses seguintes", () => {
+    // R$ 150 de novembro em diante; editar novembro para R$ 120 mantém dezembro com R$ 150.
+    const group = { monthlyLimitCents: 10_000, limitChanges: [{ month: "2026-11", cents: 15_000 }] };
+
+    const limitChanges = setGroupLimitForMonth(group, "2026-11", 12_000);
+
+    expect(limits({ ...group, limitChanges }, ["2026-10", "2026-11", "2026-12"])).toEqual([10_000, 12_000, 15_000]);
+  });
+
+  it("pode tirar o limite só do mês editado", () => {
+    const group = { monthlyLimitCents: 10_000, limitChanges: [] };
+
+    const limitChanges = setGroupLimitForMonth(group, "2026-11", null);
+
+    expect(limits({ ...group, limitChanges }, ["2026-10", "2026-11", "2026-12"])).toEqual([10_000, null, 10_000]);
+  });
+
+  it("em dezembro, o mês seguinte é janeiro do ano seguinte", () => {
+    const group = { monthlyLimitCents: 10_000, limitChanges: [] };
+
+    expect(setGroupLimitForMonth(group, "2026-12", 15_000)).toEqual([
+      { month: "2026-12", cents: 15_000 },
+      { month: "2027-01", cents: 10_000 },
+    ]);
+  });
+
+  it("não altera o grupo recebido", () => {
+    const group = { monthlyLimitCents: 10_000, limitChanges: [{ month: "2026-03", cents: 5_000 }] };
+
+    setGroupLimitForMonth(group, "2026-11", 15_000);
+
+    expect(group.limitChanges).toEqual([{ month: "2026-03", cents: 5_000 }]);
+  });
+});
+
 describe("summarizeExpenseGroups", () => {
-  const TAXES = { id: "g1", name: "Impostos", monthlyLimitCents: 100_000 };
-  const SUPPLIES = { id: "g2", name: "Insumos", monthlyLimitCents: null };
-  const RENT = { id: "g3", name: "Aluguel", monthlyLimitCents: 300_000 };
+  const TAXES = { id: "g1", name: "Impostos", monthlyLimitCents: 100_000, limitChanges: [] };
+  const SUPPLIES = { id: "g2", name: "Insumos", monthlyLimitCents: null, limitChanges: [] };
+  const RENT = { id: "g3", name: "Aluguel", monthlyLimitCents: 300_000, limitChanges: [] };
+  // IPTU: R$ 100 por mês até outubro e R$ 150 a partir de novembro.
+  const IPTU = { id: "g4", name: "IPTU", monthlyLimitCents: 10_000, limitChanges: [{ month: "2026-11", cents: 15_000 }] };
+  const SEP = ["2026-09"];
+  const YEAR = Array.from({ length: 12 }, (_, i) => `2026-${String(i + 1).padStart(2, "0")}`);
 
   it("junta os totais a cada grupo, com zero nos grupos sem despesas, em ordem alfabética", () => {
     const result = summarizeExpenseGroups(
       [TAXES, SUPPLIES, RENT],
       [{ groupId: "g1", totalCents: 80_000, paidCents: 50_000 }],
+      SEP,
     );
 
     expect(result).toEqual([
@@ -403,43 +553,127 @@ describe("summarizeExpenseGroups", () => {
     ]);
   });
 
+  it("no mês, o limite é o daquele mês", () => {
+    expect(summarizeExpenseGroups([IPTU], [], ["2026-10"])[0].limitCents).toBe(10_000);
+    expect(summarizeExpenseGroups([IPTU], [], ["2026-11"])[0].limitCents).toBe(15_000);
+  });
+
   it("passa do limite quando o total do mês é maior que o limite, pago ou não", () => {
-    const [taxes] = summarizeExpenseGroups([TAXES], [{ groupId: "g1", totalCents: 100_001, paidCents: 0 }]);
+    const [taxes] = summarizeExpenseGroups([TAXES], [{ groupId: "g1", totalCents: 100_001, paidCents: 0 }], SEP);
 
     expect(taxes.overLimit).toBe(true);
   });
 
   it("total igual ao limite não passa do limite", () => {
-    const [taxes] = summarizeExpenseGroups([TAXES], [{ groupId: "g1", totalCents: 100_000, paidCents: 100_000 }]);
+    const [taxes] = summarizeExpenseGroups([TAXES], [{ groupId: "g1", totalCents: 100_000, paidCents: 100_000 }], SEP);
 
     expect(taxes.overLimit).toBe(false);
   });
 
   it("grupo sem limite nunca passa do limite", () => {
-    const [supplies] = summarizeExpenseGroups([SUPPLIES], [{ groupId: "g2", totalCents: 9_999_999, paidCents: 0 }]);
+    const [supplies] = summarizeExpenseGroups([SUPPLIES], [{ groupId: "g2", totalCents: 9_999_999, paidCents: 0 }], SEP);
 
     expect(supplies.overLimit).toBe(false);
   });
 
   it("ignora totais de grupos que não estão na lista", () => {
-    const result = summarizeExpenseGroups([TAXES], [{ groupId: "gone", totalCents: 500, paidCents: 500 }]);
+    const result = summarizeExpenseGroups([TAXES], [{ groupId: "gone", totalCents: 500, paidCents: 500 }], SEP);
 
     expect(result).toEqual([{ ...TAXES, limitCents: 100_000, totalCents: 0, paidCents: 0, overLimit: false }]);
   });
 
-  it("no ano, o limite é o mensal vezes 12 e o total do ano é comparado com ele", () => {
+  it("no ano, o limite soma o de cada mês e o total do ano é comparado com ele", () => {
     const totals = [
       { groupId: "g1", totalCents: 1_200_000, paidCents: 900_000 },
       { groupId: "g3", totalCents: 3_600_001, paidCents: 0 },
     ];
 
-    const result = summarizeExpenseGroups([TAXES, SUPPLIES, RENT], totals, 12);
+    const result = summarizeExpenseGroups([TAXES, SUPPLIES, RENT, IPTU], totals, YEAR);
 
     expect(result).toEqual([
       { ...RENT, limitCents: 3_600_000, totalCents: 3_600_001, paidCents: 0, overLimit: true },
       { ...TAXES, limitCents: 1_200_000, totalCents: 1_200_000, paidCents: 900_000, overLimit: false },
       { ...SUPPLIES, limitCents: null, totalCents: 0, paidCents: 0, overLimit: false },
+      // 10 meses de R$ 100 e 2 de R$ 150.
+      { ...IPTU, limitCents: 130_000, totalCents: 0, paidCents: 0, overLimit: false },
     ]);
+  });
+
+  it("no ano, os meses sem limite não somam; o grupo só fica sem limite se nenhum mês tiver", () => {
+    const fromNovember = { id: "g5", name: "Seguro", monthlyLimitCents: null, limitChanges: [{ month: "2026-11", cents: 5_000 }] };
+
+    expect(summarizeExpenseGroups([fromNovember], [], YEAR)[0].limitCents).toBe(10_000);
+    expect(summarizeExpenseGroups([fromNovember], [], ["2026-10"])[0].limitCents).toBeNull();
+  });
+});
+
+describe("expenseGroupYearOverview", () => {
+  const RENT = { id: "g1", name: "Aluguel", monthlyLimitCents: 300_000, limitChanges: [] };
+  const IPTU = { id: "g2", name: "IPTU", monthlyLimitCents: 10_000, limitChanges: [{ month: "2026-11", cents: 15_000 }] };
+  const SUPPLIES = { id: "g3", name: "Insumos", monthlyLimitCents: null, limitChanges: [] };
+  const cell = (plannedCents: number | null, paidCents: number) => ({ plannedCents, paidCents });
+
+  const result = expenseGroupYearOverview(
+    [SUPPLIES, IPTU, RENT],
+    [
+      { groupId: "g1", month: "2026-01", paidCents: 300_000 },
+      { groupId: "g2", month: "2026-01", paidCents: 10_000 },
+      { groupId: "g3", month: "2026-01", paidCents: 4_500 },
+      { groupId: "g2", month: "2026-12", paidCents: 15_000 },
+      { groupId: "gone", month: "2026-01", paidCents: 999 },
+      { groupId: "g1", month: "2025-12", paidCents: 999 },
+    ],
+    "2026",
+  );
+
+  it("tem os grupos em ordem alfabética, que são as colunas", () => {
+    expect(result.groups).toEqual([
+      { id: "g1", name: "Aluguel" },
+      { id: "g3", name: "Insumos" },
+      { id: "g2", name: "IPTU" },
+    ]);
+  });
+
+  it("tem uma linha por mês do ano, com o limite e o pago de cada grupo naquele mês e a soma da linha", () => {
+    expect(result.rows.map((row) => row.month)).toEqual([
+      "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06",
+      "2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12",
+    ]);
+    expect(result.rows[0]).toEqual({
+      month: "2026-01",
+      cells: [cell(300_000, 300_000), cell(null, 4_500), cell(10_000, 10_000)],
+      plannedCents: 310_000,
+      paidCents: 314_500,
+    });
+    expect(result.rows[10]).toEqual({
+      month: "2026-11",
+      cells: [cell(300_000, 0), cell(null, 0), cell(15_000, 0)],
+      plannedCents: 315_000,
+      paidCents: 0,
+    });
+    expect(result.rows[11]).toEqual({
+      month: "2026-12",
+      cells: [cell(300_000, 0), cell(null, 0), cell(15_000, 15_000)],
+      plannedCents: 315_000,
+      paidCents: 15_000,
+    });
+  });
+
+  it("o total soma os meses de cada grupo; grupo sem limite em nenhum mês fica sem planejado", () => {
+    expect(result.total).toEqual({
+      cells: [cell(3_600_000, 300_000), cell(null, 4_500), cell(130_000, 25_000)],
+      plannedCents: 3_730_000,
+      paidCents: 329_500,
+    });
+  });
+
+  it("sem grupos, as linhas não têm colunas e somam zero", () => {
+    const empty = expenseGroupYearOverview([], [], "2026");
+
+    expect(empty.groups).toEqual([]);
+    expect(empty.rows).toHaveLength(12);
+    expect(empty.rows[0]).toEqual({ month: "2026-01", cells: [], plannedCents: 0, paidCents: 0 });
+    expect(empty.total).toEqual({ cells: [], plannedCents: 0, paidCents: 0 });
   });
 });
 
@@ -494,18 +728,6 @@ describe("staffExpenseGroups", () => {
 
   it("sem custos de equipe nem repasse, não há grupos automáticos", () => {
     expect(staffExpenseGroups({ real: amounts(0, 0, 0), forecast: amounts(0, 0, 0) })).toEqual([]);
-  });
-});
-
-describe("expenseBudgetCents", () => {
-  it("soma os limites mensais dos grupos; grupo sem limite não entra", () => {
-    const groups = [{ monthlyLimitCents: 100_000 }, { monthlyLimitCents: null }, { monthlyLimitCents: 250_000 }];
-
-    expect(expenseBudgetCents(groups)).toBe(350_000);
-  });
-
-  it("sem grupos, orçamento zero", () => {
-    expect(expenseBudgetCents([])).toBe(0);
   });
 });
 

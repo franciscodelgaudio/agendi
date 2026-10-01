@@ -2,7 +2,7 @@ import Link from "@/components/link"
 import { notFound, redirect } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { ArrowRightIcon, CircleCheckIcon } from "lucide-react"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member"
+import { can, type Actor } from "@/lib/permissions"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import {
@@ -52,7 +52,7 @@ export default async function AppointmentsPage({
   // Serviços da unidade e quem pode atender alimentam o formulário; o total sem busca nem
   // filtros separa "sem atendimentos" de "filtro sem resultado".
   const [workspace] = await Workspace.aggregate<{
-    role: WorkspaceRole
+    actor: Actor
     therapists: TherapistOption[]
     unit: { appointments: AppointmentPage<AppointmentRow>; total: number; services: ServiceOption[] } | null
   }>([
@@ -110,7 +110,7 @@ export default async function AppointmentsPage({
     {
       $project: {
         _id: 0,
-        role: 1,
+        actor: 1,
         therapists: 1,
         unit: { $ifNull: [{ $first: "$unit" }, null] },
       },
@@ -119,7 +119,7 @@ export default async function AppointmentsPage({
   if (!workspace?.unit) notFound()
   const { appointments: result, total, services } = workspace.unit
   const { therapists } = workspace
-  const canManage = canManageMembers(workspace.role)
+  const canManage = can(workspace.actor, "appointments.manage")
 
   const pathname = `/workspace/${workspaceId}/unit/${unitId}/appointments`
   // Filtros mudam sem levar a página junto, então a lista volta para a primeira.

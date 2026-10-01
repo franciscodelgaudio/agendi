@@ -16,13 +16,13 @@ export async function getSessionUserId() {
   return id && isObjectIdOrHexString(id) ? id : null;
 }
 
-// Estágios que só encontram o workspace se o usuário for o dono ou um membro
-// que aceitou o convite, e adicionam o campo role ("owner" ou a função do
-// membro). Aggregation não converte string em ObjectId sozinho, então a
-// conversão é feita aqui; id inválido vira null para a página responder 404
-// sem ir ao banco. Sem assinatura ativa o workspace não é encontrado, o que barra
-// páginas, server actions e rotas de API; só o layout usa allowUnpaid para mostrar
-// a tela de planos.
+// Estágios que só encontram o workspace se o usuário for um membro que aceitou o convite
+// e tiver acesso, e adicionam o campo actor (ver Actor em permissions): administrador pode
+// tudo; os demais, o que a role libera; membro sem role não entra. Aggregation não converte
+// string em ObjectId sozinho, então a conversão é feita aqui; id inválido vira null para a
+// página responder 404 sem ir ao banco. Sem assinatura ativa o workspace não é encontrado,
+// o que barra páginas, server actions e rotas de API; só o layout usa allowUnpaid para
+// mostrar a tela de planos.
 export function workspaceAccessStages(
   workspaceId: string,
   userId: string,
@@ -41,21 +41,36 @@ export function workspaceAccessStages(
         localField: "_id",
         foreignField: "workspaceId",
         as: "membership",
-        pipeline: [{ $match: { userId: userObjectId } }, { $limit: 1 }, { $project: { _id: 0, role: 1 } }],
+        pipeline: [
+          { $match: { userId: userObjectId } },
+          { $limit: 1 },
+          { $lookup: { from: "roles", localField: "roleId", foreignField: "_id", as: "role" } },
+          { $project: { _id: 0, admin: 1, role: { $first: "$role" } } },
+        ],
       },
     },
     {
       $set: {
-        role: {
-          $cond: [
-            { $eq: ["$userId", userObjectId] },
-            "owner",
-            { $ifNull: [{ $first: "$membership.role" }, null] },
-          ],
+        actor: {
+          $let: {
+            vars: { member: { $first: "$membership" } },
+            in: {
+              $switch: {
+                branches: [
+                  { case: { $eq: ["$$member.admin", true] }, then: { admin: true } },
+                  {
+                    case: { $ne: [{ $ifNull: ["$$member.role", null] }, null] },
+                    then: { admin: false, permissions: "$$member.role.permissions", pages: "$$member.role.pages" },
+                  },
+                ],
+                default: null,
+              },
+            },
+          },
         },
       },
     },
-    { $match: { role: { $ne: null } } },
+    { $match: { actor: { $ne: null } } },
     { $unset: "membership" },
   ];
 }

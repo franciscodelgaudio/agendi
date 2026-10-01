@@ -1,13 +1,7 @@
-import { roleLabels } from "@/components/role-labels"
+import type { RoleOption } from "@/lib/unit-team"
 import { QuerySelect } from "@/components/user-filters"
 
 const ALL = "all"
-
-const roleItems = [
-  { value: ALL, label: "Todas as funções" },
-  { value: "massage_therapist", label: roleLabels.massage_therapist },
-  { value: "receptionist", label: roleLabels.receptionist },
-]
 
 const statusItems = [
   { value: ALL, label: "Todos os status" },
@@ -25,9 +19,12 @@ const payItems = [
 type Props = {
   // role/status/pay vazios = todos; os demais campos da query são preservados na URL.
   query: { role: string; status: string; pay: string } & Record<string, string>
+  // Roles do workspace; administradores não fazem parte da equipe das unidades.
+  roles: RoleOption[]
 }
 
-export function UnitTeamFilters({ query }: Props) {
+export function UnitTeamFilters({ query, roles }: Props) {
+  const roleItems = [{ value: ALL, label: "Todas as funções" }, ...roles.map((role) => ({ value: role.id, label: role.name }))]
   return (
     <>
       <QuerySelect query={query} field="role" items={roleItems} label="Filtrar por função" />

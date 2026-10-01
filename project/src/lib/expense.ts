@@ -230,32 +230,141 @@ export function expenseGroupTotalsPipeline(range: DayRange): PipelineStage[] {
   ];
 }
 
+// Etapas para as despesas pagas da unidade: pago por grupo em cada mês ("AAAA-MM") do lançamento.
+export type ExpenseGroupMonthTotal = { groupId: string; month: string; paidCents: number };
+
+export function expenseGroupMonthTotalsPipeline({ from, to }: DayRange): PipelineStage[] {
+  return [
+    { $match: { date: { $gte: from, $lte: to }, paidAt: { $ne: null } } },
+    {
+      $group: {
+        _id: { groupId: "$groupId", month: { $substrBytes: ["$date", 0, 7] } },
+        paidCents: { $sum: "$amountCents" },
+      },
+    },
+    { $project: { _id: 0, groupId: { $toString: "$_id.groupId" }, month: "$_id.month", paidCents: 1 } },
+  ];
+}
+
+// Limite por mês do grupo: monthlyLimitCents vale até a primeira mudança; cada mudança vale
+// do mês dela ("AAAA-MM") até a seguinte. null = sem limite.
+export type GroupLimitChange = { month: string; cents: number | null };
+export type GroupLimits = { monthlyLimitCents: number | null; limitChanges: GroupLimitChange[] };
+
+export function groupLimitForMonth({ monthlyLimitCents, limitChanges }: GroupLimits, month: string) {
+  let limit = monthlyLimitCents;
+  let since = "";
+  for (const change of limitChanges) {
+    if (change.month <= month && change.month >= since) {
+      limit = change.cents;
+      since = change.month;
+    }
+  }
+  return limit;
+}
+
+// Mudanças com o limite novo a partir do mês, trocando a que já houver nele; as outras ficam.
+export function setGroupLimitFrom(changes: GroupLimitChange[], month: string, cents: number | null) {
+  return [...changes.filter((change) => change.month !== month), { month, cents }].sort((a, b) =>
+    a.month.localeCompare(b.month),
+  );
+}
+
+// Mês ("AAAA-MM") seguinte; depois de dezembro, janeiro do ano seguinte.
+export function nextMonth(month: string) {
+  const [year, index] = month.split("-").map(Number);
+  return index === 12 ? `${year + 1}-01` : `${year}-${String(index + 1).padStart(2, "0")}`;
+}
+
+// Mudanças com o limite novo só no mês: o mês seguinte, se não tiver mudança própria, volta ao
+// limite que já valia nele.
+export function setGroupLimitForMonth(group: GroupLimits, month: string, cents: number | null) {
+  const next = nextMonth(month);
+  const changes = setGroupLimitFrom(group.limitChanges, month, cents);
+  if (group.limitChanges.some((change) => change.month === next)) return changes;
+  return setGroupLimitFrom(changes, next, groupLimitForMonth(group, next));
+}
+
+// Soma dos limites nos meses; null quando nenhum mês tem limite.
+function limitForMonths(group: GroupLimits, months: string[]) {
+  let total: number | null = null;
+  for (const month of months) {
+    const limit = groupLimitForMonth(group, month);
+    if (limit !== null) total = (total ?? 0) + limit;
+  }
+  return total;
+}
+
 export type ExpenseGroupInfo = { id: string; name: string; monthlyLimitCents: number | null };
 
 export type ExpenseGroupSummary<T extends ExpenseGroupInfo = ExpenseGroupInfo> = T & {
-  // Limite do período: o mensal vezes os meses; null sem limite.
+  // Limite do período: a soma do limite de cada mês; null sem limite.
   limitCents: number | null;
   totalCents: number;
   paidCents: number;
   overLimit: boolean;
 };
 
-// Passa do limite pelo total lançado, pago ou não: o limite é do gasto previsto por mês,
-// multiplicado pelos meses do período. Campos extras do grupo (como o ícone) seguem no resumo.
-export function summarizeExpenseGroups<T extends ExpenseGroupInfo>(
+// Passa do limite pelo total lançado, pago ou não: o limite é do gasto previsto em cada mês
+// ("AAAA-MM") do período. Campos extras do grupo (como o ícone) seguem no resumo.
+export function summarizeExpenseGroups<T extends ExpenseGroupInfo & GroupLimits>(
   groups: T[],
   totals: ExpenseGroupTotal[],
-  months = 1,
+  months: string[],
 ): ExpenseGroupSummary<T>[] {
   const byGroup = new Map(totals.map((total) => [total.groupId, total]));
   return groups
     .map((group) => {
       const { totalCents = 0, paidCents = 0 } = byGroup.get(group.id) ?? {};
-      const limitCents = group.monthlyLimitCents === null ? null : group.monthlyLimitCents * months;
+      const limitCents = limitForMonths(group, months);
       const overLimit = limitCents !== null && totalCents > limitCents;
       return { ...group, limitCents, totalCents, paidCents, overLimit };
     })
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+}
+
+export type YearOverviewCell = { plannedCents: number | null; paidCents: number };
+export type YearOverviewRow = { cells: YearOverviewCell[]; plannedCents: number; paidCents: number };
+export type ExpenseGroupYearOverview = {
+  groups: { id: string; name: string }[];
+  rows: (YearOverviewRow & { month: string })[];
+  total: YearOverviewRow;
+};
+
+function overviewRow(cells: YearOverviewCell[]): YearOverviewRow {
+  return {
+    cells,
+    plannedCents: cells.reduce((sum, cell) => sum + (cell.plannedCents ?? 0), 0),
+    paidCents: cells.reduce((sum, cell) => sum + cell.paidCents, 0),
+  };
+}
+
+// Mês a mês do ano ("AAAA"): limite e pago de cada grupo, em ordem alfabética, com as somas
+// da linha e do ano. Pago de grupos que não estão na lista ou de fora do ano não entra.
+export function expenseGroupYearOverview(
+  groups: (ExpenseGroupInfo & GroupLimits)[],
+  totals: ExpenseGroupMonthTotal[],
+  year: string,
+): ExpenseGroupYearOverview {
+  const sorted = [...groups].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const paid = new Map(totals.map((total) => [`${total.groupId}:${total.month}`, total.paidCents]));
+  const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`);
+  const rows = months.map((month) => ({
+    month,
+    ...overviewRow(
+      sorted.map((group) => ({
+        plannedCents: groupLimitForMonth(group, month),
+        paidCents: paid.get(`${group.id}:${month}`) ?? 0,
+      })),
+    ),
+  }));
+  const total = overviewRow(
+    sorted.map((group, i) => ({
+      plannedCents: limitForMonths(group, months),
+      paidCents: rows.reduce((sum, row) => sum + row.cells[i].paidCents, 0),
+    })),
+  );
+  return { groups: sorted.map(({ id, name }) => ({ id, name })), rows, total };
 }
 
 type StaffAmounts = Pick<StaffCashFlowAmounts, "partnerShareCents" | "commissionCents" | "salaryCents">;
@@ -277,9 +386,4 @@ export function staffExpenseGroups({ real, forecast }: { real: StaffAmounts; for
     group("team", "Equipe", forecast.commissionCents + forecast.salaryCents, real.commissionCents + real.salaryCents),
     group("partner_share", "Repasse", forecast.partnerShareCents, real.partnerShareCents),
   ].filter((row) => row.limitCents > 0);
-}
-
-// Gasto previsto da unidade por mês: a soma dos limites dos grupos que têm limite.
-export function expenseBudgetCents(groups: { monthlyLimitCents: number | null }[]) {
-  return groups.reduce((sum, group) => sum + (group.monthlyLimitCents ?? 0), 0);
 }

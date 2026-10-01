@@ -3,7 +3,7 @@
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { getSessionUserId } from "@/lib/session"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member"
+import { can, type Actor } from "@/lib/permissions"
 import { planUnitTeam, type PlanUnitTeamError, type UnitTeamPlan } from "@/lib/unit-team"
 import { findWorkspaceAccess } from "@/lib/workspace-access"
 import type { TreatmentRoomInput } from "@/lib/treatment-room"
@@ -17,6 +17,7 @@ import {
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
 import { Unit } from "@/models/Unit"
+import { Wallet } from "@/models/Wallet"
 import { Service } from "@/models/Service"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 
@@ -44,7 +45,7 @@ const errorMessages: Record<CreateUnitError | UpdateUnitError | PlanUnitTeamErro
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unit_not_found: "Unidade não encontrada ou sem permissão.",
   forbidden: "Sem permissão para alterar a equipe.",
-  invalid_team: "Escolha só massagistas e recepcionistas deste workspace.",
+  invalid_team: "Escolha só pessoas da equipe deste workspace (administradores não entram na equipe das unidades).",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
@@ -52,23 +53,25 @@ export type CreateUnitState = { error: string | null }
 export type UpdateUnitState = CreateUnitState
 export type DeleteUnitState = CreateUnitState
 
-// Acesso ao workspace se o usuário puder gerenciá-lo (dono ou administrador); senão undefined.
+// Acesso ao workspace se o usuário puder gerenciar unidades; senão undefined.
 async function findManagedAccess(workspaceId: string, userId: string) {
   const access = await findWorkspaceAccess(workspaceId, userId)
-  return access && canManageMembers(access.role) ? access : undefined
+  return access && can(access.actor, "units.manage") ? access : undefined
 }
 
 // Quem vincular e desvincular, conferido antes de gravar a unidade. unitId null = unidade nova.
-async function planTeam(formData: FormData, workspaceId: string, role: WorkspaceRole, unitId: string | null) {
-  const members = await WorkspaceMember.find({ workspaceId }).select({ role: 1, units: 1 }).lean()
+// Sem permissão de gerenciar a equipe, a equipe fica como está (o formulário nem mostra o campo).
+async function planTeam(formData: FormData, workspaceId: string, actor: Actor, unitId: string | null) {
+  if (!can(actor, "team.manage")) return undefined
+  const members = await WorkspaceMember.find({ workspaceId }).select({ admin: 1, units: 1 }).lean()
   return planUnitTeam(
     formData.getAll("teamMemberId"),
     members.map((member) => ({
       id: member._id.toString(),
-      role: member.role,
+      admin: !!member.admin,
       linked: !!unitId && member.units.some((unit) => unit.unitId.equals(unitId)),
     })),
-    role,
+    actor,
   )
 }
 
@@ -121,15 +124,25 @@ export async function createUnitAction(
   if (!userId) return { error: errorMessages.unauthenticated }
 
   const access = await findManagedAccess(workspaceId, userId)
-  const team = access && (await planTeam(formData, access.id, access.role, null))
+  const team = access && (await planTeam(formData, access.id, access.actor, null))
   if (team && !team.ok) return { error: errorMessages[team.error] }
 
   const result = await createUnit(
     unitInput(formData),
     access?.id,
     async (data) => {
-      const unit = await Unit.create({ ...data, treatmentRooms: toTreatmentRoomDocs(data.treatmentRooms) })
+      const { openingBalance, ...unitData } = data
+      const unit = await Unit.create({ ...unitData, treatmentRooms: toTreatmentRoomDocs(data.treatmentRooms) })
       const id = unit._id.toString()
+      // O saldo informado no cadastro vira uma carteira só da unidade, com o nome dela.
+      if (openingBalance) {
+        await Wallet.create({
+          name: unit.name.slice(0, 40),
+          openingBalance,
+          units: [{ unitId: unit._id, amountCents: null }],
+          workspaceId: data.workspaceId,
+        })
+      }
       if (team) await applyTeam(data.workspaceId, id, team)
       return { id }
     },
@@ -148,7 +161,7 @@ async function resolveUnitTarget(workspaceId: string, unitId: string) {
   const userId = await getSessionUserId()
   if (!userId) return null
   const access = await findManagedAccess(workspaceId, userId)
-  return { ownedId: access?.id, role: access?.role, unitId: access && isObjectIdOrHexString(unitId) ? unitId : null }
+  return { ownedId: access?.id, actor: access?.actor, unitId: access && isObjectIdOrHexString(unitId) ? unitId : null }
 }
 
 export async function updateUnitAction(
@@ -159,7 +172,7 @@ export async function updateUnitAction(
 ): Promise<UpdateUnitState> {
   const target = await resolveUnitTarget(workspaceId, unitId)
   if (!target) return { error: errorMessages.unauthenticated }
-  const team = target.ownedId && target.role && (await planTeam(formData, target.ownedId, target.role, target.unitId))
+  const team = target.ownedId && target.actor && (await planTeam(formData, target.ownedId, target.actor, target.unitId))
   if (team && !team.ok) return { error: errorMessages[team.error] }
 
   const result = await updateUnit(
@@ -214,6 +227,7 @@ export async function deleteUnitAction(workspaceId: string, unitId: string): Pro
       Service.deleteMany({ unitId: id }),
       Appointment.deleteMany({ unitId: id }),
       WorkspaceMember.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
+      Wallet.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
     ])
     return true
   })

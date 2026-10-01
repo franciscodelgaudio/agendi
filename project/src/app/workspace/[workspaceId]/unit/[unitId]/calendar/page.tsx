@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member"
+import { can, type Actor } from "@/lib/permissions"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { therapistOptionsStages } from "@/lib/therapist"
@@ -20,7 +20,7 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
 
   // Parte do workspace -> unidade -> serviços para que o acesso seja garantido em cada nível.
   const [workspace] = await Workspace.aggregate<Omit<BookingOptions, "units"> & {
-    role: WorkspaceRole
+    actor: Actor
     unit: { id: string; name: string; businessHours: BusinessHours } | null
   }>([
     ...access,
@@ -59,7 +59,7 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
     {
       $project: {
         _id: 0,
-        role: 1,
+        actor: 1,
         unit: {
           $let: {
             vars: { unit: { $first: "$unit" } },
@@ -79,7 +79,7 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
     },
   ])
   if (!workspace?.unit) notFound()
-  const { role, unit, ...options } = workspace
+  const { actor, unit, ...options } = workspace
 
   return (
     <div className="flex flex-col gap-4">
@@ -90,7 +90,7 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
       <div data-tour="unit-calendar">
         <BookingCalendar
           workspaceId={workspaceId}
-          canManage={canManageMembers(role)}
+          canManage={can(actor, "bookings.manage")}
           unitId={unit.id}
           units={[unit]}
           {...options}

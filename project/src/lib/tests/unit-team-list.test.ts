@@ -7,13 +7,18 @@ import {
 } from "@/lib/unit-team-list";
 
 const BASE = { q: "", dir: "asc", role: "", status: "", pay: "", page: 1 } as const;
+// Roles do workspace: o filtro de função usa "admin" ou o id da role.
+const THERAPIST_ROLE = "64b7f0c2a1b2c3d4e5f60731";
+const RECEPTION_ROLE = "64b7f0c2a1b2c3d4e5f60732";
 
 function member(overrides: Partial<UnitTeamListItem> & { id: string }): UnitTeamListItem {
   return {
     name: null,
     email: `${overrides.id}@x.com`,
     image: null,
-    role: "massage_therapist",
+    admin: false,
+    roleId: THERAPIST_ROLE,
+    roleName: "Massagista",
     pending: false,
     commissionPercent: null,
     salaryCents: null,
@@ -25,8 +30,8 @@ function member(overrides: Partial<UnitTeamListItem> & { id: string }): UnitTeam
 }
 
 const ANA = member({ id: "ana", name: "Ana Souza", email: "ana@x.com", commissionPercent: 40 });
-const BRUNO = member({ id: "bruno", name: "bruno lima", email: "bruno@spa.com", role: "receptionist", salaryCents: 250000 });
-const CELIA = member({ id: "celia", name: "Célia Ramos", email: "celia@x.com", role: "receptionist" });
+const BRUNO = member({ id: "bruno", name: "bruno lima", email: "bruno@spa.com", roleId: RECEPTION_ROLE, roleName: "Recepção", salaryCents: 250000 });
+const CELIA = member({ id: "celia", name: "Célia Ramos", email: "celia@x.com", roleId: RECEPTION_ROLE, roleName: "Recepção" });
 // Convite sem conta: sem nome, ordena e busca pelo email.
 const INVITE = member({ id: "invite", email: "davi@x.com", pending: true, commissionPercent: 35 });
 const TEAM = [ANA, BRUNO, CELIA, INVITE];
@@ -40,15 +45,15 @@ describe("parseUnitTeamListQuery", () => {
 
   it("lê busca, direção, filtros e página válidos", () => {
     expect(
-      parseUnitTeamListQuery({ q: "ana", dir: "desc", role: "receptionist", status: "pending", pay: "salary", page: "3" }),
-    ).toEqual({ q: "ana", dir: "desc", role: "receptionist", status: "pending", pay: "salary", page: 3 });
+      parseUnitTeamListQuery({ q: "ana", dir: "desc", role: RECEPTION_ROLE, status: "pending", pay: "salary", page: "3" }),
+    ).toEqual({ q: "ana", dir: "desc", role: RECEPTION_ROLE, status: "pending", pay: "salary", page: 3 });
   });
 
-  it.each(["massage_therapist", "receptionist"])("aceita a função %s", (role) => {
+  it.each(["admin", THERAPIST_ROLE])("aceita a função %s (administrador ou id de role)", (role) => {
     expect(parseUnitTeamListQuery({ role }).role).toBe(role);
   });
 
-  it.each(["owner", "admin"])("ignora a função %s, que não faz parte da equipe da unidade", (role) => {
+  it.each(["owner", "massage_therapist", "receptionist", "64b7f0c2a1b2c3d4e5f6073"])("ignora a função %s", (role) => {
     expect(parseUnitTeamListQuery({ role }).role).toBe("");
   });
 
@@ -100,8 +105,22 @@ describe("unitTeamListPage", () => {
     expect(ids(unitTeamListPage(TEAM, { ...BASE, q: "spa.com" }).rows)).toEqual(["bruno"]);
   });
 
-  it("filtra pela função", () => {
-    expect(ids(unitTeamListPage(TEAM, { ...BASE, role: "receptionist" }).rows)).toEqual(["bruno", "celia"]);
+  it("filtra pela role", () => {
+    expect(ids(unitTeamListPage(TEAM, { ...BASE, role: RECEPTION_ROLE }).rows)).toEqual(["bruno", "celia"]);
+  });
+
+  it("filtra os administradores da equipe", () => {
+    const admin = member({ id: "admin", name: "Zé Admin", admin: true, roleId: null, roleName: "Administrador" });
+
+    expect(ids(unitTeamListPage([admin, ...TEAM], { ...BASE, role: "admin" }).rows)).toEqual(["admin"]);
+    expect(ids(unitTeamListPage([admin, ...TEAM], { ...BASE, role: THERAPIST_ROLE }).rows)).toEqual(["ana", "invite"]);
+  });
+
+  it("membro sem role não aparece no filtro de nenhuma role", () => {
+    const noRole = member({ id: "norole", roleId: null, roleName: null });
+
+    expect(ids(unitTeamListPage([noRole, ANA], { ...BASE, role: THERAPIST_ROLE }).rows)).toEqual(["ana"]);
+    expect(ids(unitTeamListPage([noRole, ANA], BASE).rows)).toEqual(["ana", "norole"]);
   });
 
   it("filtra quem já aceitou o convite", () => {
@@ -135,7 +154,7 @@ describe("unitTeamListPage", () => {
   });
 
   it("combina busca e filtros", () => {
-    expect(unitTeamListPage(TEAM, { ...BASE, q: "x.com", role: "massage_therapist", status: "active" })).toEqual({
+    expect(unitTeamListPage(TEAM, { ...BASE, q: "x.com", role: THERAPIST_ROLE, status: "active" })).toEqual({
       rows: [ANA],
       total: 1,
     });

@@ -10,7 +10,7 @@ const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const USER_ID = "64b7f0c2a1b2c3d4e5f60719";
 
 describe("workspaceAccessStages", () => {
-  it("encontra o workspace pelo id e calcula o papel do usuário (dono ou membro que aceitou)", () => {
+  it("encontra o workspace pelo id e monta o acesso do membro que aceitou o convite", () => {
     const workspaceId = new Types.ObjectId(WORKSPACE_ID);
     const userId = new Types.ObjectId(USER_ID);
 
@@ -22,17 +22,41 @@ describe("workspaceAccessStages", () => {
           localField: "_id",
           foreignField: "workspaceId",
           as: "membership",
-          pipeline: [{ $match: { userId } }, { $limit: 1 }, { $project: { _id: 0, role: 1 } }],
+          pipeline: [
+            { $match: { userId } },
+            { $limit: 1 },
+            { $lookup: { from: "roles", localField: "roleId", foreignField: "_id", as: "role" } },
+            { $project: { _id: 0, admin: 1, role: { $first: "$role" } } },
+          ],
         },
       },
+      // Administrador pode tudo; os demais, o que a role libera; sem role, sem acesso.
       {
         $set: {
-          role: {
-            $cond: [{ $eq: ["$userId", userId] }, "owner", { $ifNull: [{ $first: "$membership.role" }, null] }],
+          actor: {
+            $let: {
+              vars: { member: { $first: "$membership" } },
+              in: {
+                $switch: {
+                  branches: [
+                    { case: { $eq: ["$$member.admin", true] }, then: { admin: true } },
+                    {
+                      case: { $ne: [{ $ifNull: ["$$member.role", null] }, null] },
+                      then: {
+                        admin: false,
+                        permissions: "$$member.role.permissions",
+                        pages: "$$member.role.pages",
+                      },
+                    },
+                  ],
+                  default: null,
+                },
+              },
+            },
           },
         },
       },
-      { $match: { role: { $ne: null } } },
+      { $match: { actor: { $ne: null } } },
       { $unset: "membership" },
     ]);
   });

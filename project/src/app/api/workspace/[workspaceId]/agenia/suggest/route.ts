@@ -4,7 +4,7 @@ import { loadAgeniaModel, NOT_CONFIGURED_MESSAGE } from "@/lib/agenia-model"
 import { recordAiUsage } from "@/lib/ai-usage-store"
 import { smartComposePrompt } from "@/lib/agenia-prompts"
 import { buildReadTools, loadConversation, loadWorkspaceContext } from "@/lib/agenia-read"
-import { canUseInbox } from "@/lib/member-role"
+import { can } from "@/lib/permissions"
 import { getSessionUserId } from "@/lib/session"
 import { findWorkspaceAccess } from "@/lib/workspace-access"
 
@@ -21,7 +21,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
   const userId = await getSessionUserId()
   if (!userId) return fail("Sua sessão expirou. Entre novamente.", 401)
   const access = await findWorkspaceAccess(workspaceId, userId)
-  if (!access || !canUseInbox(access.role)) return fail("Sua função não pode usar a AgenIA aqui.", 403)
+  if (!access || !can(access.actor, "inbox.use")) return fail("Sua função não pode usar a AgenIA aqui.", 403)
   const agenia = await loadAgeniaModel(workspaceId)
   if (!agenia) return fail(NOT_CONFIGURED_MESSAGE, 503)
 
@@ -30,7 +30,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
   const conversation = await loadConversation(workspaceId, parsed.data.conversationId)
   if (!conversation) return fail("Conversa não encontrada.", 404)
 
-  const ctx = await loadWorkspaceContext(workspaceId, { id: userId, role: access.role }, null)
+  const ctx = await loadWorkspaceContext(workspaceId, { id: userId, actor: access.actor }, null)
   const { listServices, listBookings } = buildReadTools(workspaceId)
   try {
     const result = await generateText({

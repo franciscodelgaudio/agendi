@@ -1,70 +1,68 @@
 import { describe, it, expect } from "vitest";
 import { planUnitTeam } from "@/lib/unit-team";
-import type { MemberRole } from "@/lib/member-role";
+import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
-const member = (id: string, role: MemberRole, linked = false) => ({ id, role, linked });
+const member = (id: string, linked = false) => ({ id, linked });
 
-// Ana e Bia são massagistas; Rita é recepcionista; Alice é administradora.
-const MEMBERS = [
-  member("ana", "massage_therapist", true),
-  member("bia", "massage_therapist"),
-  member("rita", "receptionist", true),
-  member("rosa", "receptionist"),
-  member("alice", "admin"),
-];
+// Qualquer usuário do workspace pode trabalhar na unidade, administradores inclusive (Alice).
+const MEMBERS = [member("ana", true), member("bia"), member("rita", true), member("rosa"), member("alice")];
 
 describe("planUnitTeam", () => {
-  it("dono vincula as selecionadas que ainda não estão e desvincula as que saíram", () => {
-    const result = planUnitTeam(["bia", "rita", "rosa"], MEMBERS, "owner");
+  it("vincula as selecionadas que ainda não estão e desvincula as que saíram", () => {
+    const result = planUnitTeam(["bia", "rita", "rosa"], MEMBERS, ADMIN);
 
     expect(result).toEqual({ ok: true, link: ["bia", "rosa"], unlink: ["ana"] });
   });
 
+  it("role com permissão de gerenciar a equipe também altera a equipe", () => {
+    const result = planUnitTeam(["bia", "rosa"], MEMBERS, actorWith("team.manage"));
+
+    expect(result).toEqual({ ok: true, link: ["bia", "rosa"], unlink: ["ana", "rita"] });
+  });
+
   it("mantém quem já estava vinculada e continua selecionada (sem vincular de novo)", () => {
-    const result = planUnitTeam(["ana", "rita"], MEMBERS, "owner");
+    const result = planUnitTeam(["ana", "rita"], MEMBERS, ADMIN);
 
     expect(result).toEqual({ ok: true, link: [], unlink: [] });
   });
 
-  it("nenhuma selecionada desvincula todas as massagistas e recepcionistas", () => {
-    const result = planUnitTeam([], MEMBERS, "owner");
+  it("nenhuma selecionada desvincula todas", () => {
+    const result = planUnitTeam([], MEMBERS, ADMIN);
 
     expect(result).toEqual({ ok: true, link: [], unlink: ["ana", "rita"] });
   });
 
   it("ids repetidos contam uma vez só", () => {
-    const result = planUnitTeam(["bia", "bia", "ana", "rita"], MEMBERS, "owner");
+    const result = planUnitTeam(["bia", "bia", "ana", "rita"], MEMBERS, ADMIN);
 
     expect(result).toEqual({ ok: true, link: ["bia"], unlink: [] });
   });
 
-  it("administradora vinculada antes não é desvinculada (não aparece na seleção)", () => {
-    const members = [member("alice", "admin", true), member("rita", "receptionist")];
-
-    const result = planUnitTeam(["rita"], members, "owner");
-
-    expect(result).toEqual({ ok: true, link: ["rita"], unlink: [] });
+  it("administradora entra e sai da equipe como qualquer pessoa", () => {
+    expect(planUnitTeam(["ana", "rita", "alice"], MEMBERS, ADMIN)).toEqual({ ok: true, link: ["alice"], unlink: [] });
+    expect(planUnitTeam(["rita"], [member("alice", true), member("rita")], ADMIN)).toEqual({
+      ok: true,
+      link: ["rita"],
+      unlink: ["alice"],
+    });
   });
 
-  it("admin só altera recepcionistas: massagistas enviadas são ignoradas e as vinculadas continuam", () => {
-    const result = planUnitTeam(["bia", "rosa"], MEMBERS, "admin");
-
-    expect(result).toEqual({ ok: true, link: ["rosa"], unlink: ["rita"] });
-  });
-
-  it.each([["alice"], ["desconhecida"]])("id %j fora das massagistas e recepcionistas → invalid_team", (id) => {
-    expect(planUnitTeam(["bia", id], MEMBERS, "owner")).toEqual({ ok: false, error: "invalid_team" });
+  it("id fora dos usuários do workspace → invalid_team", () => {
+    expect(planUnitTeam(["bia", "desconhecida"], MEMBERS, ADMIN)).toEqual({ ok: false, error: "invalid_team" });
   });
 
   it.each([null, undefined, "bia", [1], ["bia", null]])("seleção %j → invalid_input", (selected) => {
-    expect(planUnitTeam(selected, MEMBERS, "owner")).toEqual({ ok: false, error: "invalid_input" });
+    expect(planUnitTeam(selected, MEMBERS, ADMIN)).toEqual({ ok: false, error: "invalid_input" });
   });
 
   it("sem acesso ao workspace → workspace_not_found", () => {
     expect(planUnitTeam(["bia"], MEMBERS, null)).toEqual({ ok: false, error: "workspace_not_found" });
   });
 
-  it.each(["massage_therapist", "receptionist"] as const)("%s não gerencia a equipe → forbidden", (actorRole) => {
-    expect(planUnitTeam(["rosa"], MEMBERS, actorRole)).toEqual({ ok: false, error: "forbidden" });
+  it.each([
+    ["role sem permissões", STAFF],
+    ["role que só gerencia unidades", actorWith("units.manage")],
+  ] as const)("%s não gerencia a equipe → forbidden", (_label, actor) => {
+    expect(planUnitTeam(["rosa"], MEMBERS, actor)).toEqual({ ok: false, error: "forbidden" });
   });
 });

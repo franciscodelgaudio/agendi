@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createUra, deleteUra, saveUra, setUraActive } from "@/lib/ura";
+import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
 const URA_ID = "64b7f0c2a1b2c3d4e5f60792";
 
@@ -15,7 +16,7 @@ describe("createUra", () => {
   it("cria a URA inativa, com o nome limpo e só o nó de início", async () => {
     const insert = vi.fn().mockResolvedValue({ id: URA_ID });
 
-    const result = await createUra({ name: "  Boas-vindas  " }, { actorRole: "admin" }, insert);
+    const result = await createUra({ name: "  Boas-vindas  " }, { actor: ADMIN }, insert);
 
     expect(result).toEqual({ ok: true, uraId: URA_ID });
     expect(insert).toHaveBeenCalledWith({
@@ -28,9 +29,10 @@ describe("createUra", () => {
     });
   });
 
-  it("o proprietário também pode criar", async () => {
+  it("role com permissão de gerenciar URAs também pode criar", async () => {
     const insert = vi.fn().mockResolvedValue({ id: URA_ID });
-    expect(await createUra({ name: "X" }, { actorRole: "owner" }, insert)).toEqual({ ok: true, uraId: URA_ID });
+    expect(await createUra({ name: "X" }, { actor: ADMIN }, insert)).toEqual({ ok: true, uraId: URA_ID });
+    expect(await createUra({ name: "X" }, { actor: actorWith("uras.manage") }, insert)).toEqual({ ok: true, uraId: URA_ID });
   });
 
   it.each([
@@ -41,15 +43,15 @@ describe("createUra", () => {
     [null, "invalid_input"],
   ])("recusa %j com %s", async (input, error) => {
     const insert = vi.fn();
-    expect(await createUra(input, { actorRole: "admin" }, insert)).toEqual({ ok: false, error });
+    expect(await createUra(input, { actor: ADMIN }, insert)).toEqual({ ok: false, error });
     expect(insert).not.toHaveBeenCalled();
   });
 
   it("recusa quem não gerencia o workspace e quem não tem acesso", async () => {
     const insert = vi.fn();
-    expect(await createUra({ name: "X" }, { actorRole: "receptionist" }, insert)).toEqual({ ok: false, error: "forbidden" });
-    expect(await createUra({ name: "X" }, { actorRole: "massage_therapist" }, insert)).toEqual({ ok: false, error: "forbidden" });
-    expect(await createUra({ name: "X" }, { actorRole: null }, insert)).toEqual({ ok: false, error: "workspace_not_found" });
+    expect(await createUra({ name: "X" }, { actor: actorWith("inbox.use") }, insert)).toEqual({ ok: false, error: "forbidden" });
+    expect(await createUra({ name: "X" }, { actor: STAFF }, insert)).toEqual({ ok: false, error: "forbidden" });
+    expect(await createUra({ name: "X" }, { actor: null }, insert)).toEqual({ ok: false, error: "workspace_not_found" });
     expect(insert).not.toHaveBeenCalled();
   });
 });
@@ -58,7 +60,7 @@ describe("saveUra", () => {
   it("valida e salva nome e fluxo normalizados", async () => {
     const update = vi.fn().mockResolvedValue(true);
 
-    const result = await saveUra({ name: " Agendamento ", graph }, { actorRole: "admin", uraId: URA_ID }, update);
+    const result = await saveUra({ name: " Agendamento ", graph }, { actor: ADMIN, uraId: URA_ID }, update);
 
     expect(result).toEqual({ ok: true });
     expect(update).toHaveBeenCalledWith(URA_ID, {
@@ -74,11 +76,11 @@ describe("saveUra", () => {
   it("repassa os erros do fluxo", async () => {
     const update = vi.fn();
     const noStart = { nodes: [graph.nodes[1]], edges: [] };
-    expect(await saveUra({ name: "X", graph: noStart }, { actorRole: "admin", uraId: URA_ID }, update)).toEqual({
+    expect(await saveUra({ name: "X", graph: noStart }, { actor: ADMIN, uraId: URA_ID }, update)).toEqual({
       ok: false,
       error: "missing_start",
     });
-    expect(await saveUra({ name: "X", graph: "x" }, { actorRole: "admin", uraId: URA_ID }, update)).toEqual({
+    expect(await saveUra({ name: "X", graph: "x" }, { actor: ADMIN, uraId: URA_ID }, update)).toEqual({
       ok: false,
       error: "invalid_graph",
     });
@@ -87,41 +89,41 @@ describe("saveUra", () => {
 
   it("recusa nome inválido, falta de permissão e URA inexistente", async () => {
     const update = vi.fn().mockResolvedValue(false);
-    expect(await saveUra({ name: "", graph }, { actorRole: "admin", uraId: URA_ID }, update)).toEqual({ ok: false, error: "invalid_name" });
-    expect(await saveUra({ name: "X", graph }, { actorRole: "receptionist", uraId: URA_ID }, update)).toEqual({
+    expect(await saveUra({ name: "", graph }, { actor: ADMIN, uraId: URA_ID }, update)).toEqual({ ok: false, error: "invalid_name" });
+    expect(await saveUra({ name: "X", graph }, { actor: actorWith("inbox.use"), uraId: URA_ID }, update)).toEqual({
       ok: false,
       error: "forbidden",
     });
-    expect(await saveUra({ name: "X", graph }, { actorRole: "admin", uraId: null }, update)).toEqual({ ok: false, error: "ura_not_found" });
-    expect(await saveUra({ name: "X", graph }, { actorRole: "admin", uraId: URA_ID }, update)).toEqual({ ok: false, error: "ura_not_found" });
+    expect(await saveUra({ name: "X", graph }, { actor: ADMIN, uraId: null }, update)).toEqual({ ok: false, error: "ura_not_found" });
+    expect(await saveUra({ name: "X", graph }, { actor: ADMIN, uraId: URA_ID }, update)).toEqual({ ok: false, error: "ura_not_found" });
   });
 });
 
 describe("setUraActive", () => {
   it("ativa e desativa", async () => {
     const update = vi.fn().mockResolvedValue(true);
-    expect(await setUraActive(true, { actorRole: "owner", uraId: URA_ID }, update)).toEqual({ ok: true });
+    expect(await setUraActive(true, { actor: ADMIN, uraId: URA_ID }, update)).toEqual({ ok: true });
     expect(update).toHaveBeenCalledWith(URA_ID, true);
   });
 
   it("recusa sem permissão ou URA inexistente", async () => {
     const update = vi.fn().mockResolvedValue(false);
-    expect(await setUraActive(true, { actorRole: "receptionist", uraId: URA_ID }, update)).toEqual({ ok: false, error: "forbidden" });
-    expect(await setUraActive(true, { actorRole: "admin", uraId: URA_ID }, update)).toEqual({ ok: false, error: "ura_not_found" });
+    expect(await setUraActive(true, { actor: actorWith("inbox.use"), uraId: URA_ID }, update)).toEqual({ ok: false, error: "forbidden" });
+    expect(await setUraActive(true, { actor: ADMIN, uraId: URA_ID }, update)).toEqual({ ok: false, error: "ura_not_found" });
   });
 });
 
 describe("deleteUra", () => {
   it("exclui a URA", async () => {
     const remove = vi.fn().mockResolvedValue(true);
-    expect(await deleteUra({ actorRole: "admin", uraId: URA_ID }, remove)).toEqual({ ok: true });
+    expect(await deleteUra({ actor: ADMIN, uraId: URA_ID }, remove)).toEqual({ ok: true });
     expect(remove).toHaveBeenCalledWith(URA_ID);
   });
 
   it("recusa sem permissão ou URA inexistente", async () => {
     const remove = vi.fn().mockResolvedValue(false);
-    expect(await deleteUra({ actorRole: "massage_therapist", uraId: URA_ID }, remove)).toEqual({ ok: false, error: "forbidden" });
-    expect(await deleteUra({ actorRole: "admin", uraId: null }, remove)).toEqual({ ok: false, error: "ura_not_found" });
-    expect(await deleteUra({ actorRole: "admin", uraId: URA_ID }, remove)).toEqual({ ok: false, error: "ura_not_found" });
+    expect(await deleteUra({ actor: STAFF, uraId: URA_ID }, remove)).toEqual({ ok: false, error: "forbidden" });
+    expect(await deleteUra({ actor: ADMIN, uraId: null }, remove)).toEqual({ ok: false, error: "ura_not_found" });
+    expect(await deleteUra({ actor: ADMIN, uraId: URA_ID }, remove)).toEqual({ ok: false, error: "ura_not_found" });
   });
 });

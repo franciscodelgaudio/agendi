@@ -10,8 +10,10 @@ import {
 import { mergeCashFlowSummaries, mergeGroupsByName, sumBalances } from "@/lib/cash-flow-overview"
 import { loadExpenseGroupIcons } from "@/lib/expense-group-icon-store"
 import { requirePage } from "@/lib/page-guard"
+import { can } from "@/lib/permissions"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { loadUnitCashFlow, type CashFlowUnit } from "@/lib/unit-cash-flow-store"
+import { loadWallets } from "@/lib/wallet-store"
 import { Workspace } from "@/models/Workspace"
 import { CashFlowNav, periodLabel } from "@/components/cash-flow-nav"
 import { OpeningBalanceCard } from "@/components/opening-balance-card"
@@ -20,6 +22,8 @@ import { CashFlowCostsChart } from "@/components/cash-flow-costs-chart"
 import { CostCumulativeChart, CostPeriodChart } from "@/components/cost-curve-chart"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CashFlowUnitsTable } from "@/components/cash-flow-units-table"
+import { WalletList } from "@/components/wallet-list"
+import { CreateWalletSheet } from "@/components/wallet-sheets"
 
 // Caixa de todas as unidades: cada uma é calculada com as próprias regras e os valores são somados.
 // Como no caixa da unidade, é sempre do ano, mês a mês, e os gastos por grupo são de um mês só.
@@ -32,7 +36,7 @@ export default async function WorkspaceCashFlowPage({
   const search = await searchParams
   const query = { ...parseCashFlowQuery(search, now), view: "year" as const }
   const user = await requireUser()
-  await requirePage(workspaceId, user.id, { workspace: "cash_flow" })
+  const { actor } = await requirePage(workspaceId, user.id, { workspace: "cash_flow" })
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access) notFound()
 
@@ -53,7 +57,6 @@ export default async function WorkspaceCashFlowPage({
               id: { $toString: "$_id" },
               name: 1,
               revenueShare: { $ifNull: ["$revenueShare", null] },
-              openingBalance: { $ifNull: ["$openingBalance", null] },
             },
           },
         ],
@@ -68,16 +71,25 @@ export default async function WorkspaceCashFlowPage({
   const shown = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const costBuckets = cashFlowBuckets({ view: "month", date: costMonthDate(search.costs, shown, today) })
   const costMonth = { from: costBuckets[0].from, to: costBuckets.at(-1)!.to }
-  const [icons, flows, monthFlows] = await Promise.all([
+  const [icons, flows, monthFlows, wallets] = await Promise.all([
     loadExpenseGroupIcons(),
     Promise.all(workspace.units.map((unit) => loadUnitCashFlow(workspace.id, unit, buckets, today))),
     Promise.all(workspace.units.map((unit) => loadUnitCashFlow(workspace.id, unit, costBuckets, today))),
+    loadWallets(workspace.id, today),
   ])
   const summary = mergeCashFlowSummaries(
     buckets,
     flows.map((flow) => flow.summary),
   )
-  const balanceCents = sumBalances(flows.map((flow) => flow.balanceCents))
+  // Soma das carteiras: a unidade de carteira compartilhada não tem saldo próprio, e nada conta duas vezes.
+  const balanceCents = sumBalances(wallets.map((wallet) => wallet.balanceCents))
+  const unitBalances = new Map(wallets.flatMap((wallet) => wallet.units.map((unit) => [unit.id, unit.balanceCents])))
+  const walletOptions = can(actor, "cash_flow.manage")
+    ? workspace.units.map((unit) => {
+        const wallet = wallets.find((w) => w.units.some((u) => u.id === unit.id))
+        return { id: unit.id, name: unit.name, walletId: wallet?.id ?? null, walletName: wallet?.name ?? null }
+      })
+    : null
   const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
   const costs = summarizeCosts(
     mergeCashFlowSummaries(costBuckets, monthFlows.map((flow) => flow.summary)).total.real,
@@ -87,14 +99,13 @@ export default async function WorkspaceCashFlowPage({
     })),
   )
   const curve = costCurve(
-    flows.map((flow) => ({ buckets: flow.summary.buckets, monthlyBudgetCents: flow.monthlyBudgetCents })),
-    today,
+    flows.map((flow) => ({ buckets: flow.summary.buckets, groups: flow.groupLimits })),
   )
   const units = workspace.units.map((unit, i) => ({
     id: unit.id,
     name: unit.name,
     real: flows[i].summary.total.real,
-    balanceCents: flows[i].balanceCents,
+    balanceCents: unitBalances.get(unit.id) ?? null,
   }))
 
   const pathname = `/workspace/${workspaceId}/cash-flow`
@@ -163,6 +174,11 @@ export default async function WorkspaceCashFlowPage({
         query={listQuery}
         workspaceId={workspaceId}
       />
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <h4 className="font-semibold tracking-tight">Carteiras</h4>
+        {walletOptions && <CreateWalletSheet workspaceId={workspaceId} units={walletOptions} />}
+      </div>
+      <WalletList wallets={wallets} workspaceId={workspaceId} units={walletOptions} />
     </div>
   )
 }

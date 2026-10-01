@@ -1,6 +1,5 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
-import { canManageMembers } from "@/lib/member-role"
 import { findVisiblePages } from "@/lib/page-guard"
 import { requireUser } from "@/lib/session"
 import { UsersNav } from "@/components/users-nav"
@@ -25,5 +24,5 @@ async function UsersNavLoader({ workspaceId }: { workspaceId: string }) {
   const user = await requireUser()
   const found = await findVisiblePages(workspaceId, user.id)
   if (!found) notFound()
-  return <UsersNav workspaceId={workspaceId} canManage={canManageMembers(found.role)} />
+  return <UsersNav workspaceId={workspaceId} canManage={found.actor.admin} />
 }

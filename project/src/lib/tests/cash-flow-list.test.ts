@@ -268,6 +268,16 @@ describe("expenseGroupListPage", () => {
     expect(ids(expenseGroupListPage(GROUPS, { ...GROUP_BASE, q: "ALIMENTACAO" }).rows)).toEqual(["alimentacao"]);
   });
 
+  it("o filtro de limite segue o limite do período, não o limite de antes das mudanças", () => {
+    // Sem limite até setembro e com limite a partir de outubro: no período, tem limite.
+    const fromOctober = group({ id: "seguro", monthlyLimitCents: null, limitCents: 5000 });
+    // Com limite até setembro e sem limite a partir de outubro: no período, não tem.
+    const untilSeptember = group({ id: "frete", monthlyLimitCents: 5000, limitCents: null });
+
+    expect(ids(expenseGroupListPage([fromOctober, untilSeptember], { ...GROUP_BASE, limit: "within" }).rows)).toEqual(["seguro"]);
+    expect(ids(expenseGroupListPage([fromOctober, untilSeptember], { ...GROUP_BASE, limit: "none" }).rows)).toEqual(["frete"]);
+  });
+
   it("filtra acima do limite, dentro do limite e sem limite", () => {
     expect(ids(expenseGroupListPage(GROUPS, { ...GROUP_BASE, limit: "over" }).rows)).toEqual(["alimentacao"]);
     expect(ids(expenseGroupListPage(GROUPS, { ...GROUP_BASE, limit: "within" }).rows)).toEqual(["insumos", "marketing"]);

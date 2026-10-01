@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { canUseInbox } from "@/lib/member-role"
+import { can } from "@/lib/permissions"
 import {
   createChannel,
   deleteChannel,
@@ -51,12 +51,12 @@ const replyErrorMessages: Record<SendReplyError | "unauthenticated", string> = {
 
 export type MessagingActionState = { error: string | null }
 
-// Papel do usuário no workspace; undefined sem acesso, null com sessão expirada.
+// Acesso do usuário no workspace (null sem acesso); null no lugar de tudo com sessão expirada.
 async function findRole(workspaceId: string) {
   const userId = await getSessionUserId()
   if (!userId) return null
   const access = await findWorkspaceAccess(workspaceId, userId)
-  return { userId, role: access?.role ?? null }
+  return { userId, access: access?.actor ?? null }
 }
 
 class MissingKeyError extends Error {}
@@ -89,7 +89,7 @@ export async function createChannelAction(
   if (!actor) return { error: channelErrorMessages.unauthenticated }
 
   try {
-    const result = await createChannel(channelInput(formData), { workspaceId, actorRole: actor.role }, {
+    const result = await createChannel(channelInput(formData), { workspaceId, actor: actor.access }, {
       isExternalIdTaken: async (platform, externalId) => !!(await MessagingChannel.exists({ platform, externalId })),
       insert: async (data) => {
         const channel = await MessagingChannel.create(data)
@@ -121,7 +121,7 @@ export async function updateChannelAction(
   try {
     const result = await updateChannel(
       { name: formData.get("name"), accessToken: formData.get("accessToken") },
-      { actorRole: actor.role, channelId: isObjectIdOrHexString(channelId) ? channelId : null },
+      { actor: actor.access, channelId: isObjectIdOrHexString(channelId) ? channelId : null },
       {
         update: async (id, data) => {
           const { matchedCount } = await MessagingChannel.updateOne({ _id: id, workspaceId }, { $set: data })
@@ -146,7 +146,7 @@ export async function deleteChannelAction(workspaceId: string, channelId: string
   if (!actor) return { error: channelErrorMessages.unauthenticated }
 
   const result = await deleteChannel(
-    { actorRole: actor.role, channelId: isObjectIdOrHexString(channelId) ? channelId : null },
+    { actor: actor.access, channelId: isObjectIdOrHexString(channelId) ? channelId : null },
     async (id) => {
       const { deletedCount } = await MessagingChannel.deleteOne({ _id: id, workspaceId })
       if (!deletedCount) return false
@@ -187,10 +187,10 @@ export async function sendReplyAction(
   const actor = await findRole(workspaceId)
   if (!actor) return { error: replyErrorMessages.unauthenticated }
 
-  const conversation = canUseInbox(actor.role) ? await findReplyConversation(workspaceId, conversationId) : null
+  const conversation = can(actor.access, "inbox.use") ? await findReplyConversation(workspaceId, conversationId) : null
   const result = await sendReply(
     { text: formData.get("text") },
-    { workspaceId, userId: actor.userId, actorRole: actor.role, conversation },
+    { workspaceId, userId: actor.userId, actor: actor.access, conversation },
     {
       now: () => new Date(),
       insertMessage: async (data) => (await insertMessage(data))!,
@@ -223,7 +223,7 @@ export async function sendReplyAction(
 
 export async function markConversationReadAction(workspaceId: string, conversationId: string) {
   const actor = await findRole(workspaceId)
-  if (!actor || !canUseInbox(actor.role) || !isObjectIdOrHexString(conversationId)) return
+  if (!actor || !can(actor.access, "inbox.use") || !isObjectIdOrHexString(conversationId)) return
   const { modifiedCount } = await Conversation.updateOne(
     { _id: conversationId, workspaceId: new Types.ObjectId(workspaceId), unreadCount: { $gt: 0 } },
     { $set: { unreadCount: 0 } },

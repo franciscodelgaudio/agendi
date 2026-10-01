@@ -12,11 +12,14 @@ import { WorkspaceMember } from "@/models/WorkspaceMember"
 export default async function Home() {
   const user = await requireUser()
 
-  // O workspace mais antigo (próprio ou em que é membro) é o padrão.
+  // O workspace mais antigo em que é membro com acesso (administrador ou com role) é o padrão.
   const userId = new Types.ObjectId(user.id)
-  const memberOf = await WorkspaceMember.distinct("workspaceId", { userId })
+  const memberOf = await WorkspaceMember.distinct("workspaceId", {
+    userId,
+    $or: [{ admin: true }, { roleId: { $ne: null } }],
+  })
   const [workspace] = await Workspace.aggregate<{ id: string }>([
-    { $match: { $or: [{ userId }, { _id: { $in: memberOf } }] } },
+    { $match: { _id: { $in: memberOf } } },
     { $sort: { createdAt: 1 } },
     { $limit: 1 },
     { $project: { _id: 0, id: { $toString: "$_id" } } },

@@ -1,9 +1,10 @@
 import { notFound, redirect } from "next/navigation"
-import type { WorkspaceRole } from "@/lib/member-role"
+import type { Actor } from "@/lib/permissions"
 import { parseCashFlowQuery } from "@/lib/cash-flow"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { parseUnitTeamListQuery, UNIT_TEAM_PAGE_SIZE, unitTeamListPage, type UnitTeamListItem } from "@/lib/unit-team-list"
+import { memberAttendsStages, memberRoleNameStages, rolesLookup, type RoleOption } from "@/lib/unit-team"
 import { Workspace } from "@/models/Workspace"
 import { ListPagination } from "@/components/list-pagination"
 import { ListSearch } from "@/components/list-search"
@@ -21,11 +22,13 @@ export default async function TeamPage({ params, searchParams }: PageProps<"/wor
   if (!access) notFound()
 
   const [workspace] = await Workspace.aggregate<{
-    role: WorkspaceRole
+    actor: Actor
     units: { id: string; name: string }[]
-    members: (UnitTeamListItem & { unitId: string })[]
+    members: (UnitTeamListItem & { unitId: string; attends: boolean })[]
+    roles: RoleOption[]
   }>([
     ...access,
+    rolesLookup(),
     {
       $lookup: {
         from: "units",
@@ -42,7 +45,9 @@ export default async function TeamPage({ params, searchParams }: PageProps<"/wor
         foreignField: "workspaceId",
         as: "members",
         pipeline: [
-          { $match: { role: { $in: ["massage_therapist", "receptionist"] } } },
+          { $match: { admin: { $ne: true } } },
+          ...memberAttendsStages(),
+          ...memberRoleNameStages(),
           { $unwind: "$units" },
           { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
           { $set: { user: { $first: "$user" } } },
@@ -51,7 +56,9 @@ export default async function TeamPage({ params, searchParams }: PageProps<"/wor
               _id: 0,
               id: { $toString: "$_id" },
               unitId: { $toString: "$units.unitId" },
-              role: 1,
+              roleId: { $ifNull: [{ $toString: "$roleId" }, null] },
+              roleName: 1,
+              attends: 1,
               email: { $ifNull: ["$user.email", "$email"] },
               name: { $ifNull: ["$user.name", null] },
               image: { $ifNull: ["$user.image", null] },
@@ -66,10 +73,10 @@ export default async function TeamPage({ params, searchParams }: PageProps<"/wor
         ],
       },
     },
-    { $project: { _id: 0, role: 1, units: 1, members: 1 } },
+    { $project: { _id: 0, actor: 1, units: 1, members: 1, roles: 1 } },
   ])
   if (!workspace) notFound()
-  const { role } = workspace
+  const { actor } = workspace
   const unitNames = new Map(workspace.units.map((unit) => [unit.id, unit.name]))
   // Vínculos com unidades que não existem mais ficam de fora. Ordenadas pela unidade antes,
   // a ordenação por nome (estável) deixa a mesma pessoa em ordem de unidade.
@@ -100,12 +107,12 @@ export default async function TeamPage({ params, searchParams }: PageProps<"/wor
       {members.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <ListSearch query={filters} placeholder="Buscar nome ou email..." />
-          <UnitTeamFilters query={filters} />
+          <UnitTeamFilters query={filters} roles={workspace.roles} />
         </div>
       )}
       <TeamTable
         workspaceId={workspaceId}
-        role={role}
+        actor={actor}
         rows={result.rows}
         filters={filters}
         pathname={pathname}

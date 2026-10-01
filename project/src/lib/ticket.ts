@@ -1,4 +1,4 @@
-import type { WorkspaceRole } from "@/lib/member-role";
+import type { Actor } from "@/lib/permissions";
 
 // Sem dependências de servidor: também é importado por componentes de cliente.
 export const TICKET_TYPES = ["bug", "improvement"] as const;
@@ -32,10 +32,10 @@ export type TicketData = {
 // Tickets vão para a equipe da Agendi: qualquer membro do workspace pode abrir.
 export async function createTicket(
   input: unknown,
-  ctx: { workspaceId: string; userId: string; actorRole: WorkspaceRole | null },
+  ctx: { workspaceId: string; userId: string; actor: Actor | null },
   insert: (data: TicketData) => Promise<{ id: string }>,
 ): Promise<CreateTicketResult> {
-  if (!ctx.actorRole) return { ok: false, error: "workspace_not_found" };
+  if (!ctx.actor) return { ok: false, error: "workspace_not_found" };
   if (!input || typeof input !== "object") return { ok: false, error: "invalid_input" };
 
   const { type, title, description } = input as Record<string, unknown>;

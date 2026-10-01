@@ -3,7 +3,6 @@
 import { useActionState, useState, useTransition } from "react"
 import { EllipsisIcon, PencilIcon, UserMinusIcon } from "lucide-react"
 import { removeMemberAction, updateMemberAction, type MemberFormState } from "@/lib/actions/member"
-import type { MemberRole } from "@/lib/member-role"
 
 import {
   AlertDialog,
@@ -23,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { FieldDescription, FieldError, FieldGroup } from "@/components/ui/field"
-import { MemberNameField, RoleField } from "@/components/member-fields"
+import { MemberNameField, RoleField, type RoleChoices } from "@/components/member-fields"
 import {
   Sheet,
   SheetContent,
@@ -34,9 +33,18 @@ import {
 } from "@/components/ui/sheet"
 
 // pending = convite ainda não aceito (sem conta vinculada, então sem nome para editar).
-type Member = { id: string; email: string; name: string | null; role: MemberRole; pending: boolean }
+// role: "admin", o id da role ou null (ainda sem role).
+type Member = { id: string; email: string; name: string | null; role: string | null; pending: boolean }
 
-export function MemberActions({ workspaceId, member }: { workspaceId: string; member: Member }) {
+export function MemberActions({
+  workspaceId,
+  member,
+  choices,
+}: {
+  workspaceId: string
+  member: Member
+  choices: RoleChoices
+}) {
   const [editOpen, setEditOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
@@ -73,6 +81,7 @@ export function MemberActions({ workspaceId, member }: { workspaceId: string; me
             key={editKey}
             workspaceId={workspaceId}
             member={member}
+            choices={choices}
             onDone={() => setEditOpen(false)}
           />
         </SheetContent>
@@ -91,10 +100,12 @@ export function MemberActions({ workspaceId, member }: { workspaceId: string; me
 function EditMemberForm({
   workspaceId,
   member,
+  choices,
   onDone,
 }: {
   workspaceId: string
   member: Member
+  choices: RoleChoices
   onDone: () => void
 }) {
   const [state, formAction, pending] = useActionState(
@@ -122,7 +133,7 @@ function EditMemberForm({
         ) : (
           <MemberNameField idPrefix={`edit-member-${member.id}`} defaultValue={member.name ?? ""} />
         )}
-        <RoleField idPrefix={`edit-member-${member.id}`} defaultValue={member.role} />
+        <RoleField idPrefix={`edit-member-${member.id}`} choices={choices} defaultValue={member.role} />
         {!member.pending && (
           <FieldDescription>
             O nome é da conta da pessoa: a alteração vale em todos os workspaces dela. Para trocar o email,

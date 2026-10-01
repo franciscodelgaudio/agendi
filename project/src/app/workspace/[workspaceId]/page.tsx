@@ -20,8 +20,9 @@ import {
   type ServiceTotal,
   type StaffCashFlowAmounts,
 } from "@/lib/cash-flow"
-import { dailyExpenseTotalsPipeline, expenseBudgetCents, type ExpenseDayTotal } from "@/lib/expense"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member"
+import { dailyExpenseTotalsPipeline, type ExpenseDayTotal } from "@/lib/expense"
+import { findTeamPayMembers, groupLimitsOf } from "@/lib/unit-cash-flow-store"
+import { can, type Actor } from "@/lib/permissions"
 import type { RevenueShare } from "@/lib/revenue-share"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
@@ -33,7 +34,6 @@ import { Booking } from "@/models/Booking"
 import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Workspace } from "@/models/Workspace"
-import { WorkspaceMember } from "@/models/WorkspaceMember"
 import { CostCumulativeChart, CostPeriodChart } from "@/components/cost-curve-chart"
 import { CreateUnitSheet } from "@/components/create-unit-sheet"
 import { timeFormat } from "@/components/service-format"
@@ -89,7 +89,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
   const [workspace] = await Workspace.aggregate<{
     id: string
     name: string
-    role: WorkspaceRole
+    actor: Actor
     units: UnitInfo[]
     therapists: TherapistOption[]
     team: TeamCandidate[]
@@ -117,12 +117,12 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     },
     ...therapistOptionsStages(),
     teamCandidatesLookup(),
-    { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, role: 1, units: 1, therapists: 1, team: 1 } },
+    { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, actor: 1, units: 1, therapists: 1, team: 1 } },
   ])
   if (!workspace) notFound()
   const { units } = workspace
-  const canManage = canManageMembers(workspace.role)
-  const team = { candidates: workspace.team, canLinkTherapists: workspace.role === "owner" }
+  const canManage = can(workspace.actor, "units.manage")
+  const team = { candidates: workspace.team, canEdit: can(workspace.actor, "team.manage") }
 
   if (units.length === 0) {
     return (
@@ -156,11 +156,11 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
           Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(month)]),
           Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(month, now)]),
           Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(yearRange)]),
-          ExpenseGroup.find({ unitId: new Types.ObjectId(unit.id) }).select({ monthlyLimitCents: 1 }).lean(),
+          ExpenseGroup.find({ unitId: new Types.ObjectId(unit.id) }).select({ monthlyLimitCents: 1, limitChanges: 1 }).lean(),
         ])
         return {
           unit,
-          monthlyBudgetCents: expenseBudgetCents(groups.map((group) => ({ monthlyLimitCents: group.monthlyLimitCents ?? null }))),
+          groupLimits: groups.map(groupLimitsOf),
           appointments,
           bookings,
           expenses,
@@ -168,17 +168,15 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         }
       }),
     ),
-    // Remuneração da equipe em cada unidade (o proprietário não tem).
-    WorkspaceMember.find({ workspaceId: workspace.id, role: { $in: ["massage_therapist", "receptionist"] } })
-      .select({ userId: 1, role: 1, units: 1 })
-      .lean(),
+    // Remuneração da equipe em cada unidade (administradores não têm).
+    findTeamPayMembers(workspace.id),
     Booking.find({ unitId: { $in: unitIds }, startsAt: { $gte: todayStart, $lt: todayEnd } })
       .sort({ startsAt: 1 })
       .select({ unitId: 1, startsAt: 1, endsAt: 1, guest: 1, service: 1, therapistId: 1, therapistName: 1, appointmentId: 1 })
       .lean(),
   ])
 
-  const unitSummaries = perUnit.map(({ unit, appointments, bookings, expenses, services, monthlyBudgetCents }) => {
+  const unitSummaries = perUnit.map(({ unit, appointments, bookings, expenses, services, groupLimits }) => {
     const { commissionRates, ...staffCosts } = teamPayRates(members, unit.id)
     const summarize = (buckets: DayRange[]) =>
       applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, unit.revenueShare, commissionRates), { ...staffCosts, today })
@@ -192,7 +190,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         staffCosts.grossCommissionPercent > 0 ||
         staffCosts.salaries.length > 0,
       month: summarize(monthBuckets).total,
-      year: { buckets: applyExpenses(summarize(yearBuckets), expenses).buckets, monthlyBudgetCents },
+      year: { buckets: applyExpenses(summarize(yearBuckets), expenses).buckets, groups: groupLimits },
       services: { done, scheduled: all - done },
     }
   })
@@ -201,8 +199,8 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     real: sumAmounts(unitSummaries.map((summary) => summary.month.real)),
     forecast: sumAmounts(unitSummaries.map((summary) => summary.month.forecast)),
   }
-  const curve = costCurve(unitSummaries.map((summary) => summary.year), today)
-  const spentCents = curve.findLast((point) => point.spentCumulativeCents !== null)?.spentCumulativeCents ?? 0
+  const curve = costCurve(unitSummaries.map((summary) => summary.year))
+  const spentCents = curve.at(-1)?.spentCumulativeCents ?? 0
   const plannedCents = curve.at(-1)?.plannedCumulativeCents ?? 0
   const servicesDone = unitSummaries.reduce((sum, summary) => sum + summary.services.done, 0)
   const servicesScheduled = unitSummaries.reduce((sum, summary) => sum + summary.services.scheduled, 0)

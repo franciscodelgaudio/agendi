@@ -7,19 +7,15 @@ export type WorkspaceContext = {
   today: string
   page: string | null
   units: { id: string; name: string; opensAt: string; closesAt: string; rooms: { id: string; name: string; beds: number }[] }[]
+  // role: "administrador", o nome da role ou "sem função".
   team: { userId: string | null; memberId: string | null; name: string; role: string; unitIds: string[] }[]
+  // Roles criadas pelo administrador; attends = realiza atendimentos.
+  roles: { id: string; name: string; attends: boolean }[]
   channels: { id: string; name: string; platform: string }[]
   uras: { id: string; name: string; active: boolean }[]
   memories: { id: string; content: string }[]
-  // Quem pode guardar e apagar fatos da memória (proprietário e administradores).
+  // Quem pode guardar e apagar fatos da memória (permissão de usar a AgenIA).
   canRemember: boolean
-}
-
-const roleLabels: Record<string, string> = {
-  owner: "proprietário",
-  admin: "administrador",
-  massage_therapist: "massagista",
-  receptionist: "recepcionista",
 }
 
 const BASE = `Você é a AgenIA, a assistente do agendi, um sistema de gestão para spas e massagistas: unidades (espaço próprio ou dentro de um estabelecimento parceiro), serviços, estoque de produtos, calendário de agendamentos, atendimentos realizados, caixa (receitas, repasse ao parceiro, comissões, salários e despesas), equipe, conversas de WhatsApp/Instagram e URAs (fluxos automáticos de atendimento).
@@ -49,7 +45,7 @@ Quando aprender algo durável sobre o negócio ou uma preferência de como traba
 export function workspaceSection(ctx: WorkspaceContext) {
   return [
     `WORKSPACE: ${ctx.workspace}`,
-    `Usuário: ${ctx.user.name} (${roleLabels[ctx.user.role] ?? ctx.user.role})`,
+    `Usuário: ${ctx.user.name} (${ctx.user.role})`,
     `Hoje: ${ctx.today}`,
     ctx.page ? `Página aberta: ${ctx.page}` : null,
     list(
@@ -64,13 +60,18 @@ export function workspaceSection(ctx: WorkspaceContext) {
       "Equipe",
       ctx.team,
       (m) =>
-        `- ${m.name}: ${roleLabels[m.role] ?? m.role}${m.userId ? ` (userId=${m.userId})` : " (convite pendente)"}${
+        `- ${m.name}: ${m.role}${m.userId ? ` (userId=${m.userId})` : " (convite pendente)"}${
           m.memberId ? ` memberId=${m.memberId}` : ""
         }${m.unitIds.length ? ` unidades=[${m.unitIds.join(", ")}]` : ""}`,
     ),
     list("Canais", ctx.channels, (c) => `- ${c.name} (${c.platform}, id=${c.id})`),
     list("URAs", ctx.uras, (u) => `- ${u.name} (id=${u.id}, ${u.active ? "ativa" : "inativa"})`),
-    "Quem pode atender (massagista em agendamentos e atendimentos): o proprietário e os membros com função massagista, pelo userId.",
+    list(
+      'Funções (role ao convidar ou editar membro: "admin" para administrador ou o id da função)',
+      ctx.roles,
+      (r) => `- ${r.name} (id=${r.id})${r.attends ? ", realiza atendimentos" : ""}`,
+    ),
+    "Quem pode atender (massagista em agendamentos e atendimentos): administradores e membros cuja função realiza atendimentos, pelo userId.",
     memorySection(ctx),
   ]
     .filter(Boolean)

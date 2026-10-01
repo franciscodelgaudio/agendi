@@ -41,7 +41,7 @@ export type ProductActionState = { error: string | null }
 async function findManagedUnitId(workspaceId: string, unitId: string) {
   const userId = await getSessionUserId()
   if (!userId) return null
-  return (await findManagedUnit(workspaceId, unitId, userId))?.unitId
+  return (await findManagedUnit(workspaceId, unitId, userId, "stock.manage"))?.unitId
 }
 
 // Aumento de estoque vira despesa paga no grupo de insumos, criado se a unidade ainda não tiver.

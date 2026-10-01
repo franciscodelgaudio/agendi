@@ -1,10 +1,9 @@
 import { UserIcon } from "lucide-react"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member-role"
+import { can, type Actor } from "@/lib/permissions"
 import { nextPayrollDate } from "@/lib/payroll"
 import type { UnitTeamListItem, UnitTeamListQuery } from "@/lib/unit-team-list"
 import { CodeCell, CodeHead } from "@/components/record-code"
 import { SortableHead } from "@/components/sortable-head"
-import { roleLabels } from "@/components/role-labels"
 import { UnitMemberActions } from "@/components/unit-member-actions"
 import { currencyFormat } from "@/components/service-format"
 import { Avatar, AvatarImage } from "@/components/ui/avatar"
@@ -15,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 const percentFormat = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 const dayFormat = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" })
 
-export type TeamRow = UnitTeamListItem & { unitId: string; unitName: string }
+export type TeamRow = UnitTeamListItem & { unitId: string; unitName: string; attends: boolean }
 
 function payParts({ commissionPercent, salaryCents, bonuses }: UnitTeamListItem) {
   const parts: string[] = []
@@ -30,7 +29,7 @@ function payParts({ commissionPercent, salaryCents, bonuses }: UnitTeamListItem)
 // em Função, remuneração com comissão + salário + bônus); o nome ocupa o que sobrar.
 export function TeamTable({
   workspaceId,
-  role,
+  actor,
   rows,
   filters,
   pathname,
@@ -39,7 +38,7 @@ export function TeamTable({
   emptyText,
 }: {
   workspaceId: string
-  role: WorkspaceRole
+  actor: Actor
   rows: TeamRow[]
   filters: Omit<UnitTeamListQuery, "page">
   pathname: string
@@ -47,7 +46,7 @@ export function TeamTable({
   showUnit?: boolean
   emptyText: string
 }) {
-  const canManage = canManageMembers(role)
+  const canManage = can(actor, "team.manage")
   const columns = 5 + (showUnit ? 1 : 0) + (canManage ? 1 : 0)
   return (
     <div data-tour="team-table" className="border">
@@ -81,9 +80,6 @@ export function TeamTable({
           ) : (
             rows.map((member) => {
               const label = member.name ?? member.email
-              const isTherapist = member.role === "massage_therapist"
-              // Só o proprietário define a remuneração de massagistas.
-              const canEdit = canManage && (!isTherapist || role === "owner")
               const nextPay = nextPayrollDate(member, today)
               return (
                 <TableRow key={`${member.id}:${member.unitId}`}>
@@ -103,7 +99,7 @@ export function TeamTable({
                   {showUnit && <TableCell className="px-4 @max-4xl:hidden">{member.unitName}</TableCell>}
                   <TableCell className="px-4 @max-lg:hidden">
                     <div className="flex items-center gap-1.5">
-                      <Badge variant="secondary">{roleLabels[member.role]}</Badge>
+                      <Badge variant="secondary">{member.roleName ?? "Sem função"}</Badge>
                       {member.pending && <Badge variant="outline">Convite pendente</Badge>}
                     </div>
                   </TableCell>
@@ -119,23 +115,21 @@ export function TeamTable({
                   </TableCell>
                   {canManage && (
                     <TableCell className="px-4 text-right">
-                      {canEdit && (
-                        <UnitMemberActions
-                          workspaceId={workspaceId}
-                          unitId={member.unitId}
-                          unitName={member.unitName}
-                          member={{
-                            id: member.id,
-                            label,
-                            role: member.role,
-                            startDate: member.startDate,
-                            payDay: member.payDay,
-                            commissionPercent: member.commissionPercent,
-                            salaryCents: member.salaryCents,
-                            bonuses: member.bonuses,
-                          }}
-                        />
-                      )}
+                      <UnitMemberActions
+                        workspaceId={workspaceId}
+                        unitId={member.unitId}
+                        unitName={member.unitName}
+                        member={{
+                          id: member.id,
+                          label,
+                          attends: member.attends,
+                          startDate: member.startDate,
+                          payDay: member.payDay,
+                          commissionPercent: member.commissionPercent,
+                          salaryCents: member.salaryCents,
+                          bonuses: member.bonuses,
+                        }}
+                      />
                     </TableCell>
                   )}
                 </TableRow>

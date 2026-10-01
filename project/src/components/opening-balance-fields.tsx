@@ -12,17 +12,31 @@ function todayInBrasilia() {
 }
 
 // Valor em caixa e o dia a partir do qual o saldo passa a somar o líquido; sem valor, fica sem saldo.
-export function OpeningBalanceFields({ idPrefix, defaultValue }: { idPrefix: string; defaultValue?: OpeningBalance | null }) {
+export function OpeningBalanceFields({
+  idPrefix,
+  defaultValue,
+  label = "Saldo em caixa (opcional)",
+  required,
+  onAmountChange,
+}: {
+  idPrefix: string
+  defaultValue?: OpeningBalance | null
+  label?: string
+  required?: boolean
+  onAmountChange?: (cents: number | null) => void
+}) {
   return (
     <div className="grid grid-cols-[1fr_auto] items-end gap-4">
       <Field>
-        <FieldLabel htmlFor={`${idPrefix}-opening-balance`}>Saldo em caixa (opcional)</FieldLabel>
+        <FieldLabel htmlFor={`${idPrefix}-opening-balance`}>{label}</FieldLabel>
         <AmountInput
           id={`${idPrefix}-opening-balance`}
           name="openingBalance"
           max={100_000_000}
           placeholder="R$ 0,00"
           defaultValue={defaultValue?.amountCents}
+          onValueChange={onAmountChange}
+          required={required}
         />
       </Field>
       <DayField

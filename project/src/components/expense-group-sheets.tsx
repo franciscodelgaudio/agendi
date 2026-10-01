@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Sheet,
   SheetContent,
@@ -41,9 +42,21 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 
-type Group = { id: string; name: string; monthlyLimitCents: number | null; icon: ExpenseGroupIcon | null }
+// limits: o limite do grupo em cada mês de LimitMonths.months, na mesma ordem.
+type Group = { id: string; name: string; limits: (number | null)[]; icon: ExpenseGroupIcon | null }
 
-type Props = { workspaceId: string; unitId: string; icons: ExpenseGroupIcon[] }
+// Meses ("AAAA-MM") que o limite pode passar a valer, e o já escolhido ao abrir.
+export type LimitMonths = { months: string[]; defaultMonth: string }
+
+type Props = { workspaceId: string; unitId: string; icons: ExpenseGroupIcon[]; limitMonths: LimitMonths }
+
+// Os meses são do calendário, então são formatados em UTC para não deslocar.
+const monthFormat = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" })
+
+function monthLabel(month: string) {
+  const [year, index] = month.split("-").map(Number)
+  return monthFormat.format(new Date(Date.UTC(year, index - 1, 1)))
+}
 
 function ExpenseGroupForm({
   title,
@@ -51,6 +64,7 @@ function ExpenseGroupForm({
   submitLabel,
   group,
   icons,
+  limitMonths: { months, defaultMonth },
   action,
   onDone,
 }: {
@@ -59,6 +73,7 @@ function ExpenseGroupForm({
   submitLabel: [string, string]
   group?: Group
   icons: ExpenseGroupIcon[]
+  limitMonths: LimitMonths
   action: (prev: ExpenseActionState, formData: FormData) => Promise<ExpenseActionState>
   onDone: () => void
 }) {
@@ -71,6 +86,8 @@ function ExpenseGroupForm({
     { error: null },
   )
   const idPrefix = group ? `edit-expense-group-${group.id}` : "create-expense-group"
+  const [limitFrom, setLimitFrom] = useState(defaultMonth)
+  const limitCents = group?.limits[months.indexOf(limitFrom)] ?? null
 
   return (
     <form action={formAction} className="flex min-h-0 flex-1 flex-col">
@@ -93,13 +110,36 @@ function ExpenseGroupForm({
           />
         </Field>
         <Field>
+          <FieldLabel htmlFor={`${idPrefix}-limit-from`}>Vale a partir de</FieldLabel>
+          <Select
+            name="limitFrom"
+            items={months.map((month) => ({ value: month, label: monthLabel(month) }))}
+            value={limitFrom}
+            onValueChange={(value) => setLimitFrom(value as string)}
+            required
+          >
+            <SelectTrigger id={`${idPrefix}-limit-from`} className="w-full first-letter:uppercase">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {months.map((month) => (
+                <SelectItem key={month} value={month} className="first-letter:uppercase">
+                  {monthLabel(month)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field>
           <FieldLabel htmlFor={`${idPrefix}-limit`}>Limite por mês (opcional)</FieldLabel>
+          {/* Remonta ao trocar o mês para mostrar o limite que vale nele. */}
           <AmountInput
+            key={limitFrom}
             id={`${idPrefix}-limit`}
             name="monthlyLimit"
             max={100_000_000}
             placeholder="R$ 0,00"
-            defaultValue={group?.monthlyLimitCents}
+            defaultValue={limitCents}
           />
         </Field>
         <Field>
@@ -121,7 +161,7 @@ function ExpenseGroupForm({
   )
 }
 
-export function CreateExpenseGroupSheet({ workspaceId, unitId, icons }: Props) {
+export function CreateExpenseGroupSheet({ workspaceId, unitId, icons, limitMonths }: Props) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -136,6 +176,7 @@ export function CreateExpenseGroupSheet({ workspaceId, unitId, icons }: Props) {
           description="Grupo para organizar as despesas da unidade."
           submitLabel={["Cadastrar", "Cadastrando..."]}
           icons={icons}
+          limitMonths={limitMonths}
           action={(prev, formData) => createExpenseGroupAction(workspaceId, unitId, prev, formData)}
           onDone={() => setOpen(false)}
         />
@@ -144,7 +185,7 @@ export function CreateExpenseGroupSheet({ workspaceId, unitId, icons }: Props) {
   )
 }
 
-export function ExpenseGroupActions({ workspaceId, unitId, icons, group }: Props & { group: Group }) {
+export function ExpenseGroupActions({ workspaceId, unitId, icons, limitMonths, group }: Props & { group: Group }) {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
@@ -189,10 +230,11 @@ export function ExpenseGroupActions({ workspaceId, unitId, icons, group }: Props
           <ExpenseGroupForm
             key={editKey}
             title="Editar grupo"
-            description="Altere o nome, o limite e o ícone deste grupo."
+            description="Altere o nome, o limite e o ícone deste grupo. O limite novo vale do mês escolhido em diante."
             submitLabel={["Salvar", "Salvando..."]}
             group={group}
             icons={icons}
+            limitMonths={limitMonths}
             action={(prev, formData) => updateExpenseGroupAction(workspaceId, unitId, group.id, prev, formData)}
             onDone={() => setEditOpen(false)}
           />

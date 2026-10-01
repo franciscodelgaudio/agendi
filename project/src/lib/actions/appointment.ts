@@ -83,7 +83,7 @@ export async function createAppointmentAction(
 ): Promise<AppointmentActionState> {
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
-  const unit = await findManagedUnit(workspaceId, unitId, userId)
+  const unit = await findManagedUnit(workspaceId, unitId, userId, "appointments.manage")
 
   const result = await createAppointment(appointmentInput(formData), unit?.unitId, {
     ...appointmentLookups(unit!),
@@ -108,7 +108,7 @@ export async function updateAppointmentAction(
 ): Promise<AppointmentActionState> {
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
-  const unit = await findManagedUnit(workspaceId, unitId, userId)
+  const unit = await findManagedUnit(workspaceId, unitId, userId, "appointments.manage")
 
   // Só repassa o id quando a unidade é gerenciável; a escrita ainda filtra por unitId.
   const result = await updateAppointment(
@@ -151,7 +151,7 @@ export async function updateWorkspaceAppointmentAction(
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
   const unitId = formData.get("unitId")
-  const unit = await findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId)
+  const unit = await findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId, "appointments.manage")
   if (!unit) return { error: errorMessages.unit_not_found }
 
   const result = await updateAppointment(
@@ -183,7 +183,7 @@ export async function deleteAppointmentAction(
 ): Promise<AppointmentActionState> {
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
-  const unit = await findManagedUnit(workspaceId, unitId, userId)
+  const unit = await findManagedUnit(workspaceId, unitId, userId, "appointments.manage")
 
   // Só repassa o id quando a unidade é gerenciável; a exclusão ainda filtra por unitId.
   const result = await deleteAppointment(
@@ -213,7 +213,7 @@ export async function convertBookingAction(
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
   const unitId = formData.get("unitId")
-  const unit = await findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId)
+  const unit = await findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId, "appointments.manage")
   if (!unit) return { error: errorMessages.unit_not_found }
   const workspaceUnitIds = await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id")
 

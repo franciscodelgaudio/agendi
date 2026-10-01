@@ -557,13 +557,41 @@ async function seed(db: Db, now: Date): Promise<SeedResult> {
     stats.expenses += expenses.length
   }
 
+  // Funções: quem atende e quem recebe os clientes; a dona é administradora (acesso total).
+  const allPages = {
+    workspace: ["home", "units", "calendar", "cash_flow", "team", "users"],
+    unit: ["overview", "services", "calendar", "appointments", "stock", "team", "cash_flow"],
+  }
+  const therapistRoleId = new ObjectId()
+  const receptionistRoleId = new ObjectId()
+  await db.collection("roles").insertMany([
+    {
+      _id: therapistRoleId,
+      workspaceId,
+      name: "Massagista",
+      permissions: ["appointments.manage", "attends"],
+      pages: allPages,
+      ...stamp,
+    },
+    {
+      _id: receptionistRoleId,
+      workspaceId,
+      name: "Recepcionista",
+      permissions: ["bookings.manage", "appointments.manage", "inbox.use"],
+      pages: allPages,
+      ...stamp,
+    },
+  ])
+
   // Equipe: profissionais com comissão, uma com salário fixo, e a recepcionista com salário.
   const memberStamp = { acceptedAt: new Date(`${year}-01-02T12:00:00Z`), ...stamp }
   await db.collection("workspace_members").insertMany([
+    { workspaceId, email: DEMO_EMAIL, admin: true, roleId: null, userId: ownerId, units: [], ...memberStamp },
     ...THERAPISTS.map((t) => ({
       workspaceId,
       email: t.email,
-      role: "massage_therapist",
+      admin: false,
+      roleId: therapistRoleId,
       userId: people.get(t.key)!.id,
       units: t.units.map((u) => ({
         unitId: new ObjectId(unitIds[u]),
@@ -578,7 +606,8 @@ async function seed(db: Db, now: Date): Promise<SeedResult> {
     {
       workspaceId,
       email: RECEPTIONIST.email,
-      role: "receptionist",
+      admin: false,
+      roleId: receptionistRoleId,
       userId: receptionistId,
       units: [
         {

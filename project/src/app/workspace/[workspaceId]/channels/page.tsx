@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { CircleAlertIcon, HashIcon, LinkIcon, RadioTowerIcon, SettingsIcon, TagIcon } from "lucide-react"
-import { canManageMembers, type WorkspaceRole } from "@/lib/member-role"
+import { can, type Actor } from "@/lib/permissions"
 import { missingMessagingEnv, webhookUrl } from "@/lib/messaging-config"
 import type { MessagingPlatform } from "@/lib/messaging-types"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
@@ -27,7 +27,7 @@ export default async function ChannelsPage({ params }: PageProps<"/workspace/[wo
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access) notFound()
 
-  const [workspace] = await Workspace.aggregate<{ role: WorkspaceRole; channels: Channel[] }>([
+  const [workspace] = await Workspace.aggregate<{ actor: Actor; channels: Channel[] }>([
     ...access,
     {
       $lookup: {
@@ -41,10 +41,10 @@ export default async function ChannelsPage({ params }: PageProps<"/workspace/[wo
         ],
       },
     },
-    { $project: { _id: 0, role: 1, channels: 1 } },
+    { $project: { _id: 0, actor: 1, channels: 1 } },
   ])
   // Canais guardam tokens de acesso: só quem gerencia o workspace vê a página.
-  if (!workspace || !canManageMembers(workspace.role)) notFound()
+  if (!workspace || !can(workspace.actor, "channels.manage")) notFound()
 
   const missingEnv = missingMessagingEnv()
   const callbackUrl = webhookUrl()

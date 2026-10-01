@@ -3,7 +3,7 @@ import { FolderIcon } from "lucide-react"
 import { parseCashFlowQuery } from "@/lib/cash-flow"
 import { CASH_FLOW_PAGE_SIZE, expenseGroupListPage, parseExpenseGroupListQuery } from "@/lib/cash-flow-list"
 import { loadExpenseGroupsScreen } from "@/lib/cash-flow-screen-store"
-import { canManageMembers } from "@/lib/member"
+import { can } from "@/lib/permissions"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser } from "@/lib/session"
 import { GroupLimitFilter } from "@/components/cash-flow-filters"
@@ -11,6 +11,7 @@ import { CashFlowNav } from "@/components/cash-flow-nav"
 import { CreateExpenseGroupSheet } from "@/components/expense-group-sheets"
 import { ExportMenu } from "@/components/export-menu"
 import { ExpenseGroupsTable } from "@/components/expense-groups-table"
+import { ExpenseGroupsYearTable } from "@/components/expense-groups-year-table"
 import { ListPagination } from "@/components/list-pagination"
 import { ListSearch } from "@/components/list-search"
 import { ListTotals } from "@/components/list-totals"
@@ -23,7 +24,7 @@ export default async function ExpenseGroupsPage({
 }: PageProps<"/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups">) {
   const { workspaceId, unitId } = await params
   const now = new Date()
-  // O limite é mensal: no ano, vale 12 vezes. A visão semanal não se aplica aos grupos.
+  // O limite é de cada mês: no ano, soma os 12. A visão semanal não se aplica aos grupos.
   const search = await searchParams
   const parsed = parseCashFlowQuery(search, now)
   const query = { ...parsed, view: parsed.view === "year" ? ("year" as const) : ("month" as const) }
@@ -33,8 +34,8 @@ export default async function ExpenseGroupsPage({
   await requirePage(workspaceId, user.id, { unit: "cash_flow", unitId })
   const data = await loadExpenseGroupsScreen(workspaceId, user.id, unitId, query, now)
   if (!data) notFound()
-  const { period, icons, summary } = data
-  const canManage = canManageMembers(data.role)
+  const { period, icons, summary, limitMonths, overview } = data
+  const canManage = can(data.actor, "cash_flow.manage")
   const today = parseCashFlowQuery({}, now).date
   const pathname = `/workspace/${workspaceId}/unit/${unitId}/cash-flow/groups`
   const listQuery = { view: query.view, date: query.date, ...filters }
@@ -63,7 +64,9 @@ export default async function ExpenseGroupsPage({
         {summary.length > 0 && (
           <div className="flex items-center gap-2">
             <ExportMenu href={`/api${pathname}/export`} query={listQuery} />
-            {canManage && <CreateExpenseGroupSheet workspaceId={workspaceId} unitId={unitId} icons={icons} />}
+            {canManage && (
+              <CreateExpenseGroupSheet workspaceId={workspaceId} unitId={unitId} icons={icons} limitMonths={limitMonths} />
+            )}
           </div>
         )}
       </div>
@@ -77,7 +80,7 @@ export default async function ExpenseGroupsPage({
           </EmptyHeader>
           {canManage && (
             <EmptyContent>
-              <CreateExpenseGroupSheet workspaceId={workspaceId} unitId={unitId} icons={icons} />
+              <CreateExpenseGroupSheet workspaceId={workspaceId} unitId={unitId} icons={icons} limitMonths={limitMonths} />
             </EmptyContent>
           )}
         </Empty>
@@ -97,6 +100,7 @@ export default async function ExpenseGroupsPage({
           <ExpenseGroupsTable
             groups={result.rows}
             icons={icons}
+            limitMonths={limitMonths}
             query={listQuery}
             pathname={pathname}
             workspaceId={workspaceId}
@@ -112,6 +116,12 @@ export default async function ExpenseGroupsPage({
             pathname={pathname}
             itemLabel="grupos"
           />
+          {overview && overview.groups.length > 0 && (
+            <>
+              <h4 className="mt-4 font-semibold tracking-tight">Mês a mês</h4>
+              <ExpenseGroupsYearTable overview={overview} editing={canManage ? { workspaceId, unitId } : null} />
+            </>
+          )}
         </>
       )}
     </div>

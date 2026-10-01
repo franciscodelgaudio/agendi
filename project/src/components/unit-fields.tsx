@@ -9,8 +9,9 @@ import type { BusinessHours } from "@/lib/business-hours"
 import type { RevenueShare } from "@/lib/revenue-share"
 import type { TeamCandidate } from "@/lib/unit-team"
 
-// Massagistas e recepcionistas do workspace para escolher quem trabalha na unidade.
-export type UnitTeamOptions = { candidates: TeamCandidate[]; canLinkTherapists: boolean }
+// Membros do workspace (menos administradores) para escolher quem trabalha na unidade.
+// canEdit: permissão de gerenciar a equipe; sem ela o campo nem aparece e a equipe fica como está.
+export type UnitTeamOptions = { candidates: TeamCandidate[]; canEdit: boolean }
 
 type Props = {
   idPrefix: string
@@ -50,12 +51,7 @@ export function UnitFields({ idPrefix, workspaceId, defaultValues, team }: Props
       />
       <BusinessHoursFields idPrefix={idPrefix} defaultValue={defaultValues?.businessHours} />
       <TreatmentRoomFields idPrefix={idPrefix} defaultValue={defaultValues?.treatmentRooms} />
-      <UnitTeamFields
-        idPrefix={idPrefix}
-        team={team.candidates}
-        unitId={defaultValues?.id}
-        canLinkTherapists={team.canLinkTherapists}
-      />
+      {team.canEdit && <UnitTeamFields idPrefix={idPrefix} team={team.candidates} unitId={defaultValues?.id} />}
       <RevenueShareFields idPrefix={idPrefix} defaultValue={defaultValues?.revenueShare} />
     </>
   )

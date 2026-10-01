@@ -129,9 +129,13 @@ describe("parseAgeniaAction", () => {
     expect(parseAgeniaAction("createExpense", { ...expense, date: "20/09/2026" }).ok).toBe(false);
   });
 
-  it("só aceita funções de membro existentes", () => {
-    expect(parseAgeniaAction("inviteMember", { email: "a@b.com", role: "receptionist", summary: "x" }).ok).toBe(true);
+  // "admin" ou o id de uma role do workspace; a existência da role é checada ao executar.
+  it("aceita administrador ou o id de uma role como função do membro", () => {
+    expect(parseAgeniaAction("inviteMember", { email: "a@b.com", role: ID_B, summary: "x" }).ok).toBe(true);
+    expect(parseAgeniaAction("inviteMember", { email: "a@b.com", role: "admin", summary: "x" }).ok).toBe(true);
     expect(parseAgeniaAction("inviteMember", { email: "a@b.com", role: "owner", summary: "x" }).ok).toBe(false);
+    expect(parseAgeniaAction("inviteMember", { email: "a@b.com", role: "receptionist", summary: "x" }).ok).toBe(false);
+    expect(parseAgeniaAction("updateMember", { memberId: ID_A, name: "Bia", role: "massage_therapist", summary: "x" }).ok).toBe(false);
     expect(parseAgeniaAction("inviteMember", { email: "não é email", role: "admin", summary: "x" }).ok).toBe(false);
   });
 
@@ -286,8 +290,8 @@ describe("actionFormEntries", () => {
       role: ["admin"],
     });
     expect(
-      grouped(actionFormEntries("updateMember", parsed("updateMember", { memberId: ID_A, name: "Bia", role: "massage_therapist", summary: "x" }))),
-    ).toEqual({ name: ["Bia"], role: ["massage_therapist"] });
+      grouped(actionFormEntries("updateMember", parsed("updateMember", { memberId: ID_A, name: "Bia", role: ID_B, summary: "x" }))),
+    ).toEqual({ name: ["Bia"], role: [ID_B] });
     expect(
       grouped(actionFormEntries("createTicket", parsed("createTicket", { type: "bug", title: "Erro", description: "Detalhes", summary: "x" }))),
     ).toEqual({ type: ["bug"], title: ["Erro"], description: ["Detalhes"] });
