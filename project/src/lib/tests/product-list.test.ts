@@ -52,6 +52,8 @@ describe("productListPipeline", () => {
       id: { $toString: "$_id" },
       name: 1,
       quantity: 1,
+      valueCents: 1,
+      nextUnitCostCents: 1,
       costCents: 1,
       notes: { $ifNull: ["$notes", null] },
       rating: { $ifNull: ["$rating", null] },
@@ -73,9 +75,34 @@ describe("productListPipeline", () => {
     },
     { $match: { items: { $ne: [] } } },
   ];
-  const QUANTITY = { $addFields: { quantity: { $sum: "$items.quantity" } } };
+  // Valor: soma de quantidade × preço de cada lote de cada item. Próximo a sair: o custo do
+  // lote mais antigo, só com um estoque (com vários, não há um próximo).
+  const VALUE = {
+    $sum: {
+      $map: {
+        input: "$items",
+        as: "item",
+        in: {
+          $sum: {
+            $map: {
+              input: { $ifNull: ["$$item.lots", []] },
+              as: "lot",
+              in: { $multiply: ["$$lot.quantity", "$$lot.unitCostCents"] },
+            },
+          },
+        },
+      },
+    },
+  };
+  const NEXT_COST = {
+    $ifNull: [{ $getField: { field: "unitCostCents", input: { $first: { $first: "$items.lots" } } } }, null],
+  };
+  const QUANTITY = { $addFields: { quantity: { $sum: "$items.quantity" }, valueCents: VALUE, nextUnitCostCents: null } };
+  const HOLDER_QUANTITY = {
+    $addFields: { quantity: { $sum: "$items.quantity" }, valueCents: VALUE, nextUnitCostCents: NEXT_COST },
+  };
 
-  it("sem estoque, traz o catálogo com a soma de todos os estoques, ordena (com _id de desempate) e projeta", () => {
+  it("sem estoque, traz o catálogo com a soma (quantidade e valor) de todos os estoques, ordena (com _id de desempate) e projeta", () => {
     expect(productListPipeline({ q: "", sort: "name", dir: "asc" })).toEqual([
       ALL_ITEMS,
       QUANTITY,
@@ -84,10 +111,10 @@ describe("productListPipeline", () => {
     ]);
   });
 
-  it("com o estoque, só os produtos que estão nele, com a quantidade de lá", () => {
+  it("com o estoque, só os produtos que estão nele, com a quantidade, o valor e o próximo a sair de lá", () => {
     expect(productListPipeline({ q: "", sort: "name", dir: "asc" }, HOLDER_ID)).toEqual([
       ...HOLDER_ITEMS,
-      QUANTITY,
+      HOLDER_QUANTITY,
       { $sort: { name: 1, _id: 1 } },
       PROJECT,
     ]);
@@ -105,7 +132,7 @@ describe("productListPipeline", () => {
     expect(productListPipeline({ q: "óleo", sort: "name", dir: "asc" }, HOLDER_ID)).toEqual([
       { $match: { name: { $regex: "óleo", $options: "i" } } },
       ...HOLDER_ITEMS,
-      QUANTITY,
+      HOLDER_QUANTITY,
       { $sort: { name: 1, _id: 1 } },
       PROJECT,
     ]);

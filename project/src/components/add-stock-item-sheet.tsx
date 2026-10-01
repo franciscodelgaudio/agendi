@@ -67,7 +67,10 @@ function AddStockItemForm({ workspaceId, unitId, products, onDone }: Props & { o
     <form action={formAction} className="flex min-h-0 flex-1 flex-col">
       <SheetHeader>
         <SheetTitle>Adicionar do catálogo</SheetTitle>
-        <SheetDescription>Escolha um produto já cadastrado e informe quanto esta unidade tem dele.</SheetDescription>
+        <SheetDescription>
+          Escolha um produto já cadastrado e informe quanto esta unidade tem dele. A quantidade entra pelo preço da
+          última compra; se o preço mudou, adicione com zero e registre a compra.
+        </SheetDescription>
       </SheetHeader>
       <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
         {state.error && <FieldError>{state.error}</FieldError>}

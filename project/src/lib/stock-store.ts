@@ -1,5 +1,7 @@
 import { Types } from "mongoose"
+import type { Lot } from "@/lib/stock-lots"
 import { Stock } from "@/models/Stock"
+import { StockItem } from "@/models/StockItem"
 import { StockMovement } from "@/models/StockMovement"
 
 // Estoque compartilhado em que a unidade está.
@@ -48,11 +50,47 @@ type Movement = {
   kind: "purchase" | "adjustment" | "depletion" | "transfer"
   quantity: number
   toUnitId?: string
+  costCents?: number
   createdBy: string
 }
 
 // Quantidade zero não é movimentação.
 export async function recordMovement({ quantity, ...movement }: Movement) {
   if (quantity <= 0) return
-  await StockMovement.create({ ...movement, quantity, toUnitId: movement.toUnitId ?? null })
+  await StockMovement.create({
+    ...movement,
+    quantity,
+    toUnitId: movement.toUnitId ?? null,
+    costCents: movement.costCents ?? 0,
+  })
+}
+
+// Lotes como vêm do banco (subdocumentos), no formato da lógica do PEPS.
+export function toLots(lots: { quantity: number; unitCostCents: number; purchasedAt: Date }[]): Lot[] {
+  return lots.map(({ quantity, unitCostCents, purchasedAt }) => ({ quantity, unitCostCents, purchasedAt }))
+}
+
+// Troca os lotes de um item a partir dos atuais, só se ninguém os alterou desde a leitura
+// (os lotes no filtro são os lidos); tenta de novo algumas vezes. change devolve os lotes novos, ou um resultado
+// para parar sem gravar. null quando o item não existe.
+export async function updateItemLots<T>(
+  filter: { holderId: Types.ObjectId; productId: Types.ObjectId },
+  change: (lots: Lot[]) => { lots: Lot[]; result: T } | { stop: T },
+  extra: Record<string, unknown> = {},
+): Promise<T | null> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const item = await StockItem.findOne(filter).select({ lots: 1 }).lean()
+    if (!item) return null
+    const next = change(toLots(item.lots))
+    if ("stop" in next) return next.stop
+    const { matchedCount } = await StockItem.updateOne(
+      { ...filter, lots: item.lots },
+      {
+        $set: { lots: next.lots, quantity: next.lots.reduce((sum, lot) => sum + lot.quantity, 0) },
+        ...extra,
+      },
+    )
+    if (matchedCount > 0) return next.result
+  }
+  throw new Error("O estoque mudou várias vezes seguidas; tente de novo.")
 }

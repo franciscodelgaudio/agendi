@@ -15,6 +15,7 @@ import {
   type StockUnit,
   type UpdateStockError,
 } from "@/lib/stock"
+import { toLots } from "@/lib/stock-store"
 import { Stock } from "@/models/Stock"
 import { StockItem } from "@/models/StockItem"
 import { Unit } from "@/models/Unit"
@@ -60,20 +61,20 @@ function toUnitDocs(units: StockUnit[]) {
 async function mergeInto(targetId: Types.ObjectId, sourceIds: Types.ObjectId[]) {
   if (sourceIds.length === 0) return
   const items = await StockItem.find({ holderId: { $in: [targetId, ...sourceIds] } })
-    .select({ productId: 1, quantity: 1, depletedAt: 1 })
+    .select({ productId: 1, lots: 1, depletedAt: 1 })
     .lean()
   const merged = mergeStockItems(
     items.map((item) => ({
       productId: item.productId.toString(),
-      quantity: item.quantity,
+      lots: toLots(item.lots),
       depletedAt: item.depletedAt as unknown as Date[],
     })),
   )
   await Promise.all(
-    merged.map(({ productId, quantity, depletedAt }) =>
+    merged.map(({ productId, lots, depletedAt }) =>
       StockItem.updateOne(
         { holderId: targetId, productId: new Types.ObjectId(productId) },
-        { $set: { quantity, depletedAt } },
+        { $set: { quantity: lots.reduce((sum, lot) => sum + lot.quantity, 0), lots, depletedAt } },
         { upsert: true },
       ),
     ),

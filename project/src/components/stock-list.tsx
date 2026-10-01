@@ -1,4 +1,4 @@
-import { WarehouseIcon } from "lucide-react"
+import { ArchiveIcon } from "lucide-react"
 
 import { StockActions, type StockFormValue, type StockUnitOption } from "@/components/stock-sheets"
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,7 +32,7 @@ export function StockList({
           <CardHeader>
             <CardTitle className="flex min-w-0 items-center gap-2">
               <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary [&_svg]:size-4">
-                <WarehouseIcon />
+                <ArchiveIcon />
               </span>
               <span className="truncate">{stock.name}</span>
             </CardTitle>

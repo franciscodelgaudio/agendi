@@ -117,24 +117,6 @@ export async function createProduct(
 
 export type UpdateProductError = ProductInputError | "product_not_found";
 
-export type UpdateProductResult = { ok: true } | { ok: false; error: UpdateProductError };
-
-// update devolve false quando o produto não existe (ou não é da unidade).
-export async function updateProduct(
-  input: unknown,
-  productId: string | null | undefined,
-  update: (productId: string, data: ProductData) => Promise<boolean>,
-): Promise<UpdateProductResult> {
-  if (!productId) return { ok: false, error: "product_not_found" };
-
-  const parsed = parseProductInput(input);
-  if (!parsed.ok) return parsed;
-
-  const { name, quantity, costCents, notes, rating, avatarUrl } = parsed;
-  const found = await update(productId, { name, quantity, costCents, notes, rating, avatarUrl });
-  return found ? { ok: true } : { ok: false, error: "product_not_found" };
-}
-
 export type CreateCatalogProductResult =
   | { ok: true; productId: string }
   | { ok: false; error: ProductInputError | "workspace_not_found" };
@@ -193,6 +175,58 @@ export async function addStockItem(
 
   const outcome = await add(productId, parsedQuantity);
   if (outcome === "added") return { ok: true };
+  return { ok: false, error: outcome === "not_found" ? "product_not_found" : outcome };
+}
+
+export type RegisterPurchaseResult =
+  | { ok: true }
+  | { ok: false; error: "invalid_input" | "invalid_quantity" | "invalid_cost" | "product_not_found" };
+
+// Compra de mais unidades de um produto que está no estoque: vira um lote com o preço pago.
+// purchase devolve not_found quando o produto não está nesse estoque.
+export async function registerPurchase(
+  input: unknown,
+  productId: string | null | undefined,
+  purchase: (
+    productId: string,
+    lot: { quantity: number; unitCostCents: number },
+  ) => Promise<"purchased" | "not_found">,
+): Promise<RegisterPurchaseResult> {
+  if (!productId) return { ok: false, error: "product_not_found" };
+
+  const { quantity, cost } = (input ?? {}) as Record<string, unknown>;
+  if (typeof quantity !== "string" || typeof cost !== "string") return { ok: false, error: "invalid_input" };
+
+  const parsedQuantity = parseQuantity(quantity.trim());
+  if (!parsedQuantity) return { ok: false, error: "invalid_quantity" };
+  const unitCostCents = parsePriceCents(cost.trim());
+  if (unitCostCents === null) return { ok: false, error: "invalid_cost" };
+
+  const outcome = await purchase(productId, { quantity: parsedQuantity, unitCostCents });
+  return outcome === "purchased" ? { ok: true } : { ok: false, error: "product_not_found" };
+}
+
+export type AdjustStockResult =
+  | { ok: true }
+  | { ok: false; error: "invalid_input" | "invalid_quantity" | "product_not_found" | "above_current" };
+
+// Ajuste pela contagem: a quantidade só diminui, tirando dos lotes mais antigos. adjust devolve
+// above_current quando a contagem passa do que há (entrada é compra).
+export async function adjustStock(
+  input: unknown,
+  productId: string | null | undefined,
+  adjust: (productId: string, quantity: number) => Promise<"adjusted" | "not_found" | "above_current">,
+): Promise<AdjustStockResult> {
+  if (!productId) return { ok: false, error: "product_not_found" };
+
+  const { quantity } = (input ?? {}) as Record<string, unknown>;
+  if (typeof quantity !== "string") return { ok: false, error: "invalid_input" };
+
+  const parsedQuantity = parseQuantity(quantity.trim());
+  if (parsedQuantity === null) return { ok: false, error: "invalid_quantity" };
+
+  const outcome = await adjust(productId, parsedQuantity);
+  if (outcome === "adjusted") return { ok: true };
   return { ok: false, error: outcome === "not_found" ? "product_not_found" : outcome };
 }
 

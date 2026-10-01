@@ -192,20 +192,25 @@ describe("deleteStock", () => {
 });
 
 // Unidades que entram num estoque compartilhado levam o que têm: o mesmo produto vira um item
-// só, com as quantidades somadas e todas as vezes que acabou.
+// só, com os lotes de todos em ordem de compra e todas as vezes que acabou.
 describe("mergeStockItems", () => {
   const day = (d: number) => new Date(Date.UTC(2026, 8, d));
+  const lot = (quantity: number, unitCostCents: number, d: number) => ({ quantity, unitCostCents, purchasedAt: day(d) });
 
-  it("soma as quantidades do mesmo produto e junta as datas em que acabou, em ordem", () => {
+  it("junta os lotes do mesmo produto em ordem de compra e as datas em que acabou, em ordem", () => {
     expect(
       mergeStockItems([
-        { productId: PRODUCT_1, quantity: 3, depletedAt: [day(5)] },
-        { productId: PRODUCT_2, quantity: 1, depletedAt: [] },
-        { productId: PRODUCT_1, quantity: 4, depletedAt: [day(2), day(9)] },
+        { productId: PRODUCT_1, lots: [lot(3, 2000, 4)], depletedAt: [day(5)] },
+        { productId: PRODUCT_2, lots: [lot(1, 500, 1)], depletedAt: [] },
+        { productId: PRODUCT_1, lots: [lot(2, 1800, 1), lot(2, 3000, 8)], depletedAt: [day(2), day(9)] },
       ]),
     ).toEqual([
-      { productId: PRODUCT_1, quantity: 7, depletedAt: [day(2), day(5), day(9)] },
-      { productId: PRODUCT_2, quantity: 1, depletedAt: [] },
+      {
+        productId: PRODUCT_1,
+        lots: [lot(2, 1800, 1), lot(3, 2000, 4), lot(2, 3000, 8)],
+        depletedAt: [day(2), day(5), day(9)],
+      },
+      { productId: PRODUCT_2, lots: [lot(1, 500, 1)], depletedAt: [] },
     ]);
   });
 
@@ -213,11 +218,13 @@ describe("mergeStockItems", () => {
     expect(mergeStockItems([])).toEqual([]);
   });
 
-  it("não altera as datas recebidas", () => {
+  it("não altera os itens recebidos", () => {
     const depletedAt = [day(9), day(2)];
+    const lots = [lot(1, 100, 9), lot(1, 100, 2)];
 
-    mergeStockItems([{ productId: PRODUCT_1, quantity: 1, depletedAt }]);
+    mergeStockItems([{ productId: PRODUCT_1, lots, depletedAt }]);
 
     expect(depletedAt).toEqual([day(9), day(2)]);
+    expect(lots).toEqual([lot(1, 100, 9), lot(1, 100, 2)]);
   });
 });

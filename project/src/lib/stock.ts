@@ -1,4 +1,5 @@
 import { isObjectIdOrHexString } from "mongoose";
+import { addLots, type Lot } from "@/lib/stock-lots";
 
 const MAX_NAME_LENGTH = 40;
 
@@ -107,20 +108,19 @@ export async function deleteStock(
   return found ? { ok: true } : { ok: false, error: "stock_not_found" };
 }
 
-export type StockItemData = { productId: string; quantity: number; depletedAt: Date[] };
+export type StockItemData = { productId: string; lots: Lot[]; depletedAt: Date[] };
 
-// O mesmo produto vindo de vários estoques vira um item: quantidades somadas e todas as vezes
-// que acabou, em ordem. Os produtos ficam na ordem em que apareceram.
+// O mesmo produto vindo de vários estoques vira um item: os lotes de todos em ordem de compra e
+// todas as vezes que acabou, em ordem. Os produtos ficam na ordem em que apareceram.
 export function mergeStockItems(items: StockItemData[]): StockItemData[] {
   const merged = new Map<string, StockItemData>();
-  for (const { productId, quantity, depletedAt } of items) {
+  for (const { productId, lots, depletedAt } of items) {
     const current = merged.get(productId);
-    merged.set(
+    merged.set(productId, {
       productId,
-      current
-        ? { productId, quantity: current.quantity + quantity, depletedAt: [...current.depletedAt, ...depletedAt] }
-        : { productId, quantity, depletedAt: [...depletedAt] },
-    );
+      lots: addLots(current?.lots ?? [], lots),
+      depletedAt: [...(current?.depletedAt ?? []), ...depletedAt],
+    });
   }
   return [...merged.values()].map((item) => ({
     ...item,

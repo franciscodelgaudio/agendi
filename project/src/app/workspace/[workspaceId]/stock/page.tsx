@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { Types } from "mongoose"
-import { WarehouseIcon } from "lucide-react"
+import { ArchiveIcon } from "lucide-react"
 import { can, type Actor } from "@/lib/permissions"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
@@ -102,7 +102,7 @@ export default async function WorkspaceStockPage({ params, searchParams }: PageP
         <Empty className="border">
           <EmptyHeader>
             <EmptyMedia variant="icon">
-              <WarehouseIcon />
+              <ArchiveIcon />
             </EmptyMedia>
             <EmptyTitle>Nenhum produto em estoque</EmptyTitle>
             <EmptyDescription>

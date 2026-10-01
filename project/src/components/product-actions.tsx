@@ -2,10 +2,21 @@
 
 import { useActionState, useState, useTransition } from "react"
 import Link from "@/components/link"
-import { ArrowRightLeftIcon, EllipsisIcon, HistoryIcon, PackageXIcon, PencilIcon, Trash2Icon } from "lucide-react"
+import {
+  ArrowRightLeftIcon,
+  ClipboardCheckIcon,
+  EllipsisIcon,
+  HistoryIcon,
+  PackageXIcon,
+  PencilIcon,
+  ShoppingCartIcon,
+  Trash2Icon,
+} from "lucide-react"
 import {
   deleteProductAction,
+  adjustStockAction,
   depleteProductAction,
+  registerPurchaseAction,
   transferProductAction,
   updateProductAction,
   type ProductActionState,
@@ -32,6 +43,7 @@ import {
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { AmountInput } from "@/components/amount-input"
 import { ProductFields } from "@/components/product-fields"
 import { formatUses } from "@/components/product-format"
 import {
@@ -70,6 +82,8 @@ export function ProductActions({
   const [transferKey, setTransferKey] = useState(0)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [depleteOpen, setDepleteOpen] = useState(false)
+  const [purchaseOpen, setPurchaseOpen] = useState(false)
+  const [adjustOpen, setAdjustOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
   const [editKey, setEditKey] = useState(0)
 
@@ -90,6 +104,24 @@ export function ProductActions({
           >
             <PencilIcon />
             Editar
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              setEditKey((k) => k + 1)
+              setPurchaseOpen(true)
+            }}
+          >
+            <ShoppingCartIcon />
+            Registrar compra
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              setEditKey((k) => k + 1)
+              setAdjustOpen(true)
+            }}
+          >
+            <ClipboardCheckIcon />
+            Ajustar estoque
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setDepleteOpen(true)}>
             <PackageXIcon />
@@ -126,6 +158,30 @@ export function ProductActions({
             unitId={unitId}
             product={product}
             onDone={() => setEditOpen(false)}
+          />
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={purchaseOpen} onOpenChange={setPurchaseOpen}>
+        <SheetContent>
+          <PurchaseForm
+            key={editKey}
+            workspaceId={workspaceId}
+            unitId={unitId}
+            product={product}
+            onDone={() => setPurchaseOpen(false)}
+          />
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={adjustOpen} onOpenChange={setAdjustOpen}>
+        <SheetContent>
+          <AdjustForm
+            key={editKey}
+            workspaceId={workspaceId}
+            unitId={unitId}
+            product={product}
+            onDone={() => setAdjustOpen(false)}
           />
         </SheetContent>
       </Sheet>
@@ -178,7 +234,9 @@ function EditProductForm({ workspaceId, unitId, product, onDone }: Props & { onD
     <form action={formAction} className="flex min-h-0 flex-1 flex-col">
       <SheetHeader>
         <SheetTitle>Editar produto</SheetTitle>
-        <SheetDescription>Altere os dados deste produto.</SheetDescription>
+        <SheetDescription>
+          Altere os dados do produto; valem para o estoque de todas as unidades. A quantidade muda por compra ou ajuste.
+        </SheetDescription>
       </SheetHeader>
       {/* Só os campos rolam; título e botões ficam fixos. */}
       <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
@@ -186,6 +244,7 @@ function EditProductForm({ workspaceId, unitId, product, onDone }: Props & { onD
         <ProductFields
           idPrefix={`edit-product-${product.id}`}
           workspaceId={workspaceId}
+          withQuantity={false}
           defaultValues={product}
         />
       </FieldGroup>
@@ -372,6 +431,114 @@ function TransferProductForm({
       <SheetFooter>
         <Button type="submit" loading={pending}>
           {pending ? "Transferindo..." : "Transferir"}
+        </Button>
+      </SheetFooter>
+    </form>
+  )
+}
+
+// Compra de mais unidades: vira um lote com o preço pago, que sai depois dos que já estão aqui.
+function PurchaseForm({ workspaceId, unitId, product, onDone }: Props & { onDone: () => void }) {
+  const [state, formAction, pending] = useActionState(
+    async (prev: ProductActionState, formData: FormData) => {
+      const next = await registerPurchaseAction(workspaceId, unitId, product.id, prev, formData)
+      if (!next.error) onDone()
+      return next
+    },
+    { error: null },
+  )
+  const idPrefix = `purchase-product-${product.id}`
+
+  return (
+    <form action={formAction} className="flex min-h-0 flex-1 flex-col">
+      <SheetHeader>
+        <SheetTitle>Registrar compra</SheetTitle>
+        <SheetDescription>
+          A compra de <strong>{product.name}</strong> vira um lote com o preço pago e uma despesa no caixa desta unidade.
+        </SheetDescription>
+      </SheetHeader>
+      <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+        {state.error && <FieldError>{state.error}</FieldError>}
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-quantity`}>Quantidade comprada</FieldLabel>
+          <Input
+            id={`${idPrefix}-quantity`}
+            name="quantity"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={1_000_000}
+            step={1}
+            placeholder="10"
+            autoFocus
+            required
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-cost`}>Preço pago por unidade</FieldLabel>
+          <AmountInput
+            id={`${idPrefix}-cost`}
+            name="cost"
+            max={100_000_000}
+            placeholder="R$ 45,90"
+            defaultValue={product.costCents}
+            required
+          />
+          <FieldDescription>Vem preenchido com o preço da última compra.</FieldDescription>
+        </Field>
+      </FieldGroup>
+      <SheetFooter>
+        <Button type="submit" loading={pending}>
+          {pending ? "Registrando..." : "Registrar"}
+        </Button>
+      </SheetFooter>
+    </form>
+  )
+}
+
+// Ajuste pela contagem (perda, quebra, uso sem registro): o que falta sai dos lotes mais antigos.
+function AdjustForm({ workspaceId, unitId, product, onDone }: Props & { onDone: () => void }) {
+  const [state, formAction, pending] = useActionState(
+    async (prev: ProductActionState, formData: FormData) => {
+      const next = await adjustStockAction(workspaceId, unitId, product.id, prev, formData)
+      if (!next.error) onDone()
+      return next
+    },
+    { error: null },
+  )
+  const idPrefix = `adjust-product-${product.id}`
+
+  return (
+    <form action={formAction} className="flex min-h-0 flex-1 flex-col">
+      <SheetHeader>
+        <SheetTitle>Ajustar estoque</SheetTitle>
+        <SheetDescription>
+          Informe quanto de <strong>{product.name}</strong> há de fato. O que faltar sai dos lotes mais antigos, sem
+          despesa no caixa.
+        </SheetDescription>
+      </SheetHeader>
+      <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+        {state.error && <FieldError>{state.error}</FieldError>}
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-quantity`}>Quantidade contada</FieldLabel>
+          <Input
+            id={`${idPrefix}-quantity`}
+            name="quantity"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={product.quantity}
+            step={1}
+            defaultValue={product.quantity}
+            autoFocus
+            required
+          />
+          <FieldDescription>Hoje no sistema: {product.quantity}. Para pôr mais, registre uma compra.</FieldDescription>
+        </Field>
+      </FieldGroup>
+      <SheetFooter>
+        <Button type="submit" loading={pending}>
+          {pending ? "Ajustando..." : "Ajustar"}
         </Button>
       </SheetFooter>
     </form>

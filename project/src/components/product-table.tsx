@@ -1,5 +1,6 @@
 import {
   BanknoteIcon,
+  CoinsIcon,
   HashIcon,
   PackageIcon,
   RepeatIcon,
@@ -30,29 +31,40 @@ import { currencyFormat } from "@/components/service-format"
 import { formatAverage } from "@/components/product-format"
 
 type ProductRow = {
-    id: string
-    // Histórico de uso do produto; sem ele, o nome não é link.
-    href?: string
-    // Aparece abaixo do nome, antes das observações.
-    origin?: string | null
-    name: string
-    quantity: number
-    costCents: number
-    notes: string | null
-    rating: number | null
-    avatarUrl: string | null
-    usage: ProductUsageSummary
+  id: string
+  // Histórico de uso do produto; sem ele, o nome não é link.
+  href?: string
+  // Aparece abaixo do nome, antes das observações.
+  origin?: string | null
+  name: string
+  quantity: number
+  // Preço da última compra (catálogo).
+  costCents: number
+  // Soma dos lotes (quantidade × preço pago).
+  valueCents: number
+  // Preço do lote mais antigo, o próximo a sair; null sem lotes ou com vários estoques.
+  nextUnitCostCents: number | null
+  notes: string | null
+  rating: number | null
+  avatarUrl: string | null
+  usage: ProductUsageSummary
 }
 
 type Props<T extends ProductRow> = {
   products: T[]
   query: ProductListQuery
   pathname: string
+  // next: custo do próximo a sair (estoque de uma unidade); last: preço da última compra (catálogo).
+  cost: "next" | "last"
   // Ações de cada produto; sem elas (sem permissão), a coluna não aparece.
   actions?: (product: T) => ReactNode
 }
 
-export function ProductTable<T extends ProductRow>({ products, query, pathname, actions }: Props<T>) {
+function money(cents: number | null) {
+  return cents === null ? "—" : currencyFormat.format(cents / 100)
+}
+
+export function ProductTable<T extends ProductRow>({ products, query, pathname, cost, actions }: Props<T>) {
   const canManage = actions !== undefined
   return (
     <div className="border">
@@ -62,12 +74,27 @@ export function ProductTable<T extends ProductRow>({ products, query, pathname, 
             <CodeHead className="@max-5xl:hidden" />
             <SortableHead field="name" label="Produto" icon={PackageIcon} query={query} pathname={pathname} className="w-full" />
             <SortableHead field="quantity" label="Quantidade" icon={HashIcon} query={query} pathname={pathname} />
-            <SortableHead
-              field="costCents"
-              label="Preço de custo"
-              icon={BanknoteIcon}
-              query={query}
-              pathname={pathname}
+            {cost === "last" ? (
+              <SortableHead
+                field="costCents"
+                label="Última compra"
+                icon={BanknoteIcon}
+                query={query}
+                pathname={pathname}
+                className="@max-xl:hidden"
+              />
+            ) : (
+              <UsageHead
+                icon={BanknoteIcon}
+                label="Próximo a sair"
+                title="Preço pago no lote mais antigo, que sai primeiro (PEPS)"
+                className="@max-xl:hidden"
+              />
+            )}
+            <UsageHead
+              icon={CoinsIcon}
+              label="Valor em estoque"
+              title="Soma do que foi pago pelas unidades que ainda estão em estoque"
               className="@max-xl:hidden"
             />
             <SortableHead
@@ -103,7 +130,7 @@ export function ProductTable<T extends ProductRow>({ products, query, pathname, 
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={canManage ? 8 : 7} className="h-24 px-4 text-center text-muted-foreground">
+              <TableCell colSpan={canManage ? 9 : 8} className="h-24 px-4 text-center text-muted-foreground">
                 Nenhum produto encontrado.
               </TableCell>
             </TableRow>
@@ -139,8 +166,9 @@ export function ProductTable<T extends ProductRow>({ products, query, pathname, 
                   </TableCell>
                   <TableCell className="px-4 tabular-nums">{product.quantity}</TableCell>
                   <TableCell className="px-4 tabular-nums @max-xl:hidden">
-                    {currencyFormat.format(product.costCents / 100)}
+                    {money(cost === "last" ? product.costCents : product.nextUnitCostCents)}
                   </TableCell>
+                  <TableCell className="px-4 tabular-nums @max-xl:hidden">{money(product.valueCents)}</TableCell>
                   <TableCell className="px-4 @max-3xl:hidden">
                     <StarRating value={product.rating} />
                   </TableCell>

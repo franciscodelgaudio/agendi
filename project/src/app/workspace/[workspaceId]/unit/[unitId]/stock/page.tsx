@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { PackageIcon } from "lucide-react"
+import { ArchiveIcon } from "lucide-react"
 import { can, type Actor } from "@/lib/permissions"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
@@ -28,6 +28,8 @@ type ProductRow = {
   id: string
   name: string
   quantity: number
+  valueCents: number
+  nextUnitCostCents: number | null
   costCents: number
   notes: string | null
   rating: number | null
@@ -167,7 +169,7 @@ export default async function StockPage({
         <Empty className="border">
           <EmptyHeader>
             <EmptyMedia variant="icon">
-              <PackageIcon />
+              <ArchiveIcon />
             </EmptyMedia>
             <EmptyTitle>Nenhum produto em estoque</EmptyTitle>
             <EmptyDescription>
@@ -185,6 +187,7 @@ export default async function StockPage({
             products={products}
             query={query}
             pathname={pathname}
+            cost="next"
             actions={
               canManage
                 ? (product) => (

@@ -2,7 +2,7 @@
 
 import Link from "@/components/link"
 import { usePathname } from "next/navigation"
-import { PackageIcon, WarehouseIcon } from "lucide-react"
+import { PackageIcon, ArchiveIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // Abas da página de estoque: quantidades por estoque e o catálogo de produtos.
@@ -10,7 +10,7 @@ export function StockNav({ workspaceId }: { workspaceId: string }) {
   const pathname = usePathname()
   const base = `/workspace/${workspaceId}/stock`
   const items = [
-    { title: "Estoque", icon: WarehouseIcon, href: base },
+    { title: "Estoque", icon: ArchiveIcon, href: base },
     { title: "Produtos", icon: PackageIcon, href: `${base}/products` },
   ]
 

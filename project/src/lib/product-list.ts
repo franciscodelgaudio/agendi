@@ -19,6 +19,30 @@ export function parseProductListQuery(params: SearchParams): ProductListQuery {
   };
 }
 
+// Valor do estoque: quantidade × preço de cada lote de cada item.
+const LOTS_VALUE = {
+  $sum: {
+    $map: {
+      input: "$items",
+      as: "item",
+      in: {
+        $sum: {
+          $map: {
+            input: { $ifNull: ["$$item.lots", []] },
+            as: "lot",
+            in: { $multiply: ["$$lot.quantity", "$$lot.unitCostCents"] },
+          },
+        },
+      },
+    },
+  },
+};
+
+// Preço do lote mais antigo do item (os lotes ficam em ordem de compra).
+const NEXT_UNIT_COST = {
+  $ifNull: [{ $getField: { field: "unitCostCents", input: { $first: { $first: "$items.lots" } } } }, null],
+};
+
 // Etapas sobre os produtos do catálogo, com a quantidade dos itens de estoque. Com holderId
 // (o estoque da unidade ou o compartilhado), só os produtos que estão nele, com a quantidade de
 // lá; sem, todos do catálogo, com a soma de todos os estoques.
@@ -36,7 +60,14 @@ export function productListPipeline({ q, sort, dir }: ProductListQuery, holderId
   });
   if (holderId) stages.push({ $match: { items: { $ne: [] } } });
   stages.push(
-    { $addFields: { quantity: { $sum: "$items.quantity" } } },
+    {
+      $addFields: {
+        quantity: { $sum: "$items.quantity" },
+        valueCents: LOTS_VALUE,
+        // Com vários estoques, não há um lote que sai agora.
+        nextUnitCostCents: holderId ? NEXT_UNIT_COST : null,
+      },
+    },
     { $sort: { [sort]: dir === "desc" ? -1 : 1, _id: 1 } },
     {
       $project: {
@@ -44,6 +75,8 @@ export function productListPipeline({ q, sort, dir }: ProductListQuery, holderId
         id: { $toString: "$_id" },
         name: 1,
         quantity: 1,
+        valueCents: 1,
+        nextUnitCostCents: 1,
         costCents: 1,
         notes: { $ifNull: ["$notes", null] },
         rating: { $ifNull: ["$rating", null] },

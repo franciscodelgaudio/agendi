@@ -17,6 +17,8 @@ const stockMovementSchema = new Schema(
     // Sempre positiva; o tipo diz se entrou ou saiu.
     quantity: { type: Number, required: true, min: 1 },
     toUnitId: { type: Schema.Types.ObjectId, ref: "Unit", default: null },
+    // Custo do que entrou (compra) ou saiu (pelos lotes, no PEPS).
+    costCents: { type: Number, required: true, min: 0, default: 0 },
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
   },
   { collection: "stock_movements", timestamps: { createdAt: true, updatedAt: false } },

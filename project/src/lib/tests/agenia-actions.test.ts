@@ -196,6 +196,17 @@ describe("actionFormEntries", () => {
     expect(grouped(actionFormEntries("createProduct", input))).toMatchObject({ rating: ["4"], notes: ["Fornecedor novo"] });
   });
 
+  it("edição de produto não leva quantidade: compra e ajuste são ações à parte", () => {
+    const input = { unitId: UNIT, productId: ID_A, name: "Óleo", cost: 20, notes: null, rating: null, avatarUrl: null, summary: "x" };
+    expect(grouped(actionFormEntries("updateProduct", input))).toEqual({
+      name: ["Óleo"],
+      cost: ["20.00"],
+      notes: [""],
+      rating: [""],
+      avatarUrl: [""],
+    });
+  });
+
   it("agendamento: inclui a unidade e os produtos", () => {
     const input = parsed("createBooking", {
       unitId: UNIT,

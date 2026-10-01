@@ -2,7 +2,7 @@
 
 import Link from "@/components/link"
 import { usePathname } from "next/navigation"
-import { ArrowRightIcon, CalendarIcon, CircleCheckIcon, LayoutDashboardIcon, LeafIcon, PackageIcon, UsersIcon, WalletIcon, type LucideIcon } from "lucide-react"
+import { ArrowRightIcon, CalendarIcon, CircleCheckIcon, LayoutDashboardIcon, LeafIcon, ArchiveIcon, UsersIcon, WalletIcon, type LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { UNIT_PAGE_PATHS, type UnitPage } from "@/lib/page-access"
 import { cn } from "@/lib/utils"
@@ -29,7 +29,7 @@ export function UnitNav({
     services: { title: "Serviços", icon: LeafIcon, pending: !hasServices },
     calendar: { title: "Calendário", icon: CalendarIcon },
     appointments: { title: "Atendimentos", icon: CircleCheckIcon },
-    stock: { title: "Estoque", icon: PackageIcon },
+    stock: { title: "Estoque", icon: ArchiveIcon },
     team: { title: "Equipe", icon: UsersIcon },
     cash_flow: { title: "Caixa", icon: WalletIcon },
   }

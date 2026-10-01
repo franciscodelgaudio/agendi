@@ -24,6 +24,8 @@ type ProductRow = {
   id: string
   name: string
   quantity: number
+  valueCents: number
+  nextUnitCostCents: number | null
   costCents: number
   notes: string | null
   rating: number | null
@@ -131,6 +133,7 @@ export default async function StockProductsPage({
         products={products}
         query={query}
         pathname={`/workspace/${workspaceId}/stock/products`}
+        cost="last"
         actions={canManage ? (product) => <CatalogProductActions workspaceId={workspaceId} product={product} /> : undefined}
       />
     </>
