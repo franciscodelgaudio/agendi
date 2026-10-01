@@ -3,7 +3,6 @@ import { can, type Actor } from "@/lib/permissions"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { therapistOptionsStages } from "@/lib/therapist"
-import type { BusinessHours } from "@/lib/business-hours"
 import { Workspace } from "@/models/Workspace"
 import { BookingCalendar, type BookingOptions } from "@/components/booking-calendar"
 import { CalendarNav } from "@/components/calendar-nav"
@@ -17,12 +16,7 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access) notFound()
 
-  const [workspace] = await Workspace.aggregate<
-    Omit<BookingOptions, "units"> & {
-      actor: Actor
-      units: (BookingOptions["units"][number] & { businessHours: BusinessHours })[]
-    }
-  >([
+  const [workspace] = await Workspace.aggregate<BookingOptions & { actor: Actor }>([
     ...access,
     {
       $lookup: {
@@ -30,7 +24,7 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
         localField: "_id",
         foreignField: "workspaceId",
         as: "units",
-        pipeline: [{ $sort: { name: 1, _id: 1 } }, { $project: { name: 1, treatmentRooms: 1, businessHours: 1 } }],
+        pipeline: [{ $sort: { name: 1, _id: 1 } }, { $project: { name: 1, treatmentRooms: 1 } }],
       },
     },
     {
@@ -64,7 +58,7 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
           $map: {
             input: "$units",
             as: "unit",
-            in: { id: { $toString: "$$unit._id" }, name: "$$unit.name", businessHours: "$$unit.businessHours" },
+            in: { id: { $toString: "$$unit._id" }, name: "$$unit.name" },
           },
         },
         services: 1,

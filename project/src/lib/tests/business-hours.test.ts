@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calendarTimeRange, parseBusinessHours } from "@/lib/business-hours";
+import { parseBusinessHours } from "@/lib/business-hours";
 
 describe("parseBusinessHours", () => {
   it("devolve abertura e fechamento como chegam do formulário", () => {
@@ -38,28 +38,5 @@ describe("parseBusinessHours", () => {
     ["fechamento antes da abertura", { opensAt: "18:00", closesAt: "08:00" }, "invalid_business_hours_order"],
   ])("retorna erro quando %s", (_label, input, error) => {
     expect(parseBusinessHours(input)).toEqual({ ok: false, error });
-  });
-});
-
-describe("calendarTimeRange", () => {
-  it("usa o horário da unidade", () => {
-    expect(calendarTimeRange([{ opensAt: "09:00", closesAt: "18:30" }])).toEqual({
-      slotMinTime: "09:00",
-      slotMaxTime: "18:30",
-    });
-  });
-
-  it("com várias unidades, vai da abertura mais cedo ao fechamento mais tarde", () => {
-    expect(
-      calendarTimeRange([
-        { opensAt: "10:00", closesAt: "22:00" },
-        { opensAt: "07:30", closesAt: "19:00" },
-        { opensAt: "09:00", closesAt: "24:00" },
-      ]),
-    ).toEqual({ slotMinTime: "07:30", slotMaxTime: "24:00" });
-  });
-
-  it("sem unidades, mostra das 06:00 às 24:00", () => {
-    expect(calendarTimeRange([])).toEqual({ slotMinTime: "06:00", slotMaxTime: "24:00" });
   });
 });

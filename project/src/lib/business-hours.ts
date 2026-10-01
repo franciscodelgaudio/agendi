@@ -20,12 +20,3 @@ export function parseBusinessHours(
   if (closes <= opens) return { ok: false, error: "invalid_business_hours_order" };
   return { ok: true, value: { opensAt: opens, closesAt: closes } };
 }
-
-// Faixa visível do calendário: da abertura mais cedo ao fechamento mais tarde.
-export function calendarTimeRange(hours: readonly BusinessHours[]) {
-  if (!hours.length) return { slotMinTime: "06:00", slotMaxTime: "24:00" };
-  return {
-    slotMinTime: hours.reduce((min, { opensAt }) => (opensAt < min ? opensAt : min), hours[0].opensAt),
-    slotMaxTime: hours.reduce((max, { closesAt }) => (closesAt > max ? closesAt : max), hours[0].closesAt),
-  };
-}

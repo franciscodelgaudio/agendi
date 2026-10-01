@@ -27,7 +27,6 @@ import {
 import { BOOKING_COLORS } from "@/lib/booking-colors"
 import type { BookingRow } from "@/lib/booking-list"
 import { createRescheduleQueue, type RescheduleTimes } from "@/lib/reschedule-queue"
-import { calendarTimeRange, type BusinessHours } from "@/lib/business-hours"
 import { BRT_OFFSET_HOURS } from "@/lib/timezone"
 
 import {
@@ -57,8 +56,7 @@ import {
 export type BookingOptions = Required<BookingFormOptions>
 
 // unitId: calendário de uma unidade (units traz só ela); sem filtro nem escolha de unidade.
-type Props = Omit<BookingOptions, "units"> & {
-  units: (BookingOptions["units"][number] & { businessHours: BusinessHours })[]
+type Props = BookingOptions & {
   workspaceId: string
   canManage: boolean
   unitId?: string
@@ -146,10 +144,6 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
   // O proprietário sempre está entre as massagistas, então basta haver uma unidade.
   const canCreate = canManage && units.length > 0
   const options = { units: unitId ? undefined : units, therapists, services, treatmentRooms }
-  // Do horário da unidade filtrada; sem filtro, da abertura mais cedo ao fechamento mais tarde.
-  const timeRange = calendarTimeRange(
-    units.filter((option) => !unit || option.id === unit).map((option) => option.businessHours),
-  )
 
   // Cada busca recria os ids internos dos eventos, e ao soltar um arraste o FullCalendar grava
   // a cópia do evento feita no início dele. Uma busca que chegasse no meio deixaria as duas
@@ -406,7 +400,6 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
             headerToolbar={{ start: "prev,next today", center: "title", end: "dayGridMonth,timeGridWeek,timeGridDay" }}
             height="auto"
             allDaySlot={false}
-            {...timeRange}
             scrollTime="08:00"
             // Uma faixa por hora, como no Google Agenda; arrastar e selecionar continuam de 30 em 30 min.
             slotDuration="01:00"
