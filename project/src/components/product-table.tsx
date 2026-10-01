@@ -9,8 +9,8 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "cn"
+import type { ReactNode } from "react"
 import Link from "@/components/link"
-import { ProductActions } from "@/components/product-actions"
 import { CodeCell, CodeHead } from "@/components/record-code"
 import { SortableHead } from "@/components/sortable-head"
 import { StarRating } from "@/components/star-rating"
@@ -29,15 +29,12 @@ import type { ProductUsageSummary } from "@/lib/product-usage"
 import { currencyFormat } from "@/components/service-format"
 import { formatAverage } from "@/components/product-format"
 
-type Props = {
-  products: {
+type ProductRow = {
     id: string
-    // Unidade de onde as ações e o histórico são abertos.
-    unitId: string
-    // Unidade ou estoque de várias unidades de onde o produto é; aparece abaixo do nome.
+    // Histórico de uso do produto; sem ele, o nome não é link.
+    href?: string
+    // Aparece abaixo do nome, antes das observações.
     origin?: string | null
-    // Só no estoque distribuído: a parte de cada unidade.
-    unitQuantities?: { unitId: string; quantity: number }[]
     name: string
     quantity: number
     costCents: number
@@ -45,17 +42,18 @@ type Props = {
     rating: number | null
     avatarUrl: string | null
     usage: ProductUsageSummary
-  }[]
-  query: ProductListQuery
-  pathname: string
-  workspaceId: string
-  // Sem permissão, a coluna de ações (editar/excluir) não aparece.
-  canManage: boolean
-  // Unidades do estoque distribuído, para quem pode transferir; null esconde a ação.
-  transferUnits?: { id: string; name: string }[] | null
 }
 
-export function ProductTable({ products, query, pathname, workspaceId, canManage, transferUnits = null }: Props) {
+type Props<T extends ProductRow> = {
+  products: T[]
+  query: ProductListQuery
+  pathname: string
+  // Ações de cada produto; sem elas (sem permissão), a coluna não aparece.
+  actions?: (product: T) => ReactNode
+}
+
+export function ProductTable<T extends ProductRow>({ products, query, pathname, actions }: Props<T>) {
+  const canManage = actions !== undefined
   return (
     <div className="border">
       <Table>
@@ -124,12 +122,13 @@ export function ProductTable({ products, query, pathname, workspaceId, canManage
                         <InitialFallback name={product.name} className="rounded-md" />
                       </Avatar>
                       <div className="grid min-w-0">
-                        <Link
-                          href={`/workspace/${workspaceId}/unit/${product.unitId}/stock/${product.id}`}
-                          className="truncate font-medium hover:underline"
-                        >
-                          {product.name}
-                        </Link>
+                        {product.href ? (
+                          <Link href={product.href} className="truncate font-medium hover:underline">
+                            {product.name}
+                          </Link>
+                        ) : (
+                          <span className="truncate font-medium">{product.name}</span>
+                        )}
                         {details && (
                           <span className="truncate text-xs text-muted-foreground" title={details}>
                             {details}
@@ -149,16 +148,7 @@ export function ProductTable({ products, query, pathname, workspaceId, canManage
                   <TableCell className="px-4 text-muted-foreground tabular-nums @max-4xl:hidden">
                     {formatAverage(product.usage.averageUsesPerDepletion)}
                   </TableCell>
-                  {canManage && (
-                    <TableCell className="px-4 text-right">
-                      <ProductActions
-                        workspaceId={workspaceId}
-                        unitId={product.unitId}
-                        product={product}
-                        transferUnits={transferUnits}
-                      />
-                    </TableCell>
-                  )}
+                  {actions && <TableCell className="px-4 text-right">{actions(product)}</TableCell>}
                 </TableRow>
               )
             })

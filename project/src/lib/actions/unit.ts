@@ -16,7 +16,7 @@ import {
 } from "@/lib/unit"
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
-import { Product } from "@/models/Product"
+import { StockItem } from "@/models/StockItem"
 import { Stock } from "@/models/Stock"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
@@ -230,29 +230,16 @@ export async function deleteUnitAction(workspaceId: string, unitId: string): Pro
       Appointment.deleteMany({ unitId: id }),
       WorkspaceMember.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
       Wallet.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
-      Stock.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
-      // No estoque distribuído, a parte da unidade sai do total junto com ela.
-      Product.updateMany({ "unitQuantities.unitId": unitObjectId }, [
-        {
-          $set: {
-            quantity: {
-              $subtract: [
-                "$quantity",
-                {
-                  $sum: {
-                    $map: {
-                      input: { $filter: { input: "$unitQuantities", cond: { $eq: ["$$this.unitId", unitObjectId] } } },
-                      in: "$$this.quantity",
-                    },
-                  },
-                },
-              ],
-            },
-            unitQuantities: { $filter: { input: "$unitQuantities", cond: { $ne: ["$$this.unitId", unitObjectId] } } },
-          },
-        },
-      ]),
+      // O estoque próprio da unidade vai junto; o compartilhado continua com as outras.
+      StockItem.deleteMany({ holderId: unitObjectId }),
+      Stock.updateMany({ "units.unitId": unitObjectId }, { $pull: { units: { unitId: unitObjectId } } }),
     ])
+    // Estoque compartilhado que ficou sem unidades não tem mais quem o use.
+    const orphaned = await Stock.find({ workspaceId: target.ownedId, units: { $size: 0 } }).select({ _id: 1 }).lean()
+    if (orphaned.length > 0) {
+      const ids = orphaned.map((stock) => stock._id)
+      await Promise.all([StockItem.deleteMany({ holderId: { $in: ids } }), Stock.deleteMany({ _id: { $in: ids } })])
+    }
     return true
   })
 

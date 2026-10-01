@@ -5,8 +5,8 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/componen
 
 const listFormat = new Intl.ListFormat("pt-BR")
 
-// Estoques de várias unidades, com o modo e as unidades de cada um. units só vem para quem
-// gerencia o estoque (mostra as ações).
+// Estoques compartilhados, com as unidades de cada um. units só vem para quem gerencia o
+// estoque (mostra as ações).
 export function StockList({
   stocks,
   workspaceId,
@@ -19,7 +19,8 @@ export function StockList({
   if (stocks.length === 0) {
     return (
       <div className="border px-4 py-6 text-center text-sm text-muted-foreground">
-        Cada unidade tem o próprio estoque. Crie um estoque para que várias unidades usem os mesmos produtos.
+        Cada unidade tem o próprio estoque. Crie um estoque compartilhado para que várias unidades usem uma
+        quantidade só de cada produto.
       </div>
     )
   }
@@ -41,14 +42,8 @@ export function StockList({
               </CardAction>
             )}
           </CardHeader>
-          <CardContent className="grid gap-1 text-sm">
-            <div>{stock.distributed ? "Dividido entre as unidades" : "Compartilhado"}</div>
-            <div className="text-muted-foreground">
-              {stock.units.length === 0 ? "Sem unidades" : listFormat.format(stock.units.map((unit) => unit.name))}
-            </div>
-            <div className="text-muted-foreground">
-              {stock.products.length === 1 ? "1 produto" : `${stock.products.length} produtos`}
-            </div>
+          <CardContent className="text-sm text-muted-foreground">
+            {stock.units.length === 0 ? "Sem unidades" : listFormat.format(stock.units.map((unit) => unit.name))}
           </CardContent>
         </Card>
       ))}

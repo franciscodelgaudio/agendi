@@ -51,21 +51,20 @@ type Product = {
   notes: string | null
   rating: number | null
   avatarUrl: string | null
-  // Só no estoque distribuído: a parte de cada unidade.
-  unitQuantities?: { unitId: string; quantity: number }[]
   usage: ProductUsageSummary
 }
 
 type Props = { workspaceId: string; unitId: string; product: Product }
 
-type TransferUnit = { id: string; name: string }
+// Unidades do workspace e quanto do produto o estoque de cada uma tem.
+export type ProductTransfer = { units: { id: string; name: string }[]; quantities: Record<string, number> }
 
 export function ProductActions({
   workspaceId,
   unitId,
   product,
-  transferUnits = null,
-}: Props & { transferUnits?: TransferUnit[] | null }) {
+  transfer = null,
+}: Props & { transfer?: ProductTransfer | null }) {
   const [editOpen, setEditOpen] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferKey, setTransferKey] = useState(0)
@@ -96,7 +95,7 @@ export function ProductActions({
             <PackageXIcon />
             Marcar como acabou
           </DropdownMenuItem>
-          {transferUnits && (
+          {transfer && (
             <DropdownMenuItem
               onClick={() => {
                 setTransferKey((k) => k + 1)
@@ -114,7 +113,7 @@ export function ProductActions({
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
             <Trash2Icon />
-            Excluir
+            Tirar do estoque
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -131,7 +130,7 @@ export function ProductActions({
         </SheetContent>
       </Sheet>
 
-      {transferUnits && (
+      {transfer && (
         <Sheet open={transferOpen} onOpenChange={setTransferOpen}>
           <SheetContent>
             <TransferProductForm
@@ -139,7 +138,7 @@ export function ProductActions({
               workspaceId={workspaceId}
               unitId={unitId}
               product={product}
-              units={transferUnits}
+              transfer={transfer}
               onDone={() => setTransferOpen(false)}
             />
           </SheetContent>
@@ -187,7 +186,6 @@ function EditProductForm({ workspaceId, unitId, product, onDone }: Props & { onD
         <ProductFields
           idPrefix={`edit-product-${product.id}`}
           workspaceId={workspaceId}
-          unitId={unitId}
           defaultValues={product}
         />
       </FieldGroup>
@@ -228,16 +226,17 @@ function DeleteProductDialog({
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
+          <AlertDialogTitle>Tirar do estoque?</AlertDialogTitle>
           <AlertDialogDescription>
-            O produto <strong>{product.name}</strong> será excluído permanentemente. Essa ação não pode ser desfeita.
+            O produto <strong>{product.name}</strong> sai do estoque desta unidade, com a quantidade dele. Ele continua no
+            catálogo e nos estoques das outras unidades.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error && <FieldError>{error}</FieldError>}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
           <Button variant="destructive" onClick={handleDelete} loading={pending}>
-            {pending ? "Excluindo..." : "Excluir"}
+            {pending ? "Tirando..." : "Tirar"}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -292,14 +291,14 @@ function DepleteProductDialog({
   )
 }
 
-// Leva produto de uma unidade do estoque distribuído para outra; começa saindo desta unidade.
+// Leva produto do estoque de uma unidade para o de outra; começa saindo desta unidade.
 function TransferProductForm({
   workspaceId,
   unitId,
   product,
-  units,
+  transfer: { units, quantities },
   onDone,
-}: Props & { units: TransferUnit[]; onDone: () => void }) {
+}: Props & { transfer: ProductTransfer; onDone: () => void }) {
   const [state, formAction, pending] = useActionState(
     async (prev: ProductActionState, formData: FormData) => {
       const next = await transferProductAction(workspaceId, unitId, product.id, prev, formData)
@@ -310,7 +309,7 @@ function TransferProductForm({
   )
   const [fromUnitId, setFromUnitId] = useState<string | null>(unitId)
   const [toUnitId, setToUnitId] = useState<string | null>(() => units.find((unit) => unit.id !== unitId)?.id ?? null)
-  const quantityOf = (id: string | null) => product.unitQuantities?.find((unit) => unit.unitId === id)?.quantity ?? 0
+  const quantityOf = (id: string | null) => (id && quantities[id]) || 0
   const items = units.map((unit) => ({ value: unit.id, label: `${unit.name} (${quantityOf(unit.id)})` }))
   const idPrefix = `transfer-product-${product.id}`
 
@@ -319,7 +318,7 @@ function TransferProductForm({
       <SheetHeader>
         <SheetTitle>Transferir produto</SheetTitle>
         <SheetDescription>
-          Leve <strong>{product.name}</strong> de uma unidade para outra. O total do estoque não muda.
+          Leve <strong>{product.name}</strong> do estoque de uma unidade para o de outra.
         </SheetDescription>
       </SheetHeader>
       <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">

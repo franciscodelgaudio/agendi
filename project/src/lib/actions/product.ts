@@ -4,29 +4,45 @@ import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { getSessionUserId } from "@/lib/session"
 import { findManagedUnit } from "@/lib/unit-access"
-import type { Permission } from "@/lib/permissions"
+import { can, type Permission } from "@/lib/permissions"
+import { findWorkspaceAccess } from "@/lib/workspace-access"
 import {
+  addStockItem,
+  createCatalogProduct,
   createProduct,
   deleteProduct,
   depleteProduct,
+  updateCatalogProduct,
   updateProduct,
+  type AddStockItemResult,
+  type CreateCatalogProductResult,
   type CreateProductError,
   type UpdateProductError,
 } from "@/lib/product"
 import { loadExpenseGroupIcons } from "@/lib/expense-group-icon-store"
 import { findUnitProducts } from "@/lib/product-lookup"
-import { productScopeMatch, type ProductScope } from "@/lib/product-scope"
 import { PRODUCT_SEARCH_LIMIT, productSearchPipeline } from "@/lib/product-search"
 import { recordStockPurchase } from "@/lib/stock-purchase"
-import { setUnitQuantity, transferProduct, type TransferProductError } from "@/lib/stock-movement"
-import { findUnitStock, recordMovement, scopeOf, type UnitStock } from "@/lib/stock-store"
+import { transferProduct, type TransferProductError } from "@/lib/stock-movement"
+import { findUnitHolder, recordMovement } from "@/lib/stock-store"
 import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Product } from "@/models/Product"
+import { StockItem } from "@/models/StockItem"
+import { Unit } from "@/models/Unit"
 import type { ProductOption } from "@/components/product-picker"
 
+type AddStockItemError = Extract<AddStockItemResult, { ok: false }>["error"]
+type CreateCatalogProductError = Extract<CreateCatalogProductResult, { ok: false }>["error"]
+
 const errorMessages: Record<
-  CreateProductError | UpdateProductError | TransferProductError | "out_of_stock" | "conflict" | "unauthenticated",
+  | CreateProductError
+  | CreateCatalogProductError
+  | UpdateProductError
+  | TransferProductError
+  | AddStockItemError
+  | "out_of_stock"
+  | "unauthenticated",
   string
 > = {
   invalid_input: "Preencha nome, quantidade e preço de custo.",
@@ -37,30 +53,30 @@ const errorMessages: Record<
   notes_too_long: "As observações podem ter no máximo 500 caracteres.",
   invalid_rating: "A avaliação deve ser de 1 a 5 estrelas.",
   unit_not_found: "Unidade não encontrada ou sem permissão.",
+  workspace_not_found: "Workspace não encontrado ou sem permissão.",
   product_not_found: "Produto não encontrado ou sem permissão.",
+  already_in_stock: "Este produto já está no estoque desta unidade.",
   out_of_stock: "A quantidade deste produto já é zero. Atualize o estoque antes de marcar que acabou.",
-  invalid_units: "Escolha unidades deste estoque.",
+  invalid_units: "Escolha unidades deste workspace.",
   same_unit: "Escolha uma unidade de destino diferente da de origem.",
-  not_distributed: "Este estoque é compartilhado: a quantidade é uma só para todas as unidades.",
-  insufficient_stock: "A unidade de origem não tem essa quantidade do produto.",
-  conflict: "O estoque deste produto mudou enquanto você editava. Tente de novo.",
+  same_stock: "As duas unidades usam o mesmo estoque compartilhado; não há o que transferir.",
+  insufficient_stock: "O estoque de origem não tem essa quantidade do produto.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
 export type ProductActionState = { error: string | null }
 
-// Unidade (se o usuário tiver a permissão nela), o estoque em que ela está e os produtos que
-// ela enxerga; undefined sem permissão, null = sessão expirada.
+// Unidade (se o usuário tiver a permissão nela), com o workspace e o estoque que ela usa;
+// unit undefined sem permissão, null = sessão expirada.
 async function findManagedTarget(workspaceId: string, unitId: string, permission: Permission = "stock.manage") {
   const userId = await getSessionUserId()
   if (!userId) return null
   const unit = await findManagedUnit(workspaceId, unitId, userId, permission)
   if (!unit) return { userId, unit: undefined }
-  const stock = await findUnitStock(unit.unitId)
-  return { userId, unit: { unitId: unit.unitId, stock, scope: scopeOf(unit.unitId, stock) } }
+  return { userId, unit: { ...unit, ...(await findUnitHolder(unit.unitId)) } }
 }
 
-// Aumento de estoque vira despesa paga no grupo de insumos, criado se a unidade ainda não tiver.
+// Aumento de estoque vira despesa paga no grupo de insumos da unidade, criado se ela ainda não tiver.
 async function recordPurchase(userId: string, change: Parameters<typeof recordStockPurchase>[0]) {
   await recordStockPurchase(change, {
     ensureGroup: async (unitId, name) => {
@@ -80,20 +96,19 @@ async function recordPurchase(userId: string, change: Parameters<typeof recordSt
   })
 }
 
-// Entrada vira compra (com despesa), saída vira ajuste; as duas ficam no histórico da unidade.
+// Entrada vira compra (com despesa da unidade), saída vira ajuste; as duas ficam no histórico.
 async function recordQuantityChange(
   userId: string,
-  unitId: string,
-  stock: UnitStock | null,
+  unit: { unitId: string; holderId: string },
   change: { productId: string; productName: string; previousQuantity: number; quantity: number; costCents: number },
 ) {
   const delta = change.quantity - change.previousQuantity
   await Promise.all([
-    recordPurchase(userId, { ...change, unitId }),
+    recordPurchase(userId, { ...change, unitId: unit.unitId }),
     recordMovement({
       productId: change.productId,
-      stockId: stock?.id ?? null,
-      unitId,
+      holderId: unit.holderId,
+      unitId: unit.unitId,
       kind: delta >= 0 ? "purchase" : "adjustment",
       quantity: Math.abs(delta),
       createdBy: userId,
@@ -112,8 +127,12 @@ function productInput(formData: FormData) {
   }
 }
 
+function isDuplicateKey(error: unknown) {
+  return (error as { code?: number })?.code === 11000
+}
+
+// Cadastra o produto no catálogo do workspace e já o põe no estoque da unidade com a quantidade.
 // workspaceId e unitId vêm via argumento do cliente; a posse é conferida aqui, no servidor.
-// Num estoque distribuído, a quantidade informada é a da unidade; as outras começam em zero.
 export async function createProductAction(
   workspaceId: string,
   unitId: string,
@@ -124,26 +143,17 @@ export async function createProductAction(
   if (!target) return { error: errorMessages.unauthenticated }
   const { userId, unit } = target
 
-  const result = await createProduct(productInput(formData), unit?.unitId, async (data) => {
-    const stock = unit!.stock
-    const quantities = stock?.distributed
-      ? setUnitQuantity(
-          { quantity: 0, unitQuantities: stock.unitIds.map((id) => ({ unitId: id, quantity: 0 })) },
-          data.unitId,
-          data.quantity,
-        )
-      : null
-    const product = await Product.create({
-      ...data,
-      stockId: stock?.id ?? null,
-      unitQuantities: quantities?.unitQuantities ?? [],
-    })
+  const result = await createProduct(productInput(formData), unit?.unitId, async (input) => {
+    const { quantity, name, costCents, notes, rating, avatarUrl } = input
+    const data = { name, costCents, notes, rating, avatarUrl }
+    const product = await Product.create({ ...data, workspaceId: unit!.workspaceId })
     const id = product._id.toString()
-    await recordQuantityChange(userId, data.unitId, stock, {
+    await StockItem.create({ productId: product._id, holderId: unit!.holderId, quantity })
+    await recordQuantityChange(userId, unit!, {
       productId: id,
       productName: data.name,
       previousQuantity: 0,
-      quantity: data.quantity,
+      quantity,
       costCents: data.costCents,
     })
     return { id }
@@ -155,8 +165,48 @@ export async function createProductAction(
   return { error: null }
 }
 
-// Só repassa o productId quando a unidade é gerenciável; a escrita ainda filtra pelo escopo
-// da unidade para que um produto de fora dele não seja encontrado. null = sessão expirada.
+// Põe no estoque da unidade um produto que já está no catálogo.
+export async function addStockItemAction(
+  workspaceId: string,
+  unitId: string,
+  _prev: ProductActionState,
+  formData: FormData,
+): Promise<ProductActionState> {
+  const target = await findManagedTarget(workspaceId, unitId)
+  if (!target) return { error: errorMessages.unauthenticated }
+  const { userId, unit } = target
+  if (!unit) return { error: errorMessages.unit_not_found }
+
+  const input = { productId: formData.get("productId"), quantity: formData.get("quantity") }
+  const result = await addStockItem(input, async (productId, quantity) => {
+    const product = await Product.findOne({ _id: productId, workspaceId: unit.workspaceId })
+      .select({ name: 1, costCents: 1 })
+      .lean()
+    if (!product) return "not_found"
+    try {
+      await StockItem.create({ productId: product._id, holderId: unit.holderId, quantity })
+    } catch (error) {
+      if (isDuplicateKey(error)) return "already_in_stock"
+      throw error
+    }
+    await recordQuantityChange(userId, unit, {
+      productId,
+      productName: product.name,
+      previousQuantity: 0,
+      quantity,
+      costCents: product.costCents,
+    })
+    return "added"
+  })
+
+  if (!result.ok) return { error: errorMessages[result.error] }
+
+  refresh()
+  return { error: null }
+}
+
+// Só repassa o productId quando a unidade é gerenciável; as escritas filtram pelo estoque da
+// unidade (e pelo workspace, no catálogo). null = sessão expirada.
 async function resolveProductTarget(
   workspaceId: string,
   unitId: string,
@@ -168,10 +218,11 @@ async function resolveProductTarget(
   return { ...target, productId: target.unit && isObjectIdOrHexString(productId) ? productId : null }
 }
 
-function scopedProduct(id: string, scope: ProductScope) {
-  return { _id: new Types.ObjectId(id), ...productScopeMatch(scope) }
+function stockItemOf(holderId: string, productId: string) {
+  return { holderId: new Types.ObjectId(holderId), productId: new Types.ObjectId(productId) }
 }
 
+// Edita o produto no catálogo e a quantidade no estoque da unidade; só o produto que está nele.
 export async function updateProductAction(
   workspaceId: string,
   unitId: string,
@@ -182,62 +233,36 @@ export async function updateProductAction(
   const target = await resolveProductTarget(workspaceId, unitId, productId)
   if (!target) return { error: errorMessages.unauthenticated }
   const { userId } = target
-  let conflict = false
 
-  const result = await updateProduct(productInput(formData), target.productId, async (id, data) => {
-    const { unitId: ownedUnitId, stock, scope } = target.unit!
-    const filter = scopedProduct(id, scope)
-    const change = { productId: id, productName: data.name, costCents: data.costCents }
-
-    if (!stock?.distributed) {
-      // Devolve o documento de antes para saber quanto entrou no estoque.
-      const previous = await Product.findOneAndUpdate(filter, { $set: data }, { returnDocument: "before" })
-        .select({ quantity: 1 })
-        .lean()
-      if (!previous) return false
-      await recordQuantityChange(userId, ownedUnitId, stock, {
-        ...change,
-        previousQuantity: previous.quantity,
-        quantity: data.quantity,
-      })
-      return true
-    }
-
-    // Estoque distribuído: a quantidade do formulário é a da unidade; o total acompanha. A
-    // escrita só vale se o total não mudou desde a leitura, senão outra edição se perderia.
-    const current = await Product.findOne(filter).select({ quantity: 1, unitQuantities: 1 }).lean()
-    if (!current) return false
-    const next = setUnitQuantity(
-      {
-        quantity: current.quantity,
-        unitQuantities: current.unitQuantities.map((unit) => ({ unitId: unit.unitId.toString(), quantity: unit.quantity })),
-      },
-      ownedUnitId,
-      data.quantity,
+  const result = await updateProduct(productInput(formData), target.productId, async (id, { quantity, ...data }) => {
+    const unit = target.unit!
+    // Devolve o item de antes para saber quanto entrou no estoque.
+    const previous = await StockItem.findOneAndUpdate(
+      stockItemOf(unit.holderId, id),
+      { $set: { quantity } },
+      { returnDocument: "before" },
     )
-    const { matchedCount } = await Product.updateOne(
-      { ...filter, quantity: current.quantity },
-      { $set: { ...data, quantity: next.quantity, unitQuantities: next.unitQuantities } },
-    )
-    if (matchedCount === 0) {
-      conflict = true
-      return true
-    }
-    await recordQuantityChange(userId, ownedUnitId, stock, {
-      ...change,
-      previousQuantity: next.previousQuantity,
-      quantity: data.quantity,
+      .select({ quantity: 1 })
+      .lean()
+    if (!previous) return false
+    await Product.updateOne({ _id: id, workspaceId: unit.workspaceId }, { $set: data })
+    await recordQuantityChange(userId, unit, {
+      productId: id,
+      productName: data.name,
+      previousQuantity: previous.quantity,
+      quantity,
+      costCents: data.costCents,
     })
     return true
   })
 
   if (!result.ok) return { error: errorMessages[result.error] }
-  if (conflict) return { error: errorMessages.conflict }
 
   refresh()
   return { error: null }
 }
 
+// Tira o produto do estoque da unidade; ele continua no catálogo e nos outros estoques.
 export async function deleteProductAction(
   workspaceId: string,
   unitId: string,
@@ -247,7 +272,7 @@ export async function deleteProductAction(
   if (!target) return { error: errorMessages.unauthenticated }
 
   const result = await deleteProduct(target.productId, async (id) => {
-    const { deletedCount } = await Product.deleteOne(scopedProduct(id, target.unit!.scope))
+    const { deletedCount } = await StockItem.deleteOne(stockItemOf(target.unit!.holderId, id))
     return deletedCount > 0
   })
 
@@ -257,8 +282,8 @@ export async function deleteProductAction(
   return { error: null }
 }
 
-// Uma unidade do produto acabou: registra a data e tira 1 da quantidade, numa só escrita. No
-// estoque distribuído, sai da parte da unidade, que precisa ter pelo menos 1.
+// Uma unidade do produto acabou no estoque da unidade: registra a data e tira 1 da quantidade,
+// numa só escrita.
 export async function depleteProductAction(
   workspaceId: string,
   unitId: string,
@@ -269,35 +294,15 @@ export async function depleteProductAction(
   const { userId } = target
 
   const result = await depleteProduct(target.productId, async (id) => {
-    const { unitId: ownedUnitId, stock, scope } = target.unit!
-    const filter = scopedProduct(id, scope)
-    const unitObjectId = new Types.ObjectId(ownedUnitId)
-    const { matchedCount } = stock?.distributed
-      ? await Product.updateOne(
-          { ...filter, unitQuantities: { $elemMatch: { unitId: unitObjectId, quantity: { $gt: 0 } } } },
-          {
-            $inc: { quantity: -1, "unitQuantities.$[unit].quantity": -1 },
-            $push: { depletedAt: new Date() },
-          },
-          { arrayFilters: [{ "unit.unitId": unitObjectId }] },
-        )
-      : await Product.updateOne(
-          { ...filter, quantity: { $gt: 0 } },
-          { $inc: { quantity: -1 }, $push: { depletedAt: new Date() } },
-        )
-    if (matchedCount > 0) {
-      await recordMovement({
-        productId: id,
-        stockId: stock?.id ?? null,
-        unitId: ownedUnitId,
-        kind: "depletion",
-        quantity: 1,
-        createdBy: userId,
-      })
-      return "depleted"
-    }
-    const exists = await Product.exists(filter)
-    return exists ? "out_of_stock" : "not_found"
+    const unit = target.unit!
+    const item = stockItemOf(unit.holderId, id)
+    const { matchedCount } = await StockItem.updateOne(
+      { ...item, quantity: { $gt: 0 } },
+      { $inc: { quantity: -1 }, $push: { depletedAt: new Date() } },
+    )
+    if (matchedCount === 0) return (await StockItem.exists(item)) ? "out_of_stock" : "not_found"
+    await recordMovement({ productId: id, holderId: unit.holderId, unitId: unit.unitId, kind: "depletion", quantity: 1, createdBy: userId })
+    return "depleted"
   })
 
   if (!result.ok) return { error: errorMessages[result.error] }
@@ -306,7 +311,7 @@ export async function depleteProductAction(
   return { error: null }
 }
 
-// Leva produto de uma unidade para outra do mesmo estoque distribuído. unitId é a unidade de
+// Leva produto do estoque de uma unidade para o de outra do workspace. unitId é a unidade de
 // onde a tela foi aberta, onde o usuário precisa da permissão de transferir.
 export async function transferProductAction(
   workspaceId: string,
@@ -321,27 +326,34 @@ export async function transferProductAction(
 
   const input = { fromUnitId: formData.get("fromUnitId"), toUnitId: formData.get("toUnitId"), quantity: formData.get("quantity") }
   const result = await transferProduct(input, target.productId, async (id, { fromUnitId, toUnitId, quantity }) => {
-    const { stock, scope } = target.unit!
-    const filter = scopedProduct(id, scope)
-    if (!stock?.distributed) return (await Product.exists(filter)) ? "not_distributed" : "not_found"
-    if (!stock.unitIds.includes(fromUnitId) || !stock.unitIds.includes(toUnitId)) return "invalid_units"
+    const { workspaceId: ownedWorkspaceId } = target.unit!
+    const units = await Unit.countDocuments({ _id: { $in: [fromUnitId, toUnitId] }, workspaceId: ownedWorkspaceId })
+    if (units < 2) return "invalid_units"
+    const [from, to] = await Promise.all([findUnitHolder(fromUnitId), findUnitHolder(toUnitId)])
+    if (from.holderId === to.holderId) return "same_stock"
 
-    const from = new Types.ObjectId(fromUnitId)
-    const to = new Types.ObjectId(toUnitId)
-    // Unidade que entrou depois no estoque ainda não tem a sua parte; sem ela, o $inc do
-    // destino não acharia onde somar.
-    await Product.updateOne(
-      { ...filter, "unitQuantities.unitId": { $ne: to } },
-      { $push: { unitQuantities: { unitId: to, quantity: 0 } } },
+    const { matchedCount } = await StockItem.updateOne(
+      { ...stockItemOf(from.holderId, id), quantity: { $gte: quantity } },
+      { $inc: { quantity: -quantity } },
     )
-    const { matchedCount } = await Product.updateOne(
-      { ...filter, unitQuantities: { $elemMatch: { unitId: from, quantity: { $gte: quantity } } } },
-      { $inc: { "unitQuantities.$[from].quantity": -quantity, "unitQuantities.$[to].quantity": quantity } },
-      { arrayFilters: [{ "from.unitId": from }, { "to.unitId": to }] },
+    if (matchedCount === 0) {
+      return (await StockItem.exists(stockItemOf(from.holderId, id))) ? "insufficient_stock" : "not_found"
+    }
+    // O destino ganha o item se ainda não tiver o produto.
+    await StockItem.updateOne(
+      stockItemOf(to.holderId, id),
+      { $inc: { quantity }, $setOnInsert: { depletedAt: [] } },
+      { upsert: true },
     )
-    if (matchedCount === 0) return (await Product.exists(filter)) ? "insufficient_stock" : "not_found"
-
-    await recordMovement({ productId: id, stockId: stock.id, unitId: fromUnitId, kind: "transfer", quantity, toUnitId, createdBy: userId })
+    await recordMovement({
+      productId: id,
+      holderId: from.holderId,
+      unitId: fromUnitId,
+      kind: "transfer",
+      quantity,
+      toUnitId,
+      createdBy: userId,
+    })
     return "transferred"
   })
 
@@ -351,12 +363,81 @@ export async function transferProductAction(
   return { error: null }
 }
 
-// Busca do seletor de produtos: no máximo PRODUCT_SEARCH_LIMIT do escopo da unidade, só id e nome.
+// Id do workspace se o usuário gerenciar o estoque nele; undefined sem permissão, null = sessão expirada.
+async function resolveCatalogWorkspace(workspaceId: string) {
+  const userId = await getSessionUserId()
+  if (!userId) return null
+  const access = await findWorkspaceAccess(workspaceId, userId)
+  return { workspaceId: access && can(access.actor, "stock.manage") ? access.id : undefined }
+}
+
+// Cadastro no catálogo (tela de produtos do workspace), sem pôr em nenhum estoque.
+export async function createCatalogProductAction(
+  workspaceId: string,
+  _prev: ProductActionState,
+  formData: FormData,
+): Promise<ProductActionState> {
+  const target = await resolveCatalogWorkspace(workspaceId)
+  if (!target) return { error: errorMessages.unauthenticated }
+
+  const result = await createCatalogProduct(productInput(formData), target.workspaceId, async (data) => {
+    const product = await Product.create(data)
+    return { id: product._id.toString() }
+  })
+
+  if (!result.ok) return { error: errorMessages[result.error] }
+
+  refresh()
+  return { error: null }
+}
+
+// Edição no catálogo (tela de produtos do workspace): os dados do produto, sem quantidade.
+export async function updateCatalogProductAction(
+  workspaceId: string,
+  productId: string,
+  _prev: ProductActionState,
+  formData: FormData,
+): Promise<ProductActionState> {
+  const target = await resolveCatalogWorkspace(workspaceId)
+  if (!target) return { error: errorMessages.unauthenticated }
+
+  const id = target.workspaceId && isObjectIdOrHexString(productId) ? productId : null
+  const result = await updateCatalogProduct(productInput(formData), id, async (productId, data) => {
+    const { matchedCount } = await Product.updateOne({ _id: productId, workspaceId: target.workspaceId }, { $set: data })
+    return matchedCount > 0
+  })
+
+  if (!result.ok) return { error: errorMessages[result.error] }
+
+  refresh()
+  return { error: null }
+}
+
+// Exclui o produto do catálogo e de todos os estoques.
+export async function deleteCatalogProductAction(workspaceId: string, productId: string): Promise<ProductActionState> {
+  const target = await resolveCatalogWorkspace(workspaceId)
+  if (!target) return { error: errorMessages.unauthenticated }
+
+  const id = target.workspaceId && isObjectIdOrHexString(productId) ? productId : null
+  const result = await deleteProduct(id, async (productId) => {
+    const { deletedCount } = await Product.deleteOne({ _id: productId, workspaceId: target.workspaceId })
+    if (deletedCount === 0) return false
+    await StockItem.deleteMany({ productId })
+    return true
+  })
+
+  if (!result.ok) return { error: errorMessages[result.error] }
+
+  refresh()
+  return { error: null }
+}
+
+// Busca do seletor de produtos: no máximo PRODUCT_SEARCH_LIMIT do catálogo, só id e nome.
 export async function searchProductsAction(workspaceId: string, unitId: string, q: string): Promise<ProductOption[]> {
   if (typeof q !== "string") return []
   const target = await findManagedTarget(workspaceId, unitId)
   if (!target?.unit) return []
-  return Product.aggregate<ProductOption>(productSearchPipeline(target.unit.scope, q))
+  return Product.aggregate<ProductOption>(productSearchPipeline(target.unit.workspaceId, q))
 }
 
 // Nomes dos produtos já escolhidos (edição ou padrão do serviço); os excluídos não voltam.

@@ -6,13 +6,12 @@ const stockUnitSchema = new Schema(
   { _id: false },
 );
 
-// Estoque de produtos de uma ou mais unidades. Cada unidade fica em um estoque só; a que não
-// está em nenhum tem os próprios produtos (stockId null). distributed: cada unidade tem a sua
-// parte (Product.unitQuantities) e os produtos são transferidos entre elas.
+// Estoque compartilhado por várias unidades: uma quantidade só de cada produto para todas
+// (StockItem.holderId é o id dele). Cada unidade fica em um estoque só; a que não está em
+// nenhum tem o próprio (holderId é o id da unidade).
 const stockSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
-    distributed: { type: Boolean, required: true, default: false },
     units: { type: [stockUnitSchema], default: [] },
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true, index: true },
   },

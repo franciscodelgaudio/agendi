@@ -1,5 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
-import { createProduct, deleteProduct, depleteProduct, updateProduct } from "@/lib/product";
+import {
+  addStockItem,
+  createCatalogProduct,
+  createProduct,
+  deleteProduct,
+  depleteProduct,
+  updateCatalogProduct,
+  updateProduct,
+} from "@/lib/product";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const PRODUCT_ID = "64b7f0c2a1b2c3d4e5f60740";
@@ -299,4 +307,129 @@ describe("depleteProduct", () => {
       expect(deplete).not.toHaveBeenCalled();
     },
   );
+});
+
+// Edição do produto no catálogo do workspace: os dados dele, sem a quantidade, que é de cada estoque.
+describe("updateCatalogProduct", () => {
+  const catalogInput = { name: validInput.name, cost: validInput.cost, notes: "", rating: "", avatarUrl: "" };
+  const catalogData = { name: validData.name, costCents: validData.costCents, notes: null, rating: null, avatarUrl: null };
+
+  it("atualiza o produto com os dados normalizados, sem quantidade", async () => {
+    const update = vi.fn().mockResolvedValue(true);
+
+    const result = await updateCatalogProduct({ ...catalogInput, name: "  Óleo de amêndoas  " }, PRODUCT_ID, update);
+
+    expect(result).toEqual({ ok: true });
+    expect(update).toHaveBeenCalledWith(PRODUCT_ID, catalogData);
+  });
+
+  it("ignora a quantidade, se vier", async () => {
+    const update = vi.fn().mockResolvedValue(true);
+
+    await updateCatalogProduct({ ...catalogInput, quantity: "abc" }, PRODUCT_ID, update);
+
+    expect(update).toHaveBeenCalledWith(PRODUCT_ID, catalogData);
+  });
+
+  it.each([
+    ["nome vazio", { ...catalogInput, name: " " }, "invalid_name"],
+    ["custo inválido", { ...catalogInput, cost: "x" }, "invalid_cost"],
+    ["nome que não é texto", { ...catalogInput, name: 1 }, "invalid_input"],
+  ])("recusa %s", async (_label, input, error) => {
+    const update = vi.fn();
+
+    expect(await updateCatalogProduct(input, PRODUCT_ID, update)).toEqual({ ok: false, error });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("retorna product_not_found sem id ou quando o produto não existe (ou não é do workspace)", async () => {
+    expect(await updateCatalogProduct(catalogInput, null, vi.fn())).toEqual({ ok: false, error: "product_not_found" });
+    expect(await updateCatalogProduct(catalogInput, PRODUCT_ID, vi.fn().mockResolvedValue(false))).toEqual({
+      ok: false,
+      error: "product_not_found",
+    });
+  });
+});
+
+// Põe no estoque da unidade um produto que já está no catálogo, com a quantidade que ela tem.
+describe("addStockItem", () => {
+  const input = { productId: PRODUCT_ID, quantity: "5" };
+
+  it("adiciona o produto com a quantidade", async () => {
+    const add = vi.fn().mockResolvedValue("added");
+
+    expect(await addStockItem(input, add)).toEqual({ ok: true });
+    expect(add).toHaveBeenCalledWith(PRODUCT_ID, 5);
+  });
+
+  it("aceita quantidade zero e com espaços nas pontas", async () => {
+    const add = vi.fn().mockResolvedValue("added");
+
+    await addStockItem({ ...input, quantity: " 0 " }, add);
+
+    expect(add).toHaveBeenCalledWith(PRODUCT_ID, 0);
+  });
+
+  it.each([
+    ["entrada que não é objeto", null, "invalid_input"],
+    ["produto que não é texto", { ...input, productId: 1 }, "invalid_input"],
+    ["quantidade que não é texto", { ...input, quantity: 5 }, "invalid_input"],
+    ["id de produto inválido", { ...input, productId: "x" }, "product_not_found"],
+    ["quantidade negativa", { ...input, quantity: "-1" }, "invalid_quantity"],
+    ["quantidade fracionada", { ...input, quantity: "1.5" }, "invalid_quantity"],
+    ["quantidade acima de 1.000.000", { ...input, quantity: "1000001" }, "invalid_quantity"],
+  ])("recusa %s", async (_label, addInput, error) => {
+    const add = vi.fn();
+
+    expect(await addStockItem(addInput, add)).toEqual({ ok: false, error });
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["not_found", "product_not_found"],
+    ["already_in_stock", "already_in_stock"],
+  ])("repassa o resultado %s da escrita", async (outcome, error) => {
+    expect(await addStockItem(input, vi.fn().mockResolvedValue(outcome))).toEqual({ ok: false, error });
+  });
+});
+
+// Cadastro direto no catálogo do workspace (aba Produtos), sem pôr em nenhum estoque.
+describe("createCatalogProduct", () => {
+  const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
+  const input = { name: "  Óleo de amêndoas  ", cost: "45.9", notes: "", rating: "", avatarUrl: "" };
+  const data = { name: "Óleo de amêndoas", costCents: 4590, notes: null, rating: null, avatarUrl: null };
+
+  it("cria o produto no workspace com os dados normalizados, sem quantidade", async () => {
+    const insert = vi.fn().mockResolvedValue({ id: PRODUCT_ID });
+
+    expect(await createCatalogProduct(input, WORKSPACE_ID, insert)).toEqual({ ok: true, productId: PRODUCT_ID });
+    expect(insert).toHaveBeenCalledWith({ ...data, workspaceId: WORKSPACE_ID });
+  });
+
+  it("ignora a quantidade, se vier", async () => {
+    const insert = vi.fn().mockResolvedValue({ id: PRODUCT_ID });
+
+    await createCatalogProduct({ ...input, quantity: "abc" }, WORKSPACE_ID, insert);
+
+    expect(insert).toHaveBeenCalledWith({ ...data, workspaceId: WORKSPACE_ID });
+  });
+
+  it.each([
+    ["nome vazio", { ...input, name: " " }, "invalid_name"],
+    ["custo inválido", { ...input, cost: "x" }, "invalid_cost"],
+    ["avaliação inválida", { ...input, rating: "6" }, "invalid_rating"],
+    ["nome que não é texto", { ...input, name: 1 }, "invalid_input"],
+  ])("recusa %s", async (_label, productInput, error) => {
+    const insert = vi.fn();
+
+    expect(await createCatalogProduct(productInput, WORKSPACE_ID, insert)).toEqual({ ok: false, error });
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("sem workspace, não grava", async () => {
+    const insert = vi.fn();
+
+    expect(await createCatalogProduct(input, null, insert)).toEqual({ ok: false, error: "workspace_not_found" });
+    expect(insert).not.toHaveBeenCalled();
+  });
 });

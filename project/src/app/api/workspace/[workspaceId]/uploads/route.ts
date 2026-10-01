@@ -2,7 +2,6 @@ import { can } from "@/lib/permissions"
 import { uploadImage, type UploadImageError } from "@/lib/image-upload"
 import { missingR2Env, r2UploadDeps } from "@/lib/r2-storage"
 import { getSessionUserId } from "@/lib/session"
-import { findManagedUnit } from "@/lib/unit-access"
 import { findWorkspaceAccess } from "@/lib/workspace-access"
 
 const errorMessages: Record<UploadImageError, string> = {
@@ -13,9 +12,9 @@ const errorMessages: Record<UploadImageError, string> = {
 }
 
 // Pasta no bucket, conferindo a permissão de quem envia: imagem do workspace exige editar o
-// workspace; de unidade, gerenciar unidades; de nó de mídia, gerenciar URAs; de produto,
-// gerenciar o estoque da unidade dele. null = sem permissão.
-async function resolveFolder(workspaceId: string, userId: string, target: FormDataEntryValue | null, unitId: FormDataEntryValue | null) {
+// workspace; de unidade, gerenciar unidades; de nó de mídia, gerenciar URAs; de produto (do
+// catálogo do workspace), gerenciar o estoque. null = sem permissão.
+async function resolveFolder(workspaceId: string, userId: string, target: FormDataEntryValue | null) {
   if (target === "workspace" || target === "unit" || target === "ura") {
     const access = await findWorkspaceAccess(workspaceId, userId)
     const permission = target === "ura" ? "uras.manage" : target === "unit" ? "units.manage" : "workspace.manage"
@@ -23,14 +22,14 @@ async function resolveFolder(workspaceId: string, userId: string, target: FormDa
     if (target === "ura") return `workspaces/${access.id}/uras`
     return target === "unit" ? `workspaces/${access.id}/units` : `workspaces/${access.id}`
   }
-  if (target === "product" && typeof unitId === "string") {
-    const unit = await findManagedUnit(workspaceId, unitId, userId, "stock.manage")
-    return unit ? `workspaces/${unit.workspaceId}/units/${unit.unitId}/products` : null
+  if (target === "product") {
+    const access = await findWorkspaceAccess(workspaceId, userId)
+    return access && can(access.actor, "stock.manage") ? `workspaces/${access.id}/products` : null
   }
   return null
 }
 
-// Recebe a imagem (multipart: file, target=workspace|unit|ura|product, unitId) e devolve a URL pública no R2.
+// Recebe a imagem (multipart: file, target=workspace|unit|ura|product) e devolve a URL pública no R2.
 // A URL volta para o formulário, que a salva no campo avatarUrl.
 export async function POST(request: Request, { params }: RouteContext<"/api/workspace/[workspaceId]/uploads">) {
   const { workspaceId } = await params
@@ -46,7 +45,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/work
   const formData = await request.formData().catch(() => null)
   if (!formData) return Response.json({ error: errorMessages.missing_file }, { status: 400 })
 
-  const folder = await resolveFolder(workspaceId, userId, formData.get("target"), formData.get("unitId"))
+  const folder = await resolveFolder(workspaceId, userId, formData.get("target"))
   if (!folder) return Response.json({ error: "Sem permissão para enviar esta imagem." }, { status: 403 })
 
   const result = await uploadImage(formData.get("file"), folder, r2UploadDeps())

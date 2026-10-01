@@ -1,12 +1,10 @@
 "use client"
 
-import { useActionState, useState, useTransition } from "react"
-import { EllipsisIcon, PencilIcon, PlusIcon, SplitIcon, Trash2Icon, MergeIcon } from "lucide-react"
+import { useActionState, useState } from "react"
+import { EllipsisIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
 import {
   createStockAction,
   deleteStockAction,
-  distributeStockAction,
-  shareStockAction,
   updateStockAction,
   type StockActionState,
 } from "@/lib/actions/stock"
@@ -41,15 +39,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
-export type StockFormValue = {
-  id: string
-  name: string
-  distributed: boolean
-  units: { id: string; name: string }[]
-  products: { id: string; name: string; quantity: number }[]
-}
+export type StockFormValue = { id: string; name: string; units: { id: string; name: string }[] }
 
 // Unidades do workspace; stockId/stockName dizem em qual estoque cada uma já está.
 export type StockUnitOption = { id: string; name: string; stockId: string | null; stockName: string | null }
@@ -106,7 +97,9 @@ function StockForm({
         <FieldSet>
           <FieldLegend variant="label">Unidades</FieldLegend>
           <FieldDescription>
-            As unidades marcadas usam os produtos deste estoque. Uma unidade que já está em outro estoque sai de lá.
+            As unidades marcadas passam a usar uma quantidade só de cada produto. O que cada uma tem no próprio estoque
+            entra aqui, somado por produto. Uma unidade que está em outro estoque compartilhado sai de lá sem levar
+            nada.
           </FieldDescription>
           <div className="grid gap-3">
             {units.map((unit) => {
@@ -130,21 +123,6 @@ function StockForm({
             })}
           </div>
         </FieldSet>
-        {/* O modo só se escolhe ao criar; depois, a troca redistribui as quantidades. */}
-        {!stock && (
-          <Field orientation="horizontal">
-            <Checkbox id={`${idPrefix}-distributed`} name="distributed" />
-            <div className="grid gap-1">
-              <FieldLabel htmlFor={`${idPrefix}-distributed`} className="font-normal">
-                Dividir o estoque entre as unidades
-              </FieldLabel>
-              <FieldDescription>
-                Cada unidade tem a sua quantidade de cada produto e os produtos são transferidos entre elas. Sem
-                dividir, a quantidade é uma só para todas.
-              </FieldDescription>
-            </div>
-          </Field>
-        )}
       </FieldGroup>
       <SheetFooter>
         <Button type="submit" loading={pending}>
@@ -176,7 +154,7 @@ export function CreateStockSheet({ workspaceId, units }: Props) {
         <StockForm
           key={formKey}
           title="Novo estoque"
-          description="Estoque usado por várias unidades: compartilhado, com uma quantidade só, ou dividido entre elas."
+          description="Estoque usado por várias unidades, com uma quantidade só de cada produto para todas."
           submitLabel={["Criar", "Criando..."]}
           units={units}
           action={(prev, formData) => createStockAction(workspaceId, prev, formData)}
@@ -187,131 +165,11 @@ export function CreateStockSheet({ workspaceId, units }: Props) {
   )
 }
 
-// Troca do compartilhado para o dividido: quanto de cada produto está em cada unidade; o resto
-// fica com a unidade padrão.
-function DistributeStockForm({
-  workspaceId,
-  stock,
-  onDone,
-}: {
-  workspaceId: string
-  stock: StockFormValue
-  onDone: () => void
-}) {
-  const [state, formAction, pending] = useActionState(
-    async (prev: StockActionState, formData: FormData) => {
-      const next = await distributeStockAction(workspaceId, stock.id, prev, formData)
-      if (!next.error) onDone()
-      return next
-    },
-    { error: null },
-  )
-  const [defaultUnitId, setDefaultUnitId] = useState<string | null>(stock.units[0]?.id ?? null)
-  const items = stock.units.map((unit) => ({ value: unit.id, label: unit.name }))
-
-  return (
-    <form action={formAction} className="flex min-h-0 flex-1 flex-col">
-      <SheetHeader>
-        <SheetTitle>Dividir entre as unidades</SheetTitle>
-        <SheetDescription>
-          Informe quanto de cada produto está em cada unidade. O que não for informado fica com a unidade padrão.
-        </SheetDescription>
-      </SheetHeader>
-      <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
-        {state.error && <FieldError>{state.error}</FieldError>}
-        <Field>
-          <FieldLabel htmlFor={`distribute-${stock.id}-default`}>Unidade padrão</FieldLabel>
-          <Select
-            name="defaultUnitId"
-            items={items}
-            value={defaultUnitId}
-            onValueChange={(value) => setDefaultUnitId(value as string | null)}
-            required
-          >
-            <SelectTrigger id={`distribute-${stock.id}-default`} className="w-full">
-              <SelectValue placeholder="Escolha a unidade" />
-            </SelectTrigger>
-            <SelectContent>
-              {items.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        {stock.products.length === 0 ? (
-          <FieldDescription>O estoque ainda não tem produtos; cada unidade começa com zero.</FieldDescription>
-        ) : (
-          <div className="overflow-x-auto border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="px-3">Produto</TableHead>
-                  {stock.units.map((unit) => (
-                    <TableHead key={unit.id} className="px-3">
-                      {unit.name}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stock.products.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell className="px-3">
-                      <div className="grid">
-                        <span className="truncate font-medium">{product.name}</span>
-                        <span className="text-xs text-muted-foreground tabular-nums">{product.quantity} no total</span>
-                      </div>
-                    </TableCell>
-                    {stock.units.map((unit) => (
-                      <TableCell key={unit.id} className="px-3">
-                        <Input
-                          name={`quantity-${product.id}-${unit.id}`}
-                          aria-label={`${product.name} em ${unit.name}`}
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          max={product.quantity}
-                          step={1}
-                          placeholder={unit.id === defaultUnitId ? "resto" : "0"}
-                          className="w-20"
-                        />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </FieldGroup>
-      <SheetFooter>
-        <Button type="submit" loading={pending}>
-          {pending ? "Dividindo..." : "Dividir"}
-        </Button>
-      </SheetFooter>
-    </form>
-  )
-}
-
 export function StockActions({ workspaceId, units, stock }: Props & { stock: StockFormValue }) {
   const [editOpen, setEditOpen] = useState(false)
-  const [distributeOpen, setDistributeOpen] = useState(false)
-  const [shareOpen, setShareOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
   const [formKey, setFormKey] = useState(0)
-  const [error, setError] = useState<string | null>(null)
-  const [pending, startTransition] = useTransition()
-
-  function run(action: () => Promise<StockActionState>, close: () => void) {
-    startTransition(async () => {
-      const result = await action()
-      setError(result.error)
-      if (!result.error) close()
-    })
-  }
 
   return (
     <>
@@ -319,7 +177,7 @@ export function StockActions({ workspaceId, units, stock }: Props & { stock: Sto
         <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Ações de ${stock.name}`} />}>
           <EllipsisIcon />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent align="end" className="w-40">
           <DropdownMenuItem
             onClick={() => {
               setFormKey((key) => key + 1)
@@ -329,24 +187,14 @@ export function StockActions({ workspaceId, units, stock }: Props & { stock: Sto
             <PencilIcon />
             Editar
           </DropdownMenuItem>
-          {stock.distributed ? (
-            <DropdownMenuItem onClick={() => setShareOpen(true)}>
-              <MergeIcon />
-              Juntar as quantidades
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem
-              onClick={() => {
-                setFormKey((key) => key + 1)
-                setDistributeOpen(true)
-              }}
-            >
-              <SplitIcon />
-              Dividir entre as unidades
-            </DropdownMenuItem>
-          )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() => {
+              setFormKey((key) => key + 1)
+              setDeleteOpen(true)
+            }}
+          >
             <Trash2Icon />
             Excluir
           </DropdownMenuItem>
@@ -358,7 +206,7 @@ export function StockActions({ workspaceId, units, stock }: Props & { stock: Sto
           <StockForm
             key={formKey}
             title="Editar estoque"
-            description="Altere o nome e as unidades deste estoque."
+            description="Altere o nome e as unidades deste estoque. Quem sai volta para o próprio estoque, vazio."
             submitLabel={["Salvar", "Salvando..."]}
             stock={stock}
             units={units}
@@ -368,73 +216,73 @@ export function StockActions({ workspaceId, units, stock }: Props & { stock: Sto
         </SheetContent>
       </Sheet>
 
-      <Sheet open={distributeOpen} onOpenChange={setDistributeOpen}>
-        <SheetContent className="sm:max-w-2xl">
-          <DistributeStockForm
-            key={formKey}
-            workspaceId={workspaceId}
-            stock={stock}
-            onDone={() => setDistributeOpen(false)}
-          />
-        </SheetContent>
-      </Sheet>
-
-      <AlertDialog
-        open={shareOpen}
-        onOpenChange={(next) => {
-          if (!next) setError(null)
-          setShareOpen(next)
-        }}
-      >
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Juntar as quantidades?</AlertDialogTitle>
-            <AlertDialogDescription>
-              O estoque <strong>{stock.name}</strong> passa a ter uma quantidade só de cada produto, a soma das
-              unidades. Não dá mais para saber quanto está em cada uma nem transferir entre elas.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {error && <FieldError>{error}</FieldError>}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
-            <Button
-              onClick={() => run(() => shareStockAction(workspaceId, stock.id), () => setShareOpen(false))}
-              loading={pending}
-            >
-              {pending ? "Juntando..." : "Juntar"}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={deleteOpen}
-        onOpenChange={(next) => {
-          if (!next) setError(null)
-          setDeleteOpen(next)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir estoque?</AlertDialogTitle>
-            <AlertDialogDescription>
-              O estoque <strong>{stock.name}</strong> será excluído e cada unidade volta a ter o próprio estoque. Só
-              dá para excluir um estoque sem produtos.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {error && <FieldError>{error}</FieldError>}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
-            <Button
-              variant="destructive"
-              onClick={() => run(() => deleteStockAction(workspaceId, stock.id), () => setDeleteOpen(false))}
-              loading={pending}
-            >
-              {pending ? "Excluindo..." : "Excluir"}
-            </Button>
-          </AlertDialogFooter>
+          <DeleteStockForm key={formKey} workspaceId={workspaceId} stock={stock} onDone={() => setDeleteOpen(false)} />
         </AlertDialogContent>
       </AlertDialog>
     </>
+  )
+}
+
+// Desfaz o estoque compartilhado: tudo dele vai para a unidade escolhida.
+function DeleteStockForm({
+  workspaceId,
+  stock,
+  onDone,
+}: {
+  workspaceId: string
+  stock: StockFormValue
+  onDone: () => void
+}) {
+  const [state, formAction, pending] = useActionState(
+    async (prev: StockActionState, formData: FormData) => {
+      const next = await deleteStockAction(workspaceId, stock.id, prev, formData)
+      if (!next.error) onDone()
+      return next
+    },
+    { error: null },
+  )
+  const [unitId, setUnitId] = useState<string | null>(stock.units[0]?.id ?? null)
+  const items = stock.units.map((unit) => ({ value: unit.id, label: unit.name }))
+
+  return (
+    <form action={formAction} className="grid gap-4">
+      <AlertDialogHeader>
+        <AlertDialogTitle>Excluir estoque?</AlertDialogTitle>
+        <AlertDialogDescription>
+          O estoque <strong>{stock.name}</strong> será excluído. Os produtos e as quantidades dele vão para a unidade
+          escolhida; as outras voltam para o próprio estoque, vazio.
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      {state.error && <FieldError>{state.error}</FieldError>}
+      <Field>
+        <FieldLabel htmlFor={`delete-stock-${stock.id}-unit`}>Fica com o estoque</FieldLabel>
+        <Select
+          name="unitId"
+          items={items}
+          value={unitId}
+          onValueChange={(value) => setUnitId(value as string | null)}
+          required
+        >
+          <SelectTrigger id={`delete-stock-${stock.id}-unit`} className="w-full">
+            <SelectValue placeholder="Escolha a unidade" />
+          </SelectTrigger>
+          <SelectContent>
+            {items.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <AlertDialogFooter>
+        <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
+        <Button type="submit" variant="destructive" loading={pending}>
+          {pending ? "Excluindo..." : "Excluir"}
+        </Button>
+      </AlertDialogFooter>
+    </form>
   )
 }

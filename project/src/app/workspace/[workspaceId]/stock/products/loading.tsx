@@ -4,7 +4,7 @@ export default function Loading() {
   return (
     <PageSkeleton section>
       <FiltersSkeleton />
-      <TableSkeleton columns={4} />
+      <TableSkeleton columns={5} avatar />
     </PageSkeleton>
   )
 }

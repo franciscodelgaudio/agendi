@@ -2,7 +2,7 @@ import { Schema, model, models, type InferSchemaType, type Model } from "mongoos
 import { connectOnUse } from "@/lib/mongoose";
 
 // purchase: entrou no estoque; adjustment: diminuiu na edição; depletion: uma unidade do
-// produto acabou; transfer: foi de unitId para toUnitId.
+// produto acabou; transfer: foi do estoque de unitId para o de toUnitId.
 export const STOCK_MOVEMENT_KINDS = ["purchase", "adjustment", "depletion", "transfer"] as const;
 
 // Cada mudança na quantidade de um produto, com a unidade que fez: no estoque compartilhado é
@@ -10,7 +10,8 @@ export const STOCK_MOVEMENT_KINDS = ["purchase", "adjustment", "depletion", "tra
 const stockMovementSchema = new Schema(
   {
     productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
-    stockId: { type: Schema.Types.ObjectId, ref: "Stock", default: null },
+    // Estoque mexido: o compartilhado ou a própria unidade (como StockItem.holderId).
+    holderId: { type: Schema.Types.ObjectId, required: true },
     unitId: { type: Schema.Types.ObjectId, ref: "Unit", required: true },
     kind: { type: String, enum: STOCK_MOVEMENT_KINDS, required: true },
     // Sempre positiva; o tipo diz se entrou ou saiu.

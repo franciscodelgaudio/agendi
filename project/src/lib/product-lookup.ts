@@ -1,29 +1,41 @@
 import { Types } from "mongoose"
-import { productScopeMatch } from "@/lib/product-scope"
 import { summarizeProductUsage, type ProductUsageSummary } from "@/lib/product-usage"
-import { findUnitScope } from "@/lib/stock-store"
 import { objectIds } from "@/lib/therapist-lookup"
 import { Product } from "@/models/Product"
+import { StockItem } from "@/models/StockItem"
+import { Unit } from "@/models/Unit"
 
-// Para server actions: dos ids pedidos, os produtos que a unidade enxerga (os do estoque dela).
+// Para server actions: dos ids pedidos, os produtos do catálogo do workspace da unidade.
 export async function findUnitProducts(unitId: string, ids: string[]) {
-  const { scope } = await findUnitScope(unitId)
-  const products = await Product.find({ _id: { $in: objectIds(ids) }, ...productScopeMatch(scope) })
+  const unit = await Unit.findById(unitId).select({ workspaceId: 1 }).lean()
+  if (!unit) return []
+  const products = await Product.find({ _id: { $in: objectIds(ids) }, workspaceId: unit.workspaceId })
     .select({ name: 1 })
     .lean()
   return products.map((product) => ({ id: product._id.toString(), name: product.name }))
 }
 
-// Resumo de uso dos produtos que a unidade enxerga (ou de um só): atendimentos e agendamentos
-// de qualquer unidade que os listaram. Agendamento que virou atendimento já conta pelo atendimento, então só entram os
-// que ainda não viraram. Quem chama já conferiu o acesso à unidade.
-export async function findProductUsage(unitId: string, productId?: string) {
-  const { scope } = await findUnitScope(unitId)
-  const usage = await Product.aggregate<{ id: string; depletedAt: Date[]; uses: Date[] }>([
+// Resumo de uso dos produtos nos estoques pedidos (ou de um só): as vezes que acabaram nesses
+// estoques e os atendimentos e agendamentos das unidades que os usam. Agendamento que virou
+// atendimento já conta pelo atendimento, então só entram os que ainda não viraram. Quem chama
+// já conferiu o acesso.
+export async function findProductUsage(
+  { holderIds, unitIds }: { holderIds: string[]; unitIds: string[] },
+  productId?: string,
+) {
+  const units = { $in: unitIds.map((id) => new Types.ObjectId(id)) }
+  const usage = await StockItem.aggregate<{ id: string; depletedAt: Date[]; uses: Date[] }>([
     {
       $match: {
-        ...productScopeMatch(scope),
-        ...(productId && { _id: new Types.ObjectId(productId) }),
+        holderId: { $in: holderIds.map((id) => new Types.ObjectId(id)) },
+        ...(productId && { productId: new Types.ObjectId(productId) }),
+      },
+    },
+    // O mesmo produto em vários estoques (catálogo do workspace) conta junto.
+    {
+      $group: {
+        _id: "$productId",
+        depletedAt: { $push: { $ifNull: ["$depletedAt", []] } },
       },
     },
     {
@@ -32,7 +44,7 @@ export async function findProductUsage(unitId: string, productId?: string) {
         localField: "_id",
         foreignField: "products.productId",
         as: "appointments",
-        pipeline: [{ $project: { _id: 0, at: "$performedAt" } }],
+        pipeline: [{ $match: { unitId: units } }, { $project: { _id: 0, at: "$performedAt" } }],
       },
     },
     {
@@ -41,14 +53,17 @@ export async function findProductUsage(unitId: string, productId?: string) {
         localField: "_id",
         foreignField: "products.productId",
         as: "bookings",
-        pipeline: [{ $match: { appointmentId: null } }, { $project: { _id: 0, at: "$startsAt" } }],
+        pipeline: [
+          { $match: { unitId: units, appointmentId: null } },
+          { $project: { _id: 0, at: "$startsAt" } },
+        ],
       },
     },
     {
       $project: {
         _id: 0,
         id: { $toString: "$_id" },
-        depletedAt: { $ifNull: ["$depletedAt", []] },
+        depletedAt: { $reduce: { input: "$depletedAt", initialValue: [], in: { $concatArrays: ["$$value", "$$this"] } } },
         uses: { $concatArrays: ["$appointments.at", "$bookings.at"] },
       },
     },

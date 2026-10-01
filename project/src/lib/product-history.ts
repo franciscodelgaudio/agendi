@@ -71,13 +71,22 @@ export function parseProductHistoryQuery(params: SearchParams): ProductHistoryQu
   };
 }
 
-// Pipeline para Appointment.aggregate: atendimentos com o produto, agendamentos que ainda não
-// viraram atendimento (o que virou já aparece pelo atendimento) e cada vez que o produto acabou,
-// no mesmo formato. A posse do produto é conferida antes, por quem chama.
-export function productHistoryPipeline(productId: string, { q, kind, from, to, sort, dir, page }: ProductHistoryQuery) {
+// Estoque do produto: holderId é o da unidade ou o compartilhado; unitIds, as unidades que usam.
+export type ProductHistoryHolder = { holderId: string; unitIds: string[] };
+
+// Pipeline para Appointment.aggregate: atendimentos com o produto nas unidades do estoque,
+// agendamentos que ainda não viraram atendimento (o que virou já aparece pelo atendimento) e
+// cada vez que o produto acabou nesse estoque, no mesmo formato. A posse do produto é
+// conferida antes, por quem chama.
+export function productHistoryPipeline(
+  productId: string,
+  holder: ProductHistoryHolder,
+  { q, kind, from, to, sort, dir, page }: ProductHistoryQuery,
+) {
   const id = new Types.ObjectId(productId);
+  const unitId = { $in: holder.unitIds.map((unit) => new Types.ObjectId(unit)) };
   const stages: Exclude<PipelineStage, PipelineStage.Merge | PipelineStage.Out>[] = [
-    { $match: { "products.productId": id } },
+    { $match: { "products.productId": id, unitId } },
     {
       $project: {
         kind: { $literal: "appointment" },
@@ -91,7 +100,7 @@ export function productHistoryPipeline(productId: string, { q, kind, from, to, s
       $unionWith: {
         coll: "bookings",
         pipeline: [
-          { $match: { "products.productId": id, appointmentId: null } },
+          { $match: { "products.productId": id, unitId, appointmentId: null } },
           {
             $project: {
               kind: { $literal: "booking" },
@@ -106,9 +115,9 @@ export function productHistoryPipeline(productId: string, { q, kind, from, to, s
     },
     {
       $unionWith: {
-        coll: "products",
+        coll: "stock_items",
         pipeline: [
-          { $match: { _id: id } },
+          { $match: { productId: id, holderId: new Types.ObjectId(holder.holderId) } },
           { $unwind: "$depletedAt" },
           {
             $project: {
@@ -140,7 +149,7 @@ export function productHistoryPipeline(productId: string, { q, kind, from, to, s
     });
   }
 
-  // As linhas de "acabou" repetem o _id do produto, então kind entra no desempate.
+  // As linhas de "acabou" repetem o _id do item de estoque, então kind entra no desempate.
   stages.push(
     { $sort: { [SORT_PATHS[sort]]: dir === "desc" ? -1 : 1, _id: 1, kind: 1 } },
     {

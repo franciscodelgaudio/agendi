@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { Types } from "mongoose";
 import { parseProductListQuery, productListPipeline } from "@/lib/product-list";
 
 describe("parseProductListQuery", () => {
@@ -39,19 +40,16 @@ describe("parseProductListQuery", () => {
   });
 });
 
+const HOLDER_ID = "64b7f0c2a1b2c3d4e5f60790";
+
+// Etapas sobre os produtos do catálogo, com a quantidade dos itens de estoque. Com o estoque
+// (holderId: da unidade ou o compartilhado), só os produtos que estão nele, com a quantidade
+// de lá; sem, todos do catálogo, com a soma de todos os estoques.
 describe("productListPipeline", () => {
   const PROJECT = {
     $project: {
       _id: 0,
       id: { $toString: "$_id" },
-      unitId: { $toString: "$unitId" },
-      stockId: { $toString: "$stockId" },
-      unitQuantities: {
-        $map: {
-          input: { $ifNull: ["$unitQuantities", []] },
-          in: { unitId: { $toString: "$$this.unitId" }, quantity: "$$this.quantity" },
-        },
-      },
       name: 1,
       quantity: 1,
       costCents: 1,
@@ -60,9 +58,36 @@ describe("productListPipeline", () => {
       avatarUrl: { $ifNull: ["$avatarUrl", null] },
     },
   };
+  const ALL_ITEMS = {
+    $lookup: { from: "stock_items", localField: "_id", foreignField: "productId", as: "items", pipeline: [] },
+  };
+  const HOLDER_ITEMS = [
+    {
+      $lookup: {
+        from: "stock_items",
+        localField: "_id",
+        foreignField: "productId",
+        as: "items",
+        pipeline: [{ $match: { holderId: new Types.ObjectId(HOLDER_ID) } }],
+      },
+    },
+    { $match: { items: { $ne: [] } } },
+  ];
+  const QUANTITY = { $addFields: { quantity: { $sum: "$items.quantity" } } };
 
-  it("sem busca, só ordena (com _id de desempate) e projeta", () => {
+  it("sem estoque, traz o catálogo com a soma de todos os estoques, ordena (com _id de desempate) e projeta", () => {
     expect(productListPipeline({ q: "", sort: "name", dir: "asc" })).toEqual([
+      ALL_ITEMS,
+      QUANTITY,
+      { $sort: { name: 1, _id: 1 } },
+      PROJECT,
+    ]);
+  });
+
+  it("com o estoque, só os produtos que estão nele, com a quantidade de lá", () => {
+    expect(productListPipeline({ q: "", sort: "name", dir: "asc" }, HOLDER_ID)).toEqual([
+      ...HOLDER_ITEMS,
+      QUANTITY,
       { $sort: { name: 1, _id: 1 } },
       PROJECT,
     ]);
@@ -72,22 +97,18 @@ describe("productListPipeline", () => {
     ["quantity", "asc", { quantity: 1, _id: 1 }],
     ["costCents", "desc", { costCents: -1, _id: 1 }],
     ["rating", "desc", { rating: -1, _id: 1 }],
-  ] as const)("ordena por %s %s", (sort, dir, $sort) => {
-    expect(productListPipeline({ q: "", sort, dir })).toEqual([{ $sort }, PROJECT]);
+  ] as const)("ordena por %s %s, depois de calcular a quantidade", (sort, dir, $sort) => {
+    expect(productListPipeline({ q: "", sort, dir })).toEqual([ALL_ITEMS, QUANTITY, { $sort }, PROJECT]);
   });
 
-  it("com busca, filtra o nome sem diferenciar maiúsculas antes de ordenar", () => {
-    expect(productListPipeline({ q: "óleo", sort: "name", dir: "asc" })).toEqual([
+  it("com busca, filtra o nome sem diferenciar maiúsculas antes de tudo", () => {
+    expect(productListPipeline({ q: "óleo", sort: "name", dir: "asc" }, HOLDER_ID)).toEqual([
       { $match: { name: { $regex: "óleo", $options: "i" } } },
+      ...HOLDER_ITEMS,
+      QUANTITY,
       { $sort: { name: 1, _id: 1 } },
       PROJECT,
     ]);
-  });
-
-  it("projeta o id da unidade do produto, para listar produtos de várias unidades", () => {
-    const [project] = productListPipeline({ q: "", sort: "name", dir: "asc" }).slice(-1);
-
-    expect(project).toMatchObject({ $project: { unitId: { $toString: "$unitId" } } });
   });
 
   it("escapa caracteres especiais de regex da busca", () => {
