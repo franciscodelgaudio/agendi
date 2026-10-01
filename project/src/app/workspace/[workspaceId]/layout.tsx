@@ -13,7 +13,7 @@ import { User } from "@/models/User"
 import { Workspace } from "@/models/Workspace"
 
 // O layout espera o workspace antes de renderizar: ao abrir a página inteira, a espera cai no
-// loading.tsx da raiz (tela do agenli). Na navegação interna ele não recarrega, e as páginas
+// loading.tsx da raiz (tela do agendi). Na navegação interna ele não recarrega, e as páginas
 // mostram seus skeletons dentro da moldura.
 export default async function WorkspaceLayout({
   children,

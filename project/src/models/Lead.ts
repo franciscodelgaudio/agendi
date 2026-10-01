@@ -1,7 +1,7 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 import { connectOnUse } from "@/lib/mongoose";
 
-// Contato enviado pelo formulário da landing, para a equipe da Agenli responder pelo WhatsApp.
+// Contato enviado pelo formulário da landing, para a equipe da Agendi responder pelo WhatsApp.
 const leadSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },

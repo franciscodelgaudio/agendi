@@ -8,7 +8,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="flex justify-center gap-2 md:justify-start">
           <a href="#" className="flex items-center gap-2 text-lg font-semibold tracking-tight">
             <Image src="/logo.svg" alt="" width={28} height={28} loading="eager" />
-            agenli
+            agendi
           </a>
         </div>
         <div className="flex flex-1 items-center justify-center">
@@ -18,7 +18,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <div className="hidden items-center justify-center bg-linear-to-br from-secondary via-accent to-muted lg:flex">
         <Image
           src="/logo-app.svg"
-          alt="agenli"
+          alt="agendi"
           width={320}
           height={320}
           className="size-64 drop-shadow-2xl xl:size-80"

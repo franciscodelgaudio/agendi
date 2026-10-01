@@ -93,8 +93,8 @@ describe("walkUra: mensagens e fim do fluxo", () => {
   it("envia mídia com legenda resolvida, ou sem legenda quando ela fica vazia", async () => {
     const g = graph(
       [
-        { id: "a", type: "sendMedia", data: { mediaType: "image", url: "https://cdn.agenli.com/tabela.png", caption: "Preços, {{contato_primeiro_nome}}" } },
-        { id: "b", type: "sendMedia", data: { mediaType: "document", url: "https://cdn.agenli.com/menu.pdf", caption: " " } },
+        { id: "a", type: "sendMedia", data: { mediaType: "image", url: "https://cdn.agendi.com/tabela.png", caption: "Preços, {{contato_primeiro_nome}}" } },
+        { id: "b", type: "sendMedia", data: { mediaType: "document", url: "https://cdn.agendi.com/menu.pdf", caption: " " } },
       ],
       [
         ["s", "a"],
@@ -105,8 +105,8 @@ describe("walkUra: mensagens e fim do fluxo", () => {
     const result = await run(g);
 
     expect(result.outgoing).toEqual([
-      { kind: "media", mediaType: "image", url: "https://cdn.agenli.com/tabela.png", caption: "Preços, Maria" },
-      { kind: "media", mediaType: "document", url: "https://cdn.agenli.com/menu.pdf", caption: null },
+      { kind: "media", mediaType: "image", url: "https://cdn.agendi.com/tabela.png", caption: "Preços, Maria" },
+      { kind: "media", mediaType: "document", url: "https://cdn.agendi.com/menu.pdf", caption: null },
     ]);
   });
 

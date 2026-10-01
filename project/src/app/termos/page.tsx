@@ -7,7 +7,7 @@ import { TERMS_MARKDOWN } from "@/content/terms"
 import { cn } from "@/lib/utils"
 
 export const metadata: Metadata = {
-  title: "Termos de Uso · Agenli",
+  title: "Termos de Uso · Agendi",
 }
 
 export default function TermsPage() {
@@ -20,7 +20,7 @@ export default function TermsPage() {
             className="flex items-center gap-2 text-lg font-semibold tracking-tight text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ld-sage-light"
           >
             <LandingLogo className="size-7" />
-            Agenli
+            Agendi
           </Link>
         </div>
       </header>

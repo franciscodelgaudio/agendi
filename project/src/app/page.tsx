@@ -13,7 +13,7 @@ import { PLANS } from "@/lib/plans"
 import { cn } from "@/lib/utils"
 
 export const metadata: Metadata = {
-  title: "Agenli · Gestão para beleza e bem-estar",
+  title: "Agendi · Gestão para beleza e bem-estar",
   description:
     "Agenda, caixa, comissões, estoque e atendimento por WhatsApp e Instagram para salões, clínicas de estética, barbearias, SPAs e studios. De uma unidade a uma rede inteira.",
 }
@@ -30,7 +30,7 @@ const CLIENTS = [
 const SHOWCASE = [
   {
     src: "/landing/calendario.webp",
-    alt: "Calendário semanal de uma unidade no Agenli, com os agendamentos de cada profissional",
+    alt: "Calendário semanal de uma unidade no Agendi, com os agendamentos de cada profissional",
     icon: CalendarDays,
     title: "Agenda por profissional",
     description: "Todos os agendamentos da unidade em mês, semana, dia ou lista, com uma cor por profissional.",
@@ -105,7 +105,7 @@ export default function LandingPage() {
         <Container className="flex h-16 items-center gap-8">
           <a href="#topo" className={cn("flex items-center gap-2 text-lg font-semibold tracking-tight text-white focus-visible:outline-ld-sage-light", focusRing)}>
             <LandingLogo className="size-7" />
-            Agenli
+            Agendi
           </a>
           <nav aria-label="Seções" className="hidden flex-1 items-center gap-7 min-[900px]:flex">
             {NAV.map((item) => (
@@ -174,7 +174,7 @@ export default function LandingPage() {
                 <div className="ld-screen relative aspect-[1850/990] w-full overflow-hidden rounded-tl-xl border-t border-l border-white/15 bg-white shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)]">
                   <Image
                     src="/landing/inicio.webp"
-                    alt="Tela Início do Agenli com indicadores do negócio e gráficos de custos"
+                    alt="Tela Início do Agendi com indicadores do negócio e gráficos de custos"
                     fill
                     priority
                     quality={90}
@@ -352,7 +352,7 @@ export default function LandingPage() {
         <Container className="flex flex-col gap-6 py-8 text-sm text-ld-mist min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <LandingLogo className="size-5" />
-            Agenli · Gestão para beleza e bem-estar
+            Agendi · Gestão para beleza e bem-estar
             <span aria-hidden="true">·</span>
             <Link href="/termos" className={cn("underline-offset-4 hover:text-white hover:underline focus-visible:outline-ld-sage-light", focusRing)}>
               Termos de uso

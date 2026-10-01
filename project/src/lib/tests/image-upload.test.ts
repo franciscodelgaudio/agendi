@@ -9,7 +9,7 @@ function image(type: string, bytes = 10) {
 
 function deps(overrides: Partial<Parameters<typeof uploadImage>[2]> = {}) {
   return {
-    publicUrl: "https://cdn.agenli.com",
+    publicUrl: "https://cdn.agendi.com",
     put: vi.fn().mockResolvedValue(undefined),
     randomId: () => "a1b2c3",
     ...overrides,
@@ -27,15 +27,15 @@ describe("uploadImage", () => {
 
     const result = await uploadImage(file, FOLDER, d);
 
-    expect(result).toEqual({ ok: true, url: `https://cdn.agenli.com/${FOLDER}/a1b2c3.${ext}` });
+    expect(result).toEqual({ ok: true, url: `https://cdn.agendi.com/${FOLDER}/a1b2c3.${ext}` });
     expect(d.put).toHaveBeenCalledTimes(1);
     expect(d.put).toHaveBeenCalledWith(`${FOLDER}/a1b2c3.${ext}`, file, type);
   });
 
   it("não duplica a barra quando a URL pública termina com /", async () => {
-    const result = await uploadImage(image("image/png"), FOLDER, deps({ publicUrl: "https://cdn.agenli.com/" }));
+    const result = await uploadImage(image("image/png"), FOLDER, deps({ publicUrl: "https://cdn.agendi.com/" }));
 
-    expect(result).toEqual({ ok: true, url: `https://cdn.agenli.com/${FOLDER}/a1b2c3.png` });
+    expect(result).toEqual({ ok: true, url: `https://cdn.agendi.com/${FOLDER}/a1b2c3.png` });
   });
 
   it("aceita imagem exatamente no tamanho máximo", async () => {

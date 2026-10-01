@@ -39,7 +39,7 @@ async function request<T>(path: string, init?: { method?: "GET" | "POST"; body?:
 // A v2 só cria checkout de produtos do catálogo. Cada plano × preço vira um produto;
 // mudar o preço em plans.ts cria um produto novo em vez de alterar o antigo.
 async function ensureProduct(planId: PlanId, amount: number) {
-  const externalId = `agenli-${planId}-${amount}`
+  const externalId = `agendi-${planId}-${amount}`
   const [existing] = await request<{ id: string }[]>(`/products/list?${new URLSearchParams({ externalId, status: "ACTIVE" })}`)
   if (existing) return existing.id
 
@@ -48,8 +48,8 @@ async function ensureProduct(planId: PlanId, amount: number) {
     method: "POST",
     body: {
       externalId,
-      name: `Agenli · ${plan.name}`,
-      description: `${plan.periodDays} dias de acesso ao Agenli: plano ${plan.name.toLowerCase()}, até ${plan.maxUsers} usuários.`,
+      name: `Agendi · ${plan.name}`,
+      description: `${plan.periodDays} dias de acesso ao Agendi: plano ${plan.name.toLowerCase()}, até ${plan.maxUsers} usuários.`,
       price: amount,
       currency: "BRL",
     },

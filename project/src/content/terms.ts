@@ -1,10 +1,10 @@
 // Texto dos Termos de Uso em markdown, renderizado em /termos. Ao editar, atualize a data.
 export const TERMS_MARKDOWN = `
-# TERMOS E CONDIÇÕES DE USO DO AGENLI
+# TERMOS E CONDIÇÕES DE USO DO AGENDI
 
 **Última atualização: 29 de setembro de 2026**
 
-Estes Termos e Condições de Uso (“Termos”) regulam o acesso e a utilização do **Agenli**, plataforma de gestão destinada a negócios dos segmentos de beleza, estética, barbearia, spa e bem-estar, disponibilizada pela **Triad Soluções Inteligentes**, inscrita no CNPJ sob nº **62.262.799/0001-41**, doravante denominada **“Agenli”**.
+Estes Termos e Condições de Uso (“Termos”) regulam o acesso e a utilização do **Agendi**, plataforma de gestão destinada a negócios dos segmentos de beleza, estética, barbearia, spa e bem-estar, disponibilizada pela **Triad Soluções Inteligentes**, inscrita no CNPJ sob nº **62.262.799/0001-41**, doravante denominada **“Agendi”**.
 
 Ao criar uma conta, contratar um plano, efetuar pagamento ou utilizar a Plataforma, o contratante declara ter lido e concordado com estes Termos.
 
@@ -12,7 +12,7 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 ## 1. Objeto
 
-1.1. O Agenli é uma plataforma de software como serviço — SaaS — destinada à gestão de estabelecimentos e profissionais dos segmentos de beleza e bem-estar.
+1.1. O Agendi é uma plataforma de software como serviço — SaaS — destinada à gestão de estabelecimentos e profissionais dos segmentos de beleza e bem-estar.
 
 1.2. Conforme o plano contratado e as funcionalidades disponíveis, a Plataforma poderá oferecer, entre outros recursos:
 
@@ -42,7 +42,7 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 2.4. Cada usuário deverá possuir acesso individual. O compartilhamento sistemático de uma mesma credencial entre diferentes pessoas para contornar limites do plano não é permitido.
 
-2.5. Caso a operação ultrapasse os limites do plano contratado, o Agenli poderá solicitar a migração para outro plano ou apresentar proposta comercial compatível com a utilização.
+2.5. Caso a operação ultrapasse os limites do plano contratado, o Agendi poderá solicitar a migração para outro plano ou apresentar proposta comercial compatível com a utilização.
 
 2.6. Clientes que demandem maior quantidade de usuários, capacidade de infraestrutura diferenciada, implantação personalizada, consultoria, treinamento, suporte prioritário, SLA, desenvolvimento de funcionalidades ou outras condições especiais poderão contratar um plano **Sob Medida**.
 
@@ -60,7 +60,7 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 3.5. O valor vigente para cada nova contratação será aquele informado no site ou no momento da assinatura.
 
-3.6. O Agenli poderá modificar seus preços para ciclos futuros, mediante comunicação prévia ao Contratante.
+3.6. O Agendi poderá modificar seus preços para ciclos futuros, mediante comunicação prévia ao Contratante.
 
 3.7. Alterações de preço não produzirão efeitos retroativos sobre períodos já pagos.
 
@@ -68,7 +68,7 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 ## 4. Custos variáveis e serviços de terceiros
 
-4.1. Determinadas funcionalidades do Agenli dependem de serviços prestados por terceiros, como serviços de comunicação, mensageria, inteligência artificial, telefonia, processamento de pagamentos ou infraestrutura externa.
+4.1. Determinadas funcionalidades do Agendi dependem de serviços prestados por terceiros, como serviços de comunicação, mensageria, inteligência artificial, telefonia, processamento de pagamentos ou infraestrutura externa.
 
 4.2. Funcionalidades relacionadas a WhatsApp, Instagram, inteligência artificial, robôs de atendimento, URA ou serviços semelhantes poderão possuir cobrança adicional baseada em utilização.
 
@@ -85,7 +85,7 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 - câmbio, quando aplicável;
 - modalidade técnica utilizada.
 
-4.5. Sempre que houver cobrança variável relevante, o Agenli buscará apresentar ao Contratante informações suficientes para acompanhamento do consumo.
+4.5. Sempre que houver cobrança variável relevante, o Agendi buscará apresentar ao Contratante informações suficientes para acompanhamento do consumo.
 
 ## 5. Plano padrão
 
@@ -117,11 +117,11 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 ## 6. Suporte
 
-6.1. O Agenli poderá disponibilizar canais para comunicação de dúvidas e problemas técnicos.
+6.1. O Agendi poderá disponibilizar canais para comunicação de dúvidas e problemas técnicos.
 
 6.2. No plano padrão, o atendimento não possui prazo garantido de resposta ou resolução, salvo disposição expressa em oferta ou contrato específico.
 
-6.3. Problemas comprovadamente decorrentes de falhas do Agenli poderão ser analisados e corrigidos como parte da manutenção normal do produto.
+6.3. Problemas comprovadamente decorrentes de falhas do Agendi poderão ser analisados e corrigidos como parte da manutenção normal do produto.
 
 6.4. Não são considerados simples correções de falha:
 
@@ -141,11 +141,11 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 ## 7. Desenvolvimento e funcionalidades sob medida
 
-7.1. O Contratante poderá solicitar funcionalidades, integrações, alterações ou adaptações não existentes na versão padrão do Agenli.
+7.1. O Contratante poderá solicitar funcionalidades, integrações, alterações ou adaptações não existentes na versão padrão do Agendi.
 
 7.2. A solicitação não gera obrigação automática de desenvolvimento.
 
-7.3. Após análise técnica e comercial, o Agenli poderá:
+7.3. Após análise técnica e comercial, o Agendi poderá:
 
 - incorporar a sugestão ao roadmap geral do produto, sem custo e sem compromisso de prazo;
 - apresentar orçamento para desenvolvimento;
@@ -161,9 +161,9 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 8.1. O pagamento pelo desenvolvimento de uma funcionalidade não implica, por si só, transferência da propriedade intelectual do código desenvolvido.
 
-8.2. Salvo acordo escrito em sentido contrário, códigos, estruturas, componentes, fluxos, abstrações, modelos de dados, interfaces e funcionalidades desenvolvidos para o Agenli permanecerão de propriedade do Agenli.
+8.2. Salvo acordo escrito em sentido contrário, códigos, estruturas, componentes, fluxos, abstrações, modelos de dados, interfaces e funcionalidades desenvolvidos para o Agendi permanecerão de propriedade do Agendi.
 
-8.3. O Agenli poderá incorporar funcionalidades desenvolvidas sob demanda ao produto geral e disponibilizá-las a outros clientes.
+8.3. O Agendi poderá incorporar funcionalidades desenvolvidas sob demanda ao produto geral e disponibilizá-las a outros clientes.
 
 8.4. Informações, dados comerciais ou dados pessoais específicos do Contratante não serão compartilhados com outros clientes em razão dessa incorporação.
 
@@ -187,11 +187,11 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 9.2. O administrador da conta é responsável pelos usuários convidados para seu workspace e pelas permissões atribuídas a eles.
 
-9.3. O Contratante deverá comunicar ao Agenli tão logo identifique acesso indevido ou comprometimento de suas credenciais.
+9.3. O Contratante deverá comunicar ao Agendi tão logo identifique acesso indevido ou comprometimento de suas credenciais.
 
 ## 10. Uso proibido
 
-10.1. É proibida a utilização do Agenli para:
+10.1. É proibida a utilização do Agendi para:
 
 - prática de atos ilícitos;
 - fraude;
@@ -204,7 +204,7 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 - contorno deliberado de limites comerciais ou técnicos;
 - armazenamento ou transmissão de conteúdo ilegal.
 
-10.2. O Agenli poderá limitar ou suspender acessos quando identificar risco relevante à segurança da Plataforma, dos demais clientes ou de terceiros.
+10.2. O Agendi poderá limitar ou suspender acessos quando identificar risco relevante à segurança da Plataforma, dos demais clientes ou de terceiros.
 
 ## 11. Uso razoável e infraestrutura
 
@@ -223,33 +223,33 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 - balanceamento de carga específico;
 - alta disponibilidade ou redundância adicional.
 
-11.3. Nesses casos, o Agenli poderá apresentar proposta de adequação técnica e comercial antes de ampliar a capacidade.
+11.3. Nesses casos, o Agendi poderá apresentar proposta de adequação técnica e comercial antes de ampliar a capacidade.
 
-11.4. O Agenli não utilizará esta cláusula para cobrar arbitrariamente por variações normais de utilização compatíveis com o plano contratado.
+11.4. O Agendi não utilizará esta cláusula para cobrar arbitrariamente por variações normais de utilização compatíveis com o plano contratado.
 
 ## 12. Dados financeiros, comissões e relatórios
 
-12.1. Os recursos financeiros do Agenli são ferramentas auxiliares de gestão.
+12.1. Os recursos financeiros do Agendi são ferramentas auxiliares de gestão.
 
 12.2. Resultados, comissões, repasses, receitas, despesas, projeções e demais indicadores dependem das informações inseridas e das regras configuradas pelo Contratante.
 
 12.3. O Contratante é responsável por conferir a exatidão dos dados e parâmetros utilizados.
 
-12.4. O Agenli não substitui contador, instituição financeira, departamento jurídico, sistema fiscal obrigatório ou serviço profissional especializado.
+12.4. O Agendi não substitui contador, instituição financeira, departamento jurídico, sistema fiscal obrigatório ou serviço profissional especializado.
 
 12.5. Informações exibidas pela Plataforma não constituem aconselhamento contábil, tributário, trabalhista, financeiro ou jurídico.
 
 ## 13. Integrações, API e webhooks
 
-13.1. O Agenli poderá permitir integração com serviços externos por API, webhooks ou outros mecanismos.
+13.1. O Agendi poderá permitir integração com serviços externos por API, webhooks ou outros mecanismos.
 
 13.2. O Contratante é responsável por proteger chaves, tokens e credenciais concedidas para essas integrações.
 
 13.3. A utilização das APIs poderá estar sujeita a limites técnicos e políticas de uso razoável.
 
-13.4. Integrações desenvolvidas por terceiros são de responsabilidade de seus respectivos fornecedores quanto aos componentes que não forem controlados pelo Agenli.
+13.4. Integrações desenvolvidas por terceiros são de responsabilidade de seus respectivos fornecedores quanto aos componentes que não forem controlados pelo Agendi.
 
-13.5. O Agenli poderá alterar ou descontinuar versões de APIs, buscando comunicar previamente alterações incompatíveis quando tecnicamente razoável.
+13.5. O Agendi poderá alterar ou descontinuar versões de APIs, buscando comunicar previamente alterações incompatíveis quando tecnicamente razoável.
 
 ## 14. WhatsApp, Instagram, inteligência artificial e plataformas externas
 
@@ -266,7 +266,7 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 - falhas de conectividade;
 - decisões tomadas pela plataforma externa.
 
-14.3. O Agenli não pode garantir disponibilidade contínua de serviços que não estejam sob seu controle.
+14.3. O Agendi não pode garantir disponibilidade contínua de serviços que não estejam sob seu controle.
 
 14.4. O Contratante é responsável pelo conteúdo das mensagens enviadas em seu nome e por utilizar os canais de comunicação de acordo com a legislação e as políticas das plataformas correspondentes.
 
@@ -274,7 +274,7 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 14.6. O Contratante deverá supervisionar a utilização de automações e configurar adequadamente os fluxos oferecidos aos seus clientes.
 
-14.7. O Agenli não garante que respostas geradas automaticamente sejam livres de erro.
+14.7. O Agendi não garante que respostas geradas automaticamente sejam livres de erro.
 
 ## 15. Agendamentos
 
@@ -286,21 +286,21 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 ## 16. Proteção de dados pessoais
 
-16.1. O tratamento de dados pessoais relacionado ao Agenli observará a legislação brasileira aplicável, especialmente a Lei Geral de Proteção de Dados Pessoais — Lei nº 13.709/2018.
+16.1. O tratamento de dados pessoais relacionado ao Agendi observará a legislação brasileira aplicável, especialmente a Lei Geral de Proteção de Dados Pessoais — Lei nº 13.709/2018.
 
 16.2. Em relação aos dados de clientes, funcionários, prestadores e demais pessoas cadastrados pelo Contratante para utilização das funcionalidades da Plataforma, o Contratante normalmente atuará como **Controlador**, por determinar as finalidades e os meios essenciais desse tratamento.
 
-16.3. Nesses casos, o Agenli poderá atuar como **Operador**, tratando os dados necessários para execução dos serviços de acordo com as instruções legítimas do Contratante.
+16.3. Nesses casos, o Agendi poderá atuar como **Operador**, tratando os dados necessários para execução dos serviços de acordo com as instruções legítimas do Contratante.
 
-16.4. Para informações necessárias à administração da própria relação contratual, segurança, faturamento, prevenção à fraude e cumprimento de obrigações legais, o Agenli poderá atuar como Controlador independente.
+16.4. Para informações necessárias à administração da própria relação contratual, segurança, faturamento, prevenção à fraude e cumprimento de obrigações legais, o Agendi poderá atuar como Controlador independente.
 
 16.5. O Contratante é responsável por garantir base legal adequada para a coleta e utilização dos dados que inserir na Plataforma.
 
 16.6. O Contratante também é responsável por fornecer aos titulares as informações e avisos de privacidade exigidos em razão de sua própria atividade.
 
-16.7. O Agenli adotará medidas técnicas e administrativas razoáveis e compatíveis com sua operação para proteção dos dados pessoais contra acessos não autorizados e situações acidentais ou ilícitas.
+16.7. O Agendi adotará medidas técnicas e administrativas razoáveis e compatíveis com sua operação para proteção dos dados pessoais contra acessos não autorizados e situações acidentais ou ilícitas.
 
-16.8. As condições detalhadas sobre dados coletados diretamente pelo Agenli deverão constar também da Política de Privacidade da Plataforma.
+16.8. As condições detalhadas sobre dados coletados diretamente pelo Agendi deverão constar também da Política de Privacidade da Plataforma.
 
 ## 17. Dados sensíveis e informações de saúde
 
@@ -310,21 +310,21 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 17.3. Quando realizar tratamento de dados sensíveis por meio da Plataforma, o Contratante é responsável por verificar a existência de base legal adequada e implementar os procedimentos necessários para sua atividade.
 
-17.4. Salvo quando expressamente disponibilizada uma funcionalidade destinada a esse objetivo, o Agenli não deve ser utilizado como sistema de prontuário médico ou repositório de diagnósticos e documentos clínicos.
+17.4. Salvo quando expressamente disponibilizada uma funcionalidade destinada a esse objetivo, o Agendi não deve ser utilizado como sistema de prontuário médico ou repositório de diagnósticos e documentos clínicos.
 
 ## 18. Propriedade e titularidade dos dados
 
 18.1. O Contratante mantém os direitos que possuir sobre os dados e conteúdos inseridos na Plataforma.
 
-18.2. A utilização do Agenli não transfere ao Agenli a propriedade dos cadastros comerciais do Contratante.
+18.2. A utilização do Agendi não transfere ao Agendi a propriedade dos cadastros comerciais do Contratante.
 
-18.3. O Contratante concede ao Agenli autorização para processar tecnicamente esses dados na medida necessária à prestação, segurança, manutenção e melhoria dos serviços, respeitada a legislação aplicável.
+18.3. O Contratante concede ao Agendi autorização para processar tecnicamente esses dados na medida necessária à prestação, segurança, manutenção e melhoria dos serviços, respeitada a legislação aplicável.
 
-18.4. O Agenli não poderá vender listas de clientes cadastradas pelo Contratante como se fossem base própria.
+18.4. O Agendi não poderá vender listas de clientes cadastradas pelo Contratante como se fossem base própria.
 
-## 19. Propriedade intelectual do Agenli
+## 19. Propriedade intelectual do Agendi
 
-19.1. A assinatura concede ao Contratante licença limitada, temporária, revogável, não exclusiva e intransferível de utilização do Agenli enquanto o contrato estiver ativo.
+19.1. A assinatura concede ao Contratante licença limitada, temporária, revogável, não exclusiva e intransferível de utilização do Agendi enquanto o contrato estiver ativo.
 
 19.2. Não ocorre venda do software ou transferência de seu código-fonte.
 
@@ -340,11 +340,11 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 - componentes;
 - arquitetura;
 - funcionalidades;
-- materiais produzidos pelo Agenli.
+- materiais produzidos pelo Agendi.
 
 ## 20. Backups e continuidade
 
-20.1. O Agenli poderá manter rotinas padrão de backup destinadas principalmente à continuidade e recuperação técnica da Plataforma.
+20.1. O Agendi poderá manter rotinas padrão de backup destinadas principalmente à continuidade e recuperação técnica da Plataforma.
 
 20.2. Backups de infraestrutura não devem ser considerados pelo Contratante como mecanismo de arquivamento individual ou histórico ilimitado de registros excluídos.
 
@@ -354,7 +354,7 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 ## 21. Disponibilidade e manutenção
 
-21.1. O Agenli buscará manter a Plataforma disponível de forma contínua, mas não garante disponibilidade ininterrupta de 100%.
+21.1. O Agendi buscará manter a Plataforma disponível de forma contínua, mas não garante disponibilidade ininterrupta de 100%.
 
 21.2. Poderão ocorrer interrupções em razão de:
 
@@ -372,7 +372,7 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 ## 22. Inadimplência
 
-22.1. Em caso de falha de pagamento, o Agenli poderá realizar novas tentativas de cobrança e comunicar o Contratante.
+22.1. Em caso de falha de pagamento, o Agendi poderá realizar novas tentativas de cobrança e comunicar o Contratante.
 
 22.2. Persistindo a inadimplência, o acesso às funcionalidades pagas poderá ser temporariamente suspenso.
 
@@ -404,11 +404,11 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 - prazos técnicos de retenção de backups;
 - demais hipóteses autorizadas pela legislação.
 
-24.3. O Agenli não possui obrigação de manter indefinidamente dados de contas canceladas.
+24.3. O Agendi não possui obrigação de manter indefinidamente dados de contas canceladas.
 
 ## 25. Suspensão e encerramento por violação
 
-25.1. O Agenli poderá suspender ou encerrar uma conta em caso de:
+25.1. O Agendi poderá suspender ou encerrar uma conta em caso de:
 
 - uso ilícito;
 - fraude;
@@ -426,17 +426,17 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 26.1. Cada parte responderá pelos danos que causar de acordo com a legislação aplicável.
 
-26.2. O Agenli não será responsável por danos causados exclusivamente por:
+26.2. O Agendi não será responsável por danos causados exclusivamente por:
 
 - informações incorretas inseridas pelo Contratante;
 - configuração inadequada realizada pelo próprio Contratante;
 - acesso decorrente de credenciais comprometidas sob responsabilidade do Contratante;
-- integrações externas não controladas pelo Agenli;
+- integrações externas não controladas pelo Agendi;
 - bloqueios impostos por plataformas terceiras em razão da conduta do Contratante;
 - utilização da Plataforma em desacordo com estes Termos;
 - decisões comerciais tomadas exclusivamente com base em estimativas ou indicadores sem conferência adequada.
 
-26.3. Quando permitido pela legislação aplicável, o Agenli não responderá por lucros cessantes, perda de oportunidade ou danos indiretos que não decorram diretamente de falha imputável ao Agenli.
+26.3. Quando permitido pela legislação aplicável, o Agendi não responderá por lucros cessantes, perda de oportunidade ou danos indiretos que não decorram diretamente de falha imputável ao Agendi.
 
 26.4. Nenhuma disposição destes Termos exclui responsabilidade que, por determinação legal, não possa ser excluída ou limitada.
 
@@ -457,7 +457,7 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 ## 28. Comunicações
 
-28.1. O Agenli poderá encaminhar comunicações relacionadas ao serviço pelos dados de contato cadastrados pelo Contratante.
+28.1. O Agendi poderá encaminhar comunicações relacionadas ao serviço pelos dados de contato cadastrados pelo Contratante.
 
 28.2. O Contratante é responsável por manter e-mail, telefone e demais dados de contato atualizados.
 
@@ -477,13 +477,13 @@ Caso a pessoa que aceite estes Termos atue em nome de uma empresa, declara possu
 
 30.2. A tolerância de uma das partes quanto ao descumprimento de determinada obrigação não constituirá renúncia definitiva ao respectivo direito.
 
-30.3. Estes Termos, juntamente com a Política de Privacidade, a oferta apresentada durante a contratação e eventuais propostas comerciais ou contratos específicos, constituem o conjunto de condições aplicável à utilização do Agenli.
+30.3. Estes Termos, juntamente com a Política de Privacidade, a oferta apresentada durante a contratação e eventuais propostas comerciais ou contratos específicos, constituem o conjunto de condições aplicável à utilização do Agendi.
 
 ## 31. Contato
 
-Dúvidas relacionadas à utilização do Agenli ou a estes Termos poderão ser encaminhadas pelos canais oficiais disponibilizados pela Plataforma.
+Dúvidas relacionadas à utilização do Agendi ou a estes Termos poderão ser encaminhadas pelos canais oficiais disponibilizados pela Plataforma.
 
-**Agenli — Triad Soluções Inteligentes**
+**Agendi — Triad Soluções Inteligentes**
 **CNPJ:** 62.262.799/0001-41
 **WhatsApp:** (45) 98835-1168
 `

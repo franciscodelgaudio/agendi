@@ -24,7 +24,7 @@ export function formatBucket(bucket: string) {
 export const formatRange = (startDate: string, endDate: string) =>
   `${fullDay.format(new Date(`${startDate}T12:00:00Z`))} – ${fullDay.format(new Date(`${endDate}T12:00:00Z`))}`
 
-// Paleta categórica validada (skill de dataviz) contra as superfícies do agenli, claro e escuro.
+// Paleta categórica validada (skill de dataviz) contra as superfícies do agendi, claro e escuro.
 // As variáveis ficam no contêiner da tela: --ai-1 a --ai-6; "Outros" usa o cinza do tema.
 export const AI_PALETTE_CLASSES =
   "[--ai-1:#2a78d6] [--ai-2:#eb6834] [--ai-3:#1baf7a] [--ai-4:#eda100] [--ai-5:#e87ba4] [--ai-6:#008300] " +

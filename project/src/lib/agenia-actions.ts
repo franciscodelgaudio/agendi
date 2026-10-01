@@ -172,7 +172,7 @@ export const AGENIA_ACTIONS = {
   takeConversation: spec("Assumir conversa", "Passa a conversa para o usuário atual e para a URA.", conversation.shape),
   closeConversation: spec("Encerrar conversa", "Encerra a conversa.", conversation.shape),
   stopConversationUra: spec("Parar URA", "Para a URA em andamento na conversa; a conversa fica com a equipe.", conversation.shape),
-  createTicket: spec("Abrir ticket", "Abre um ticket de suporte (bug ou melhoria) para a equipe do agenli.", {
+  createTicket: spec("Abrir ticket", "Abre um ticket de suporte (bug ou melhoria) para a equipe do agendi.", {
     type: z.enum(TICKET_TYPES),
     title: z.string().min(1),
     description: z.string().min(1),

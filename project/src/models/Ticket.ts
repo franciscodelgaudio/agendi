@@ -2,7 +2,7 @@ import { Schema, model, models, type InferSchemaType, type Model } from "mongoos
 import { connectOnUse } from "@/lib/mongoose";
 import { TICKET_STATUSES, TICKET_TYPES } from "@/lib/ticket";
 
-// Bug ou sugestão de melhoria enviada para a equipe da Agenli. O workspace é só o
+// Bug ou sugestão de melhoria enviada para a equipe da Agendi. O workspace é só o
 // contexto de onde o usuário abriu; o status é mudado pela equipe direto no banco.
 const ticketSchema = new Schema(
   {

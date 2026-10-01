@@ -22,5 +22,5 @@ export const FEATURES: readonly Feature[] = [
   { icon: Bot, title: "IA pelo WhatsApp", description: "Atendimento automático que responde e agenda pelo WhatsApp." },
   { icon: Camera, title: "Instagram integrado", description: "Mensagens do Instagram na mesma caixa de entrada da equipe." },
   { icon: CalendarCheck, title: "Agendamento público", description: "Link para o cliente escolher serviço, profissional e horário." },
-  { icon: Webhook, title: "API e webhooks", description: "Integre o Agenli aos sistemas que o seu negócio já usa." },
+  { icon: Webhook, title: "API e webhooks", description: "Integre o Agendi aos sistemas que o seu negócio já usa." },
 ]

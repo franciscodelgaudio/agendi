@@ -2,7 +2,7 @@
 //
 //   npm run capture:landing
 //
-// 1. Lê o .env.local, deriva o banco "agenli_demo" do MONGODB_URI, apaga só ele e o semeia.
+// 1. Lê o .env.local, deriva o banco "agendi_demo" do MONGODB_URI, apaga só ele e o semeia.
 // 2. Sobe `next dev` numa porta livre apontando para o banco demo.
 // 3. Entra com o usuário demo pelo /login e captura Início, Calendário (semana),
 //    Caixa › Resumo e Caixa › Planejamento com o Playwright (Chromium).
@@ -21,14 +21,14 @@ import sharp from "sharp"
 import { EXPENSE_GROUP_ICONS } from "../src/lib/expense-group-icon"
 
 const ROOT = path.resolve(__dirname, "..")
-const DEMO_DB = "agenli_demo"
+const DEMO_DB = "agendi_demo"
 const OUT_DIR = path.join(ROOT, "public", "landing")
-const TMP_DIR = path.join(os.tmpdir(), "agenli-landing-capture")
+const TMP_DIR = path.join(os.tmpdir(), "agendi-landing-capture")
 const VIEWPORT = { width: 1850, height: 990 }
 const SCALE = 2
 const MAX_WIDTH = 2400
 const WEBP_QUALITY = 82
-const DEMO_EMAIL = "demo@agenli.app"
+const DEMO_EMAIL = "demo@agendi.app"
 
 // ---------------------------------------------------------------------------------------------
 // Ambiente
@@ -624,7 +624,7 @@ function killTree(child: ChildProcess | null) {
 // Já pode haver outro `next dev` no projeto (ele trava a pasta .next). Este sobe com a
 // configuração resolvida do projeto, mas com distDir e tsconfig próprios em node_modules/.cache,
 // para não disputar a pasta nem reescrever o tsconfig.json do projeto.
-const NEXT_CACHE_DIR = path.join("node_modules", ".cache", "agenli-landing-next")
+const NEXT_CACHE_DIR = path.join("node_modules", ".cache", "agendi-landing-next")
 
 async function isolatedNextConfig() {
   const dir = path.join(ROOT, NEXT_CACHE_DIR)

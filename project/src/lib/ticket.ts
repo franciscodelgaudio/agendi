@@ -29,7 +29,7 @@ export type TicketData = {
   description: string;
 };
 
-// Tickets vão para a equipe da Agenli: qualquer membro do workspace pode abrir.
+// Tickets vão para a equipe da Agendi: qualquer membro do workspace pode abrir.
 export async function createTicket(
   input: unknown,
   ctx: { workspaceId: string; userId: string; actorRole: WorkspaceRole | null },

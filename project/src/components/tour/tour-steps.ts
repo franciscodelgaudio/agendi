@@ -78,7 +78,7 @@ const start: Tour = {
   steps: [
     {
       id: "welcome",
-      title: "Boas-vindas ao agenli",
+      title: "Boas-vindas ao agendi",
       body: "Em três missões rápidas você cria uma unidade, cadastra um serviço e faz o primeiro agendamento.",
     },
     {
@@ -178,7 +178,7 @@ const start: Tour = {
     {
       id: "done",
       title: "Missões concluídas",
-      body: "Sua unidade já recebe agendamentos. Quando quiser, conheça as outras áreas do agenli:",
+      body: "Sua unidade já recebe agendamentos. Quando quiser, conheça as outras áreas do agendi:",
     },
   ],
 }
@@ -390,7 +390,7 @@ const settings: Tour = {
       sidebar: true,
       side: "right",
       title: "Tickets",
-      body: "Relate bugs e peça melhorias ao time do agenli.",
+      body: "Relate bugs e peça melhorias ao time do agendi.",
     },
   ],
 }
