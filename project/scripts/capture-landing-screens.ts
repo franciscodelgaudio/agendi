@@ -559,7 +559,7 @@ async function seed(db: Db, now: Date): Promise<SeedResult> {
 
   // Funções: quem atende e quem recebe os clientes; a dona é administradora (acesso total).
   const allPages = {
-    workspace: ["home", "units", "calendar", "cash_flow", "team", "users"],
+    workspace: ["home", "units", "calendar", "cash_flow", "team", "stock", "users"],
     unit: ["overview", "services", "calendar", "appointments", "stock", "team", "cash_flow"],
   }
   const therapistRoleId = new ObjectId()

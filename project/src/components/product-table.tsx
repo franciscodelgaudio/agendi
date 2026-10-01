@@ -32,6 +32,9 @@ import { formatAverage } from "@/components/product-format"
 type Props = {
   products: {
     id: string
+    unitId: string
+    // Só no estoque de todas as unidades: aparece abaixo do nome do produto.
+    unitName?: string
     name: string
     quantity: number
     costCents: number
@@ -43,12 +46,11 @@ type Props = {
   query: ProductListQuery
   pathname: string
   workspaceId: string
-  unitId: string
   // Sem permissão, a coluna de ações (editar/excluir) não aparece.
   canManage: boolean
 }
 
-export function ProductTable({ products, query, pathname, workspaceId, unitId, canManage }: Props) {
+export function ProductTable({ products, query, pathname, workspaceId, canManage }: Props) {
   return (
     <div className="border">
       <Table>
@@ -103,50 +105,53 @@ export function ProductTable({ products, query, pathname, workspaceId, unitId, c
               </TableCell>
             </TableRow>
           ) : (
-            products.map((product) => (
-              <TableRow key={product.id}>
-                <CodeCell id={product.id} className="@max-5xl:hidden" />
-                <TableCell className="max-w-0 px-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="rounded-md after:rounded-md">
-                      {product.avatarUrl && (
-                        <AvatarImage src={product.avatarUrl} alt={product.name} className="rounded-md object-contain" />
-                      )}
-                      <InitialFallback name={product.name} className="rounded-md" />
-                    </Avatar>
-                    <div className="grid min-w-0">
-                      <Link
-                        href={`/workspace/${workspaceId}/unit/${unitId}/stock/${product.id}`}
-                        className="truncate font-medium hover:underline"
-                      >
-                        {product.name}
-                      </Link>
-                      {product.notes && (
-                        <span className="truncate text-xs text-muted-foreground" title={product.notes}>
-                          {product.notes}
-                        </span>
-                      )}
+            products.map((product) => {
+              const details = [product.unitName, product.notes].filter(Boolean).join(" · ")
+              return (
+                <TableRow key={product.id}>
+                  <CodeCell id={product.id} className="@max-5xl:hidden" />
+                  <TableCell className="max-w-0 px-4">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="rounded-md after:rounded-md">
+                        {product.avatarUrl && (
+                          <AvatarImage src={product.avatarUrl} alt={product.name} className="rounded-md object-contain" />
+                        )}
+                        <InitialFallback name={product.name} className="rounded-md" />
+                      </Avatar>
+                      <div className="grid min-w-0">
+                        <Link
+                          href={`/workspace/${workspaceId}/unit/${product.unitId}/stock/${product.id}`}
+                          className="truncate font-medium hover:underline"
+                        >
+                          {product.name}
+                        </Link>
+                        {details && (
+                          <span className="truncate text-xs text-muted-foreground" title={details}>
+                            {details}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </TableCell>
-                <TableCell className="px-4 tabular-nums">{product.quantity}</TableCell>
-                <TableCell className="px-4 tabular-nums @max-xl:hidden">
-                  {currencyFormat.format(product.costCents / 100)}
-                </TableCell>
-                <TableCell className="px-4 @max-3xl:hidden">
-                  <StarRating value={product.rating} />
-                </TableCell>
-                <TableCell className="px-4 tabular-nums @max-2xl:hidden">{product.usage.usesSinceLastDepletion}</TableCell>
-                <TableCell className="px-4 text-muted-foreground tabular-nums @max-4xl:hidden">
-                  {formatAverage(product.usage.averageUsesPerDepletion)}
-                </TableCell>
-                {canManage && (
-                  <TableCell className="px-4 text-right">
-                    <ProductActions workspaceId={workspaceId} unitId={unitId} product={product} />
                   </TableCell>
-                )}
-              </TableRow>
-            ))
+                  <TableCell className="px-4 tabular-nums">{product.quantity}</TableCell>
+                  <TableCell className="px-4 tabular-nums @max-xl:hidden">
+                    {currencyFormat.format(product.costCents / 100)}
+                  </TableCell>
+                  <TableCell className="px-4 @max-3xl:hidden">
+                    <StarRating value={product.rating} />
+                  </TableCell>
+                  <TableCell className="px-4 tabular-nums @max-2xl:hidden">{product.usage.usesSinceLastDepletion}</TableCell>
+                  <TableCell className="px-4 text-muted-foreground tabular-nums @max-4xl:hidden">
+                    {formatAverage(product.usage.averageUsesPerDepletion)}
+                  </TableCell>
+                  {canManage && (
+                    <TableCell className="px-4 text-right">
+                      <ProductActions workspaceId={workspaceId} unitId={product.unitId} product={product} />
+                    </TableCell>
+                  )}
+                </TableRow>
+              )
+            })
           )}
         </TableBody>
       </Table>

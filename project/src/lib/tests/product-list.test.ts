@@ -44,6 +44,7 @@ describe("productListPipeline", () => {
     $project: {
       _id: 0,
       id: { $toString: "$_id" },
+      unitId: { $toString: "$unitId" },
       name: 1,
       quantity: 1,
       costCents: 1,
@@ -74,6 +75,12 @@ describe("productListPipeline", () => {
       { $sort: { name: 1, _id: 1 } },
       PROJECT,
     ]);
+  });
+
+  it("projeta o id da unidade do produto, para listar produtos de várias unidades", () => {
+    const [project] = productListPipeline({ q: "", sort: "name", dir: "asc" }).slice(-1);
+
+    expect(project).toMatchObject({ $project: { unitId: { $toString: "$unitId" } } });
   });
 
   it("escapa caracteres especiais de regex da busca", () => {
