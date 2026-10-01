@@ -11,7 +11,7 @@ type NavItem = { title: string; href: string; icon: LucideIcon }
 export function CalendarNav({ base }: { base: string }) {
   const pathname = usePathname()
   const items: NavItem[] = [
-    { title: "Calendário", href: base, icon: CalendarIcon },
+    { title: "Agenda", href: base, icon: CalendarIcon },
     { title: "Lista", href: `${base}/list`, icon: ListIcon },
   ]
 

@@ -1,4 +1,8 @@
 import { createAppointment, type AppointmentData, type CreateAppointmentError } from "@/lib/appointment";
+import { BRT_OFFSET_HOURS } from "@/lib/timezone";
+
+const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
 
 export type ConvertBookingResult =
   | { ok: true; appointmentId: string }
@@ -35,4 +39,27 @@ export async function convertBooking(
     return { ok: false, error: "booking_already_converted" };
   }
   return created;
+}
+
+export type BookingForAppointment = {
+  guest: { name: string; room: string };
+  startsAt: Date;
+  endsAt: Date;
+  service: { serviceId: string };
+  therapistId: string;
+  products: { productId: string }[];
+};
+
+// Registro com um clique: monta, a partir do agendamento salvo, o mesmo input do formulário de
+// atendimento (horário de Brasília e a duração do agendamento), para convertBooking validar.
+export function bookingAppointmentInput(booking: BookingForAppointment) {
+  return {
+    guestName: booking.guest.name,
+    room: booking.guest.room,
+    performedAt: new Date(booking.startsAt.getTime() - BRT_OFFSET_HOURS * HOUR_MS).toISOString().slice(0, 16),
+    serviceIds: [booking.service.serviceId],
+    therapistIds: [booking.therapistId],
+    durations: [String(Math.round((booking.endsAt.getTime() - booking.startsAt.getTime()) / MINUTE_MS))],
+    productIds: booking.products.map((product) => product.productId),
+  };
 }

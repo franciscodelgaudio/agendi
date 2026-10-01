@@ -35,7 +35,7 @@ type Appointment = {
   unitId: string
   performedAt: Date
   guest: { name: string; room: string }
-  items: { serviceId: string; therapistId: string }[]
+  items: { serviceId: string; therapistId: string; durationMinutes: number }[]
   productIds: string[]
 }
 
@@ -92,7 +92,11 @@ export function AppointmentActions({ workspaceId, appointment, ...options }: Pro
               guestName: appointment.guest.name,
               room: appointment.guest.room,
               performedAt: toFormDateTime(appointment.performedAt),
-              items: appointment.items.map(({ serviceId, therapistId }) => ({ serviceId, therapistId })),
+              items: appointment.items.map(({ serviceId, therapistId, durationMinutes }) => ({
+                serviceId,
+                therapistId,
+                durationMinutes,
+              })),
               productIds: appointment.productIds,
             }}
             action={(prev, formData) =>

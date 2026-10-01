@@ -41,7 +41,7 @@ const permissionLabels: Record<Permission, string> = {
 const workspacePageLabels: Record<WorkspacePage, string> = {
   home: "Início",
   units: "Unidades",
-  calendar: "Calendário",
+  calendar: "Agenda",
   cash_flow: "Caixa",
   team: "Equipe",
   stock: "Estoque",
@@ -51,7 +51,7 @@ const workspacePageLabels: Record<WorkspacePage, string> = {
 const unitPageLabels: Record<UnitPage, string> = {
   overview: "Visão geral",
   services: "Serviços",
-  calendar: "Calendário",
+  calendar: "Agenda",
   appointments: "Atendimentos",
   stock: "Estoque",
   team: "Equipe",

@@ -290,13 +290,13 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
                 ? `${plural(schedule.length, "agendamento", "agendamentos")}, ${attendedToday} ${attendedToday === 1 ? "atendido" : "atendidos"}`
                 : "Nada agendado para hoje"}
             </CardDescription>
-            <CardLink href={`${base}/calendar`}>Calendário</CardLink>
+            <CardLink href={`${base}/calendar`}>Agenda</CardLink>
           </CardHeader>
           <CardContent className="flex-1">
             {schedule.length ? (
               <TodaySchedule bookings={schedule} therapists={workspace.therapists} now={now} />
             ) : (
-              <CardEmpty icon={CalendarXIcon}>Nenhum agendamento hoje. Novos horários entram pelo calendário.</CardEmpty>
+              <CardEmpty icon={CalendarXIcon}>Nenhum agendamento hoje. Novos horários entram pela agenda.</CardEmpty>
             )}
           </CardContent>
         </Card>

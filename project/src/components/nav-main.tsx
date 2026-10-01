@@ -46,7 +46,7 @@ export function NavMain({ workspaceId, pages, actor }: { workspaceId: string; pa
       label: "Geral",
       items: [
         ...item("units", "Unidades", MapPinIcon),
-        ...item("calendar", "Calendário", CalendarIcon),
+        ...item("calendar", "Agenda", CalendarIcon),
         ...item("cash_flow", "Caixa", WalletIcon),
         ...item("team", "Equipe", UsersRoundIcon),
         ...item("stock", "Estoque", ArchiveIcon),

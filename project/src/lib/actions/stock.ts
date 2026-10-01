@@ -3,8 +3,8 @@
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { getSessionUserId } from "@/lib/session"
-import { can } from "@/lib/permissions"
-import { findWorkspaceAccess } from "@/lib/workspace-access"
+import { forbiddenMessage } from "@/lib/access-check"
+import { findManagedWorkspace } from "@/lib/workspace-access"
 import {
   createStock,
   deleteStock,
@@ -35,12 +35,15 @@ const errorMessages: Record<CreateStockError | UpdateStockError | DeleteStockErr
 
 export type StockActionState = { error: string | null }
 
-// Id do workspace se o usuário gerenciar o estoque nele; undefined sem permissão, null = sessão expirada.
-async function resolveWorkspace(workspaceId: string) {
+// Id do workspace se o usuário gerenciar o estoque nele; senão a mensagem de erro.
+async function resolveWorkspace(workspaceId: string): Promise<{ workspaceId: string } | { error: string }> {
   const userId = await getSessionUserId()
-  if (!userId) return null
-  const access = await findWorkspaceAccess(workspaceId, userId)
-  return { workspaceId: access && can(access.actor, "stock.manage") ? access.id : undefined }
+  if (!userId) return { error: errorMessages.unauthenticated }
+  const managed = await findManagedWorkspace(workspaceId, userId, "stock.manage")
+  if (!managed.ok) {
+    return { error: managed.error === "forbidden" ? forbiddenMessage("stock.manage") : errorMessages[managed.error] }
+  }
+  return { workspaceId: managed.access.id }
 }
 
 function stockInput(formData: FormData) {
@@ -109,7 +112,7 @@ export async function createStockAction(
   formData: FormData,
 ): Promise<StockActionState> {
   const target = await resolveWorkspace(workspaceId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return target
 
   const result = await createStock(stockInput(formData), target.workspaceId, {
     unitsExist,
@@ -134,9 +137,9 @@ export async function updateStockAction(
   formData: FormData,
 ): Promise<StockActionState> {
   const target = await resolveWorkspace(workspaceId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return target
 
-  const id = target.workspaceId && isObjectIdOrHexString(stockId) ? stockId : null
+  const id = isObjectIdOrHexString(stockId) ? stockId : null
   const result = await updateStock(stockInput(formData), target.workspaceId, id, {
     unitsExist,
     update: async (stockId, { units, ...data }) => {
@@ -146,7 +149,7 @@ export async function updateStockAction(
         { $set: { ...data, units: toUnitDocs(units) } },
       )
       if (matchedCount === 0) return false
-      await bringUnitsIn(target.workspaceId!, _id, units)
+      await bringUnitsIn(target.workspaceId, _id, units)
       return true
     },
   })
@@ -165,9 +168,9 @@ export async function deleteStockAction(
   formData: FormData,
 ): Promise<StockActionState> {
   const target = await resolveWorkspace(workspaceId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return target
 
-  const id = target.workspaceId && isObjectIdOrHexString(stockId) ? stockId : null
+  const id = isObjectIdOrHexString(stockId) ? stockId : null
   const result = await deleteStock({ unitId: formData.get("unitId") }, target.workspaceId, id, {
     findUnitIds: async (workspaceId, stockId) => {
       const stock = await Stock.findOne({ _id: stockId, workspaceId }).select({ units: 1 }).lean()

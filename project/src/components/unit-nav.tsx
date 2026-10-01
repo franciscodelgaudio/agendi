@@ -27,7 +27,7 @@ export function UnitNav({
   const tabs: Record<UnitPage, NavItem> = {
     overview: { title: "Visão geral", icon: LayoutDashboardIcon },
     services: { title: "Serviços", icon: LeafIcon, pending: !hasServices },
-    calendar: { title: "Calendário", icon: CalendarIcon },
+    calendar: { title: "Agenda", icon: CalendarIcon },
     appointments: { title: "Atendimentos", icon: CircleCheckIcon },
     stock: { title: "Estoque", icon: ArchiveIcon },
     team: { title: "Equipe", icon: UsersIcon },

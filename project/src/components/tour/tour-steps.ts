@@ -114,7 +114,7 @@ const start: Tour = {
       mission: 1,
       target: "unit-tabs",
       title: "O painel da unidade",
-      body: "Pelas abas você chega aos serviços, ao calendário, aos atendimentos, ao estoque, à equipe e ao caixa desta unidade.",
+      body: "Pelas abas você chega aos serviços, à agenda, aos atendimentos, ao estoque, à equipe e ao caixa desta unidade.",
     },
     {
       id: "unit-tab-services",
@@ -151,8 +151,8 @@ const start: Tour = {
       mission: 2,
       target: "unit-tab-calendar",
       action: "click",
-      title: "Calendário",
-      body: "Os agendamentos da unidade ficam aqui. Clique em Calendário.",
+      title: "Agenda",
+      body: "Os agendamentos da unidade ficam aqui. Clique em Agenda.",
       show: unitPage("calendar"),
     },
     {
@@ -163,7 +163,7 @@ const start: Tour = {
       expect: "booking-form",
       side: "top",
       title: "Escolha um horário",
-      body: "Clique num horário livre do calendário (ou arraste para escolher a duração).",
+      body: "Clique num horário livre da agenda (ou arraste para escolher a duração).",
       show: managesUnitPage("calendar", "bookings.manage"),
     },
     {
@@ -197,8 +197,8 @@ const general: Tour = {
       target: "nav-calendar",
       sidebar: true,
       side: "right",
-      title: "Calendário",
-      body: "Os agendamentos de todas as unidades num calendário só.",
+      title: "Agenda",
+      body: "Os agendamentos de todas as unidades numa agenda só.",
       show: workspacePage("calendar"),
     },
     {

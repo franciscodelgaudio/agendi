@@ -83,7 +83,7 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h3 className="text-lg font-semibold tracking-tight">Calendário</h3>
+        <h3 className="text-lg font-semibold tracking-tight">Agenda</h3>
         <CalendarNav base={`/workspace/${workspaceId}/unit/${unitId}/calendar`} />
       </div>
       <div data-tour="unit-calendar">

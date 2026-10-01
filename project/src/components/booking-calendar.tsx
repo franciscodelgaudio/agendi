@@ -45,6 +45,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { AppointmentForm } from "@/components/appointment-form"
 import { BookingForm, type BookingFormOptions, type BookingFormValues } from "@/components/booking-form"
+import { RegisterBookingDialog } from "@/components/register-booking-dialog"
 import { formatDuration } from "@/components/service-format"
 import {
   MissingTherapistIcon,
@@ -89,7 +90,8 @@ function brtNow() {
   return new Date(Date.now() - BRT_OFFSET_HOURS * HOUR_MS)
 }
 
-// convert: formulário de atendimento pré-preenchido; done: resumo do agendamento já atendido.
+// convert: formulário de atendimento pré-preenchido (o "ajustar antes de registrar");
+// done: resumo do agendamento já atendido.
 type SheetInput =
   | { mode: "edit"; values: BookingFormValues; booking: BookingRow }
   | { mode: "convert"; booking: BookingRow }
@@ -117,6 +119,8 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
   const [draft, setDraft] = useState<Draft | null>(null)
   const [draftEl, setDraftEl] = useState<HTMLElement | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  // Confirmação do registro com um clique; o agendamento fica guardado durante a animação de fechar.
+  const [register, setRegister] = useState<{ open: boolean; booking: BookingRow } | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleting, startDelete] = useTransition()
   // A primeira busca começa junto com o calendário, então ele já nasce carregando.
@@ -588,7 +592,10 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
                 setSheetOpen(false)
                 refetch()
               }}
-              onConvert={() => openSheet({ mode: "convert", booking: sheet.booking })}
+              onConvert={() => {
+                setSheetOpen(false)
+                setRegister({ open: true, booking: sheet.booking })
+              }}
               onDelete={() => setDeleteOpen(true)}
             />
           )}
@@ -602,7 +609,13 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
                 guestName: sheet.booking.guest.name,
                 room: sheet.booking.guest.room,
                 performedAt: sheet.booking.startsAt,
-                items: [{ serviceId: sheet.booking.service.serviceId, therapistId: sheet.booking.therapistId }],
+                items: [
+                  {
+                    serviceId: sheet.booking.service.serviceId,
+                    therapistId: sheet.booking.therapistId,
+                    durationMinutes: sheet.booking.durationMinutes,
+                  },
+                ],
                 productIds: sheet.booking.productIds,
               }}
               action={(prev, formData) => convertBookingAction(workspaceId, sheet.booking.id, prev, formData)}
@@ -615,6 +628,17 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
           {sheet?.mode === "done" && <DoneSummary workspaceId={workspaceId} booking={sheet.booking} />}
         </SheetContent>
       </Sheet>
+
+      {register && (
+        <RegisterBookingDialog
+          workspaceId={workspaceId}
+          booking={register.booking}
+          open={register.open}
+          onOpenChange={(open) => setRegister({ ...register, open })}
+          onRegistered={refetch}
+          onAdjust={() => openSheet({ mode: "convert", booking: register.booking })}
+        />
+      )}
 
       {sheet?.mode === "edit" && (
         <AlertDialog

@@ -92,7 +92,7 @@ export const AGENIA_ACTIONS = {
     },
   ),
   deleteProduct: spec("Excluir produto", "Exclui um produto do estoque.", { unitId: objectId, productId: objectId, summary }),
-  createBooking: spec("Criar agendamento", "Agenda um horário no calendário de uma unidade.", {
+  createBooking: spec("Criar agendamento", "Marca um horário na agenda de uma unidade.", {
     unitId: objectId,
     therapistId: objectId.describe("userId do profissional."),
     serviceId: objectId,
@@ -111,7 +111,7 @@ export const AGENIA_ACTIONS = {
     endsAt: dateTime,
     summary,
   }),
-  deleteBooking: spec("Excluir agendamento", "Exclui um agendamento do calendário.", { bookingId: objectId, summary }),
+  deleteBooking: spec("Excluir agendamento", "Exclui um agendamento da agenda.", { bookingId: objectId, summary }),
   createAppointment: spec("Registrar atendimento", "Registra um atendimento realizado numa unidade (entra no caixa).", {
     unitId: objectId,
     guestName: z.string().min(1),

@@ -30,7 +30,7 @@ const CLIENTS = [
 const SHOWCASE = [
   {
     src: "/landing/calendario.webp",
-    alt: "Calendário semanal de uma unidade no Agendi, com os agendamentos de cada profissional",
+    alt: "Agenda semanal de uma unidade no Agendi, com os agendamentos de cada profissional",
     icon: CalendarDays,
     title: "Agenda por profissional",
     description: "Todos os agendamentos da unidade em mês, semana, dia ou lista, com uma cor por profissional.",

@@ -18,7 +18,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/works
   const visible = await findVisiblePages(workspaceId, userId)
   if (!visible) return Response.json({ error: "Workspace não encontrado." }, { status: 404 })
   if (!visible.pages.workspace.includes("calendar") && !(query.unit && visible.pages.unit.includes("calendar"))) {
-    return Response.json({ error: "Sem permissão para ver o calendário." }, { status: 403 })
+    return Response.json({ error: "Sem permissão para ver a agenda." }, { status: 403 })
   }
 
   const [workspace] = await Workspace.aggregate<{ bookings: BookingRow[] }>([

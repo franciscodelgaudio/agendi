@@ -3,9 +3,10 @@
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { getSessionUserId } from "@/lib/session"
+import { forbiddenMessage } from "@/lib/access-check"
 import { can, type Actor } from "@/lib/permissions"
 import { planUnitTeam, type PlanUnitTeamError, type UnitTeamPlan } from "@/lib/unit-team"
-import { findWorkspaceAccess } from "@/lib/workspace-access"
+import { findManagedWorkspace } from "@/lib/workspace-access"
 import type { TreatmentRoomInput } from "@/lib/treatment-room"
 import {
   createUnit,
@@ -55,10 +56,16 @@ export type CreateUnitState = { error: string | null }
 export type UpdateUnitState = CreateUnitState
 export type DeleteUnitState = CreateUnitState
 
-// Acesso ao workspace se o usuário puder gerenciar unidades; senão undefined.
-async function findManagedAccess(workspaceId: string, userId: string) {
-  const access = await findWorkspaceAccess(workspaceId, userId)
-  return access && can(access.actor, "units.manage") ? access : undefined
+// Acesso ao workspace se o usuário puder gerenciar unidades; senão a mensagem de erro.
+async function findManagedAccess(
+  workspaceId: string,
+  userId: string,
+): Promise<{ access: { id: string; actor: Actor } } | { error: string }> {
+  const managed = await findManagedWorkspace(workspaceId, userId, "units.manage")
+  if (!managed.ok) {
+    return { error: managed.error === "forbidden" ? forbiddenMessage("units.manage") : errorMessages[managed.error] }
+  }
+  return { access: managed.access }
 }
 
 // Quem vincular e desvincular, conferido antes de gravar a unidade. unitId null = unidade nova.
@@ -124,13 +131,15 @@ export async function createUnitAction(
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
 
-  const access = await findManagedAccess(workspaceId, userId)
-  const team = access && (await planTeam(formData, access.id, access.actor, null))
+  const managed = await findManagedAccess(workspaceId, userId)
+  if ("error" in managed) return managed
+  const { access } = managed
+  const team = await planTeam(formData, access.id, access.actor, null)
   if (team && !team.ok) return { error: errorMessages[team.error] }
 
   const result = await createUnit(
     unitInput(formData),
-    access?.id,
+    access.id,
     async (data) => {
       const { openingBalance, ...unitData } = data
       const unit = await Unit.create({ ...unitData, treatmentRooms: toTreatmentRoomDocs(data.treatmentRooms) })
@@ -155,14 +164,18 @@ export async function createUnitAction(
   return { error: null }
 }
 
-// Só repassa o unitId quando o usuário gerencia o workspace; a escrita ainda filtra
-// por workspaceId para que uma unidade de outro workspace não seja encontrado.
-// null = sessão expirada.
-async function resolveUnitTarget(workspaceId: string, unitId: string) {
+// A escrita ainda filtra por workspaceId para que uma unidade de outro workspace não seja
+// encontrada. Sem sessão ou sem permissão, a mensagem de erro.
+async function resolveUnitTarget(
+  workspaceId: string,
+  unitId: string,
+): Promise<{ ownedId: string; actor: Actor; unitId: string | null } | { error: string }> {
   const userId = await getSessionUserId()
-  if (!userId) return null
-  const access = await findManagedAccess(workspaceId, userId)
-  return { ownedId: access?.id, actor: access?.actor, unitId: access && isObjectIdOrHexString(unitId) ? unitId : null }
+  if (!userId) return { error: errorMessages.unauthenticated }
+  const managed = await findManagedAccess(workspaceId, userId)
+  if ("error" in managed) return managed
+  const { access } = managed
+  return { ownedId: access.id, actor: access.actor, unitId: isObjectIdOrHexString(unitId) ? unitId : null }
 }
 
 export async function updateUnitAction(
@@ -172,8 +185,8 @@ export async function updateUnitAction(
   formData: FormData,
 ): Promise<UpdateUnitState> {
   const target = await resolveUnitTarget(workspaceId, unitId)
-  if (!target) return { error: errorMessages.unauthenticated }
-  const team = target.ownedId && target.actor && (await planTeam(formData, target.ownedId, target.actor, target.unitId))
+  if ("error" in target) return target
+  const team = await planTeam(formData, target.ownedId, target.actor, target.unitId)
   if (team && !team.ok) return { error: errorMessages[team.error] }
 
   const result = await updateUnit(
@@ -196,7 +209,7 @@ export async function updateUnitAction(
         },
       )
       if (matchedCount === 0) return false
-      if (team) await applyTeam(target.ownedId!, id, team)
+      if (team) await applyTeam(target.ownedId, id, team)
       return true
     },
     async (id, keptRoomIds) => {
@@ -219,7 +232,7 @@ export async function updateUnitAction(
 
 export async function deleteUnitAction(workspaceId: string, unitId: string): Promise<DeleteUnitState> {
   const target = await resolveUnitTarget(workspaceId, unitId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return target
 
   const result = await deleteUnit(target.unitId, async (id) => {
     const { deletedCount } = await Unit.deleteOne({ _id: id, workspaceId: target.ownedId })

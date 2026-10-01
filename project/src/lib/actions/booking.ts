@@ -1,11 +1,11 @@
 "use server"
 
 import { isObjectIdOrHexString } from "mongoose"
-import { can } from "@/lib/permissions"
+import { forbiddenMessage, type UnitAccessError } from "@/lib/access-check"
 import { getSessionUserId } from "@/lib/session"
 import { bookingLookups, conflictChecker, findUnitTreatmentRoom, roomBookingsFinder } from "@/lib/booking-store"
 import { findManagedUnit } from "@/lib/unit-access"
-import { findWorkspaceAccess } from "@/lib/workspace-access"
+import { findManagedWorkspace } from "@/lib/workspace-access"
 import {
   createBooking,
   deleteBooking,
@@ -16,7 +16,7 @@ import {
 import { Booking } from "@/models/Booking"
 import { Unit } from "@/models/Unit"
 
-const errorMessages: Record<BookingError | "unauthenticated", string> = {
+const errorMessages: Record<BookingError | "workspace_not_found" | "unauthenticated", string> = {
   invalid_input: "Preencha profissional, sala, hóspede, quarto, início e duração.",
   invalid_therapist: "Escolha o profissional.",
   invalid_service: "Escolha o serviço.",
@@ -35,6 +35,7 @@ const errorMessages: Record<BookingError | "unauthenticated", string> = {
   room_full: "A sala já está ocupada nesse horário.",
   unit_not_found: "Escolha uma unidade válida deste workspace.",
   booking_not_found: "Agendamento não encontrado ou sem permissão.",
+  workspace_not_found: "Workspace não encontrado ou sem permissão.",
   too_many_products: "Escolha no máximo 20 produtos.",
   product_not_found: "Algum produto não foi encontrado nesta unidade. Recarregue a página.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
@@ -56,11 +57,21 @@ function bookingInput(formData: FormData) {
   }
 }
 
-// Unidades do workspace, se o usuário pode gerenciar agendamentos; senão null.
+function accessError(error: UnitAccessError): BookingActionState {
+  return { error: error === "forbidden" ? forbiddenMessage("bookings.manage") : errorMessages[error] }
+}
+
+// Unidade gerenciável pelo usuário (vinda do formulário), com o motivo quando não é.
+function findBookingUnit(workspaceId: string, formData: FormData, userId: string) {
+  const unitId = formData.get("unitId")
+  return findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId, "bookings.manage")
+}
+
+// Unidades do workspace, se o usuário pode gerenciar agendamentos; senão o motivo.
 async function findManagedUnitIds(workspaceId: string, userId: string) {
-  const access = await findWorkspaceAccess(workspaceId, userId)
-  if (!access || !can(access.actor, "bookings.manage")) return null
-  return Unit.find({ workspaceId: access.id }).distinct("_id")
+  const managed = await findManagedWorkspace(workspaceId, userId, "bookings.manage")
+  if (!managed.ok) return managed
+  return { ok: true as const, unitIds: await Unit.find({ workspaceId: managed.access.id }).distinct("_id") }
 }
 
 // workspaceId vem via argumento e a unidade pelo formulário (campo unitId); a posse é conferida aqui.
@@ -71,12 +82,13 @@ export async function createBookingAction(
 ): Promise<BookingActionState> {
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
-  const unitId = formData.get("unitId")
-  const unit = await findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId, "bookings.manage")
-  const unitIds = unit ? await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id") : []
+  const access = await findBookingUnit(workspaceId, formData, userId)
+  if (!access.ok) return accessError(access.error)
+  const { unit } = access
+  const unitIds = await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id")
 
-  const result = await createBooking(bookingInput(formData), unit?.unitId, {
-    ...bookingLookups(unit!, unitIds),
+  const result = await createBooking(bookingInput(formData), unit.unitId, {
+    ...bookingLookups(unit, unitIds),
     insert: async (data) => {
       const booking = await Booking.create({ ...data, createdBy: userId })
       return { id: booking._id.toString() }
@@ -96,9 +108,9 @@ export async function updateBookingAction(
 ): Promise<BookingActionState> {
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
-  const unitId = formData.get("unitId")
-  const unit = await findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId, "bookings.manage")
-  if (!unit) return { error: errorMessages.unit_not_found }
+  const access = await findBookingUnit(workspaceId, formData, userId)
+  if (!access.ok) return accessError(access.error)
+  const { unit } = access
   const unitIds = await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id")
 
   const result = await updateBooking(bookingInput(formData), isObjectIdOrHexString(bookingId) ? bookingId : null, {
@@ -124,13 +136,15 @@ export async function rescheduleBookingAction(
 ): Promise<BookingActionState> {
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
-  const unitIds = await findManagedUnitIds(workspaceId, userId)
+  const managed = await findManagedUnitIds(workspaceId, userId)
+  if (!managed.ok) return accessError(managed.error)
+  const { unitIds } = managed
 
-  // Só repassa o id quando o workspace é gerenciável; a escrita ainda filtra pelas unidades dele.
-  const result = await rescheduleBooking(times, unitIds && isObjectIdOrHexString(bookingId) ? bookingId : null, {
+  // A escrita ainda filtra pelas unidades do workspace.
+  const result = await rescheduleBooking(times, isObjectIdOrHexString(bookingId) ? bookingId : null, {
     findBooking: async (id) => {
       // Agendamento que já virou atendimento não pode ser arrastado.
-      const booking = await Booking.findOne({ _id: id, unitId: { $in: unitIds! }, appointmentId: null })
+      const booking = await Booking.findOne({ _id: id, unitId: { $in: unitIds }, appointmentId: null })
         .select({ therapistId: 1, unitId: 1, treatmentRoom: 1 })
         .lean()
       if (!booking) return null
@@ -140,11 +154,11 @@ export async function rescheduleBookingAction(
         treatmentRoom: room && { roomId: room.id, beds: room.beds },
       }
     },
-    hasConflict: conflictChecker(unitIds ?? []),
-    findRoomBookings: roomBookingsFinder(unitIds ?? []),
+    hasConflict: conflictChecker(unitIds),
+    findRoomBookings: roomBookingsFinder(unitIds),
     update: async (id, fields) => {
       const { matchedCount } = await Booking.updateOne(
-        { _id: id, unitId: { $in: unitIds! }, appointmentId: null },
+        { _id: id, unitId: { $in: unitIds }, appointmentId: null },
         { $set: fields },
       )
       return matchedCount > 0
@@ -157,10 +171,12 @@ export async function rescheduleBookingAction(
 export async function deleteBookingAction(workspaceId: string, bookingId: string): Promise<BookingActionState> {
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
-  const unitIds = await findManagedUnitIds(workspaceId, userId)
+  const managed = await findManagedUnitIds(workspaceId, userId)
+  if (!managed.ok) return accessError(managed.error)
+  const { unitIds } = managed
 
-  const result = await deleteBooking(unitIds && isObjectIdOrHexString(bookingId) ? bookingId : null, async (id) => {
-    const { deletedCount } = await Booking.deleteOne({ _id: id, unitId: { $in: unitIds! } })
+  const result = await deleteBooking(isObjectIdOrHexString(bookingId) ? bookingId : null, async (id) => {
+    const { deletedCount } = await Booking.deleteOne({ _id: id, unitId: { $in: unitIds } })
     return deletedCount > 0
   })
 

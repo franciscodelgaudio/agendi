@@ -3,6 +3,7 @@
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { getSessionUserId } from "@/lib/session"
+import { forbiddenMessage, type UnitAccessError } from "@/lib/access-check"
 import { findManagedUnit } from "@/lib/unit-access"
 import {
   createExpense,
@@ -34,7 +35,7 @@ type GroupError =
   | UpdateExpenseGroupError
   | Extract<DeleteExpenseGroupResult, { ok: false }>["error"]
 
-const groupErrorMessages: Record<GroupError | "unauthenticated", string> = {
+const groupErrorMessages: Record<GroupError | "workspace_not_found" | "unauthenticated", string> = {
   invalid_input: "Informe o nome do grupo.",
   invalid_name: "Informe o nome do grupo.",
   name_too_long: "O nome pode ter no máximo 40 caracteres.",
@@ -44,11 +45,15 @@ const groupErrorMessages: Record<GroupError | "unauthenticated", string> = {
   duplicate_group_name: "Já existe um grupo com esse nome nesta unidade.",
   group_has_expenses: "Este grupo tem despesas lançadas. Exclua ou mova as despesas antes.",
   unit_not_found: "Unidade não encontrada ou sem permissão.",
+  workspace_not_found: "Workspace não encontrado ou sem permissão.",
   group_not_found: "Grupo não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
-const expenseErrorMessages: Record<CreateExpenseError | UpdateExpenseError | "unauthenticated", string> = {
+const expenseErrorMessages: Record<
+  CreateExpenseError | UpdateExpenseError | "workspace_not_found" | "unauthenticated",
+  string
+> = {
   invalid_input: "Preencha grupo, descrição, valor e dia.",
   invalid_description: "Informe a descrição da despesa.",
   description_too_long: "A descrição pode ter no máximo 80 caracteres.",
@@ -57,23 +62,29 @@ const expenseErrorMessages: Record<CreateExpenseError | UpdateExpenseError | "un
   invalid_count: "Informe de 2 a 60 meses.",
   group_not_found: "Escolha um grupo desta unidade.",
   unit_not_found: "Unidade não encontrada ou sem permissão.",
+  workspace_not_found: "Workspace não encontrado ou sem permissão.",
   expense_not_found: "Despesa não encontrada ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
 export type ExpenseActionState = { error: string | null }
 
-// Usuário e unidade, com unitId undefined quando o usuário não gerencia a unidade.
-// null = sessão expirada.
-async function resolveUnit(workspaceId: string, unitId: string) {
+// Usuário e unidade se o usuário gerenciar o caixa dela; senão a mensagem de erro, tirada de messages.
+async function resolveUnit(
+  workspaceId: string,
+  unitId: string,
+  messages: Record<Exclude<UnitAccessError, "forbidden"> | "unauthenticated", string>,
+): Promise<{ userId: string; unitId: string } | { error: string }> {
   const userId = await getSessionUserId()
-  if (!userId) return null
-  return { userId, unitId: (await findManagedUnit(workspaceId, unitId, userId, "cash_flow.manage"))?.unitId }
+  if (!userId) return { error: messages.unauthenticated }
+  const access = await findManagedUnit(workspaceId, unitId, userId, "cash_flow.manage")
+  if (!access.ok) return { error: access.error === "forbidden" ? forbiddenMessage("cash_flow.manage") : messages[access.error] }
+  return { userId, unitId: access.unit.unitId }
 }
 
-// Só repassa o id do registro quando a unidade é gerenciável; a escrita ainda filtra por unitId.
-function ownedId(unitId: string | undefined, id: string) {
-  return unitId && isObjectIdOrHexString(id) ? id : null
+// A escrita ainda filtra por unitId.
+function ownedId(id: string) {
+  return isObjectIdOrHexString(id) ? id : null
 }
 
 // Mesma regra do índice único: sem diferenciar maiúsculas nem acentos.
@@ -126,8 +137,8 @@ export async function createExpenseGroupAction(
   _prev: ExpenseActionState,
   formData: FormData,
 ): Promise<ExpenseActionState> {
-  const target = await resolveUnit(workspaceId, unitId)
-  if (!target) return { error: groupErrorMessages.unauthenticated }
+  const target = await resolveUnit(workspaceId, unitId, groupErrorMessages)
+  if ("error" in target) return target
 
   const result = await createExpenseGroup(groupInput(formData), target.unitId, {
     insert: async (data) => ({ id: (await ExpenseGroup.create(data))._id.toString() }),
@@ -147,10 +158,10 @@ export async function updateExpenseGroupAction(
   _prev: ExpenseActionState,
   formData: FormData,
 ): Promise<ExpenseActionState> {
-  const target = await resolveUnit(workspaceId, unitId)
-  if (!target) return { error: groupErrorMessages.unauthenticated }
+  const target = await resolveUnit(workspaceId, unitId, groupErrorMessages)
+  if ("error" in target) return target
 
-  const result = await updateExpenseGroup(groupInput(formData), target.unitId, ownedId(target.unitId, groupId), {
+  const result = await updateExpenseGroup(groupInput(formData), target.unitId, ownedId(groupId), {
     update: async (id, data, limit) => {
       const group = await ExpenseGroup.findOne({ _id: id, unitId: target.unitId }).select({ limitChanges: 1 }).lean()
       if (!group) return false
@@ -178,10 +189,10 @@ export async function updateGroupMonthLimitAction(
   month: string,
   limit: string,
 ): Promise<ExpenseActionState> {
-  const target = await resolveUnit(workspaceId, unitId)
-  if (!target) return { error: groupErrorMessages.unauthenticated }
+  const target = await resolveUnit(workspaceId, unitId, groupErrorMessages)
+  if ("error" in target) return target
 
-  const result = await updateGroupMonthLimit({ month, limit }, target.unitId, ownedId(target.unitId, groupId), {
+  const result = await updateGroupMonthLimit({ month, limit }, target.unitId, ownedId(groupId), {
     setMonthLimit: async (id, limitMonth, cents) => {
       const group = await ExpenseGroup.findOne({ _id: id, unitId: target.unitId })
         .select({ monthlyLimitCents: 1, limitChanges: 1 })
@@ -206,10 +217,10 @@ export async function deleteExpenseGroupAction(
   unitId: string,
   groupId: string,
 ): Promise<ExpenseActionState> {
-  const target = await resolveUnit(workspaceId, unitId)
-  if (!target) return { error: groupErrorMessages.unauthenticated }
+  const target = await resolveUnit(workspaceId, unitId, groupErrorMessages)
+  if ("error" in target) return target
 
-  const result = await deleteExpenseGroup(ownedId(target.unitId, groupId), {
+  const result = await deleteExpenseGroup(ownedId(groupId), {
     hasExpenses: async (id) => !!(await Expense.exists({ groupId: id, unitId: target.unitId })),
     remove: async (id) => (await ExpenseGroup.deleteOne({ _id: id, unitId: target.unitId })).deletedCount > 0,
   })
@@ -225,8 +236,8 @@ export async function createExpenseAction(
   _prev: ExpenseActionState,
   formData: FormData,
 ): Promise<ExpenseActionState> {
-  const target = await resolveUnit(workspaceId, unitId)
-  if (!target) return { error: expenseErrorMessages.unauthenticated }
+  const target = await resolveUnit(workspaceId, unitId, expenseErrorMessages)
+  if ("error" in target) return target
 
   const result = await createExpense(expenseInput(formData), target.unitId, {
     insert: async (entries) => {
@@ -250,12 +261,12 @@ export async function updateExpenseAction(
   _prev: ExpenseActionState,
   formData: FormData,
 ): Promise<ExpenseActionState> {
-  const target = await resolveUnit(workspaceId, unitId)
-  if (!target) return { error: expenseErrorMessages.unauthenticated }
+  const target = await resolveUnit(workspaceId, unitId, expenseErrorMessages)
+  if ("error" in target) return target
 
-  const result = await updateExpense(expenseInput(formData), target.unitId, ownedId(target.unitId, expenseId), {
+  const result = await updateExpense(expenseInput(formData), target.unitId, ownedId(expenseId), {
     update: async (id, data, scope) => {
-      const filter = await scopeFilter(target.unitId!, id, scope)
+      const filter = await scopeFilter(target.unitId, id, scope)
       if (!filter) return false
       await Expense.updateMany(filter, { $set: data })
       return true
@@ -274,10 +285,10 @@ export async function setExpensePaidAction(
   expenseId: string,
   paid: boolean,
 ): Promise<ExpenseActionState> {
-  const target = await resolveUnit(workspaceId, unitId)
-  if (!target) return { error: expenseErrorMessages.unauthenticated }
+  const target = await resolveUnit(workspaceId, unitId, expenseErrorMessages)
+  if ("error" in target) return target
 
-  const result = await setExpensePaid(ownedId(target.unitId, expenseId), paid, {
+  const result = await setExpensePaid(ownedId(expenseId), paid, {
     update: async (id, paidAt) => {
       const { matchedCount } = await Expense.updateOne({ _id: id, unitId: target.unitId }, { $set: { paidAt } })
       return matchedCount > 0
@@ -296,11 +307,11 @@ export async function deleteExpenseAction(
   expenseId: string,
   scope: ExpenseScope,
 ): Promise<ExpenseActionState> {
-  const target = await resolveUnit(workspaceId, unitId)
-  if (!target) return { error: expenseErrorMessages.unauthenticated }
+  const target = await resolveUnit(workspaceId, unitId, expenseErrorMessages)
+  if ("error" in target) return target
 
-  const result = await deleteExpense(ownedId(target.unitId, expenseId), scope, async (id, scope) => {
-    const filter = await scopeFilter(target.unitId!, id, scope)
+  const result = await deleteExpense(ownedId(expenseId), scope, async (id, scope) => {
+    const filter = await scopeFilter(target.unitId, id, scope)
     if (!filter) return false
     await Expense.deleteMany(filter)
     return true

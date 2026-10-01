@@ -132,6 +132,56 @@ describe("createAppointment", () => {
     expect(deps.insert.mock.calls[0][0].performedAt).toEqual(new Date("2027-01-01T01:15:00.000Z"));
   });
 
+  // A duração de cada serviço chega numa terceira lista paralela; vazia, vale a do cadastro.
+  it("usa a duração informada em cada serviço e a do cadastro quando ela vem vazia", async () => {
+    const deps = makeDeps();
+
+    await createAppointment(
+      { ...validInput, serviceIds: [CANDLE_ID, RELAX_ID], therapistIds: [ANA_ID, BIA_ID], durations: [" 90 ", ""] },
+      UNIT_ID,
+      deps,
+    );
+
+    expect(deps.insert.mock.calls[0][0].items.map((item: { durationMinutes: number }) => item.durationMinutes)).toEqual(
+      [90, 50],
+    );
+  });
+
+  it("aceita duração de 5 minutos e de 12 horas (limites)", async () => {
+    const deps = makeDeps();
+
+    const result = await createAppointment(
+      { ...validInput, serviceIds: [CANDLE_ID, CANDLE_ID], therapistIds: [ANA_ID, ANA_ID], durations: ["5", "720"] },
+      UNIT_ID,
+      deps,
+    );
+
+    expect(result).toEqual({ ok: true, appointmentId: APPOINTMENT_ID });
+    expect(deps.insert.mock.calls[0][0].items.map((item: { durationMinutes: number }) => item.durationMinutes)).toEqual(
+      [5, 720],
+    );
+  });
+
+  it.each([
+    ["durations não é lista", { ...validInput, durations: "60" }, "invalid_input"],
+    ["item de durations não é string", { ...validInput, durations: [60] }, "invalid_input"],
+    ["durations com tamanho diferente dos serviços", { ...validInput, durations: ["60", "30"] }, "invalid_item"],
+    ["duração menor que 5 minutos", { ...validInput, durations: ["4"] }, "invalid_duration"],
+    ["duração zero", { ...validInput, durations: ["0"] }, "invalid_duration"],
+    ["duração maior que 12 horas", { ...validInput, durations: ["721"] }, "invalid_duration"],
+    ["duração não numérica", { ...validInput, durations: ["uma hora"] }, "invalid_duration"],
+    ["duração fracionada", { ...validInput, durations: ["1.5"] }, "invalid_duration"],
+    ["duração negativa", { ...validInput, durations: ["-30"] }, "invalid_duration"],
+  ])("retorna erro de duração sem buscar nem salvar quando %s", async (_label, input, error) => {
+    const deps = makeDeps();
+
+    const result = await createAppointment(input, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error });
+    expect(deps.findServices).not.toHaveBeenCalled();
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
   it("aceita nome do hóspede com 80 caracteres, quarto com 20 e 20 serviços (limites)", async () => {
     const result = await createAppointment(
       {
@@ -300,6 +350,15 @@ describe("updateAppointment", () => {
       ],
       products: [],
     });
+  });
+
+  // Ao editar, o formulário reenvia a duração salva, que não volta para a do cadastro.
+  it("mantém a duração informada ao editar", async () => {
+    const deps = makeUpdateDeps();
+
+    await updateAppointment({ ...validInput, durations: ["75"] }, APPOINTMENT_ID, deps);
+
+    expect(deps.update.mock.calls[0][1].items[0].durationMinutes).toBe(75);
   });
 
   // Enviar a lista vazia apaga os produtos salvos.

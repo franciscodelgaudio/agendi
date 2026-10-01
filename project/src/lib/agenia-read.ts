@@ -273,7 +273,7 @@ export function buildReadTools(workspaceId: string) {
     }),
 
     listBookings: tool({
-      description: "Lista os agendamentos do calendário entre dois dias (inclusive), de todas as unidades ou de uma.",
+      description: "Lista os agendamentos da agenda entre dois dias (inclusive), de todas as unidades ou de uma.",
       inputSchema: z.object({ from: day, to: day, unitId: objectId.optional() }),
       execute: async ({ from, to, unitId }) => {
         const range = dayRange(from, to)

@@ -172,7 +172,7 @@ export default async function UnitCalendarListPage({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h3 className="text-lg font-semibold tracking-tight">Calendário</h3>
+        <h3 className="text-lg font-semibold tracking-tight">Agenda</h3>
         {/* O botão sobe para o título: com muitos filtros, a linha deles quebra sozinha. */}
         <div className="flex items-center gap-2">
           {total > 0 && createButton}

@@ -5,6 +5,7 @@ import { isObjectIdOrHexString } from "mongoose"
 import { getSessionUserId } from "@/lib/session"
 import { findWorkspaceTherapists, objectIds } from "@/lib/therapist-lookup"
 import { findUnitProducts } from "@/lib/product-lookup"
+import { forbiddenMessage, type UnitAccessError } from "@/lib/access-check"
 import { findManagedUnit } from "@/lib/unit-access"
 import {
   createAppointment,
@@ -12,14 +13,19 @@ import {
   updateAppointment,
   type CreateAppointmentError,
 } from "@/lib/appointment"
-import { convertBooking } from "@/lib/booking-convert"
+import { bookingAppointmentInput, convertBooking } from "@/lib/booking-convert"
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
 import { Unit } from "@/models/Unit"
 import { Service } from "@/models/Service"
 
 const errorMessages: Record<
-  CreateAppointmentError | "appointment_not_found" | "booking_not_found" | "booking_already_converted" | "unauthenticated",
+  | CreateAppointmentError
+  | "appointment_not_found"
+  | "booking_not_found"
+  | "booking_already_converted"
+  | "workspace_not_found"
+  | "unauthenticated",
   string
 > = {
   invalid_input: "Preencha hóspede, quarto, data/hora e os serviços.",
@@ -31,6 +37,7 @@ const errorMessages: Record<
   no_items: "Adicione pelo menos um serviço.",
   too_many_items: "Um atendimento pode ter no máximo 20 serviços.",
   invalid_item: "Escolha o serviço e o profissional de cada linha.",
+  invalid_duration: "A duração de cada serviço deve ser entre 5 minutos e 12 horas.",
   service_not_found: "Algum serviço não foi encontrado nesta unidade. Recarregue a página.",
   therapist_not_found: "Algum profissional escolhido não pode atender neste workspace. Recarregue a página.",
   unit_not_found: "Escolha uma unidade válida deste workspace.",
@@ -39,10 +46,20 @@ const errorMessages: Record<
   appointment_not_found: "Atendimento não encontrado ou sem permissão.",
   booking_not_found: "Agendamento não encontrado ou sem permissão.",
   booking_already_converted: "Este agendamento já foi registrado como atendimento.",
+  workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
 export type AppointmentActionState = { error: string | null }
+
+function accessError(error: UnitAccessError): AppointmentActionState {
+  return { error: error === "forbidden" ? forbiddenMessage("appointments.manage") : errorMessages[error] }
+}
+
+// Unidade gerenciável pelo usuário, com o motivo quando não é.
+function findAppointmentUnit(workspaceId: string, unitId: unknown, userId: string) {
+  return findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId, "appointments.manage")
+}
 
 function appointmentInput(formData: FormData) {
   return {
@@ -51,6 +68,8 @@ function appointmentInput(formData: FormData) {
     performedAt: formData.get("performedAt"),
     serviceIds: formData.getAll("serviceId"),
     therapistIds: formData.getAll("therapistId"),
+    // Sem o campo, vale a duração do cadastro de cada serviço.
+    durations: formData.has("durationMinutes") ? formData.getAll("durationMinutes") : undefined,
     productIds: formData.getAll("productId"),
   }
 }
@@ -83,10 +102,12 @@ export async function createAppointmentAction(
 ): Promise<AppointmentActionState> {
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
-  const unit = await findManagedUnit(workspaceId, unitId, userId, "appointments.manage")
+  const access = await findAppointmentUnit(workspaceId, unitId, userId)
+  if (!access.ok) return accessError(access.error)
+  const { unit } = access
 
-  const result = await createAppointment(appointmentInput(formData), unit?.unitId, {
-    ...appointmentLookups(unit!),
+  const result = await createAppointment(appointmentInput(formData), unit.unitId, {
+    ...appointmentLookups(unit),
     insert: async (data) => {
       const appointment = await Appointment.create({ ...data, createdBy: userId })
       return { id: appointment._id.toString() }
@@ -108,16 +129,18 @@ export async function updateAppointmentAction(
 ): Promise<AppointmentActionState> {
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
-  const unit = await findManagedUnit(workspaceId, unitId, userId, "appointments.manage")
+  const access = await findAppointmentUnit(workspaceId, unitId, userId)
+  if (!access.ok) return accessError(access.error)
+  const { unit } = access
 
-  // Só repassa o id quando a unidade é gerenciável; a escrita ainda filtra por unitId.
+  // A escrita ainda filtra por unitId.
   const result = await updateAppointment(
     appointmentInput(formData),
-    unit && isObjectIdOrHexString(appointmentId) ? appointmentId : null,
+    isObjectIdOrHexString(appointmentId) ? appointmentId : null,
     {
-      ...appointmentLookups(unit!),
+      ...appointmentLookups(unit),
       update: async (id, fields) => {
-        const { matchedCount } = await Appointment.updateOne({ _id: id, unitId: unit!.unitId }, { $set: fields })
+        const { matchedCount } = await Appointment.updateOne({ _id: id, unitId: unit.unitId }, { $set: fields })
         return matchedCount > 0
       },
     },
@@ -150,9 +173,9 @@ export async function updateWorkspaceAppointmentAction(
 ): Promise<AppointmentActionState> {
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
-  const unitId = formData.get("unitId")
-  const unit = await findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId, "appointments.manage")
-  if (!unit) return { error: errorMessages.unit_not_found }
+  const access = await findAppointmentUnit(workspaceId, formData.get("unitId"), userId)
+  if (!access.ok) return accessError(access.error)
+  const { unit } = access
 
   const result = await updateAppointment(
     appointmentInput(formData),
@@ -183,13 +206,15 @@ export async function deleteAppointmentAction(
 ): Promise<AppointmentActionState> {
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
-  const unit = await findManagedUnit(workspaceId, unitId, userId, "appointments.manage")
+  const access = await findAppointmentUnit(workspaceId, unitId, userId)
+  if (!access.ok) return accessError(access.error)
+  const { unit } = access
 
-  // Só repassa o id quando a unidade é gerenciável; a exclusão ainda filtra por unitId.
+  // A exclusão ainda filtra por unitId.
   const result = await deleteAppointment(
-    unit && isObjectIdOrHexString(appointmentId) ? appointmentId : null,
+    isObjectIdOrHexString(appointmentId) ? appointmentId : null,
     async (id) => {
-      const { deletedCount } = await Appointment.deleteOne({ _id: id, unitId: unit!.unitId })
+      const { deletedCount } = await Appointment.deleteOne({ _id: id, unitId: unit.unitId })
       // O agendamento de onde o atendimento veio volta a ser editável e convertível.
       if (deletedCount > 0) await Booking.updateOne({ appointmentId: id }, { $set: { appointmentId: null } })
       return deletedCount > 0
@@ -212,13 +237,45 @@ export async function convertBookingAction(
 ): Promise<AppointmentActionState> {
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
-  const unitId = formData.get("unitId")
-  const unit = await findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId, "appointments.manage")
-  if (!unit) return { error: errorMessages.unit_not_found }
+  const access = await findAppointmentUnit(workspaceId, formData.get("unitId"), userId)
+  if (!access.ok) return accessError(access.error)
+  return convertBookingInUnit(appointmentInput(formData), bookingId, access.unit, userId)
+}
+
+// Registro com um clique: o atendimento sai dos dados salvos no agendamento (inclusive a
+// duração), sem formulário. A unidade é a do agendamento e precisa ser gerenciável.
+export async function registerBookingAction(workspaceId: string, bookingId: string): Promise<AppointmentActionState> {
+  const userId = await getSessionUserId()
+  if (!userId) return { error: errorMessages.unauthenticated }
+  if (!isObjectIdOrHexString(bookingId)) return { error: errorMessages.booking_not_found }
+  const booking = await Booking.findById(bookingId)
+    .select({ unitId: 1, guest: 1, startsAt: 1, endsAt: 1, service: 1, therapistId: 1, products: 1 })
+    .lean()
+  if (!booking) return { error: errorMessages.booking_not_found }
+  const access = await findAppointmentUnit(workspaceId, booking.unitId.toString(), userId)
+  if (!access.ok) return accessError(access.error)
+
+  const input = bookingAppointmentInput({
+    guest: { name: booking.guest?.name ?? "", room: booking.guest?.room ?? "" },
+    startsAt: booking.startsAt,
+    endsAt: booking.endsAt,
+    service: { serviceId: booking.service.serviceId.toString() },
+    therapistId: booking.therapistId.toString(),
+    products: booking.products.map((product) => ({ productId: product.productId.toString() })),
+  })
+  return convertBookingInUnit(input, bookingId, access.unit, userId)
+}
+
+async function convertBookingInUnit(
+  input: unknown,
+  bookingId: string,
+  unit: { workspaceId: string; unitId: string },
+  userId: string,
+): Promise<AppointmentActionState> {
   const workspaceUnitIds = await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id")
 
   const result = await convertBooking(
-    appointmentInput(formData),
+    input,
     { bookingId: isObjectIdOrHexString(bookingId) ? bookingId : null, unitId: unit.unitId },
     {
       ...appointmentLookups(unit),

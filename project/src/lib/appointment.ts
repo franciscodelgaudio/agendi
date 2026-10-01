@@ -9,6 +9,8 @@ import {
 const MAX_GUEST_NAME_LENGTH = 80;
 const MAX_ROOM_LENGTH = 20;
 const MAX_ITEMS = 20;
+const MIN_DURATION_MINUTES = 5;
+const MAX_DURATION_MINUTES = 12 * 60;
 
 export type CreateAppointmentError =
   | "invalid_input"
@@ -20,6 +22,7 @@ export type CreateAppointmentError =
   | "no_items"
   | "too_many_items"
   | "invalid_item"
+  | "invalid_duration"
   | "service_not_found"
   | "therapist_not_found"
   | "unit_not_found"
@@ -74,12 +77,13 @@ export function parsePerformedAt(value: string) {
 }
 
 // Valida o input do formulário e resolve serviços e profissionais, copiando nome, valor e
-// duração para que mudanças futuras no serviço não alterem o histórico.
+// duração para que mudanças futuras no serviço não alterem o histórico. A duração de cada
+// serviço pode vir no input; vazia (ou sem a lista), vale a do cadastro.
 async function resolveAppointmentFields(
   input: unknown,
   { findServices, findTherapists, findProducts }: Lookups,
 ): Promise<{ ok: true; fields: AppointmentFields } | { ok: false; error: FieldsError }> {
-  const { guestName, room, performedAt, serviceIds, therapistIds, productIds } = (input ?? {}) as Record<
+  const { guestName, room, performedAt, serviceIds, therapistIds, durations, productIds } = (input ?? {}) as Record<
     string,
     unknown
   >;
@@ -88,7 +92,8 @@ async function resolveAppointmentFields(
     typeof room !== "string" ||
     typeof performedAt !== "string" ||
     !isStringList(serviceIds) ||
-    !isStringList(therapistIds)
+    !isStringList(therapistIds) ||
+    (durations !== undefined && !isStringList(durations))
   ) {
     return { ok: false, error: "invalid_input" };
   }
@@ -111,6 +116,19 @@ async function resolveAppointmentFields(
   const pairs = serviceIds.map((serviceId, i) => ({ serviceId: serviceId.trim(), therapistId: therapistIds[i].trim() }));
   if (pairs.some((pair) => !pair.serviceId || !pair.therapistId)) return { ok: false, error: "invalid_item" };
 
+  // null = usar a duração do cadastro do serviço.
+  if (durations && durations.length !== pairs.length) return { ok: false, error: "invalid_item" };
+  const durationList = pairs.map((_, i) => durations?.[i].trim() || null);
+  if (
+    durationList.some(
+      (value) =>
+        value !== null &&
+        (!/^\d+$/.test(value) || Number(value) < MIN_DURATION_MINUTES || Number(value) > MAX_DURATION_MINUTES),
+    )
+  ) {
+    return { ok: false, error: "invalid_duration" };
+  }
+
   const [services, therapists, selection] = await Promise.all([
     findServices([...new Set(pairs.map((pair) => pair.serviceId))]),
     findTherapists([...new Set(pairs.map((pair) => pair.therapistId))]),
@@ -127,13 +145,13 @@ async function resolveAppointmentFields(
     fields: {
       performedAt: date,
       guest: { name, room: normalizedRoom },
-      items: pairs.map(({ serviceId, therapistId }) => {
+      items: pairs.map(({ serviceId, therapistId }, i) => {
         const service = servicesById.get(serviceId)!;
         return {
           serviceId,
           serviceName: service.name,
           priceCents: service.priceCents,
-          durationMinutes: service.durationMinutes,
+          durationMinutes: durationList[i] === null ? service.durationMinutes : Number(durationList[i]),
           therapistId,
           therapistName: therapistsById.get(therapistId)!.name,
         };

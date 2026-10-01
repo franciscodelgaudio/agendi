@@ -14,7 +14,8 @@ import { ProductPicker, withServiceProducts } from "@/components/product-picker"
 import { currencyFormat, formatDuration } from "@/components/service-format"
 import { TherapistLabel, TherapistSelectValue, type TherapistOption } from "@/components/therapist-avatar"
 
-type Row = { key: number; serviceId: string | null; therapistId: string | null }
+// duration: minutos digitados; vazio até escolher o serviço, que preenche com a duração do cadastro.
+type Row = { key: number; serviceId: string | null; therapistId: string | null; duration: string }
 
 export type AppointmentFormValues = {
   // Na visão do workspace, a unidade é escolhida no formulário; no calendário de uma
@@ -24,8 +25,9 @@ export type AppointmentFormValues = {
   room: string
   // "2026-09-24T14:30", no horário de Brasília.
   performedAt: string
-  // null = ainda não escolhido (ex.: vindo de um agendamento sem serviço).
-  items: { serviceId: string | null; therapistId: string | null }[]
+  // null = ainda não escolhido (ex.: vindo de um agendamento sem serviço). Sem durationMinutes,
+  // vale a do cadastro do serviço.
+  items: { serviceId: string | null; therapistId: string | null; durationMinutes?: number }[]
   productIds?: string[]
 }
 
@@ -82,8 +84,15 @@ export function AppointmentForm({
   const [productIds, setProductIds] = useState(defaultValues.productIds ?? [])
   const [rows, setRows] = useState<Row[]>(() =>
     defaultValues.items?.length
-      ? defaultValues.items.map((item, key) => ({ key, ...item }))
-      : [{ key: 0, serviceId: null, therapistId: null }],
+      ? defaultValues.items.map(({ serviceId, therapistId, durationMinutes }, key) => ({
+          key,
+          serviceId,
+          therapistId,
+          duration: String(
+            durationMinutes ?? allServices.find((service) => service.id === serviceId)?.durationMinutes ?? "",
+          ),
+        }))
+      : [{ key: 0, serviceId: null, therapistId: null, duration: "" }],
   )
   const [state, formAction, pending] = useActionState(
     async (prev: AppointmentActionState, formData: FormData) => {
@@ -123,7 +132,7 @@ export function AppointmentForm({
               onValueChange={(value) => {
                 setUnitId(value as string | null)
                 // Serviços e produtos são de cada unidade, então trocar a unidade limpa os escolhidos.
-                setRows((current) => current.map((row) => ({ ...row, serviceId: null })))
+                setRows((current) => current.map((row) => ({ ...row, serviceId: null, duration: "" })))
                 setProductIds([])
               }}
               required
@@ -186,14 +195,18 @@ export function AppointmentForm({
                   </Button>
                 )}
               </div>
-              {/* A ordem dos campos no FormData forma os pares serviço/profissional. */}
+              {/* A ordem dos campos no FormData forma os trios serviço/profissional/duração. */}
               <Select
                 name="serviceId"
                 items={serviceItems}
                 value={row.serviceId}
                 onValueChange={(value) => {
-                  updateRow(row.key, { serviceId: value as string | null })
-                  setProductIds((current) => withServiceProducts(current, servicesById.get(value as string)))
+                  const next = servicesById.get(value as string)
+                  updateRow(row.key, {
+                    serviceId: value as string | null,
+                    ...(next && { duration: String(next.durationMinutes) }),
+                  })
+                  setProductIds((current) => withServiceProducts(current, next))
                 }}
                 disabled={units && !unitId}
                 required
@@ -236,11 +249,26 @@ export function AppointmentForm({
                   ))}
                 </SelectContent>
               </Select>
-              {service && (
-                <p className="text-xs text-muted-foreground">
-                  {currencyFormat.format(service.priceCents / 100)} · {formatDuration(service.durationMinutes)}
-                </p>
-              )}
+              <div className="flex items-center gap-2">
+                <Input
+                  name="durationMinutes"
+                  type="number"
+                  inputMode="numeric"
+                  min={5}
+                  max={720}
+                  step={1}
+                  value={row.duration}
+                  onChange={(e) => updateRow(row.key, { duration: e.target.value })}
+                  aria-label={`Duração do serviço ${index + 1} (minutos)`}
+                  className="w-24"
+                  required
+                />
+                <span className="text-xs text-muted-foreground">
+                  min
+                  {Number(row.duration) >= 5 && Number(row.duration) <= 720 && ` · ${formatDuration(Number(row.duration))}`}
+                  {service && ` · ${currencyFormat.format(service.priceCents / 100)}`}
+                </span>
+              </div>
             </div>
           )
         })}
@@ -252,7 +280,7 @@ export function AppointmentForm({
             onClick={() =>
               setRows((current) => [
                 ...current,
-                { key: Math.max(...current.map((r) => r.key)) + 1, serviceId: null, therapistId: null },
+                { key: Math.max(...current.map((r) => r.key)) + 1, serviceId: null, therapistId: null, duration: "" },
               ])
             }
           >

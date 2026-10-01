@@ -289,7 +289,7 @@ export function BookingForm({
           )}
         </Field>
         <Field>
-          <FieldLabel id="booking-color">Cor no calendário</FieldLabel>
+          <FieldLabel id="booking-color">Cor na agenda</FieldLabel>
           <div role="radiogroup" aria-labelledby="booking-color" className="flex flex-wrap gap-2">
             {colorOptions.map((option) => (
               <label key={option.value} title={option.name} className="relative cursor-pointer">

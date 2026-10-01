@@ -4,8 +4,9 @@ import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { getSessionUserId } from "@/lib/session"
 import { findManagedUnit } from "@/lib/unit-access"
-import { can, type Permission } from "@/lib/permissions"
-import { findWorkspaceAccess } from "@/lib/workspace-access"
+import { forbiddenMessage, type UnitAccessError } from "@/lib/access-check"
+import type { Permission } from "@/lib/permissions"
+import { findManagedWorkspace } from "@/lib/workspace-access"
 import {
   addStockItem,
   adjustStock,
@@ -75,14 +76,27 @@ const errorMessages: Record<
 
 export type ProductActionState = { error: string | null }
 
+function accessErrorMessage(error: UnitAccessError, permission: Permission) {
+  return error === "forbidden" ? forbiddenMessage(permission) : errorMessages[error]
+}
+
+type ManagedTarget = {
+  userId: string
+  unit: { workspaceId: string; unitId: string } & Awaited<ReturnType<typeof findUnitHolder>>
+}
+
 // Unidade (se o usuário tiver a permissão nela), com o workspace e o estoque que ela usa;
-// unit undefined sem permissão, null = sessão expirada.
-async function findManagedTarget(workspaceId: string, unitId: string, permission: Permission = "stock.manage") {
+// senão a mensagem de erro.
+async function findManagedTarget(
+  workspaceId: string,
+  unitId: string,
+  permission: Permission = "stock.manage",
+): Promise<ManagedTarget | { error: string }> {
   const userId = await getSessionUserId()
-  if (!userId) return null
-  const unit = await findManagedUnit(workspaceId, unitId, userId, permission)
-  if (!unit) return { userId, unit: undefined }
-  return { userId, unit: { ...unit, ...(await findUnitHolder(unit.unitId)) } }
+  if (!userId) return { error: errorMessages.unauthenticated }
+  const access = await findManagedUnit(workspaceId, unitId, userId, permission)
+  if (!access.ok) return { error: accessErrorMessage(access.error, permission) }
+  return { userId, unit: { ...access.unit, ...(await findUnitHolder(access.unit.unitId)) } }
 }
 
 // Compra vira despesa paga no grupo de insumos da unidade, criado se ela ainda não tiver.
@@ -162,21 +176,21 @@ export async function createProductAction(
   formData: FormData,
 ): Promise<ProductActionState> {
   const target = await findManagedTarget(workspaceId, unitId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return { error: target.error }
   const { userId, unit } = target
 
-  const result = await createProduct(productInput(formData), unit?.unitId, async (input) => {
+  const result = await createProduct(productInput(formData), unit.unitId, async (input) => {
     const { quantity, name, costCents, notes, rating, avatarUrl } = input
-    const product = await Product.create({ name, costCents, notes, rating, avatarUrl, workspaceId: unit!.workspaceId })
+    const product = await Product.create({ name, costCents, notes, rating, avatarUrl, workspaceId: unit.workspaceId })
     const id = product._id.toString()
     await StockItem.create({
       productId: product._id,
-      holderId: unit!.holderId,
+      holderId: unit.holderId,
       quantity,
       lots: firstLots(quantity, costCents),
     })
     if (quantity > 0) {
-      await recordLotPurchase(userId, unit!, { productId: id, productName: name, quantity, unitCostCents: costCents })
+      await recordLotPurchase(userId, unit, { productId: id, productName: name, quantity, unitCostCents: costCents })
     }
     return { id }
   })
@@ -196,9 +210,8 @@ export async function addStockItemAction(
   formData: FormData,
 ): Promise<ProductActionState> {
   const target = await findManagedTarget(workspaceId, unitId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return { error: target.error }
   const { userId, unit } = target
-  if (!unit) return { error: errorMessages.unit_not_found }
 
   const input = { productId: formData.get("productId"), quantity: formData.get("quantity") }
   const result = await addStockItem(input, async (productId, quantity) => {
@@ -234,17 +247,16 @@ export async function addStockItemAction(
   return { error: null }
 }
 
-// Só repassa o productId quando a unidade é gerenciável; as escritas filtram pelo estoque da
-// unidade (e pelo workspace, no catálogo). null = sessão expirada.
+// As escritas filtram pelo estoque da unidade (e pelo workspace, no catálogo).
 async function resolveProductTarget(
   workspaceId: string,
   unitId: string,
   productId: string,
   permission: Permission = "stock.manage",
-) {
+): Promise<(ManagedTarget & { productId: string | null }) | { error: string }> {
   const target = await findManagedTarget(workspaceId, unitId, permission)
-  if (!target) return null
-  return { ...target, productId: target.unit && isObjectIdOrHexString(productId) ? productId : null }
+  if ("error" in target) return target
+  return { ...target, productId: isObjectIdOrHexString(productId) ? productId : null }
 }
 
 function stockItemOf(holderId: string, productId: string) {
@@ -261,10 +273,10 @@ export async function updateProductAction(
   formData: FormData,
 ): Promise<ProductActionState> {
   const target = await resolveProductTarget(workspaceId, unitId, productId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return { error: target.error }
 
   const result = await updateCatalogProduct(productInput(formData), target.productId, async (id, data) => {
-    const unit = target.unit!
+    const unit = target.unit
     if (!(await StockItem.exists(stockItemOf(unit.holderId, id)))) return false
     const { matchedCount } = await Product.updateOne({ _id: id, workspaceId: unit.workspaceId }, { $set: data })
     return matchedCount > 0
@@ -286,12 +298,12 @@ export async function registerPurchaseAction(
   formData: FormData,
 ): Promise<ProductActionState> {
   const target = await resolveProductTarget(workspaceId, unitId, productId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return { error: target.error }
   const { userId } = target
 
   const input = { quantity: formData.get("quantity"), cost: formData.get("cost") }
   const result = await registerPurchase(input, target.productId, async (id, { quantity, unitCostCents }) => {
-    const unit = target.unit!
+    const unit = target.unit
     const product = await Product.findOne({ _id: id, workspaceId: unit.workspaceId }).select({ name: 1 }).lean()
     if (!product) return "not_found"
     // A compra de agora é a mais recente, então o lote vai para o fim.
@@ -320,11 +332,11 @@ export async function adjustStockAction(
   formData: FormData,
 ): Promise<ProductActionState> {
   const target = await resolveProductTarget(workspaceId, unitId, productId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return { error: target.error }
   const { userId } = target
 
   const result = await adjustStock({ quantity: formData.get("quantity") }, target.productId, async (id, counted) => {
-    const unit = target.unit!
+    const unit = target.unit
     type Adjusted = { kind: "above_current" } | { kind: "adjusted"; quantity: number; costCents: number }
     const outcome = await updateItemLots<Adjusted>(stockItemOf(unit.holderId, id), (lots) => {
       const current = lots.reduce((sum, lot) => sum + lot.quantity, 0)
@@ -359,10 +371,10 @@ export async function deleteProductAction(
   productId: string,
 ): Promise<ProductActionState> {
   const target = await resolveProductTarget(workspaceId, unitId, productId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return { error: target.error }
 
   const result = await deleteProduct(target.productId, async (id) => {
-    const { deletedCount } = await StockItem.deleteOne(stockItemOf(target.unit!.holderId, id))
+    const { deletedCount } = await StockItem.deleteOne(stockItemOf(target.unit.holderId, id))
     return deletedCount > 0
   })
 
@@ -380,11 +392,11 @@ export async function depleteProductAction(
   productId: string,
 ): Promise<ProductActionState> {
   const target = await resolveProductTarget(workspaceId, unitId, productId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return { error: target.error }
   const { userId } = target
 
   const result = await depleteProduct(target.productId, async (id) => {
-    const unit = target.unit!
+    const unit = target.unit
     const outcome = await updateItemLots<number | null>(
       stockItemOf(unit.holderId, id),
       (lots) => {
@@ -423,12 +435,12 @@ export async function transferProductAction(
   formData: FormData,
 ): Promise<ProductActionState> {
   const target = await resolveProductTarget(workspaceId, unitId, productId, "stock.transfer")
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return { error: target.error }
   const { userId } = target
 
   const input = { fromUnitId: formData.get("fromUnitId"), toUnitId: formData.get("toUnitId"), quantity: formData.get("quantity") }
   const result = await transferProduct(input, target.productId, async (id, { fromUnitId, toUnitId, quantity }) => {
-    const { workspaceId: ownedWorkspaceId } = target.unit!
+    const { workspaceId: ownedWorkspaceId } = target.unit
     const units = await Unit.countDocuments({ _id: { $in: [fromUnitId, toUnitId] }, workspaceId: ownedWorkspaceId })
     if (units < 2) return "invalid_units"
     const [from, to] = await Promise.all([findUnitHolder(fromUnitId), findUnitHolder(toUnitId)])
@@ -464,12 +476,13 @@ export async function transferProductAction(
   return { error: null }
 }
 
-// Id do workspace se o usuário gerenciar o estoque nele; undefined sem permissão, null = sessão expirada.
-async function resolveCatalogWorkspace(workspaceId: string) {
+// Id do workspace se o usuário gerenciar o estoque nele; senão a mensagem de erro.
+async function resolveCatalogWorkspace(workspaceId: string): Promise<{ workspaceId: string } | { error: string }> {
   const userId = await getSessionUserId()
-  if (!userId) return null
-  const access = await findWorkspaceAccess(workspaceId, userId)
-  return { workspaceId: access && can(access.actor, "stock.manage") ? access.id : undefined }
+  if (!userId) return { error: errorMessages.unauthenticated }
+  const managed = await findManagedWorkspace(workspaceId, userId, "stock.manage")
+  if (!managed.ok) return { error: accessErrorMessage(managed.error, "stock.manage") }
+  return { workspaceId: managed.access.id }
 }
 
 // Cadastro no catálogo (tela de produtos do workspace), sem pôr em nenhum estoque.
@@ -479,7 +492,7 @@ export async function createCatalogProductAction(
   formData: FormData,
 ): Promise<ProductActionState> {
   const target = await resolveCatalogWorkspace(workspaceId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return { error: target.error }
 
   const result = await createCatalogProduct(productInput(formData), target.workspaceId, async (data) => {
     const product = await Product.create(data)
@@ -500,9 +513,9 @@ export async function updateCatalogProductAction(
   formData: FormData,
 ): Promise<ProductActionState> {
   const target = await resolveCatalogWorkspace(workspaceId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return { error: target.error }
 
-  const id = target.workspaceId && isObjectIdOrHexString(productId) ? productId : null
+  const id = isObjectIdOrHexString(productId) ? productId : null
   const result = await updateCatalogProduct(productInput(formData), id, async (productId, data) => {
     const { matchedCount } = await Product.updateOne({ _id: productId, workspaceId: target.workspaceId }, { $set: data })
     return matchedCount > 0
@@ -517,9 +530,9 @@ export async function updateCatalogProductAction(
 // Exclui o produto do catálogo e de todos os estoques.
 export async function deleteCatalogProductAction(workspaceId: string, productId: string): Promise<ProductActionState> {
   const target = await resolveCatalogWorkspace(workspaceId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return { error: target.error }
 
-  const id = target.workspaceId && isObjectIdOrHexString(productId) ? productId : null
+  const id = isObjectIdOrHexString(productId) ? productId : null
   const result = await deleteProduct(id, async (productId) => {
     const { deletedCount } = await Product.deleteOne({ _id: productId, workspaceId: target.workspaceId })
     if (deletedCount === 0) return false
@@ -537,7 +550,7 @@ export async function deleteCatalogProductAction(workspaceId: string, productId:
 export async function searchProductsAction(workspaceId: string, unitId: string, q: string): Promise<ProductOption[]> {
   if (typeof q !== "string") return []
   const target = await findManagedTarget(workspaceId, unitId)
-  if (!target?.unit) return []
+  if ("error" in target) return []
   return Product.aggregate<ProductOption>(productSearchPipeline(target.unit.workspaceId, q))
 }
 
@@ -545,6 +558,6 @@ export async function searchProductsAction(workspaceId: string, unitId: string, 
 export async function productNamesAction(workspaceId: string, unitId: string, ids: string[]): Promise<ProductOption[]> {
   if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string")) return []
   const target = await findManagedTarget(workspaceId, unitId)
-  if (!target?.unit) return []
+  if ("error" in target) return []
   return findUnitProducts(target.unit.unitId, ids.slice(0, PRODUCT_SEARCH_LIMIT))
 }

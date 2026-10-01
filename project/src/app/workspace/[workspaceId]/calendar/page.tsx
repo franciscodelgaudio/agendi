@@ -96,7 +96,7 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-2xl font-semibold tracking-tight">Calendário</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">Agenda</h2>
         <CalendarNav base={`/workspace/${workspaceId}/calendar`} />
       </div>
       <BookingCalendar workspaceId={workspaceId} canManage={can(actor, "bookings.manage")} {...options} />

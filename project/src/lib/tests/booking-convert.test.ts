@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { convertBooking } from "@/lib/booking-convert";
+import { bookingAppointmentInput, convertBooking } from "@/lib/booking-convert";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const BOOKING_ID = "64b7f0c2a1b2c3d4e5f60740";
@@ -142,5 +142,69 @@ describe("convertBooking", () => {
 
     expect(result).toEqual({ ok: false, error: "booking_already_converted" });
     expect(deps.removeAppointment).toHaveBeenCalledWith(APPOINTMENT_ID);
+  });
+});
+
+// Registro com um clique: o atendimento sai dos dados salvos no agendamento, no mesmo formato
+// do formulário, para ser validado como qualquer atendimento.
+describe("bookingAppointmentInput", () => {
+  const booking = {
+    guest: { name: "João Silva", room: "204" },
+    startsAt: new Date("2026-09-24T17:30:00.000Z"),
+    endsAt: new Date("2026-09-24T19:00:00.000Z"),
+    service: { serviceId: CANDLE_ID },
+    therapistId: ANA_ID,
+    products: [{ productId: OIL_ID }],
+  };
+
+  it("usa hóspede, horário de Brasília, serviço, profissional, produtos e a duração do agendamento", () => {
+    expect(bookingAppointmentInput(booking)).toEqual({
+      guestName: "João Silva",
+      room: "204",
+      performedAt: "2026-09-24T14:30",
+      serviceIds: [CANDLE_ID],
+      therapistIds: [ANA_ID],
+      durations: ["90"],
+      productIds: [OIL_ID],
+    });
+  });
+
+  it("converte para o dia de Brasília quando o horário em UTC já é do dia seguinte", () => {
+    const input = bookingAppointmentInput({
+      ...booking,
+      startsAt: new Date("2026-09-25T01:30:00.000Z"),
+      endsAt: new Date("2026-09-25T02:20:00.000Z"),
+    });
+
+    expect(input.performedAt).toBe("2026-09-24T22:30");
+    expect(input.durations).toEqual(["50"]);
+  });
+
+  it("registra o atendimento com a duração do agendamento, não a do cadastro do serviço", async () => {
+    const deps = makeDeps();
+
+    const result = await convertBooking(
+      bookingAppointmentInput({ ...booking, products: [] }),
+      { bookingId: BOOKING_ID, unitId: UNIT_ID },
+      deps,
+    );
+
+    expect(result).toEqual({ ok: true, appointmentId: APPOINTMENT_ID });
+    expect(deps.insert).toHaveBeenCalledWith({
+      unitId: UNIT_ID,
+      performedAt: new Date("2026-09-24T17:30:00.000Z"),
+      guest: { name: "João Silva", room: "204" },
+      items: [
+        {
+          serviceId: CANDLE_ID,
+          serviceName: "Massagem Candle",
+          priceCents: 35000,
+          durationMinutes: 90,
+          therapistId: ANA_ID,
+          therapistName: "Ana",
+        },
+      ],
+      products: [],
+    });
   });
 });

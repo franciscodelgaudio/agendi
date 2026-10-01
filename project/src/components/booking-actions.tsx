@@ -29,6 +29,7 @@ import { FieldError } from "@/components/ui/field"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { AppointmentForm } from "@/components/appointment-form"
 import { BookingForm, type BookingFormOptions } from "@/components/booking-form"
+import { RegisterBookingDialog } from "@/components/register-booking-dialog"
 
 // Com units (visão do workspace), a edição permite trocar a unidade.
 type Props = BookingFormOptions & { workspaceId: string; booking: BookingRow }
@@ -38,6 +39,7 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
   const router = useRouter()
   const [sheet, setSheet] = useState<"edit" | "convert" | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [registerOpen, setRegisterOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
   const [formKey, setFormKey] = useState(0)
 
@@ -77,7 +79,7 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
                 <PencilIcon />
                 Editar
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openSheet("convert")}>
+              <DropdownMenuItem onClick={() => setRegisterOpen(true)}>
                 <ClipboardCheckIcon />
                 Registrar atendimento
               </DropdownMenuItem>
@@ -112,7 +114,10 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
               }}
               action={(prev, formData) => updateBookingAction(workspaceId, booking.id, prev, formData)}
               onDone={done}
-              onConvert={() => openSheet("convert")}
+              onConvert={() => {
+                setSheet(null)
+                setRegisterOpen(true)
+              }}
               onDelete={() => setDeleteOpen(true)}
             />
           )}
@@ -126,7 +131,13 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
                 guestName: booking.guest.name,
                 room: booking.guest.room,
                 performedAt: booking.startsAt,
-                items: [{ serviceId: booking.service.serviceId, therapistId: booking.therapistId }],
+                items: [
+                  {
+                    serviceId: booking.service.serviceId,
+                    therapistId: booking.therapistId,
+                    durationMinutes: booking.durationMinutes,
+                  },
+                ],
                 productIds: booking.productIds,
               }}
               action={(prev, formData) => convertBookingAction(workspaceId, booking.id, prev, formData)}
@@ -135,6 +146,15 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
           )}
         </SheetContent>
       </Sheet>
+
+      <RegisterBookingDialog
+        workspaceId={workspaceId}
+        booking={booking}
+        open={registerOpen}
+        onOpenChange={setRegisterOpen}
+        onRegistered={done}
+        onAdjust={() => openSheet("convert")}
+      />
 
       <DeleteBookingDialog
         workspaceId={workspaceId}

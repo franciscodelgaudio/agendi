@@ -3,8 +3,8 @@
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { getSessionUserId } from "@/lib/session"
-import { can } from "@/lib/permissions"
-import { findWorkspaceAccess } from "@/lib/workspace-access"
+import { forbiddenMessage } from "@/lib/access-check"
+import { findManagedWorkspace } from "@/lib/workspace-access"
 import {
   createWallet,
   deleteWallet,
@@ -34,12 +34,15 @@ const errorMessages: Record<CreateWalletError | UpdateWalletError | "unauthentic
 
 export type WalletActionState = { error: string | null }
 
-// Id do workspace se o usuário gerenciar o caixa nele; undefined sem permissão, null = sessão expirada.
-async function resolveWorkspace(workspaceId: string) {
+// Id do workspace se o usuário gerenciar o caixa nele; senão a mensagem de erro.
+async function resolveWorkspace(workspaceId: string): Promise<{ workspaceId: string } | { error: string }> {
   const userId = await getSessionUserId()
-  if (!userId) return null
-  const access = await findWorkspaceAccess(workspaceId, userId)
-  return { workspaceId: access && can(access.actor, "cash_flow.manage") ? access.id : undefined }
+  if (!userId) return { error: errorMessages.unauthenticated }
+  const managed = await findManagedWorkspace(workspaceId, userId, "cash_flow.manage")
+  if (!managed.ok) {
+    return { error: managed.error === "forbidden" ? forbiddenMessage("cash_flow.manage") : errorMessages[managed.error] }
+  }
+  return { workspaceId: managed.access.id }
 }
 
 // Unidades marcadas (unitId) com o valor de cada uma no campo unitAmount-<id>.
@@ -71,7 +74,7 @@ export async function createWalletAction(
   formData: FormData,
 ): Promise<WalletActionState> {
   const target = await resolveWorkspace(workspaceId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return target
 
   const result = await createWallet(walletInput(formData), target.workspaceId, {
     unitsExist,
@@ -95,9 +98,9 @@ export async function updateWalletAction(
   formData: FormData,
 ): Promise<WalletActionState> {
   const target = await resolveWorkspace(workspaceId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return target
 
-  const id = target.workspaceId && isObjectIdOrHexString(walletId) ? walletId : null
+  const id = isObjectIdOrHexString(walletId) ? walletId : null
   const result = await updateWallet(walletInput(formData), target.workspaceId, id, {
     unitsExist,
     unitsInOtherWallet,
@@ -117,9 +120,9 @@ export async function updateWalletAction(
 
 export async function deleteWalletAction(workspaceId: string, walletId: string): Promise<WalletActionState> {
   const target = await resolveWorkspace(workspaceId)
-  if (!target) return { error: errorMessages.unauthenticated }
+  if ("error" in target) return target
 
-  const id = target.workspaceId && isObjectIdOrHexString(walletId) ? walletId : null
+  const id = isObjectIdOrHexString(walletId) ? walletId : null
   const result = await deleteWallet(id, async (walletId) => {
     const { deletedCount } = await Wallet.deleteOne({ _id: walletId, workspaceId: target.workspaceId })
     return deletedCount > 0
