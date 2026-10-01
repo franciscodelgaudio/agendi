@@ -26,6 +26,7 @@ const permissionLabels: Record<Permission, string> = {
   "bookings.manage": "Gerenciar agendamentos",
   "appointments.manage": "Gerenciar atendimentos",
   "stock.manage": "Gerenciar estoque",
+  "stock.transfer": "Transferir produtos entre as unidades de um estoque",
   "cash_flow.manage": "Gerenciar despesas e grupos do caixa",
   "team.manage": "Gerenciar a equipe e a remuneração",
   "users.manage": "Convidar, editar e remover usuários",

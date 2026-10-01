@@ -8,6 +8,12 @@ import {
 
 const PRODUCT_ID = "64b7f0c2a1b2c3d4e5f60761";
 const OID = new Types.ObjectId(PRODUCT_ID);
+const HOLDER_ID = "64b7f0c2a1b2c3d4e5f60790";
+const UNIT_A = "64b7f0c2a1b2c3d4e5f60720";
+const UNIT_B = "64b7f0c2a1b2c3d4e5f60721";
+// Estoque compartilhado por duas unidades: o uso de qualquer uma delas conta.
+const HOLDER = { holderId: HOLDER_ID, unitIds: [UNIT_A, UNIT_B] };
+const UNITS = { $in: [new Types.ObjectId(UNIT_A), new Types.ObjectId(UNIT_B)] };
 
 describe("parseProductHistoryQuery", () => {
   it("usa busca vazia, todos os tipos, todo o período, mais recentes primeiro e página 1 sem parâmetros", () => {
@@ -63,10 +69,11 @@ describe("parseProductHistoryQuery", () => {
 describe("productHistoryPipeline", () => {
   const BASE = { q: "", kind: "", from: "", to: "", sort: "at", dir: "desc", page: 1 } as const;
 
-  // Atendimentos com o produto, agendamentos que ainda não viraram atendimento (o que virou
-  // já aparece pelo atendimento) e cada vez que o produto acabou, no mesmo formato.
+  // Atendimentos com o produto nas unidades do estoque, agendamentos que ainda não viraram
+  // atendimento (o que virou já aparece pelo atendimento) e cada vez que o produto acabou
+  // nesse estoque, no mesmo formato.
   const SOURCES = [
-    { $match: { "products.productId": OID } },
+    { $match: { "products.productId": OID, unitId: UNITS } },
     {
       $project: {
         kind: { $literal: "appointment" },
@@ -80,7 +87,7 @@ describe("productHistoryPipeline", () => {
       $unionWith: {
         coll: "bookings",
         pipeline: [
-          { $match: { "products.productId": OID, appointmentId: null } },
+          { $match: { "products.productId": OID, unitId: UNITS, appointmentId: null } },
           {
             $project: {
               kind: { $literal: "booking" },
@@ -95,9 +102,9 @@ describe("productHistoryPipeline", () => {
     },
     {
       $unionWith: {
-        coll: "products",
+        coll: "stock_items",
         pipeline: [
-          { $match: { _id: OID } },
+          { $match: { productId: OID, holderId: new Types.ObjectId(HOLDER_ID) } },
           { $unwind: "$depletedAt" },
           {
             $project: {
@@ -140,7 +147,7 @@ describe("productHistoryPipeline", () => {
   }
 
   it("sem filtros, junta as três origens, ordena pela data (com desempate) e pagina", () => {
-    expect(productHistoryPipeline(PRODUCT_ID, BASE)).toEqual([
+    expect(productHistoryPipeline(PRODUCT_ID, HOLDER, BASE)).toEqual([
       ...SOURCES,
       { $sort: { at: -1, _id: 1, kind: 1 } },
       ...page(0),
@@ -152,18 +159,18 @@ describe("productHistoryPipeline", () => {
     ["guestName", "asc", { "guest.name": 1, _id: 1, kind: 1 }],
     ["guestName", "desc", { "guest.name": -1, _id: 1, kind: 1 }],
   ] as const)("ordena por %s %s usando o campo unificado", (sort, dir, $sort) => {
-    expect(productHistoryPipeline(PRODUCT_ID, { ...BASE, sort, dir })).toEqual([...SOURCES, { $sort }, ...page(0)]);
+    expect(productHistoryPipeline(PRODUCT_ID, HOLDER, { ...BASE, sort, dir })).toEqual([...SOURCES, { $sort }, ...page(0)]);
   });
 
   it("pula as páginas anteriores", () => {
-    const stages = productHistoryPipeline(PRODUCT_ID, { ...BASE, page: 3 });
+    const stages = productHistoryPipeline(PRODUCT_ID, HOLDER, { ...BASE, page: 3 });
 
     expect(stages.slice(-2)).toEqual(page(2 * PRODUCT_HISTORY_PAGE_SIZE));
   });
 
   it("filtra o tipo, e o período do início do primeiro dia ao fim do último (Brasília), antes de ordenar", () => {
     expect(
-      productHistoryPipeline(PRODUCT_ID, { ...BASE, kind: "appointment", from: "2026-09-01", to: "2026-09-30" }),
+      productHistoryPipeline(PRODUCT_ID, HOLDER, { ...BASE, kind: "appointment", from: "2026-09-01", to: "2026-09-30" }),
     ).toEqual([
       ...SOURCES,
       {
@@ -178,8 +185,8 @@ describe("productHistoryPipeline", () => {
   });
 
   it("aceita período com só início ou só fim", () => {
-    const [onlyFrom] = productHistoryPipeline(PRODUCT_ID, { ...BASE, from: "2026-09-01" }).slice(SOURCES.length);
-    const [onlyTo] = productHistoryPipeline(PRODUCT_ID, { ...BASE, to: "2026-09-30" }).slice(SOURCES.length);
+    const [onlyFrom] = productHistoryPipeline(PRODUCT_ID, HOLDER, { ...BASE, from: "2026-09-01" }).slice(SOURCES.length);
+    const [onlyTo] = productHistoryPipeline(PRODUCT_ID, HOLDER, { ...BASE, to: "2026-09-30" }).slice(SOURCES.length);
 
     expect(onlyFrom).toEqual({ $match: { at: { $gte: new Date("2026-09-01T03:00:00.000Z") } } });
     expect(onlyTo).toEqual({ $match: { at: { $lt: new Date("2026-10-01T03:00:00.000Z") } } });
@@ -188,7 +195,7 @@ describe("productHistoryPipeline", () => {
   it("com busca, filtra hóspede, quarto, serviço ou massagista sem diferenciar maiúsculas, com regex escapada", () => {
     const regex = { $regex: "jo\\.ão", $options: "i" };
 
-    expect(productHistoryPipeline(PRODUCT_ID, { ...BASE, q: "jo.ão" })).toEqual([
+    expect(productHistoryPipeline(PRODUCT_ID, HOLDER, { ...BASE, q: "jo.ão" })).toEqual([
       ...SOURCES,
       {
         $match: {

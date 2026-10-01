@@ -22,6 +22,8 @@ import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Message } from "@/models/Message"
 import { MessagingChannel } from "@/models/MessagingChannel"
 import { Product } from "@/models/Product"
+import { productListPipeline } from "@/lib/product-list"
+import { findUnitHolder } from "@/lib/stock-store"
 import { Role } from "@/models/Role"
 import { Service } from "@/models/Service"
 import { Ticket } from "@/models/Ticket"
@@ -243,10 +245,23 @@ export function buildReadTools(workspaceId: string) {
       inputSchema: z.object({ unitId: objectId, search: z.string().optional().describe("Parte do nome.") }),
       execute: async ({ unitId, search }) => {
         if (!(await ownUnit(unitId))) return noUnit
-        const filter = search ? { unitId, name: { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } } : { unitId }
-        const products = await Product.find(filter).sort({ name: 1 }).limit(MAX_ROWS).lean()
+        // Os do estoque da unidade: num estoque compartilhado, o de todas as unidades dele.
+        const { holderId } = await findUnitHolder(unitId)
+        const products = await Product.aggregate<{
+          id: string
+          name: string
+          quantity: number
+          costCents: number
+          notes: string | null
+          rating: number | null
+          avatarUrl: string | null
+        }>([
+          { $match: { workspaceId: wid } },
+          ...productListPipeline({ q: search?.trim() ?? "", sort: "name", dir: "asc" }, holderId),
+          { $limit: MAX_ROWS },
+        ])
         return products.map((p) => ({
-          id: p._id.toString(),
+          id: p.id,
           name: p.name,
           quantity: p.quantity,
           cost: reais(p.costCents),

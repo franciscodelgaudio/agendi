@@ -41,6 +41,7 @@ describe("PERMISSIONS", () => {
       "bookings.manage",
       "appointments.manage",
       "stock.manage",
+      "stock.transfer",
       "cash_flow.manage",
       "team.manage",
       "users.manage",

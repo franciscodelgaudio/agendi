@@ -8,10 +8,11 @@ import { ImageUploadField } from "@/components/image-upload-field"
 type Props = {
   idPrefix: string
   workspaceId: string
-  unitId: string
+  // Sem quantidade: edição no catálogo do workspace, que não é de nenhum estoque.
+  withQuantity?: boolean
   defaultValues?: {
     name: string
-    quantity: number
+    quantity?: number
     costCents: number
     notes: string | null
     rating: number | null
@@ -19,7 +20,7 @@ type Props = {
   }
 }
 
-export function ProductFields({ idPrefix, workspaceId, unitId, defaultValues }: Props) {
+export function ProductFields({ idPrefix, workspaceId, withQuantity = true, defaultValues }: Props) {
   return (
     <>
       <Field>
@@ -34,21 +35,23 @@ export function ProductFields({ idPrefix, workspaceId, unitId, defaultValues }: 
           required
         />
       </Field>
-      <Field>
-        <FieldLabel htmlFor={`${idPrefix}-quantity`}>Quantidade</FieldLabel>
-        <Input
-          id={`${idPrefix}-quantity`}
-          name="quantity"
-          type="number"
-          inputMode="numeric"
-          min={0}
-          max={1_000_000}
-          step={1}
-          placeholder="10"
-          defaultValue={defaultValues?.quantity}
-          required
-        />
-      </Field>
+      {withQuantity && (
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-quantity`}>Quantidade</FieldLabel>
+          <Input
+            id={`${idPrefix}-quantity`}
+            name="quantity"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={1_000_000}
+            step={1}
+            placeholder="10"
+            defaultValue={defaultValues?.quantity}
+            required
+          />
+        </Field>
+      )}
       <Field>
         <FieldLabel htmlFor={`${idPrefix}-cost`}>Preço de custo</FieldLabel>
         <AmountInput
@@ -80,7 +83,6 @@ export function ProductFields({ idPrefix, workspaceId, unitId, defaultValues }: 
         label="Imagem (opcional)"
         workspaceId={workspaceId}
         target="product"
-        unitId={unitId}
         defaultValue={defaultValues?.avatarUrl}
       />
     </>

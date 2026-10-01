@@ -18,6 +18,8 @@ import {
   takeConversationAction,
 } from "@/lib/actions/ura"
 import { Product } from "@/models/Product"
+import { findUnitHolder } from "@/lib/stock-store"
+import { StockItem } from "@/models/StockItem"
 import { Service } from "@/models/Service"
 import { Unit } from "@/models/Unit"
 
@@ -53,11 +55,18 @@ async function currentService(workspaceId: string, input: Input) {
 
 async function currentProduct(workspaceId: string, input: Input) {
   if (!(await unitInWorkspace(workspaceId, String(input.unitId)))) return null
-  const product = await Product.findOne({ _id: String(input.productId), unitId: String(input.unitId) }).lean()
+  const { holderId } = await findUnitHolder(String(input.unitId))
+  const productId = String(input.productId)
+  if (!isObjectIdOrHexString(productId)) return null
+  const [product, item] = await Promise.all([
+    Product.findOne({ _id: productId, workspaceId }).lean(),
+    StockItem.findOne({ holderId, productId }).select({ quantity: 1 }).lean(),
+  ])
   return (
-    product && {
+    product &&
+    item && {
       name: product.name,
-      quantity: product.quantity,
+      quantity: item.quantity,
       cost: product.costCents / 100,
       notes: product.notes,
       rating: product.rating,

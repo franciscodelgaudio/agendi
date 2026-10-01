@@ -79,12 +79,11 @@ export const AGENIA_ACTIONS = {
   }),
   updateProduct: spec(
     "Editar produto",
-    "Edita um produto do estoque (inclui ajustar a quantidade). Informe só os campos que mudam.",
+    "Edita os dados de um produto do catálogo (nome, custo, observações, avaliação, imagem). A quantidade não muda por aqui. Informe só os campos que mudam.",
     {
       unitId: objectId,
       productId: objectId,
       name: productFields.name.optional(),
-      quantity: productFields.quantity.optional(),
       cost: productFields.cost.optional(),
       notes: productFields.notes.optional(),
       rating: productFields.rating.optional(),
@@ -220,10 +219,18 @@ export function actionFormEntries(name: AgeniaActionName, input: Record<string, 
         ...many("productId", i.productIds),
       ];
     case "createProduct":
-    case "updateProduct":
       return [
         ["name", String(i.name)],
         ["quantity", String(i.quantity)],
+        ["cost", cents(i.cost)],
+        ["notes", optional(i.notes)],
+        ["rating", optional(i.rating)],
+        ["avatarUrl", optional(i.avatarUrl)],
+      ];
+    // A quantidade muda por compra ou ajuste, não na edição.
+    case "updateProduct":
+      return [
+        ["name", String(i.name)],
         ["cost", cents(i.cost)],
         ["notes", optional(i.notes)],
         ["rating", optional(i.rating)],

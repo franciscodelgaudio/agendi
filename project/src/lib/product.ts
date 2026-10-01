@@ -1,3 +1,4 @@
+import { isObjectIdOrHexString } from "mongoose";
 import { parsePriceCents } from "@/lib/service";
 
 const MAX_NAME_LENGTH = 80;
@@ -13,7 +14,8 @@ export type ProductInputError =
   | "notes_too_long"
   | "invalid_rating";
 
-// Opcionais vazios ficam null para que editar consiga apagar o valor salvo.
+// Opcionais vazios ficam null para que editar consiga apagar o valor salvo. quantity é a do
+// estoque de onde o produto foi cadastrado ou editado; o resto é do catálogo do workspace.
 export type ProductData = {
   name: string;
   quantity: number;
@@ -38,14 +40,14 @@ function isOptionalString(value: unknown): value is string | null | undefined {
   return value == null || typeof value === "string";
 }
 
-// Valida e normaliza os campos como chegam do FormData (strings).
-function parseProductInput(
+export type CatalogProductData = Omit<ProductData, "quantity">;
+
+// Valida e normaliza os campos do catálogo como chegam do FormData (strings).
+function parseCatalogInput(
   input: unknown,
-): ({ ok: true } & ProductData) | { ok: false; error: ProductInputError } {
-  const { name, quantity, cost, notes, rating, avatarUrl } = (input ?? {}) as Record<string, unknown>;
-  if (typeof name !== "string" || typeof quantity !== "string" || typeof cost !== "string") {
-    return { ok: false, error: "invalid_input" };
-  }
+): ({ ok: true } & CatalogProductData) | { ok: false; error: ProductInputError } {
+  const { name, cost, notes, rating, avatarUrl } = (input ?? {}) as Record<string, unknown>;
+  if (typeof name !== "string" || typeof cost !== "string") return { ok: false, error: "invalid_input" };
   if (!isOptionalString(notes) || !isOptionalString(rating) || !isOptionalString(avatarUrl)) {
     return { ok: false, error: "invalid_input" };
   }
@@ -53,9 +55,6 @@ function parseProductInput(
   const normalizedName = name.trim();
   if (!normalizedName) return { ok: false, error: "invalid_name" };
   if (normalizedName.length > MAX_NAME_LENGTH) return { ok: false, error: "name_too_long" };
-
-  const parsedQuantity = parseQuantity(quantity.trim());
-  if (parsedQuantity === null) return { ok: false, error: "invalid_quantity" };
 
   const costCents = parsePriceCents(cost.trim());
   if (costCents === null) return { ok: false, error: "invalid_cost" };
@@ -70,12 +69,29 @@ function parseProductInput(
   return {
     ok: true,
     name: normalizedName,
-    quantity: parsedQuantity,
     costCents,
     notes: normalizedNotes,
     rating: parsedRating,
     avatarUrl: avatarUrl?.trim() || null,
   };
+}
+
+// Campos do catálogo e a quantidade no estoque.
+function parseProductInput(
+  input: unknown,
+): ({ ok: true } & ProductData) | { ok: false; error: ProductInputError } {
+  const { name, quantity, cost } = (input ?? {}) as Record<string, unknown>;
+  if (typeof name !== "string" || typeof quantity !== "string" || typeof cost !== "string") {
+    return { ok: false, error: "invalid_input" };
+  }
+  const catalog = parseCatalogInput(input);
+  if (!catalog.ok) return catalog;
+
+  const parsedQuantity = parseQuantity(quantity.trim());
+  if (parsedQuantity === null) return { ok: false, error: "invalid_quantity" };
+
+  const { name: parsedName, costCents, notes, rating, avatarUrl } = catalog;
+  return { ok: true, name: parsedName, quantity: parsedQuantity, costCents, notes, rating, avatarUrl };
 }
 
 export type CreateProductError = ProductInputError | "unit_not_found";
@@ -101,22 +117,117 @@ export async function createProduct(
 
 export type UpdateProductError = ProductInputError | "product_not_found";
 
-export type UpdateProductResult = { ok: true } | { ok: false; error: UpdateProductError };
+export type CreateCatalogProductResult =
+  | { ok: true; productId: string }
+  | { ok: false; error: ProductInputError | "workspace_not_found" };
 
-// update devolve false quando o produto não existe (ou não é da unidade).
-export async function updateProduct(
+// Cadastro direto no catálogo do workspace, sem pôr em nenhum estoque.
+export async function createCatalogProduct(
   input: unknown,
-  productId: string | null | undefined,
-  update: (productId: string, data: ProductData) => Promise<boolean>,
-): Promise<UpdateProductResult> {
-  if (!productId) return { ok: false, error: "product_not_found" };
+  workspaceId: string | null | undefined,
+  insert: (data: CatalogProductData & { workspaceId: string }) => Promise<{ id: string }>,
+): Promise<CreateCatalogProductResult> {
+  if (!workspaceId) return { ok: false, error: "workspace_not_found" };
 
-  const parsed = parseProductInput(input);
+  const parsed = parseCatalogInput(input);
   if (!parsed.ok) return parsed;
 
-  const { name, quantity, costCents, notes, rating, avatarUrl } = parsed;
-  const found = await update(productId, { name, quantity, costCents, notes, rating, avatarUrl });
+  const { name, costCents, notes, rating, avatarUrl } = parsed;
+  const product = await insert({ name, costCents, notes, rating, avatarUrl, workspaceId });
+  return { ok: true, productId: product.id };
+}
+
+export type UpdateCatalogProductResult = { ok: true } | { ok: false; error: UpdateProductError };
+
+// Edição no catálogo do workspace: sem quantidade, que é de cada estoque.
+// update devolve false quando o produto não existe (ou não é do workspace).
+export async function updateCatalogProduct(
+  input: unknown,
+  productId: string | null | undefined,
+  update: (productId: string, data: CatalogProductData) => Promise<boolean>,
+): Promise<UpdateCatalogProductResult> {
+  if (!productId) return { ok: false, error: "product_not_found" };
+
+  const parsed = parseCatalogInput(input);
+  if (!parsed.ok) return parsed;
+
+  const { name, costCents, notes, rating, avatarUrl } = parsed;
+  const found = await update(productId, { name, costCents, notes, rating, avatarUrl });
   return found ? { ok: true } : { ok: false, error: "product_not_found" };
+}
+
+export type AddStockItemResult =
+  | { ok: true }
+  | { ok: false; error: "invalid_input" | "invalid_quantity" | "product_not_found" | "already_in_stock" };
+
+// Põe no estoque um produto do catálogo; add devolve not_found quando o produto não é do
+// workspace e already_in_stock quando ele já está nesse estoque.
+export async function addStockItem(
+  input: unknown,
+  add: (productId: string, quantity: number) => Promise<"added" | "not_found" | "already_in_stock">,
+): Promise<AddStockItemResult> {
+  const { productId, quantity } = (input ?? {}) as Record<string, unknown>;
+  if (typeof productId !== "string" || typeof quantity !== "string") return { ok: false, error: "invalid_input" };
+  if (!isObjectIdOrHexString(productId)) return { ok: false, error: "product_not_found" };
+
+  const parsedQuantity = parseQuantity(quantity.trim());
+  if (parsedQuantity === null) return { ok: false, error: "invalid_quantity" };
+
+  const outcome = await add(productId, parsedQuantity);
+  if (outcome === "added") return { ok: true };
+  return { ok: false, error: outcome === "not_found" ? "product_not_found" : outcome };
+}
+
+export type RegisterPurchaseResult =
+  | { ok: true }
+  | { ok: false; error: "invalid_input" | "invalid_quantity" | "invalid_cost" | "product_not_found" };
+
+// Compra de mais unidades de um produto que está no estoque: vira um lote com o preço pago.
+// purchase devolve not_found quando o produto não está nesse estoque.
+export async function registerPurchase(
+  input: unknown,
+  productId: string | null | undefined,
+  purchase: (
+    productId: string,
+    lot: { quantity: number; unitCostCents: number },
+  ) => Promise<"purchased" | "not_found">,
+): Promise<RegisterPurchaseResult> {
+  if (!productId) return { ok: false, error: "product_not_found" };
+
+  const { quantity, cost } = (input ?? {}) as Record<string, unknown>;
+  if (typeof quantity !== "string" || typeof cost !== "string") return { ok: false, error: "invalid_input" };
+
+  const parsedQuantity = parseQuantity(quantity.trim());
+  if (!parsedQuantity) return { ok: false, error: "invalid_quantity" };
+  const unitCostCents = parsePriceCents(cost.trim());
+  if (unitCostCents === null) return { ok: false, error: "invalid_cost" };
+
+  const outcome = await purchase(productId, { quantity: parsedQuantity, unitCostCents });
+  return outcome === "purchased" ? { ok: true } : { ok: false, error: "product_not_found" };
+}
+
+export type AdjustStockResult =
+  | { ok: true }
+  | { ok: false; error: "invalid_input" | "invalid_quantity" | "product_not_found" | "above_current" };
+
+// Ajuste pela contagem: a quantidade só diminui, tirando dos lotes mais antigos. adjust devolve
+// above_current quando a contagem passa do que há (entrada é compra).
+export async function adjustStock(
+  input: unknown,
+  productId: string | null | undefined,
+  adjust: (productId: string, quantity: number) => Promise<"adjusted" | "not_found" | "above_current">,
+): Promise<AdjustStockResult> {
+  if (!productId) return { ok: false, error: "product_not_found" };
+
+  const { quantity } = (input ?? {}) as Record<string, unknown>;
+  if (typeof quantity !== "string") return { ok: false, error: "invalid_input" };
+
+  const parsedQuantity = parseQuantity(quantity.trim());
+  if (parsedQuantity === null) return { ok: false, error: "invalid_quantity" };
+
+  const outcome = await adjust(productId, parsedQuantity);
+  if (outcome === "adjusted") return { ok: true };
+  return { ok: false, error: outcome === "not_found" ? "product_not_found" : outcome };
 }
 
 export type DeleteProductResult = { ok: true } | { ok: false; error: "product_not_found" };

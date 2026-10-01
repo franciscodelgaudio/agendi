@@ -16,6 +16,8 @@ import {
 } from "@/lib/unit"
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
+import { StockItem } from "@/models/StockItem"
+import { Stock } from "@/models/Stock"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
 import { Service } from "@/models/Service"
@@ -222,12 +224,22 @@ export async function deleteUnitAction(workspaceId: string, unitId: string): Pro
   const result = await deleteUnit(target.unitId, async (id) => {
     const { deletedCount } = await Unit.deleteOne({ _id: id, workspaceId: target.ownedId })
     if (deletedCount === 0) return false
+    const unitObjectId = new Types.ObjectId(id)
     await Promise.all([
       Service.deleteMany({ unitId: id }),
       Appointment.deleteMany({ unitId: id }),
       WorkspaceMember.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
       Wallet.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
+      // O estoque próprio da unidade vai junto; o compartilhado continua com as outras.
+      StockItem.deleteMany({ holderId: unitObjectId }),
+      Stock.updateMany({ "units.unitId": unitObjectId }, { $pull: { units: { unitId: unitObjectId } } }),
     ])
+    // Estoque compartilhado que ficou sem unidades não tem mais quem o use.
+    const orphaned = await Stock.find({ workspaceId: target.ownedId, units: { $size: 0 } }).select({ _id: 1 }).lean()
+    if (orphaned.length > 0) {
+      const ids = orphaned.map((stock) => stock._id)
+      await Promise.all([StockItem.deleteMany({ holderId: { $in: ids } }), Stock.deleteMany({ _id: { $in: ids } })])
+    }
     return true
   })
 

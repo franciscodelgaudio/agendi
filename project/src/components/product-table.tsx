@@ -1,5 +1,6 @@
 import {
   BanknoteIcon,
+  CoinsIcon,
   HashIcon,
   PackageIcon,
   RepeatIcon,
@@ -9,8 +10,8 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "cn"
+import type { ReactNode } from "react"
 import Link from "@/components/link"
-import { ProductActions } from "@/components/product-actions"
 import { CodeCell, CodeHead } from "@/components/record-code"
 import { SortableHead } from "@/components/sortable-head"
 import { StarRating } from "@/components/star-rating"
@@ -29,28 +30,42 @@ import type { ProductUsageSummary } from "@/lib/product-usage"
 import { currencyFormat } from "@/components/service-format"
 import { formatAverage } from "@/components/product-format"
 
-type Props = {
-  products: {
-    id: string
-    unitId: string
-    // Só no estoque de todas as unidades: aparece abaixo do nome do produto.
-    unitName?: string
-    name: string
-    quantity: number
-    costCents: number
-    notes: string | null
-    rating: number | null
-    avatarUrl: string | null
-    usage: ProductUsageSummary
-  }[]
-  query: ProductListQuery
-  pathname: string
-  workspaceId: string
-  // Sem permissão, a coluna de ações (editar/excluir) não aparece.
-  canManage: boolean
+type ProductRow = {
+  id: string
+  // Histórico de uso do produto; sem ele, o nome não é link.
+  href?: string
+  // Aparece abaixo do nome, antes das observações.
+  origin?: string | null
+  name: string
+  quantity: number
+  // Preço da última compra (catálogo).
+  costCents: number
+  // Soma dos lotes (quantidade × preço pago).
+  valueCents: number
+  // Preço do lote mais antigo, o próximo a sair; null sem lotes ou com vários estoques.
+  nextUnitCostCents: number | null
+  notes: string | null
+  rating: number | null
+  avatarUrl: string | null
+  usage: ProductUsageSummary
 }
 
-export function ProductTable({ products, query, pathname, workspaceId, canManage }: Props) {
+type Props<T extends ProductRow> = {
+  products: T[]
+  query: ProductListQuery
+  pathname: string
+  // next: custo do próximo a sair (estoque de uma unidade); last: preço da última compra (catálogo).
+  cost: "next" | "last"
+  // Ações de cada produto; sem elas (sem permissão), a coluna não aparece.
+  actions?: (product: T) => ReactNode
+}
+
+function money(cents: number | null) {
+  return cents === null ? "—" : currencyFormat.format(cents / 100)
+}
+
+export function ProductTable<T extends ProductRow>({ products, query, pathname, cost, actions }: Props<T>) {
+  const canManage = actions !== undefined
   return (
     <div className="border">
       <Table>
@@ -59,12 +74,27 @@ export function ProductTable({ products, query, pathname, workspaceId, canManage
             <CodeHead className="@max-5xl:hidden" />
             <SortableHead field="name" label="Produto" icon={PackageIcon} query={query} pathname={pathname} className="w-full" />
             <SortableHead field="quantity" label="Quantidade" icon={HashIcon} query={query} pathname={pathname} />
-            <SortableHead
-              field="costCents"
-              label="Preço de custo"
-              icon={BanknoteIcon}
-              query={query}
-              pathname={pathname}
+            {cost === "last" ? (
+              <SortableHead
+                field="costCents"
+                label="Última compra"
+                icon={BanknoteIcon}
+                query={query}
+                pathname={pathname}
+                className="@max-xl:hidden"
+              />
+            ) : (
+              <UsageHead
+                icon={BanknoteIcon}
+                label="Próximo a sair"
+                title="Preço pago no lote mais antigo, que sai primeiro (PEPS)"
+                className="@max-xl:hidden"
+              />
+            )}
+            <UsageHead
+              icon={CoinsIcon}
+              label="Valor em estoque"
+              title="Soma do que foi pago pelas unidades que ainda estão em estoque"
               className="@max-xl:hidden"
             />
             <SortableHead
@@ -100,13 +130,13 @@ export function ProductTable({ products, query, pathname, workspaceId, canManage
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={canManage ? 8 : 7} className="h-24 px-4 text-center text-muted-foreground">
+              <TableCell colSpan={canManage ? 9 : 8} className="h-24 px-4 text-center text-muted-foreground">
                 Nenhum produto encontrado.
               </TableCell>
             </TableRow>
           ) : (
             products.map((product) => {
-              const details = [product.unitName, product.notes].filter(Boolean).join(" · ")
+              const details = [product.origin, product.notes].filter(Boolean).join(" · ")
               return (
                 <TableRow key={product.id}>
                   <CodeCell id={product.id} className="@max-5xl:hidden" />
@@ -119,12 +149,13 @@ export function ProductTable({ products, query, pathname, workspaceId, canManage
                         <InitialFallback name={product.name} className="rounded-md" />
                       </Avatar>
                       <div className="grid min-w-0">
-                        <Link
-                          href={`/workspace/${workspaceId}/unit/${product.unitId}/stock/${product.id}`}
-                          className="truncate font-medium hover:underline"
-                        >
-                          {product.name}
-                        </Link>
+                        {product.href ? (
+                          <Link href={product.href} className="truncate font-medium hover:underline">
+                            {product.name}
+                          </Link>
+                        ) : (
+                          <span className="truncate font-medium">{product.name}</span>
+                        )}
                         {details && (
                           <span className="truncate text-xs text-muted-foreground" title={details}>
                             {details}
@@ -135,8 +166,9 @@ export function ProductTable({ products, query, pathname, workspaceId, canManage
                   </TableCell>
                   <TableCell className="px-4 tabular-nums">{product.quantity}</TableCell>
                   <TableCell className="px-4 tabular-nums @max-xl:hidden">
-                    {currencyFormat.format(product.costCents / 100)}
+                    {money(cost === "last" ? product.costCents : product.nextUnitCostCents)}
                   </TableCell>
+                  <TableCell className="px-4 tabular-nums @max-xl:hidden">{money(product.valueCents)}</TableCell>
                   <TableCell className="px-4 @max-3xl:hidden">
                     <StarRating value={product.rating} />
                   </TableCell>
@@ -144,11 +176,7 @@ export function ProductTable({ products, query, pathname, workspaceId, canManage
                   <TableCell className="px-4 text-muted-foreground tabular-nums @max-4xl:hidden">
                     {formatAverage(product.usage.averageUsesPerDepletion)}
                   </TableCell>
-                  {canManage && (
-                    <TableCell className="px-4 text-right">
-                      <ProductActions workspaceId={workspaceId} unitId={product.unitId} product={product} />
-                    </TableCell>
-                  )}
+                  {actions && <TableCell className="px-4 text-right">{actions(product)}</TableCell>}
                 </TableRow>
               )
             })
