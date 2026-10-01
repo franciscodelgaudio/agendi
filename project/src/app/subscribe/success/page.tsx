@@ -7,12 +7,12 @@ import { Checkout } from "@/models/Checkout"
 
 // completionUrl do checkout da AbacatePay. O acesso é liberado pelo webhook, que pode chegar
 // alguns segundos depois do redirecionamento: a página recarrega até a cobrança constar como paga.
-export default async function CheckoutDonePage({ searchParams }: PageProps<"/assinar/concluido">) {
+export default async function CheckoutDonePage({ searchParams }: PageProps<"/subscribe/success">) {
   const user = await requireUser()
-  const { cobranca } = await searchParams
+  const { checkout: checkoutId } = await searchParams
   const checkout =
-    typeof cobranca === "string" && Types.ObjectId.isValid(cobranca)
-      ? await Checkout.findOne({ _id: cobranca, userId: user.id }).select("status").lean()
+    typeof checkoutId === "string" && Types.ObjectId.isValid(checkoutId)
+      ? await Checkout.findOne({ _id: checkoutId, userId: user.id }).select("status").lean()
       : null
 
   if (!checkout || checkout.status === "paid") redirect("/workspace")

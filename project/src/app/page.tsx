@@ -354,7 +354,7 @@ export default function LandingPage() {
             <LandingLogo className="size-5" />
             Agendi · Gestão para beleza e bem-estar
             <span aria-hidden="true">·</span>
-            <Link href="/termos" className={cn("underline-offset-4 hover:text-white hover:underline focus-visible:outline-ld-sage-light", focusRing)}>
+            <Link href="/terms" className={cn("underline-offset-4 hover:text-white hover:underline focus-visible:outline-ld-sage-light", focusRing)}>
               Termos de uso
             </Link>
           </div>

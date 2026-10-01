@@ -44,7 +44,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       // Landing pública (inclui o POST da server action do formulário de contato).
-      if (["/", "/termos"].includes(nextUrl.pathname)) return true;
+      if (["/", "/terms"].includes(nextUrl.pathname)) return true;
       if (["/login", "/signup"].includes(nextUrl.pathname)) {
         return isLoggedIn ? Response.redirect(new URL("/workspace", nextUrl)) : true;
       }

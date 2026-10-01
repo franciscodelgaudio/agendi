@@ -74,7 +74,7 @@ export function SignupForm({
           </Button>
           <FieldDescription className="text-center">
             Ao criar a conta, você concorda com os{" "}
-            <Link href="/termos" target="_blank" className="underline underline-offset-4">
+            <Link href="/terms" target="_blank" className="underline underline-offset-4">
               Termos de uso
             </Link>
           </FieldDescription>

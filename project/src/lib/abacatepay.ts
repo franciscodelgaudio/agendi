@@ -82,7 +82,7 @@ export async function createPlanCharge(data: {
       customerId: customer.id,
       externalId: data.checkoutId,
       returnUrl: appUrl("/#planos"),
-      completionUrl: appUrl(`/assinar/concluido?cobranca=${data.checkoutId}`),
+      completionUrl: appUrl(`/subscribe/success?checkout=${data.checkoutId}`),
       metadata: { planId: data.planId },
     },
   })

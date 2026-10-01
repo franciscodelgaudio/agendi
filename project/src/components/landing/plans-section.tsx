@@ -132,7 +132,7 @@ export function PlansSection({ workspaceId }: { workspaceId?: string }) {
               <td className="@max-lg:hidden" />
               <td className="bg-ld-brand/5 px-3 py-5">
                 <a
-                  href={`/assinar?${new URLSearchParams({ plano: plan.id, ...(workspaceId ? { workspace: workspaceId } : {}) })}`}
+                  href={`/subscribe?${new URLSearchParams({ plan: plan.id, ...(workspaceId ? { workspace: workspaceId } : {}) })}`}
                   className={cn(cta, "bg-ld-brand text-white hover:bg-ld-forest")}
                   aria-label={`Assinar agora o plano ${plan.name.toLowerCase()}`}
                 >
@@ -150,7 +150,7 @@ export function PlansSection({ workspaceId }: { workspaceId?: string }) {
       </div>
       <p className="text-center text-xs text-ld-ink-soft">
         Ao assinar, você concorda com os{" "}
-        <Link href="/termos" target="_blank" className="underline underline-offset-4 hover:text-ld-ink">
+        <Link href="/terms" target="_blank" className="underline underline-offset-4 hover:text-ld-ink">
           Termos de uso
         </Link>
       </p>

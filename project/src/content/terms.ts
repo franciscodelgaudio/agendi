@@ -1,4 +1,4 @@
-// Texto dos Termos de Uso em markdown, renderizado em /termos. Ao editar, atualize a data.
+// Texto dos Termos de Uso em markdown, renderizado em /terms. Ao editar, atualize a data.
 export const TERMS_MARKDOWN = `
 # TERMOS E CONDIÇÕES DE USO DO AGENDI
 
