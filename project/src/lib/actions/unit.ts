@@ -16,6 +16,8 @@ import {
 } from "@/lib/unit"
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
+import { Product } from "@/models/Product"
+import { Stock } from "@/models/Stock"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
 import { Service } from "@/models/Service"
@@ -222,11 +224,34 @@ export async function deleteUnitAction(workspaceId: string, unitId: string): Pro
   const result = await deleteUnit(target.unitId, async (id) => {
     const { deletedCount } = await Unit.deleteOne({ _id: id, workspaceId: target.ownedId })
     if (deletedCount === 0) return false
+    const unitObjectId = new Types.ObjectId(id)
     await Promise.all([
       Service.deleteMany({ unitId: id }),
       Appointment.deleteMany({ unitId: id }),
       WorkspaceMember.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
       Wallet.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
+      Stock.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
+      // No estoque distribuído, a parte da unidade sai do total junto com ela.
+      Product.updateMany({ "unitQuantities.unitId": unitObjectId }, [
+        {
+          $set: {
+            quantity: {
+              $subtract: [
+                "$quantity",
+                {
+                  $sum: {
+                    $map: {
+                      input: { $filter: { input: "$unitQuantities", cond: { $eq: ["$$this.unitId", unitObjectId] } } },
+                      in: "$$this.quantity",
+                    },
+                  },
+                },
+              ],
+            },
+            unitQuantities: { $filter: { input: "$unitQuantities", cond: { $ne: ["$$this.unitId", unitObjectId] } } },
+          },
+        },
+      ]),
     ])
     return true
   })

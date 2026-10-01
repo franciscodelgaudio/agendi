@@ -45,6 +45,13 @@ describe("productListPipeline", () => {
       _id: 0,
       id: { $toString: "$_id" },
       unitId: { $toString: "$unitId" },
+      stockId: { $toString: "$stockId" },
+      unitQuantities: {
+        $map: {
+          input: { $ifNull: ["$unitQuantities", []] },
+          in: { unitId: { $toString: "$$this.unitId" }, quantity: "$$this.quantity" },
+        },
+      },
       name: 1,
       quantity: 1,
       costCents: 1,

@@ -32,9 +32,12 @@ import { formatAverage } from "@/components/product-format"
 type Props = {
   products: {
     id: string
+    // Unidade de onde as ações e o histórico são abertos.
     unitId: string
-    // Só no estoque de todas as unidades: aparece abaixo do nome do produto.
-    unitName?: string
+    // Unidade ou estoque de várias unidades de onde o produto é; aparece abaixo do nome.
+    origin?: string | null
+    // Só no estoque distribuído: a parte de cada unidade.
+    unitQuantities?: { unitId: string; quantity: number }[]
     name: string
     quantity: number
     costCents: number
@@ -48,9 +51,11 @@ type Props = {
   workspaceId: string
   // Sem permissão, a coluna de ações (editar/excluir) não aparece.
   canManage: boolean
+  // Unidades do estoque distribuído, para quem pode transferir; null esconde a ação.
+  transferUnits?: { id: string; name: string }[] | null
 }
 
-export function ProductTable({ products, query, pathname, workspaceId, canManage }: Props) {
+export function ProductTable({ products, query, pathname, workspaceId, canManage, transferUnits = null }: Props) {
   return (
     <div className="border">
       <Table>
@@ -106,7 +111,7 @@ export function ProductTable({ products, query, pathname, workspaceId, canManage
             </TableRow>
           ) : (
             products.map((product) => {
-              const details = [product.unitName, product.notes].filter(Boolean).join(" · ")
+              const details = [product.origin, product.notes].filter(Boolean).join(" · ")
               return (
                 <TableRow key={product.id}>
                   <CodeCell id={product.id} className="@max-5xl:hidden" />
@@ -146,7 +151,12 @@ export function ProductTable({ products, query, pathname, workspaceId, canManage
                   </TableCell>
                   {canManage && (
                     <TableCell className="px-4 text-right">
-                      <ProductActions workspaceId={workspaceId} unitId={product.unitId} product={product} />
+                      <ProductActions
+                        workspaceId={workspaceId}
+                        unitId={product.unitId}
+                        product={product}
+                        transferUnits={transferUnits}
+                      />
                     </TableCell>
                   )}
                 </TableRow>

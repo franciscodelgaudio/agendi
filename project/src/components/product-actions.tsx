@@ -2,10 +2,11 @@
 
 import { useActionState, useState, useTransition } from "react"
 import Link from "@/components/link"
-import { EllipsisIcon, HistoryIcon, PackageXIcon, PencilIcon, Trash2Icon } from "lucide-react"
+import { ArrowRightLeftIcon, EllipsisIcon, HistoryIcon, PackageXIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import {
   deleteProductAction,
   depleteProductAction,
+  transferProductAction,
   updateProductAction,
   type ProductActionState,
 } from "@/lib/actions/product"
@@ -28,7 +29,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { FieldError, FieldGroup } from "@/components/ui/field"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ProductFields } from "@/components/product-fields"
 import { formatUses } from "@/components/product-format"
 import {
@@ -48,13 +51,24 @@ type Product = {
   notes: string | null
   rating: number | null
   avatarUrl: string | null
+  // Só no estoque distribuído: a parte de cada unidade.
+  unitQuantities?: { unitId: string; quantity: number }[]
   usage: ProductUsageSummary
 }
 
 type Props = { workspaceId: string; unitId: string; product: Product }
 
-export function ProductActions({ workspaceId, unitId, product }: Props) {
+type TransferUnit = { id: string; name: string }
+
+export function ProductActions({
+  workspaceId,
+  unitId,
+  product,
+  transferUnits = null,
+}: Props & { transferUnits?: TransferUnit[] | null }) {
   const [editOpen, setEditOpen] = useState(false)
+  const [transferOpen, setTransferOpen] = useState(false)
+  const [transferKey, setTransferKey] = useState(0)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [depleteOpen, setDepleteOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
@@ -82,6 +96,17 @@ export function ProductActions({ workspaceId, unitId, product }: Props) {
             <PackageXIcon />
             Marcar como acabou
           </DropdownMenuItem>
+          {transferUnits && (
+            <DropdownMenuItem
+              onClick={() => {
+                setTransferKey((k) => k + 1)
+                setTransferOpen(true)
+              }}
+            >
+              <ArrowRightLeftIcon />
+              Transferir
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem render={<Link href={`/workspace/${workspaceId}/unit/${unitId}/stock/${product.id}`} />}>
             <HistoryIcon />
             Histórico de uso
@@ -105,6 +130,21 @@ export function ProductActions({ workspaceId, unitId, product }: Props) {
           />
         </SheetContent>
       </Sheet>
+
+      {transferUnits && (
+        <Sheet open={transferOpen} onOpenChange={setTransferOpen}>
+          <SheetContent>
+            <TransferProductForm
+              key={transferKey}
+              workspaceId={workspaceId}
+              unitId={unitId}
+              product={product}
+              units={transferUnits}
+              onDone={() => setTransferOpen(false)}
+            />
+          </SheetContent>
+        </Sheet>
+      )}
 
       <DeleteProductDialog
         workspaceId={workspaceId}
@@ -249,5 +289,92 @@ function DepleteProductDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  )
+}
+
+// Leva produto de uma unidade do estoque distribuído para outra; começa saindo desta unidade.
+function TransferProductForm({
+  workspaceId,
+  unitId,
+  product,
+  units,
+  onDone,
+}: Props & { units: TransferUnit[]; onDone: () => void }) {
+  const [state, formAction, pending] = useActionState(
+    async (prev: ProductActionState, formData: FormData) => {
+      const next = await transferProductAction(workspaceId, unitId, product.id, prev, formData)
+      if (!next.error) onDone()
+      return next
+    },
+    { error: null },
+  )
+  const [fromUnitId, setFromUnitId] = useState<string | null>(unitId)
+  const [toUnitId, setToUnitId] = useState<string | null>(() => units.find((unit) => unit.id !== unitId)?.id ?? null)
+  const quantityOf = (id: string | null) => product.unitQuantities?.find((unit) => unit.unitId === id)?.quantity ?? 0
+  const items = units.map((unit) => ({ value: unit.id, label: `${unit.name} (${quantityOf(unit.id)})` }))
+  const idPrefix = `transfer-product-${product.id}`
+
+  return (
+    <form action={formAction} className="flex min-h-0 flex-1 flex-col">
+      <SheetHeader>
+        <SheetTitle>Transferir produto</SheetTitle>
+        <SheetDescription>
+          Leve <strong>{product.name}</strong> de uma unidade para outra. O total do estoque não muda.
+        </SheetDescription>
+      </SheetHeader>
+      <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+        {state.error && <FieldError>{state.error}</FieldError>}
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-from`}>De</FieldLabel>
+          <Select name="fromUnitId" items={items} value={fromUnitId} onValueChange={(value) => setFromUnitId(value as string | null)} required>
+            <SelectTrigger id={`${idPrefix}-from`} className="w-full">
+              <SelectValue placeholder="Escolha a unidade" />
+            </SelectTrigger>
+            <SelectContent>
+              {items.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-to`}>Para</FieldLabel>
+          <Select name="toUnitId" items={items} value={toUnitId} onValueChange={(value) => setToUnitId(value as string | null)} required>
+            <SelectTrigger id={`${idPrefix}-to`} className="w-full">
+              <SelectValue placeholder="Escolha a unidade" />
+            </SelectTrigger>
+            <SelectContent>
+              {items.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-quantity`}>Quantidade</FieldLabel>
+          <Input
+            id={`${idPrefix}-quantity`}
+            name="quantity"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={quantityOf(fromUnitId) || undefined}
+            step={1}
+            placeholder="1"
+            required
+          />
+          <FieldDescription>Disponível na origem: {quantityOf(fromUnitId)}.</FieldDescription>
+        </Field>
+      </FieldGroup>
+      <SheetFooter>
+        <Button type="submit" loading={pending}>
+          {pending ? "Transferindo..." : "Transferir"}
+        </Button>
+      </SheetFooter>
+    </form>
   )
 }

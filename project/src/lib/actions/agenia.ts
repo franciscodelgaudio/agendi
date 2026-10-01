@@ -18,6 +18,8 @@ import {
   takeConversationAction,
 } from "@/lib/actions/ura"
 import { Product } from "@/models/Product"
+import { productScopeMatch } from "@/lib/product-scope"
+import { findUnitScope, unitQuantityOf } from "@/lib/stock-store"
 import { Service } from "@/models/Service"
 import { Unit } from "@/models/Unit"
 
@@ -53,11 +55,13 @@ async function currentService(workspaceId: string, input: Input) {
 
 async function currentProduct(workspaceId: string, input: Input) {
   if (!(await unitInWorkspace(workspaceId, String(input.unitId)))) return null
-  const product = await Product.findOne({ _id: String(input.productId), unitId: String(input.unitId) }).lean()
+  const { stock, scope } = await findUnitScope(String(input.unitId))
+  const product = await Product.findOne({ _id: String(input.productId), ...productScopeMatch(scope) }).lean()
   return (
     product && {
       name: product.name,
-      quantity: product.quantity,
+      // No estoque distribuído, a edição mexe só na parte da unidade.
+      quantity: stock?.distributed ? unitQuantityOf(product.unitQuantities, String(input.unitId)) : product.quantity,
       cost: product.costCents / 100,
       notes: product.notes,
       rating: product.rating,

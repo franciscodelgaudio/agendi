@@ -6,6 +6,9 @@ import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { parseProductListQuery, productListPipeline } from "@/lib/product-list"
 import { findProductUsage } from "@/lib/product-lookup"
+import { productScopeMatch } from "@/lib/product-scope"
+import { findUnitScope, unitQuantityOf } from "@/lib/stock-store"
+import { Unit } from "@/models/Unit"
 import { Workspace } from "@/models/Workspace"
 import { CreateProductSheet } from "@/components/create-product-sheet"
 import { ListSearch } from "@/components/list-search"
@@ -22,6 +25,7 @@ import {
 type ProductRow = {
   id: string
   unitId: string
+  unitQuantities: { unitId: string; quantity: number }[]
   name: string
   quantity: number
   costCents: number
@@ -41,6 +45,9 @@ export default async function StockPage({
   await requirePage(workspaceId, user.id, { unit: "stock", unitId })
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access || !isObjectIdOrHexString(unitId)) notFound()
+  // Num estoque de várias unidades, os produtos são os do estoque; a unidade é conferida abaixo.
+  const { stock, scope } = await findUnitScope(unitId)
+  const scopeMatch = { $match: productScopeMatch(scope) }
 
   // Parte do workspace -> unidade -> produtos para que o acesso seja garantido em cada nível.
   // O total sem filtro separa "unidade sem produtos" de "busca sem resultado".
@@ -60,19 +67,15 @@ export default async function StockPage({
           {
             $lookup: {
               from: "products",
-              localField: "_id",
-              foreignField: "unitId",
               as: "products",
-              pipeline: productListPipeline(query),
+              pipeline: [scopeMatch, ...productListPipeline(query)],
             },
           },
           {
             $lookup: {
               from: "products",
-              localField: "_id",
-              foreignField: "unitId",
               as: "productCount",
-              pipeline: [{ $count: "n" }],
+              pipeline: [scopeMatch, { $count: "n" }],
             },
           },
           {
@@ -91,8 +94,27 @@ export default async function StockPage({
   const { products: rows, productCount } = workspace.unit
   const canManage = can(workspace.actor, "stock.manage")
 
+  // Estoque distribuído: a quantidade mostrada e editada é a da unidade, com o total ao lado.
+  // As ações rodam sempre a partir desta unidade, mesmo no produto cadastrado por outra.
   const usageOf = await findProductUsage(unitId)
-  const products = rows.map((product) => ({ ...product, usage: usageOf(product.id) }))
+  const products = rows.map((product) => {
+    const own = stock?.distributed ? unitQuantityOf(product.unitQuantities, unitId) : product.quantity
+    return {
+      ...product,
+      unitId,
+      quantity: own,
+      origin: stock && (stock.distributed ? `${stock.name} · ${product.quantity} no total` : stock.name),
+      usage: usageOf(product.id),
+    }
+  })
+  // Transferir só existe no estoque distribuído, para quem tem a permissão.
+  const transferUnits =
+    stock?.distributed && canManage && can(workspace.actor, "stock.transfer")
+      ? (await Unit.find({ _id: { $in: stock.unitIds } }).select({ name: 1 }).sort({ name: 1 }).lean()).map((unit) => ({
+          id: unit._id.toString(),
+          name: unit.name,
+        }))
+      : null
 
   return (
     <div className="flex flex-col gap-4">
@@ -128,6 +150,7 @@ export default async function StockPage({
             pathname={`/workspace/${workspaceId}/unit/${unitId}/stock`}
             workspaceId={workspaceId}
             canManage={canManage}
+            transferUnits={transferUnits}
           />
         </>
       )}

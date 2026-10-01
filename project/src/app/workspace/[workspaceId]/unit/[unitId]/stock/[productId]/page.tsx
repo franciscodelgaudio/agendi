@@ -5,6 +5,8 @@ import { ArrowLeftIcon } from "lucide-react"
 import { requirePage } from "@/lib/page-guard"
 import { requireUser, workspaceAccessStages } from "@/lib/session"
 import { findProductUsage } from "@/lib/product-lookup"
+import { productScopeMatch } from "@/lib/product-scope"
+import { findUnitScope, unitQuantityOf } from "@/lib/stock-store"
 import {
   PRODUCT_HISTORY_PAGE_SIZE,
   parseProductHistoryQuery,
@@ -23,7 +25,12 @@ import { Avatar, AvatarImage } from "@/components/ui/avatar"
 import { InitialFallback } from "@/components/initial-fallback"
 import { Button } from "@/components/ui/button"
 
-type ProductHeader = { name: string; quantity: number; avatarUrl: string | null }
+type ProductHeader = {
+  name: string
+  quantity: number
+  unitQuantities: { unitId: string; quantity: number }[]
+  avatarUrl: string | null
+}
 
 // Histórico de uso de um produto: atendimentos, agendamentos e cada vez que ele acabou.
 // Layout e página podem renderizar em paralelo, então a página refaz a verificação de acesso.
@@ -37,6 +44,8 @@ export default async function ProductHistoryPage({
   await requirePage(workspaceId, user.id, { unit: "stock", unitId })
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access || !isObjectIdOrHexString(unitId) || !isObjectIdOrHexString(productId)) notFound()
+  // Num estoque de várias unidades, o produto pode ter sido cadastrado por outra delas.
+  const { stock, scope } = await findUnitScope(unitId)
 
   // Parte do workspace -> unidade -> produto para que o acesso seja garantido em cada nível.
   const [workspace] = await Workspace.aggregate<{ product: ProductHeader | null }>([
@@ -53,16 +62,33 @@ export default async function ProductHistoryPage({
     {
       $lookup: {
         from: "products",
-        localField: "unit._id",
-        foreignField: "unitId",
         as: "product",
         pipeline: [
-          { $match: { _id: new Types.ObjectId(productId) } },
-          { $project: { _id: 0, name: 1, quantity: 1, avatarUrl: { $ifNull: ["$avatarUrl", null] } } },
+          { $match: { _id: new Types.ObjectId(productId), ...productScopeMatch(scope) } },
+          {
+            $project: {
+              _id: 0,
+              name: 1,
+              quantity: 1,
+              unitQuantities: {
+                $map: {
+                  input: { $ifNull: ["$unitQuantities", []] },
+                  in: { unitId: { $toString: "$$this.unitId" }, quantity: "$$this.quantity" },
+                },
+              },
+              avatarUrl: { $ifNull: ["$avatarUrl", null] },
+            },
+          },
         ],
       },
     },
-    { $project: { _id: 0, product: { $ifNull: [{ $first: "$product" }, null] } } },
+    // Sem a unidade no workspace, o produto não aparece.
+    {
+      $project: {
+        _id: 0,
+        product: { $cond: [{ $gt: [{ $size: "$unit" }, 0] }, { $ifNull: [{ $first: "$product" }, null] }, null] },
+      },
+    },
   ])
   const product = workspace?.product
   if (!product) notFound()
@@ -90,7 +116,12 @@ export default async function ProductHistoryPage({
     { label: "Média até acabar", value: formatAverage(usage.averageUsesPerDepletion) },
     { label: "Desde a última vez que acabou", value: formatUses(usage.usesSinceLastDepletion) },
     { label: "Vezes que acabou", value: String(usage.cycles.length) },
-    { label: "Quantidade em estoque", value: String(product.quantity) },
+    ...(stock?.distributed
+      ? [
+          { label: "Quantidade nesta unidade", value: String(unitQuantityOf(product.unitQuantities, unitId)) },
+          { label: "Quantidade no estoque", value: String(product.quantity) },
+        ]
+      : [{ label: "Quantidade em estoque", value: String(product.quantity) }]),
   ]
 
   return (
@@ -116,7 +147,7 @@ export default async function ProductHistoryPage({
         </div>
       </div>
 
-      <dl className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <dl className={`grid grid-cols-2 gap-2 ${stats.length > 4 ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
         {stats.map((stat) => (
           <div key={stat.label} className="border p-3">
             <dt className="text-sm text-muted-foreground">{stat.label}</dt>
