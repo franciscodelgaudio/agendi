@@ -15,9 +15,9 @@ export type CashFlowView = (typeof CASH_FLOW_VIEWS)[number];
 export type CashFlowQuery = { view: CashFlowView; date: string };
 // Dias do calendário ("2026-09-24"), ambos inclusivos.
 export type DayRange = { from: string; to: string };
-// Faturamento de uma massagista num dia, com a quantidade de serviços.
+// Faturamento de um profissional num dia, com a quantidade de serviços.
 export type DayTotal = { date: string; therapistId: string; therapistName: string; count: number; cents: number };
-// Percentual de comissão por id de usuário da massagista; quem não está aqui não tem comissão.
+// Percentual de comissão por id de usuário do profissional; quem não está aqui não tem comissão.
 export type CommissionRates = Record<string, number>;
 
 export type CashFlowAmounts = { grossCents: number; partnerShareCents: number; commissionCents: number; netCents: number };
@@ -157,7 +157,7 @@ const PROJECT_DAY_TOTAL = {
   },
 };
 
-// Etapas para o $lookup de appointments da unidade: faturamento por dia e massagista,
+// Etapas para o $lookup de appointments da unidade: faturamento por dia e profissional,
 // com o nome do registro mais recente.
 export function dailyAppointmentTotalsPipeline(range: DayRange): PipelineStage.FacetPipelineStage[] {
   const { start, end } = rangeBounds(range);
@@ -177,7 +177,7 @@ export function dailyAppointmentTotalsPipeline(range: DayRange): PipelineStage.F
   ];
 }
 
-// Etapas para o $lookup de bookings da unidade: valor previsto por dia e massagista dos
+// Etapas para o $lookup de bookings da unidade: valor previsto por dia e profissional dos
 // agendamentos de agora em diante, pelo preço atual do serviço.
 export function dailyBookingForecastPipeline(range: DayRange, now: Date): PipelineStage.FacetPipelineStage[] {
   const { start, end } = rangeBounds(range);
@@ -299,7 +299,7 @@ function partnerShareByDay(totals: Map<string, number>, revenueShare: RevenueSha
   return shares;
 }
 
-// Faturamento e comissão (sem arredondar) de cada dia, somando as massagistas.
+// Faturamento e comissão (sem arredondar) de cada dia, somando os profissionais.
 function sumTotals(rates: CommissionRates, ...lists: DayTotal[][]) {
   const totals = new Map<string, number>();
   const commissions = new Map<string, number>();
@@ -368,7 +368,7 @@ export function summarizeCashFlow(
   };
 }
 
-// Por massagista no intervalo exibido. Real: atendimentos. Previsto: atendimentos mais
+// Por profissional no intervalo exibido. Real: atendimentos. Previsto: atendimentos mais
 // agendamentos futuros, cujo nome é o mais recente. Ordena pelo previsto.
 export function summarizeTherapists(
   { from, to }: DayRange,

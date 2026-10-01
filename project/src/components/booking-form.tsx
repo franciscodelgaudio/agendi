@@ -27,7 +27,7 @@ export type BookingFormValues = {
   serviceId: string | null
   treatmentRoomId: string | null
   productIds: string[]
-  // null: a cor da massagista.
+  // null: a cor do profissional.
   color: string | null
 }
 
@@ -65,7 +65,7 @@ type Props = BookingFormOptions & {
 const copy = {
   create: {
     title: "Novo agendamento",
-    description: "Escolha a massagista, a unidade, o serviço, o hóspede e o horário.",
+    description: "Escolha o profissional, a unidade, o serviço, o hóspede e o horário.",
     submit: "Agendar",
     pending: "Agendando...",
   },
@@ -121,12 +121,12 @@ export function BookingForm({
   const roomItems = allRooms
     .filter((room) => room.unitId === unitId)
     .map((room) => ({ value: room.id, label: room.name, beds: room.beds }))
-  // A opção automática mostra a cor que a massagista escolhida tem no calendário.
+  // A opção automática mostra a cor que o profissional escolhido tem no calendário.
   const therapistIndex = therapists.findIndex((therapist) => therapist.id === therapistId)
   const colorOptions = [
     {
       value: "",
-      name: "Automática (cor da massagista)",
+      name: "Automática (cor do profissional)",
       swatch: therapistIndex >= 0 ? BOOKING_COLORS[therapistIndex % BOOKING_COLORS.length].value : "#64748b",
     },
     ...BOOKING_COLORS.map((option) => ({ ...option, swatch: option.value })),
@@ -142,7 +142,7 @@ export function BookingForm({
       <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
         {state.error && <FieldError>{state.error}</FieldError>}
         <Field>
-          <FieldLabel htmlFor="booking-therapist">Massagista</FieldLabel>
+          <FieldLabel htmlFor="booking-therapist">Profissional</FieldLabel>
           <Select
             name="therapistId"
             items={therapists.map((therapist) => ({ value: therapist.id, label: therapist.name }))}
@@ -151,7 +151,7 @@ export function BookingForm({
             required
           >
             <SelectTrigger id="booking-therapist" className="w-full">
-              <TherapistSelectValue therapists={therapists} placeholder="Escolha a massagista" />
+              <TherapistSelectValue therapists={therapists} placeholder="Escolha o profissional" />
             </SelectTrigger>
             <SelectContent>
               {therapists.map((therapist) => (

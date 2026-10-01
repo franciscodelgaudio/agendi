@@ -162,7 +162,7 @@ export default async function CalendarListPage({
     .toISOString()
     .slice(0, 16)
 
-  // O proprietário sempre está entre as massagistas, então basta haver uma unidade.
+  // O proprietário sempre está entre os profissionais, então basta haver uma unidade.
   const createButton = canManage && options.units.length > 0 && (
     <CreateBookingSheet
       workspaceId={workspaceId}
@@ -195,7 +195,7 @@ export default async function CalendarListPage({
                 ? "Os agendamentos das unidades aparecerão aqui."
                 : !options.units.length
                   ? "Cadastre uma unidade antes de criar agendamentos."
-                  : "Agende escolhendo a massagista, a unidade, o serviço, o hóspede e o horário."}
+                  : "Agende escolhendo o profissional, a unidade, o serviço, o hóspede e o horário."}
             </EmptyDescription>
           </EmptyHeader>
           {createButton && <EmptyContent>{createButton}</EmptyContent>}
@@ -203,7 +203,7 @@ export default async function CalendarListPage({
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <ListSearch query={filters} placeholder="Buscar hóspede, quarto, massagista ou serviço..." />
+            <ListSearch query={filters} placeholder="Buscar hóspede, quarto, profissional ou serviço..." />
             <UnitFilter query={filters} units={options.units} />
             <TherapistFilter query={filters} therapists={options.therapists} />
             <BookingStatusFilter query={filters} />

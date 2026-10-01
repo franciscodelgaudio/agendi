@@ -15,7 +15,7 @@ type Props = {
 export function TherapistFilter({ query, therapists }: Props) {
   const replaceQuery = useReplaceQuery()
   const items = [
-    { value: ALL, label: "Todas as massagistas" },
+    { value: ALL, label: "Todos os profissionais" },
     ...therapists.map((therapist) => ({ value: therapist.id, label: therapist.name })),
   ]
 
@@ -28,11 +28,11 @@ export function TherapistFilter({ query, therapists }: Props) {
         replaceQuery({ ...query, therapist })
       }}
     >
-      <SelectTrigger className="w-full sm:w-56" aria-label="Filtrar por massagista">
-        <TherapistSelectValue therapists={therapists} fallback="Todas as massagistas" />
+      <SelectTrigger className="w-full sm:w-56" aria-label="Filtrar por profissional">
+        <TherapistSelectValue therapists={therapists} fallback="Todos os profissionais" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={ALL}>Todas as massagistas</SelectItem>
+        <SelectItem value={ALL}>Todos os profissionais</SelectItem>
         {therapists.map((therapist) => (
           <SelectItem key={therapist.id} value={therapist.id}>
             <TherapistLabel therapist={therapist} />

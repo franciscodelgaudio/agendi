@@ -139,9 +139,9 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
   }, [])
 
   const therapistsById = new Map(therapists.map((option) => [option.id, option]))
-  // Uma cor por massagista, na ordem da lista (o proprietário primeiro).
+  // Uma cor por profissional, na ordem da lista (o proprietário primeiro).
   const colors = new Map(therapists.map((option, i) => [option.id, BOOKING_COLORS[i % BOOKING_COLORS.length].value]))
-  // O proprietário sempre está entre as massagistas, então basta haver uma unidade.
+  // O proprietário sempre está entre os profissionais, então basta haver uma unidade.
   const canCreate = canManage && units.length > 0
   const options = { units: unitId ? undefined : units, therapists, services, treatmentRooms }
 
@@ -196,7 +196,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
         title: `${booking.guest.name} · Quarto ${booking.guest.room}`,
         start: booking.startsAt,
         end: booking.endsAt,
-        // A cor escolhida no agendamento vale mais que a da massagista.
+        // A cor escolhida no agendamento vale mais que a do profissional.
         color: booking.color ?? colors.get(booking.therapistId) ?? "#64748b",
         // Já atendido: fica no calendário como histórico, esmaecido e sem arrastar.
         ...(booking.appointmentId && { editable: false, className: "opacity-55" }),
@@ -267,7 +267,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
         event.setDates(new Date(`${times.startsAt}:00Z`), new Date(`${times.endsAt}:00Z`))
         event.setExtendedProp("booking", withTimes(event.extendedProps.booking, times))
       },
-      // Arraste recusado (sala, massagista ou horário ocupado): o evento volta e o motivo aparece num toast.
+      // Arraste recusado (sala, profissional ou horário ocupado): o evento volta e o motivo aparece num toast.
       onError: (message) => {
         setError((current) => (current === RETRY_MESSAGE ? null : current))
         toast.error(message)
@@ -321,7 +321,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
     })
   }
 
-  // Nos eventos, o avatar vem da lista de massagistas; quem saiu do workspace fica com a exclamação.
+  // Nos eventos, o avatar vem da lista de profissionais; quem saiu do workspace fica com a exclamação.
   const therapistAvatar = (booking: BookingRow, className: string) => {
     const option = therapistsById.get(booking.therapistId)
     return option ? (
@@ -337,7 +337,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
     value: string,
     onChange: (value: string) => void,
     list: { id: string; name: string }[],
-    // Filtro de massagista: o valor e as opções mostram o avatar.
+    // Filtro de profissional: o valor e as opções mostram o avatar.
     withAvatar = false,
   ) => {
     const items = [{ value: ALL, label: allLabel }, ...list.map((item) => ({ value: item.id, label: item.name }))]
@@ -365,7 +365,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
           {!unitId && filterSelect("Filtrar por unidade", "Todas as unidades", unit, setUnit, units)}
-          {filterSelect("Filtrar por massagista", "Todas as massagistas", therapist, setTherapist, therapists, true)}
+          {filterSelect("Filtrar por profissional", "Todos os profissionais", therapist, setTherapist, therapists, true)}
         </div>
         {canCreate && (
           <Button
@@ -469,7 +469,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
               // Cada linha trunca sozinha. A coluna quebra (flex-wrap) e cada linha ocupa a largura toda:
               // a linha que não cabe inteira na altura vai para uma coluna fora da vista, em vez de aparecer cortada.
               // O gap-x maior que o padding impede que o começo dessa coluna apareça no padding da direita.
-              // Na largura, o que é pouco útil cortado sai de propósito: o nome da massagista (o avatar e
+              // Na largura, o que é pouco útil cortado sai de propósito: o nome do profissional (o avatar e
               // a cor já dizem quem é), depois quarto e serviço, e por fim o avatar.
               return (
                 <div data-tour="booking-event" className="@container h-full w-full min-w-0">
@@ -674,7 +674,7 @@ function DoneSummary({ workspaceId, booking }: { workspaceId: string; booking: B
         <dd>
           {booking.guest.name} · Quarto {booking.guest.room}
         </dd>
-        <dt className="text-muted-foreground">Massagista</dt>
+        <dt className="text-muted-foreground">Profissional</dt>
         <dd>{booking.therapistName}</dd>
         <dt className="text-muted-foreground">Sala</dt>
         <dd>{booking.treatmentRoom.roomName}</dd>

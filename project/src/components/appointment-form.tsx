@@ -186,7 +186,7 @@ export function AppointmentForm({
                   </Button>
                 )}
               </div>
-              {/* A ordem dos campos no FormData forma os pares serviço/massagista. */}
+              {/* A ordem dos campos no FormData forma os pares serviço/profissional. */}
               <Select
                 name="serviceId"
                 items={serviceItems}
@@ -225,8 +225,8 @@ export function AppointmentForm({
                 onValueChange={(value) => updateRow(row.key, { therapistId: value as string | null })}
                 required
               >
-                <SelectTrigger className="w-full" aria-label={`Massagista do serviço ${index + 1}`}>
-                  <TherapistSelectValue therapists={therapists} placeholder="Escolha a massagista" />
+                <SelectTrigger className="w-full" aria-label={`Profissional do serviço ${index + 1}`}>
+                  <TherapistSelectValue therapists={therapists} placeholder="Escolha o profissional" />
                 </SelectTrigger>
                 <SelectContent>
                   {therapists.map((option) => (

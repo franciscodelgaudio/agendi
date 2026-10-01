@@ -41,7 +41,7 @@ export function allPages<T, R extends { rows: T[]; total: number }>(list: (page:
   return { ...first, rows: [first.rows, ...rest].flat() }
 }
 
-// O resumo é sempre do ano da data: caixa, custos e massagistas mês a mês no ano; os gastos
+// O resumo é sempre do ano da data: caixa, custos e profissionais mês a mês no ano; os gastos
 // por grupo são de um mês só, o escolhido (costMonth, "AAAA-MM") ou o de hoje dentro do ano mostrado.
 export async function loadCashFlowSummaryScreen(
   workspaceId: string,

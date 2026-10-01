@@ -30,7 +30,7 @@ const errorMessages: Record<
   invalid_performed_at: "Informe uma data e hora válidas.",
   no_items: "Adicione pelo menos um serviço.",
   too_many_items: "Um atendimento pode ter no máximo 20 serviços.",
-  invalid_item: "Escolha o serviço e a massagista de cada linha.",
+  invalid_item: "Escolha o serviço e o profissional de cada linha.",
   service_not_found: "Algum serviço não foi encontrado nesta unidade. Recarregue a página.",
   therapist_not_found: "Algum profissional escolhido não pode atender neste workspace. Recarregue a página.",
   unit_not_found: "Escolha uma unidade válida deste workspace.",

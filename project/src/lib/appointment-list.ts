@@ -70,7 +70,7 @@ export function appointmentSearchPipeline({ q, sort, dir, unit, therapist, from,
     match.performedAt = performedAt;
   }
   if (unit) match.unitId = new Types.ObjectId(unit);
-  // Qualquer um dos serviços feito pela massagista.
+  // Qualquer um dos serviços feito pelo profissional.
   if (therapist) match["items.therapistId"] = new Types.ObjectId(therapist);
   const stages: Exclude<PipelineStage, PipelineStage.Merge | PipelineStage.Out>[] = [];
   if (Object.keys(match).length) stages.push({ $match: match });

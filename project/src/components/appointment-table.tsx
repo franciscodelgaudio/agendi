@@ -105,7 +105,7 @@ function ServiceLine({ item }: { item: AppointmentRow["items"][number] }) {
   )
 }
 
-// Massagistas distintas do atendimento, na ordem dos serviços.
+// Profissionais distintos do atendimento, na ordem dos serviços.
 function appointmentTherapists(items: AppointmentRow["items"]) {
   const seen = new Map<string, string>()
   for (const item of items) if (!seen.has(item.therapistId)) seen.set(item.therapistId, item.therapistName)
@@ -142,7 +142,7 @@ export function AppointmentTable({ appointments, query, pathname, workspaceId, o
             <SortableHead field="performedAt" label="Horário" icon={ClockIcon} query={query} pathname={pathname} />
             {unitNames && <Head icon={MapPinIcon} label="Unidade" className="@max-4xl:hidden" />}
             <SortableHead field="guestName" label="Hóspede" icon={BedDoubleIcon} query={query} pathname={pathname} />
-            <Head icon={UserIcon} label="Massagista" className="@max-2xl:hidden" />
+            <Head icon={UserIcon} label="Profissional" className="@max-2xl:hidden" />
             <Head icon={LeafIcon} label="Serviços" className="w-full @max-lg:hidden" />
             <SortableHead
               field="totalCents"

@@ -155,10 +155,10 @@ export function cashFlowReport(input: CashFlowReportInput): Report {
   }
   const amountValues = ({ count, cents, commissionCents }: TherapistAmounts) => [count, cents, commissionCents];
   tables.push({
-    title: "Por massagista",
+    title: "Por profissional",
     columns: [
       text("Código"),
-      text("Massagista"),
+      text("Profissional"),
       { label: "% comissão", kind: "percent" },
       { label: "Qtd.", kind: "number" },
       money("Bruto"),

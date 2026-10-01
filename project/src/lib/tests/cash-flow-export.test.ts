@@ -242,15 +242,15 @@ describe("cashFlowReport", () => {
 
   it("sem gastos, a tabela de gastos por grupo some", () => {
     const report = cashFlowReport(cashFlowInput({ costs: { totalCents: 0, rows: [] } }));
-    expect(report.tables.map((table) => table.title)).toEqual(["Fluxo de caixa", "Custo por mês", "Por massagista"]);
+    expect(report.tables.map((table) => table.title)).toEqual(["Fluxo de caixa", "Custo por mês", "Por profissional"]);
   });
 
-  it("por massagista tem código, nome, percentual (vazio sem comissão), quantidade, bruto e comissão", () => {
+  it("por profissional tem código, nome, percentual (vazio sem comissão), quantidade, bruto e comissão", () => {
     const therapists = cashFlowReport(cashFlowInput()).tables[3];
-    expect(therapists.title).toBe("Por massagista");
+    expect(therapists.title).toBe("Por profissional");
     expect(therapists.columns).toEqual([
       { label: "Código", kind: "text" },
-      { label: "Massagista", kind: "text" },
+      { label: "Profissional", kind: "text" },
       { label: "% comissão", kind: "percent" },
       { label: "Qtd.", kind: "number" },
       { label: "Bruto", kind: "money" },
@@ -263,7 +263,7 @@ describe("cashFlowReport", () => {
     expect(therapists.total).toEqual(["Total", null, null, 6, 150000, 30000]);
   });
 
-  it("sem massagistas, a tabela vem vazia e sem total", () => {
+  it("sem profissionais, a tabela vem vazia e sem total", () => {
     const report = cashFlowReport(
       cashFlowInput({ therapists: { rows: [], sums: { real: { count: 0, cents: 0, commissionCents: 0 } } } }),
     );

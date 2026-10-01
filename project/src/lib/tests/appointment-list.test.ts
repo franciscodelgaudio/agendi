@@ -203,7 +203,7 @@ describe("appointmentSearchPipeline", () => {
     expect(appointmentSearchPipeline({ ...BASE, sort, dir })).toEqual([SET_TOTAL, { $sort }, ...paged(0)]);
   });
 
-  it("com filtros, restringe pela unidade e pela massagista de algum dos serviços num $match", () => {
+  it("com filtros, restringe pela unidade e pelo profissional de algum dos serviços num $match", () => {
     expect(appointmentSearchPipeline({ ...BASE, unit: UNIT_ID, therapist: ANA_ID })).toEqual([
       { $match: { unitId: new Types.ObjectId(UNIT_ID), "items.therapistId": new Types.ObjectId(ANA_ID) } },
       SET_TOTAL,
@@ -256,7 +256,7 @@ describe("appointmentSearchPipeline", () => {
     });
   });
 
-  it("com busca, filtra hóspede, quarto, massagista ou serviço sem diferenciar maiúsculas antes de ordenar", () => {
+  it("com busca, filtra hóspede, quarto, profissional ou serviço sem diferenciar maiúsculas antes de ordenar", () => {
     const regex = { $regex: "joão", $options: "i" };
     expect(appointmentSearchPipeline({ ...BASE, q: "joão" })).toEqual([
       {

@@ -50,7 +50,7 @@ function makeLookups({
     // Devolvem null quando não existe (serviço da unidade; quem pode atender no workspace).
     findService: vi.fn(async (id: string) => (service?.id === id ? service : null)),
     findTherapist: vi.fn(async (id: string) => (therapist?.id === id ? therapist : null)),
-    // true quando a massagista já tem outro agendamento que se sobrepõe ao intervalo.
+    // true quando o profissional já tem outro agendamento que se sobrepõe ao intervalo.
     hasConflict: vi.fn(async () => busy),
     // Sala da unidade, ou null quando não existe nela.
     findTreatmentRoom: vi.fn(async (id: string) => (room?.id === id ? room : null)),
@@ -66,7 +66,7 @@ describe("createBooking", () => {
     return { ...makeLookups(options), insert: vi.fn().mockResolvedValue({ id: BOOKING_ID }) };
   }
 
-  it("cria o agendamento com início/fim em UTC, massagista e cópia do nome do serviço", async () => {
+  it("cria o agendamento com início/fim em UTC, profissional e cópia do nome do serviço", async () => {
     const deps = makeDeps();
 
     const result = await createBooking(validInput, UNIT_ID, deps);
@@ -86,7 +86,7 @@ describe("createBooking", () => {
     });
   });
 
-  it("verifica conflito da massagista no intervalo do agendamento", async () => {
+  it("verifica conflito do profissional no intervalo do agendamento", async () => {
     const deps = makeDeps();
 
     await createBooking(validInput, UNIT_ID, deps);
@@ -158,7 +158,7 @@ describe("createBooking", () => {
 
   it.each([
     ["input nulo", null, "invalid_input"],
-    ["massagista não é string", { ...validInput, therapistId: 1 }, "invalid_input"],
+    ["profissional não é string", { ...validInput, therapistId: 1 }, "invalid_input"],
     ["hóspede ausente (null do FormData)", { ...validInput, guestName: null }, "invalid_input"],
     ["quarto ausente", { ...validInput, room: undefined }, "invalid_input"],
     ["início ausente", { ...validInput, startsAt: null }, "invalid_input"],
@@ -166,7 +166,7 @@ describe("createBooking", () => {
     ["serviço não é string", { ...validInput, serviceId: 123 }, "invalid_input"],
     ["serviço ausente (null do FormData)", { ...validInput, serviceId: null }, "invalid_input"],
     ["sala ausente (null do FormData)", { ...validInput, treatmentRoomId: null }, "invalid_input"],
-    ["massagista não escolhida", { ...validInput, therapistId: "  " }, "invalid_therapist"],
+    ["profissional não escolhido", { ...validInput, therapistId: "  " }, "invalid_therapist"],
     ["serviço vazio", { ...validInput, serviceId: "" }, "invalid_service"],
     ["serviço não escolhido", { ...validInput, serviceId: "   " }, "invalid_service"],
     ["sala não escolhida", { ...validInput, treatmentRoomId: "  " }, "invalid_treatment_room"],
@@ -207,7 +207,7 @@ describe("createBooking", () => {
     expect(deps.insert).not.toHaveBeenCalled();
   });
 
-  it("retorna therapist_not_found sem checar conflito nem salvar quando a massagista não pode atender", async () => {
+  it("retorna therapist_not_found sem checar conflito nem salvar quando o profissional não pode atender", async () => {
     const deps = makeDeps({ therapist: null });
 
     const result = await createBooking(validInput, UNIT_ID, deps);
@@ -217,7 +217,7 @@ describe("createBooking", () => {
     expect(deps.insert).not.toHaveBeenCalled();
   });
 
-  it("retorna therapist_busy sem salvar quando a massagista já tem agendamento no horário", async () => {
+  it("retorna therapist_busy sem salvar quando o profissional já tem agendamento no horário", async () => {
     const deps = makeDeps({ busy: true });
 
     const result = await createBooking(validInput, UNIT_ID, deps);
@@ -315,7 +315,7 @@ describe("createBooking", () => {
     expect(deps.insert).not.toHaveBeenCalled();
   });
 
-  // Cor do agendamento no calendário: uma da paleta; sem cor, o calendário usa a da massagista.
+  // Cor do agendamento no calendário: uma da paleta; sem cor, o calendário usa a do profissional.
   it("salva a cor escolhida da paleta, sem espaços nas pontas", async () => {
     const deps = makeDeps();
 
@@ -457,7 +457,7 @@ describe("updateBooking", () => {
 
   it.each([
     ["input nulo", null, "invalid_input"],
-    ["massagista não escolhida", { ...validInput, therapistId: "" }, "invalid_therapist"],
+    ["profissional não escolhido", { ...validInput, therapistId: "" }, "invalid_therapist"],
     ["serviço não escolhido", { ...validInput, serviceId: "" }, "invalid_service"],
     ["sala não escolhida", { ...validInput, treatmentRoomId: "" }, "invalid_treatment_room"],
     ["nome do hóspede vazio", { ...validInput, guestName: "   " }, "invalid_guest_name"],
@@ -521,7 +521,7 @@ describe("rescheduleBooking", () => {
     found = true,
   } = {}) {
     return {
-      // Devolve a massagista e a sala do agendamento, ou null se não existe (ou não é do workspace).
+      // Devolve o profissional e a sala do agendamento, ou null se não existe (ou não é do workspace).
       // treatmentRoom null: a sala foi removida da unidade.
       findBooking: vi.fn().mockResolvedValue(booking),
       hasConflict: vi.fn().mockResolvedValue(busy),
@@ -530,7 +530,7 @@ describe("rescheduleBooking", () => {
     };
   }
 
-  it("atualiza início e fim convertidos para UTC, checando conflito da massagista do agendamento", async () => {
+  it("atualiza início e fim convertidos para UTC, checando conflito do profissional do agendamento", async () => {
     const deps = makeDeps();
 
     const result = await rescheduleBooking(validTimes, BOOKING_ID, deps);

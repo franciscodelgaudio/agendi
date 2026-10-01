@@ -35,7 +35,7 @@ const permissionLabels: Record<Permission, string> = {
   "uras.manage": "Gerenciar URAs",
   "agenia.use": "Usar a AgenIA e ver os custos de IA",
   "workspace.manage": "Editar o workspace (nome, imagem e modelo da AgenIA)",
-  attends: "Realiza atendimentos (aparece como massagista e ganha comissão sobre os próprios serviços)",
+  attends: "Realiza atendimentos (aparece como profissional e ganha comissão sobre os próprios serviços)",
 }
 
 const workspacePageLabels: Record<WorkspacePage, string> = {
@@ -140,7 +140,7 @@ export function RolePermissionsForm({ workspaceId, roles }: { workspaceId: strin
             </EmptyMedia>
             <EmptyTitle>Nenhuma função criada</EmptyTitle>
             <EmptyDescription>
-              Crie funções (ex.: Massagista, Recepcionista) e escolha o que cada uma pode ver e fazer. Administradores
+              Crie funções (ex.: Terapeuta, Recepcionista) e escolha o que cada uma pode ver e fazer. Administradores
               sempre têm acesso a tudo.
             </EmptyDescription>
           </EmptyHeader>

@@ -73,7 +73,7 @@ export function parsePerformedAt(value: string) {
   return new Date(Date.UTC(year, month - 1, date, hours + BRT_OFFSET_HOURS, minutes));
 }
 
-// Valida o input do formulário e resolve serviços e massagistas, copiando nome, valor e
+// Valida o input do formulário e resolve serviços e profissionais, copiando nome, valor e
 // duração para que mudanças futuras no serviço não alterem o histórico.
 async function resolveAppointmentFields(
   input: unknown,
@@ -104,7 +104,7 @@ async function resolveAppointmentFields(
   const date = parsePerformedAt(performedAt.trim());
   if (!date) return { ok: false, error: "invalid_performed_at" };
 
-  // Os pares serviço/massagista chegam em duas listas paralelas, na ordem das linhas do formulário.
+  // Os pares serviço/profissional chegam em duas listas paralelas, na ordem das linhas do formulário.
   if (serviceIds.length !== therapistIds.length) return { ok: false, error: "invalid_item" };
   if (serviceIds.length === 0) return { ok: false, error: "no_items" };
   if (serviceIds.length > MAX_ITEMS) return { ok: false, error: "too_many_items" };

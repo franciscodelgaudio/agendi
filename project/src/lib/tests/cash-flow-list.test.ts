@@ -333,7 +333,7 @@ describe("expenseGroupListPage", () => {
   });
 });
 
-// ------------------------------------------------------------- massagistas
+// ------------------------------------------------------------- profissionais
 
 const THERAPIST_BASE = { q: "", sort: "real", dir: "desc", page: 1 } as const;
 

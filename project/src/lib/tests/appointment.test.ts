@@ -25,7 +25,7 @@ const PRODUCTS = [
 ];
 
 // Como chega do FormData: datetime-local (horário de Brasília) e os pares
-// serviço/massagista via getAll, na mesma ordem.
+// serviço/profissional via getAll, na mesma ordem.
 const validInput = {
   guestName: "João Silva",
   room: "204",
@@ -36,7 +36,7 @@ const validInput = {
 
 function makeDeps({ services = SERVICES, therapists = THERAPISTS } = {}) {
   return {
-    // Devolvem só os que existem (serviços da unidade; massagistas do workspace).
+    // Devolvem só os que existem (serviços da unidade; profissionais do workspace).
     findServices: vi.fn(async (ids: string[]) => services.filter((s) => ids.includes(s.id))),
     findTherapists: vi.fn(async (ids: string[]) => therapists.filter((t) => ids.includes(t.id))),
     // Devolve só os produtos que existem na unidade.
@@ -46,7 +46,7 @@ function makeDeps({ services = SERVICES, therapists = THERAPISTS } = {}) {
 }
 
 describe("createAppointment", () => {
-  it("cria o atendimento copiando nome, valor e duração do serviço e o nome da massagista", async () => {
+  it("cria o atendimento copiando nome, valor e duração do serviço e o nome do profissional", async () => {
     const deps = makeDeps();
 
     const result = await createAppointment(validInput, UNIT_ID, deps);
@@ -70,7 +70,7 @@ describe("createAppointment", () => {
     });
   });
 
-  it("aceita vários serviços, mantendo a ordem e o par serviço/massagista", async () => {
+  it("aceita vários serviços, mantendo a ordem e o par serviço/profissional", async () => {
     const deps = makeDeps();
 
     await createAppointment(
@@ -85,7 +85,7 @@ describe("createAppointment", () => {
     ]);
   });
 
-  it("aceita o mesmo serviço e a mesma massagista repetidos, buscando cada id uma vez só", async () => {
+  it("aceita o mesmo serviço e o mesmo profissional repetidos, buscando cada id uma vez só", async () => {
     const deps = makeDeps();
 
     await createAppointment(
@@ -171,9 +171,9 @@ describe("createAppointment", () => {
       { ...validInput, serviceIds: Array(21).fill(CANDLE_ID), therapistIds: Array(21).fill(ANA_ID) },
       "too_many_items",
     ],
-    ["serviço sem massagista (listas de tamanhos diferentes)", { ...validInput, therapistIds: [] }, "invalid_item"],
+    ["serviço sem profissional (listas de tamanhos diferentes)", { ...validInput, therapistIds: [] }, "invalid_item"],
     ["serviço não escolhido", { ...validInput, serviceIds: [""] }, "invalid_item"],
-    ["massagista não escolhida", { ...validInput, therapistIds: ["  "] }, "invalid_item"],
+    ["profissional não escolhido", { ...validInput, therapistIds: ["  "] }, "invalid_item"],
   ])("retorna erro sem buscar nem salvar quando %s", async (_label, input, error) => {
     const deps = makeDeps();
 
@@ -198,7 +198,7 @@ describe("createAppointment", () => {
     expect(deps.insert).not.toHaveBeenCalled();
   });
 
-  it("retorna therapist_not_found sem salvar quando alguma massagista não é do workspace", async () => {
+  it("retorna therapist_not_found sem salvar quando algum profissional não é do workspace", async () => {
     const deps = makeDeps({ therapists: [THERAPISTS[0]] });
 
     const result = await createAppointment(
@@ -261,7 +261,7 @@ describe("updateAppointment", () => {
     };
   }
 
-  it("atualiza hóspede, data/hora e serviços, copiando de novo os dados atuais do serviço e da massagista", async () => {
+  it("atualiza hóspede, data/hora e serviços, copiando de novo os dados atuais do serviço e do profissional", async () => {
     const deps = makeUpdateDeps();
 
     const result = await updateAppointment(
@@ -330,7 +330,7 @@ describe("updateAppointment", () => {
     ["quarto com mais de 20 caracteres", { ...validInput, room: "1".repeat(21) }, "room_too_long"],
     ["dia que não existe", { ...validInput, performedAt: "2026-02-30T10:00" }, "invalid_performed_at"],
     ["nenhum serviço", { ...validInput, serviceIds: [], therapistIds: [] }, "no_items"],
-    ["serviço sem massagista", { ...validInput, therapistIds: [] }, "invalid_item"],
+    ["serviço sem profissional", { ...validInput, therapistIds: [] }, "invalid_item"],
   ])("retorna erro sem buscar nem salvar quando %s", async (_label, input, error) => {
     const deps = makeUpdateDeps();
 
@@ -351,7 +351,7 @@ describe("updateAppointment", () => {
     expect(deps.update).not.toHaveBeenCalled();
   });
 
-  it("retorna therapist_not_found sem salvar quando alguma massagista não pode atender", async () => {
+  it("retorna therapist_not_found sem salvar quando algum profissional não pode atender", async () => {
     const deps = makeUpdateDeps({ therapists: [] });
 
     const result = await updateAppointment(validInput, APPOINTMENT_ID, deps);

@@ -6,7 +6,7 @@ import { cn } from "cn"
 
 export type TherapistOption = { id: string; name: string; image: string | null }
 
-// Foto da massagista; sem foto, a inicial do nome.
+// Foto do profissional; sem foto, a inicial do nome.
 export function TherapistAvatar({
   therapist,
   size = "sm",
@@ -26,13 +26,13 @@ export function TherapistAvatar({
   )
 }
 
-// No lugar do avatar, em agendamentos cuja massagista não está mais entre as do workspace.
+// No lugar do avatar, em agendamentos cujo profissional não está mais entre os do workspace.
 export function MissingTherapistIcon({ className }: { className?: string }) {
   return (
     <span
       role="img"
-      aria-label="Massagista não está mais no workspace"
-      title="Massagista não está mais no workspace"
+      aria-label="Profissional não está mais no workspace"
+      title="Profissional não está mais no workspace"
       className={cn("flex items-center justify-center rounded-full bg-amber-400 text-amber-950", className)}
     >
       <CircleAlertIcon className="size-[85%]" />
@@ -50,7 +50,7 @@ export function TherapistLabel({ therapist, className }: { therapist: TherapistO
   )
 }
 
-// Valor do select de massagista com o avatar; fallback aparece para valores fora da lista
+// Valor do select de profissional com o avatar; fallback aparece para valores fora da lista
 // (ex.: "todas" no filtro) e, sem ele, o placeholder.
 export function TherapistSelectValue({
   therapists,

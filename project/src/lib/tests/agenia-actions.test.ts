@@ -234,7 +234,7 @@ describe("actionFormEntries", () => {
     });
   });
 
-  it("atendimento: um campo por serviço, massagista e produto", () => {
+  it("atendimento: um campo por serviço, profissional e produto", () => {
     const input = parsed("createAppointment", {
       unitId: UNIT,
       guestName: "Ana",

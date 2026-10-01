@@ -94,7 +94,7 @@ export const AGENIA_ACTIONS = {
   deleteProduct: spec("Excluir produto", "Exclui um produto do estoque.", { unitId: objectId, productId: objectId, summary }),
   createBooking: spec("Criar agendamento", "Agenda um horário no calendário de uma unidade.", {
     unitId: objectId,
-    therapistId: objectId.describe("userId da massagista."),
+    therapistId: objectId.describe("userId do profissional."),
     serviceId: objectId,
     treatmentRoomId: objectId.describe("Sala de atendimento da unidade."),
     guestName: z.string().min(1),
@@ -118,7 +118,7 @@ export const AGENIA_ACTIONS = {
     room: z.string().min(1),
     performedAt: dateTime,
     serviceIds: ids.min(1),
-    therapistIds: ids.min(1).describe("userIds das massagistas."),
+    therapistIds: ids.min(1).describe("userIds dos profissionais."),
     productIds: ids.default([]),
     summary,
   }),

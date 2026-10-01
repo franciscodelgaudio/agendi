@@ -25,8 +25,8 @@ const overlaps = (a: { startsAt: Date; endsAt: Date }, start: number, end: numbe
   a.startsAt.getTime() < end && a.endsAt.getTime() > start;
 
 // Horários em que dá para marcar o serviço: dentro do expediente, a partir de `from`
-// mais a antecedência, com alguma massagista livre e alguma sala com maca livre.
-// Cada horário leva a primeira massagista e a primeira sala disponíveis, na ordem dada.
+// mais a antecedência, com algum profissional livre e alguma sala com maca livre.
+// Cada horário leva o primeiro profissional e a primeira sala disponíveis, na ordem dada.
 export function availableSlots({
   from,
   days,

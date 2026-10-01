@@ -164,7 +164,7 @@ export default async function AppointmentsPage({
                 ? "Os atendimentos registrados nesta unidade aparecerão aqui."
                 : !services.length
                   ? "Cadastre os serviços da unidade antes de registrar atendimentos."
-                  : "Registre os atendimentos com o hóspede, os serviços e as massagistas."}
+                  : "Registre os atendimentos com o hóspede, os serviços e os profissionais."}
             </EmptyDescription>
           </EmptyHeader>
           {createButton && <EmptyContent>{createButton}</EmptyContent>}
@@ -180,7 +180,7 @@ export default async function AppointmentsPage({
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <ListSearch query={filters} placeholder="Buscar hóspede, quarto, massagista ou serviço..." />
+            <ListSearch query={filters} placeholder="Buscar hóspede, quarto, profissional ou serviço..." />
             <TherapistFilter query={filters} therapists={therapists} />
             <PeriodFilter query={filters} />
           </div>

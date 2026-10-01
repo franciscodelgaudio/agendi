@@ -5,7 +5,7 @@
 //
 // Usa o MONGODB_URI do ambiente (ex.: o de produção, passado no terminal) ou, sem ele, o do
 // .env.local. Pode rodar mais de uma vez: quem já é membro do workspace só vira
-// administrador; quem não é ganha o documento. Os demais membros (antigos massagistas e
+// administrador; quem não é ganha o documento. Os demais membros (antigos profissionais e
 // recepcionistas) ficam sem role até um administrador definir uma, e o campo role antigo e
 // Workspace.hiddenPages são removidos.
 

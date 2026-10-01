@@ -55,7 +55,7 @@ export function ProductHistoryTable({ rows, query, pathname, cycleUses, now }: P
             <TableHead className="px-4 @max-3xl:hidden">
               <span className="inline-flex items-center gap-1">
                 <UserIcon className="size-4 text-muted-foreground" />
-                Massagista
+                Profissional
               </span>
             </TableHead>
           </TableRow>

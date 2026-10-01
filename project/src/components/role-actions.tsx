@@ -123,7 +123,7 @@ function RoleNameForm({
             id="role-name"
             name="name"
             defaultValue={defaultName}
-            placeholder="Ex.: Massagista"
+            placeholder="Ex.: Terapeuta"
             maxLength={40}
             autoFocus
             required

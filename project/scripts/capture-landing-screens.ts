@@ -568,7 +568,7 @@ async function seed(db: Db, now: Date): Promise<SeedResult> {
     {
       _id: therapistRoleId,
       workspaceId,
-      name: "Massagista",
+      name: "Terapeuta",
       permissions: ["appointments.manage", "attends"],
       pages: allPages,
       ...stamp,

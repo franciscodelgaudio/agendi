@@ -52,7 +52,7 @@ describe("availableSlots", () => {
     ]);
   });
 
-  it("escolhe a primeira massagista livre e a primeira sala com maca livre", () => {
+  it("escolhe o primeiro profissional livre e a primeira sala com maca livre", () => {
     const slots = availableSlots({
       from: FROM,
       days: 1,
@@ -117,7 +117,7 @@ describe("availableSlots", () => {
     expect(slots).toEqual([slot("2026-09-29T01:00:00.000Z", BIA), slot("2026-09-29T01:30:00.000Z", BIA), slot("2026-09-29T02:00:00.000Z", BIA)]);
   });
 
-  it("não oferece nada sem massagistas ou sem salas", () => {
+  it("não oferece nada sem profissionais ou sem salas", () => {
     const base = { from: FROM, days: 2, durationMinutes: 60, businessHours: hours, bookings: [] };
     expect(availableSlots({ ...base, therapists: [], rooms: [SALA_1] })).toEqual([]);
     expect(availableSlots({ ...base, therapists: [ANA], rooms: [] })).toEqual([]);

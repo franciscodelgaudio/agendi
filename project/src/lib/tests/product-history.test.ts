@@ -192,7 +192,7 @@ describe("productHistoryPipeline", () => {
     expect(onlyTo).toEqual({ $match: { at: { $lt: new Date("2026-10-01T03:00:00.000Z") } } });
   });
 
-  it("com busca, filtra hóspede, quarto, serviço ou massagista sem diferenciar maiúsculas, com regex escapada", () => {
+  it("com busca, filtra hóspede, quarto, serviço ou profissional sem diferenciar maiúsculas, com regex escapada", () => {
     const regex = { $regex: "jo\\.ão", $options: "i" };
 
     expect(productHistoryPipeline(PRODUCT_ID, HOLDER, { ...BASE, q: "jo.ão" })).toEqual([

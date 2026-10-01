@@ -17,8 +17,8 @@ import { Booking } from "@/models/Booking"
 import { Unit } from "@/models/Unit"
 
 const errorMessages: Record<BookingError | "unauthenticated", string> = {
-  invalid_input: "Preencha massagista, sala, hóspede, quarto, início e duração.",
-  invalid_therapist: "Escolha a massagista.",
+  invalid_input: "Preencha profissional, sala, hóspede, quarto, início e duração.",
+  invalid_therapist: "Escolha o profissional.",
   invalid_service: "Escolha o serviço.",
   invalid_treatment_room: "Escolha a sala.",
   invalid_guest_name: "Informe o nome do hóspede.",
@@ -29,8 +29,8 @@ const errorMessages: Record<BookingError | "unauthenticated", string> = {
   invalid_duration: "O agendamento precisa durar entre 5 minutos e 12 horas.",
   invalid_color: "Escolha uma cor da lista.",
   service_not_found: "O serviço escolhido não é desta unidade. Recarregue a página.",
-  therapist_not_found: "A massagista escolhida não pode atender neste workspace. Recarregue a página.",
-  therapist_busy: "A massagista já tem um agendamento nesse horário.",
+  therapist_not_found: "O profissional escolhido não pode atender neste workspace. Recarregue a página.",
+  therapist_busy: "O profissional já tem um agendamento nesse horário.",
   treatment_room_not_found: "A sala escolhida não é desta unidade. Recarregue a página.",
   room_full: "A sala já está ocupada nesse horário.",
   unit_not_found: "Escolha uma unidade válida deste workspace.",

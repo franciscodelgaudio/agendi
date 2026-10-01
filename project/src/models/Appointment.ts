@@ -1,7 +1,7 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 import { connectOnUse } from "@/lib/mongoose";
 
-// Nome, valor e duração do serviço e o nome da massagista são cópias do momento
+// Nome, valor e duração do serviço e o nome do profissional são cópias do momento
 // do registro, para que mudanças futuras não alterem o histórico.
 const appointmentItemSchema = new Schema(
   {
@@ -9,7 +9,7 @@ const appointmentItemSchema = new Schema(
     serviceName: { type: String, required: true },
     priceCents: { type: Number, required: true, min: 0 },
     durationMinutes: { type: Number, required: true, min: 1 },
-    // Usuário que fez o serviço: o proprietário ou um membro com função de massagista.
+    // Usuário que fez o serviço: o proprietário ou um membro cuja função realiza atendimentos.
     therapistId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     therapistName: { type: String, required: true },
   },

@@ -1,5 +1,5 @@
-// Paleta do calendário: cada massagista recebe uma cor na ordem da lista (o proprietário
-// primeiro), e um agendamento pode escolher uma delas no lugar da cor da massagista.
+// Paleta do calendário: cada profissional recebe uma cor na ordem da lista (o proprietário
+// primeiro), e um agendamento pode escolher uma delas no lugar da cor do profissional.
 export const BOOKING_COLORS = [
   { value: "#1f5a4e", name: "Verde-escuro" },
   { value: "#7c3aed", name: "Roxo" },

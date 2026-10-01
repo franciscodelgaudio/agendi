@@ -22,7 +22,7 @@ describe("parseBookingRange", () => {
     });
   });
 
-  it("lê os filtros de unidade e massagista", () => {
+  it("lê os filtros de unidade e profissional", () => {
     expect(parseBookingRange({ start: "2026-09-20", end: "2026-09-27", unit: UNIT_ID, therapist: ANA_ID })).toEqual({
       start: "2026-09-20",
       end: "2026-09-27",
@@ -87,7 +87,7 @@ describe("bookingListPipeline", () => {
       productIds: { $map: { input: "$products", as: "product", in: { $toString: "$$product.productId" } } },
       // Atendimento criado a partir do agendamento; null (ou ausente nos antigos) se ainda não virou.
       appointmentId: { $ifNull: [{ $toString: "$appointmentId" }, null] },
-      // Cor escolhida para o calendário; null usa a cor da massagista.
+      // Cor escolhida para o calendário; null usa a cor do profissional.
       color: { $ifNull: ["$color", null] },
     },
   };
@@ -97,7 +97,7 @@ describe("bookingListPipeline", () => {
     expect(bookingListPipeline(BASE)).toEqual([{ $match: OVERLAP }, SORT, PROJECT]);
   });
 
-  it("com filtros, restringe por unidade e massagista no mesmo $match", () => {
+  it("com filtros, restringe por unidade e profissional no mesmo $match", () => {
     expect(bookingListPipeline({ ...BASE, unit: UNIT_ID, therapist: ANA_ID })).toEqual([
       {
         $match: {
@@ -273,7 +273,7 @@ describe("bookingSearchPipeline", () => {
     expect(bookingSearchPipeline({ ...BASE, sort, dir })).toEqual([{ $sort }, ...paged(0)]);
   });
 
-  it("com filtros, restringe por unidade e massagista num $match", () => {
+  it("com filtros, restringe por unidade e profissional num $match", () => {
     expect(bookingSearchPipeline({ ...BASE, unit: UNIT_ID, therapist: ANA_ID })).toEqual([
       { $match: { unitId: new Types.ObjectId(UNIT_ID), therapistId: new Types.ObjectId(ANA_ID) } },
       SORT,
@@ -339,7 +339,7 @@ describe("bookingSearchPipeline", () => {
     });
   });
 
-  it("com busca, filtra hóspede, quarto, massagista ou serviço sem diferenciar maiúsculas antes de ordenar", () => {
+  it("com busca, filtra hóspede, quarto, profissional ou serviço sem diferenciar maiúsculas antes de ordenar", () => {
     const regex = { $regex: "joão", $options: "i" };
     expect(bookingSearchPipeline({ ...BASE, q: "joão" })).toEqual([
       {

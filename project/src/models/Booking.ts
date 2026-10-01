@@ -10,12 +10,12 @@ const selectedProductSchema = new Schema(
   { _id: false },
 );
 
-// Agendamento de um hóspede com uma massagista numa unidade, exibido no calendário.
-// Os nomes da massagista e do serviço são cópias do momento do agendamento.
+// Agendamento de um hóspede com um profissional numa unidade, exibido no calendário.
+// Os nomes do profissional e do serviço são cópias do momento do agendamento.
 const bookingSchema = new Schema(
   {
     unitId: { type: Schema.Types.ObjectId, ref: "Unit", required: true },
-    // Usuário que vai atender: o proprietário ou um membro com função de massagista.
+    // Usuário que vai atender: o proprietário ou um membro cuja função realiza atendimentos.
     therapistId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     therapistName: { type: String, required: true },
     guest: {
@@ -46,7 +46,7 @@ const bookingSchema = new Schema(
       required: true,
     },
     products: { type: [selectedProductSchema], default: [] },
-    // Cor no calendário, uma da paleta; null usa a cor da massagista.
+    // Cor no calendário, uma da paleta; null usa a cor do profissional.
     color: { type: String, default: null },
     // Atendimento registrado a partir deste agendamento; enquanto null, ainda pode ser editado.
     appointmentId: { type: Schema.Types.ObjectId, ref: "Appointment", default: null, index: true },
@@ -55,7 +55,7 @@ const bookingSchema = new Schema(
   { collection: "bookings", timestamps: true },
 );
 
-// O calendário filtra por unidades e intervalo; a checagem de conflito, por massagista e intervalo.
+// O calendário filtra por unidades e intervalo; a checagem de conflito, por profissional e intervalo.
 bookingSchema.index({ unitId: 1, startsAt: 1 });
 bookingSchema.index({ therapistId: 1, startsAt: 1 });
 // A ocupação de cada sala.

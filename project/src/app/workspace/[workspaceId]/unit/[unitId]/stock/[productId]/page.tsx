@@ -191,7 +191,7 @@ export default async function ProductHistoryPage({
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
-        <ListSearch query={filters} placeholder="Buscar hóspede, quarto, serviço ou massagista..." />
+        <ListSearch query={filters} placeholder="Buscar hóspede, quarto, serviço ou profissional..." />
         <ProductHistoryKindFilter query={filters} />
         <PeriodFilter query={filters} />
       </div>

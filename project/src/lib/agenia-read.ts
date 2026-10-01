@@ -302,7 +302,7 @@ export function buildReadTools(workspaceId: string) {
     }),
 
     listAppointments: tool({
-      description: "Lista os atendimentos realizados numa unidade entre dois dias (inclusive), com serviços, valores e massagistas.",
+      description: "Lista os atendimentos realizados numa unidade entre dois dias (inclusive), com serviços, valores e profissionais.",
       inputSchema: z.object({ unitId: objectId, from: day, to: day }),
       execute: async ({ unitId, from, to }) => {
         const range = dayRange(from, to)

@@ -7,7 +7,7 @@ import { Unit } from "@/models/Unit"
 
 // Buscas no banco usadas por lib/booking, compartilhadas pelas server actions e pela URA.
 
-// Conflito da massagista em qualquer unidade do workspace.
+// Conflito do profissional em qualquer unidade do workspace.
 export function conflictChecker(unitIds: Types.ObjectId[]) {
   return async ({
     therapistId,

@@ -123,8 +123,8 @@ export default async function CashFlowPage({
         />
       )}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-        <h4 className="font-semibold tracking-tight">Por massagista</h4>
-        <ListSearch query={listQuery} placeholder="Buscar massagista..." />
+        <h4 className="font-semibold tracking-tight">Por profissional</h4>
+        <ListSearch query={listQuery} placeholder="Buscar profissional..." />
       </div>
       <CashFlowTherapistsTable
         therapists={therapists.rows}
@@ -138,7 +138,7 @@ export default async function CashFlowPage({
         pageSize={CASH_FLOW_PAGE_SIZE}
         total={therapists.total}
         pathname={pathname}
-        itemLabel="massagistas"
+        itemLabel="profissionais"
       />
     </div>
   )

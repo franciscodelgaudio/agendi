@@ -5,7 +5,7 @@ const BASE = { q: "", sort: "name", dir: "asc", role: "", status: "", page: 1 } 
 // Roles do workspace: o filtro de função usa "admin" ou o id da role.
 const THERAPIST_ROLE = "64b7f0c2a1b2c3d4e5f60731";
 const RECEPTION_ROLE = "64b7f0c2a1b2c3d4e5f60732";
-const therapist = { admin: false, roleId: THERAPIST_ROLE, roleName: "Massagista" };
+const therapist = { admin: false, roleId: THERAPIST_ROLE, roleName: "Terapeuta" };
 const reception = { admin: false, roleId: RECEPTION_ROLE, roleName: "Recepção" };
 const admin = { admin: true, roleId: null, roleName: null };
 

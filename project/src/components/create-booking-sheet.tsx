@@ -13,7 +13,7 @@ type Props = BookingFormOptions & {
   workspaceId: string
   // Na unidade, o agendamento é dela; na visão do workspace (com units), é escolhida no formulário.
   unitId?: string
-  // Filtro de massagista ativo na lista, que já vem escolhida.
+  // Filtro de profissional ativo na lista, que já vem escolhido.
   therapistId?: string
   // Início sugerido ("2026-09-24T14:30"), no horário de Brasília.
   defaultStartsAt: string

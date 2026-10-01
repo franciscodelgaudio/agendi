@@ -22,12 +22,12 @@ describe("createRole", () => {
   it("cria a role sem permissões de ação e com todas as páginas liberadas", async () => {
     const deps = makeDeps();
 
-    const result = await createRole({ name: "  Massagista  " }, { actor: ADMIN }, deps);
+    const result = await createRole({ name: "  Terapeuta  " }, { actor: ADMIN }, deps);
 
     expect(result).toEqual({ ok: true, roleId: ROLE_ID });
-    expect(deps.isNameTaken).toHaveBeenCalledWith("Massagista");
+    expect(deps.isNameTaken).toHaveBeenCalledWith("Terapeuta");
     expect(deps.create).toHaveBeenCalledWith({
-      name: "Massagista",
+      name: "Terapeuta",
       permissions: [],
       pages: { workspace: [...WORKSPACE_PAGES], unit: [...UNIT_PAGES] },
     });
@@ -39,7 +39,7 @@ describe("createRole", () => {
   ] as const)("com o acesso %j retorna %s sem criar", async (actor, error) => {
     const deps = makeDeps();
 
-    const result = await createRole({ name: "Massagista" }, { actor }, deps);
+    const result = await createRole({ name: "Terapeuta" }, { actor }, deps);
 
     expect(result).toEqual({ ok: false, error });
     expect(deps.create).not.toHaveBeenCalled();
@@ -64,7 +64,7 @@ describe("createRole", () => {
   it("retorna name_taken sem criar quando já há role com o nome", async () => {
     const deps = makeDeps({ isNameTaken: vi.fn().mockResolvedValue(true) });
 
-    const result = await createRole({ name: "Massagista" }, { actor: ADMIN }, deps);
+    const result = await createRole({ name: "Terapeuta" }, { actor: ADMIN }, deps);
 
     expect(result).toEqual({ ok: false, error: "name_taken" });
     expect(deps.create).not.toHaveBeenCalled();

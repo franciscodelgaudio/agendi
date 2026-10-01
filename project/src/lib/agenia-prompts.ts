@@ -18,7 +18,7 @@ export type WorkspaceContext = {
   canRemember: boolean
 }
 
-const BASE = `Você é a AgenIA, a assistente do agendi, um sistema de gestão para spas e massagistas: unidades (espaço próprio ou dentro de um estabelecimento parceiro), serviços, estoque de produtos, calendário de agendamentos, atendimentos realizados, caixa (receitas, repasse ao parceiro, comissões, salários e despesas), equipe, conversas de WhatsApp/Instagram e URAs (fluxos automáticos de atendimento).
+const BASE = `Você é a AgenIA, a assistente do agendi, um sistema de gestão para spas e profissionais de bem-estar: unidades (espaço próprio ou dentro de um estabelecimento parceiro), serviços, estoque de produtos, calendário de agendamentos, atendimentos realizados, caixa (receitas, repasse ao parceiro, comissões, salários e despesas), equipe, conversas de WhatsApp/Instagram e URAs (fluxos automáticos de atendimento).
 
 COMO TRABALHAR:
 - Responda em português do Brasil, curto e direto. Texto simples; listas com "-" quando ajudar. Sem tabelas.
@@ -71,7 +71,7 @@ export function workspaceSection(ctx: WorkspaceContext) {
       ctx.roles,
       (r) => `- ${r.name} (id=${r.id})${r.attends ? ", realiza atendimentos" : ""}`,
     ),
-    "Quem pode atender (massagista em agendamentos e atendimentos): administradores e membros cuja função realiza atendimentos, pelo userId.",
+    "Quem pode atender (profissional em agendamentos e atendimentos): administradores e membros cuja função realiza atendimentos, pelo userId.",
     memorySection(ctx),
   ]
     .filter(Boolean)

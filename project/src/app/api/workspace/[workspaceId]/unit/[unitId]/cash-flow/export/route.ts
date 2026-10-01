@@ -6,7 +6,7 @@ import { findVisiblePages } from "@/lib/page-guard"
 import { reportResponse } from "@/lib/report-file"
 import { getSessionUserId } from "@/lib/session"
 
-// Resumo do caixa do ano em PDF ou XLSX (?format=), com o ano e a busca da tela e todas as massagistas encontradas.
+// Resumo do caixa do ano em PDF ou XLSX (?format=), com o ano e a busca da tela e todos os profissionais encontrados.
 export async function GET(
   request: Request,
   { params }: RouteContext<"/api/workspace/[workspaceId]/unit/[unitId]/cash-flow/export">,

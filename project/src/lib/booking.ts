@@ -35,7 +35,7 @@ export type BookingError =
   | "booking_not_found"
   | ProductSelectionError;
 
-// Dados editáveis de um agendamento (tudo menos a unidade). Os nomes da massagista e do
+// Dados editáveis de um agendamento (tudo menos a unidade). Os nomes do profissional e do
 // serviço são cópias do momento do agendamento.
 export type BookingFields = {
   therapistId: string;
@@ -47,7 +47,7 @@ export type BookingFields = {
   // Sala de atendimento da unidade, com cópia do nome do momento do agendamento.
   treatmentRoom: { roomId: string; roomName: string };
   products: SelectedProduct[];
-  // Cor no calendário; null usa a da massagista.
+  // Cor no calendário; null usa a do profissional.
   color: string | null;
 };
 
@@ -61,7 +61,7 @@ type Lookups = {
   // Devolvem null quando não existe: serviço da unidade e quem pode atender no workspace.
   findService: (id: string) => Promise<{ id: string; name: string } | null>;
   findTherapist: (id: string) => Promise<{ id: string; name: string } | null>;
-  // true quando a massagista já tem outro agendamento que se sobrepõe ao intervalo.
+  // true quando o profissional já tem outro agendamento que se sobrepõe ao intervalo.
   hasConflict: (interval: Interval) => Promise<boolean>;
   // Sala da unidade; null quando não existe nela.
   findTreatmentRoom: (id: string) => Promise<{ id: string; name: string; beds: number } | null>;
@@ -81,8 +81,8 @@ async function isRoomFull(interval: RoomInterval, beds: number, findRoomBookings
   return peakOccupancy(await findRoomBookings(interval), interval) >= beds;
 }
 
-// Valida o input do formulário, resolve massagista, serviço e sala e confere conflito
-// de horário da massagista e ocupação da sala, ignorando o próprio agendamento na edição.
+// Valida o input do formulário, resolve profissional, serviço e sala e confere conflito
+// de horário do profissional e ocupação da sala, ignorando o próprio agendamento na edição.
 async function resolveBookingFields(
   input: unknown,
   { findService, findTherapist, hasConflict, findTreatmentRoom, findRoomBookings, findProducts }: Lookups,

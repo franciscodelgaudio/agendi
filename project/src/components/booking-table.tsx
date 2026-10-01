@@ -68,7 +68,7 @@ export function BookingTable({ bookings, query, pathname, workspaceId, options, 
             <SortableHead field="guestName" label="Hóspede" icon={BedDoubleIcon} query={query} pathname={pathname} />
             <SortableHead
               field="therapistName"
-              label="Massagista"
+              label="Profissional"
               icon={UserIcon}
               query={query}
               pathname={pathname}

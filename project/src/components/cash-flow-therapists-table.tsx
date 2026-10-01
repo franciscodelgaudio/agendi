@@ -53,7 +53,7 @@ export function CashFlowTherapistsTable({ therapists, sums, query, pathname }: P
         <TableHeader>
           <TableRow>
             <CodeHead />
-            <SortableHead field="name" label="Massagista" query={query} pathname={pathname} className="w-full" />
+            <SortableHead field="name" label="Profissional" query={query} pathname={pathname} className="w-full" />
             <TableHead className={cn("px-4 text-right", PERCENT)}>Comissão</TableHead>
             <TableHead className="border-l px-4 text-right">Qtd.</TableHead>
             <SortableHead field="real" label="Bruto" query={query} pathname={pathname} className="text-right" />
@@ -64,7 +64,7 @@ export function CashFlowTherapistsTable({ therapists, sums, query, pathname }: P
           {therapists.length === 0 ? (
             <TableRow>
               <TableCell colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
-                {query.q ? "Nenhuma massagista encontrada." : "Nenhum serviço no período."}
+                {query.q ? "Nenhum profissional encontrado." : "Nenhum serviço no período."}
               </TableCell>
             </TableRow>
           ) : (

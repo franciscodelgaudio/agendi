@@ -18,7 +18,7 @@ function member(overrides: Partial<UnitTeamListItem> & { id: string }): UnitTeam
     image: null,
     admin: false,
     roleId: THERAPIST_ROLE,
-    roleName: "Massagista",
+    roleName: "Terapeuta",
     pending: false,
     commissionPercent: null,
     salaryCents: null,
