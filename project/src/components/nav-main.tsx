@@ -9,6 +9,7 @@ import {
   HomeIcon,
   LifeBuoyIcon,
   MessagesSquareIcon,
+  PackageIcon,
   RadioTowerIcon,
   SparklesIcon,
   UsersIcon,
@@ -48,6 +49,7 @@ export function NavMain({ workspaceId, pages, actor }: { workspaceId: string; pa
         ...item("calendar", "Calendário", CalendarIcon),
         ...item("cash_flow", "Caixa", WalletIcon),
         ...item("team", "Equipe", UsersRoundIcon),
+        ...item("stock", "Estoque", PackageIcon),
       ],
     },
     {

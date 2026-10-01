@@ -29,6 +29,7 @@ export function productListPipeline({ q, sort, dir }: ProductListQuery) {
       $project: {
         _id: 0,
         id: { $toString: "$_id" },
+        unitId: { $toString: "$unitId" },
         name: 1,
         quantity: 1,
         costCents: 1,

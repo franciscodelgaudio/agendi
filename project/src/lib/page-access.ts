@@ -3,7 +3,7 @@ import type { Actor } from "@/lib/permissions";
 // Sem dependências de servidor: também é importado por componentes de cliente.
 // Páginas do sistema (sidebar) e abas da unidade que cada role pode ver; o administrador
 // sempre vê tudo. A ordem é a da navegação.
-export const WORKSPACE_PAGES = ["home", "units", "calendar", "cash_flow", "team", "users"] as const;
+export const WORKSPACE_PAGES = ["home", "units", "calendar", "cash_flow", "team", "stock", "users"] as const;
 export const UNIT_PAGES = ["overview", "services", "calendar", "appointments", "stock", "team", "cash_flow"] as const;
 
 export type WorkspacePage = (typeof WORKSPACE_PAGES)[number];
@@ -16,6 +16,7 @@ export const WORKSPACE_PAGE_PATHS: Record<WorkspacePage, string> = {
   calendar: "/calendar",
   cash_flow: "/cash-flow",
   team: "/team",
+  stock: "/stock",
   users: "/users",
 };
 export const UNIT_PAGE_PATHS: Record<UnitPage, string> = {

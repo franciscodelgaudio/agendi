@@ -42,6 +42,7 @@ describe("updateUnitMemberPay", () => {
 
     const result = await updateUnitMemberPay(
       {
+        commissionBase: "services",
         commissionPercent: "20",
         salary: "1500",
         bonuses: [

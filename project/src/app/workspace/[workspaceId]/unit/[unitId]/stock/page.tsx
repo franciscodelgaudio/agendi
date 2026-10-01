@@ -21,6 +21,7 @@ import {
 
 type ProductRow = {
   id: string
+  unitId: string
   name: string
   quantity: number
   costCents: number
@@ -126,7 +127,6 @@ export default async function StockPage({
             query={query}
             pathname={`/workspace/${workspaceId}/unit/${unitId}/stock`}
             workspaceId={workspaceId}
-            unitId={unitId}
             canManage={canManage}
           />
         </>

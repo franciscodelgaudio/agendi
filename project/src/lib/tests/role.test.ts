@@ -279,7 +279,7 @@ describe("updateRolePermissions", () => {
     ["lista não é array", { ...input, [OTHER_ROLE_ID]: { ...other, unit: "team" } }],
     ["permissão desconhecida", { ...input, [OTHER_ROLE_ID]: { ...other, permissions: ["billing.manage"] } }],
     ["página desconhecida", { ...input, [OTHER_ROLE_ID]: { ...other, workspace: ["home", "billing"] } }],
-    ["página de unidade no escopo do sistema", { ...input, [OTHER_ROLE_ID]: { ...other, workspace: ["home", "stock"] } }],
+    ["página de unidade no escopo do sistema", { ...input, [OTHER_ROLE_ID]: { ...other, workspace: ["home", "appointments"] } }],
     ["item que não é string", { ...input, [OTHER_ROLE_ID]: { ...other, workspace: ["home", 1] } }],
   ])("retorna invalid_input sem salvar quando %s", async (_label, value) => {
     const deps = makeDeps();
