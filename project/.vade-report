@@ -1,0 +1,45 @@
+# Vercel Web Analytics Installation Report
+
+## Summary
+Successfully installed and configured Vercel Web Analytics for the agendi project following the latest official documentation from https://vercel.com/docs/analytics/quickstart.
+
+## Changes Made
+
+### 1. Package Installation
+- Installed `@vercel/analytics@2.0.1` using pnpm
+- Updated `package.json` to include the new dependency
+- Updated `pnpm-lock.yaml` with the resolved dependencies
+
+### 2. Analytics Configuration
+Modified `src/app/layout.tsx`:
+- Added import statement: `import { Analytics } from "@vercel/analytics/next";`
+- Added `<Analytics />` component to the body section of the root layout
+- Positioned the Analytics component after existing components (TooltipProvider and Toaster) to ensure proper initialization
+
+## Framework Details
+- **Framework**: Next.js 16.3.6 (App Router)
+- **Package Manager**: pnpm
+- **Installation Method**: Followed Next.js App Router instructions from official Vercel documentation
+
+## Implementation Approach
+The implementation follows the recommended approach for Next.js App Router:
+1. The Analytics component is imported from `@vercel/analytics/next`
+2. It's added to the root layout file (`app/layout.tsx`)
+3. Placed inside the `<body>` tag for proper page tracking
+
+## Verification
+- ✅ No linting errors introduced in the modified file
+- ✅ All existing tests passed (2,167 tests across 67 test files)
+- ✅ Lock files properly updated
+- ⚠️ Build verification skipped (requires MongoDB environment variables for existing app functionality)
+
+## Next Steps
+To enable analytics tracking:
+1. Deploy the application to Vercel
+2. Enable Web Analytics in the Vercel dashboard (Analytics section)
+3. Verify tracking by checking for network requests to `/_vercel/insights/*` in the browser's Network tab
+
+## Notes
+- The existing project had a pre-existing linting error in `src/hooks/use-mobile.ts` (unrelated to this change)
+- The Analytics component will automatically track page views once the app is deployed to Vercel
+- No additional configuration is required - analytics will work out of the box after Vercel deployment
