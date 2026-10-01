@@ -68,10 +68,10 @@ export function ProductTable<T extends ProductRow>({ products, query, pathname, 
   const canManage = actions !== undefined
   return (
     <div className="border">
-      <Table>
+      <Table className="@max-sm:[&_th]:px-2 @max-sm:[&_td]:px-2 @max-sm:[&_th_svg]:hidden">
         <TableHeader>
           <TableRow>
-            <CodeHead className="@max-5xl:hidden" />
+            <CodeHead className="@max-7xl:hidden" />
             <SortableHead field="name" label="Produto" icon={PackageIcon} query={query} pathname={pathname} className="w-full" />
             <SortableHead field="quantity" label="Quantidade" icon={HashIcon} query={query} pathname={pathname} />
             {cost === "last" ? (
@@ -81,21 +81,21 @@ export function ProductTable<T extends ProductRow>({ products, query, pathname, 
                 icon={BanknoteIcon}
                 query={query}
                 pathname={pathname}
-                className="@max-xl:hidden"
+                className="@max-3xl:hidden"
               />
             ) : (
               <UsageHead
                 icon={BanknoteIcon}
                 label="Próximo a sair"
                 title="Preço pago no lote mais antigo, que sai primeiro (PEPS)"
-                className="@max-xl:hidden"
+                className="@max-3xl:hidden"
               />
             )}
             <UsageHead
               icon={CoinsIcon}
               label="Valor em estoque"
               title="Soma do que foi pago pelas unidades que ainda estão em estoque"
-              className="@max-xl:hidden"
+              className="@max-3xl:hidden"
             />
             <SortableHead
               field="rating"
@@ -103,19 +103,19 @@ export function ProductTable<T extends ProductRow>({ products, query, pathname, 
               icon={StarIcon}
               query={query}
               pathname={pathname}
-              className="@max-3xl:hidden"
+              className="@max-5xl:hidden"
             />
             <UsageHead
               icon={RepeatIcon}
               label="Usos"
               title="Atendimentos e agendamentos desde a última vez que o produto acabou"
-              className="@max-2xl:hidden"
+              className="@max-4xl:hidden"
             />
             <UsageHead
               icon={TimerResetIcon}
               label="Média até acabar"
               title="Média de usos entre uma vez que o produto acabou e a seguinte"
-              className="@max-4xl:hidden"
+              className="@max-6xl:hidden"
             />
             {canManage && (
               <TableHead className="w-0 px-4 text-right">
@@ -139,10 +139,10 @@ export function ProductTable<T extends ProductRow>({ products, query, pathname, 
               const details = [product.origin, product.notes].filter(Boolean).join(" · ")
               return (
                 <TableRow key={product.id}>
-                  <CodeCell id={product.id} className="@max-5xl:hidden" />
+                  <CodeCell id={product.id} className="@max-7xl:hidden" />
                   <TableCell className="max-w-0 px-4">
                     <div className="flex items-center gap-3">
-                      <Avatar className="rounded-md after:rounded-md">
+                      <Avatar className="rounded-md after:rounded-md @max-sm:hidden">
                         {product.avatarUrl && (
                           <AvatarImage src={product.avatarUrl} alt={product.name} className="rounded-md object-contain" />
                         )}
@@ -165,15 +165,15 @@ export function ProductTable<T extends ProductRow>({ products, query, pathname, 
                     </div>
                   </TableCell>
                   <TableCell className="px-4 tabular-nums">{product.quantity}</TableCell>
-                  <TableCell className="px-4 tabular-nums @max-xl:hidden">
+                  <TableCell className="px-4 tabular-nums @max-3xl:hidden">
                     {money(cost === "last" ? product.costCents : product.nextUnitCostCents)}
                   </TableCell>
-                  <TableCell className="px-4 tabular-nums @max-xl:hidden">{money(product.valueCents)}</TableCell>
-                  <TableCell className="px-4 @max-3xl:hidden">
+                  <TableCell className="px-4 tabular-nums @max-3xl:hidden">{money(product.valueCents)}</TableCell>
+                  <TableCell className="px-4 @max-5xl:hidden">
                     <StarRating value={product.rating} />
                   </TableCell>
-                  <TableCell className="px-4 tabular-nums @max-2xl:hidden">{product.usage.usesSinceLastDepletion}</TableCell>
-                  <TableCell className="px-4 text-muted-foreground tabular-nums @max-4xl:hidden">
+                  <TableCell className="px-4 tabular-nums @max-4xl:hidden">{product.usage.usesSinceLastDepletion}</TableCell>
+                  <TableCell className="px-4 text-muted-foreground tabular-nums @max-6xl:hidden">
                     {formatAverage(product.usage.averageUsesPerDepletion)}
                   </TableCell>
                   {actions && <TableCell className="px-4 text-right">{actions(product)}</TableCell>}
