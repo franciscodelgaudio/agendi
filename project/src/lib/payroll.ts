@@ -2,6 +2,7 @@ import { parseDay } from "@/lib/timezone";
 import type { DayTotal } from "@/lib/cash-flow";
 import { can, type Actor } from "@/lib/permissions";
 import { parsePriceCents } from "@/lib/service";
+import type { CommissionBase } from "@/lib/unit-member";
 
 // Folha da unidade: cada mês de trabalho ("2026-09") é pago no dia de pagamento do mês
 // seguinte, com salário e bônus proporcionais a partir da data de início mais a comissão
@@ -12,8 +13,8 @@ export const PAYROLL_REMINDER_DAYS = 5;
 export type PayrollMember = {
   memberId: string;
   userId: string | null;
-  // Realiza atendimentos (permissão da role): comissão sobre os próprios serviços.
-  attends: boolean;
+  // Do vínculo, ou da função em vínculos antigos sem base guardada.
+  commissionBase: CommissionBase;
   // "2026-02-15"
   startDate: string | null;
   // 1 a 31; null sem dia de pagamento definido.
@@ -62,7 +63,7 @@ export function nextPayrollDate({ startDate, payDay }: Pick<PayrollMember, "star
   return payrollDueDate(month, payDay);
 }
 
-// Quem realiza atendimentos ganha comissão sobre os próprios serviços; os demais, sobre o bruto.
+// Comissão sobre os próprios serviços ou sobre o bruto, conforme a base.
 export function payrollAmount(member: PayrollMember, month: string, appointments: DayTotal[]): PayrollAmount {
   const [year, monthNumber] = parseMonth(month)!;
   const days = daysInMonth(year, monthNumber);
@@ -75,7 +76,7 @@ export function payrollAmount(member: PayrollMember, month: string, appointments
   const salaryCents = Math.round((monthlyCents * (days - startDay + 1)) / days);
 
   let baseCents = 0;
-  const gross = !member.attends;
+  const gross = member.commissionBase === "gross";
   if (member.commissionPercent !== null && (gross || member.userId)) {
     for (const { date, therapistId, cents } of appointments) {
       if (date < first || date > last) continue;

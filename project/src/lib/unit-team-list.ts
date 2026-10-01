@@ -2,7 +2,7 @@ import type { UnitMemberBonus } from "@/lib/unit-member";
 import { first, type SearchParams, type SortDir } from "@/lib/unit-list";
 
 export const UNIT_TEAM_PAGE_SIZE = 20;
-// Filtro de função: id de uma role (administradores não são vinculados às unidades).
+// Filtro de função: "admin" ou o id de uma role.
 const ROLE_ID_PATTERN = /^[0-9a-f]{24}$/i;
 // active: aceitou o convite; pending: convite ainda sem conta.
 const STATUSES = ["active", "pending"] as const;
@@ -26,6 +26,8 @@ export type UnitTeamListItem = {
   name: string | null;
   email: string;
   image: string | null;
+  admin: boolean;
+  // null para administradores e para quem ainda não tem role.
   roleId: string | null;
   roleName: string | null;
   pending: boolean;
@@ -45,7 +47,7 @@ export function parseUnitTeamListQuery(params: SearchParams): UnitTeamListQuery 
   return {
     q: first(params.q)?.trim() ?? "",
     dir: first(params.dir) === "desc" ? "desc" : "asc",
-    role: ROLE_ID_PATTERN.test(first(params.role) ?? "") ? first(params.role)! : "",
+    role: first(params.role) === "admin" || ROLE_ID_PATTERN.test(first(params.role) ?? "") ? first(params.role)! : "",
     status: oneOf(STATUSES, first(params.status)),
     pay: oneOf(PAYS, first(params.pay)),
     page: page && /^[1-9]\d*$/.test(page) ? Number(page) : 1,
@@ -70,7 +72,7 @@ export function unitTeamListPage<T extends UnitTeamListItem>(members: T[], { q, 
   const filtered = members
     .filter(
       (member) =>
-        (!role || member.roleId === role) &&
+        (!role || (role === "admin" ? member.admin : member.roleId === role)) &&
         (!status || (status === "pending") === member.pending) &&
         (!pay || hasPay(member, pay)) &&
         (!term || normalize(member.name ?? "").includes(term) || normalize(member.email).includes(term)),

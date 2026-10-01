@@ -473,11 +473,11 @@ export function applyExpenses(summary: StaffCashFlowSummary, expenses: ExpenseDa
 
 export type TeamPayMember = {
   userId?: { toString(): string } | null;
-  admin?: boolean | null;
-  // Realiza atendimentos (permissão da role).
+  // Realiza atendimentos (permissão da role): base da comissão dos vínculos sem base guardada.
   attends: boolean;
   units: {
     unitId: { toString(): string };
+    commissionBase?: "services" | "gross" | null;
     commissionPercent?: number | null;
     salaryCents?: number | null;
     bonuses?: { amountCents: number }[];
@@ -488,22 +488,22 @@ export type TeamPayRates = Pick<StaffCosts, "grossCommissionPercent" | "salaries
   commissionRates: CommissionRates;
 };
 
-// Comissão de quem realiza atendimentos vai pelo id de usuário, que identifica quem fez o
-// serviço; a dos demais é sobre o bruto. Salário e bônus fixos mensais valem mesmo com
-// convite pendente e entram juntos no custo mensal de cada vínculo. Administradores não
-// entram na equipe paga.
+// Comissão sobre os serviços vai pelo id de usuário, que identifica quem fez o serviço; a
+// sobre o bruto soma num percentual só. A base é a do vínculo; vínculos antigos, sem base,
+// usam a da função (quem realiza atendimentos ganha sobre os serviços). Salário e bônus fixos
+// mensais valem mesmo com convite pendente e entram juntos no custo mensal de cada vínculo.
 export function teamPayRates(team: TeamPayMember[], unitId: string): TeamPayRates {
   const commissionRates: CommissionRates = {};
   let grossCommissionPercent = 0;
   const salaries: StaffSalary[] = [];
   for (const member of team) {
-    if (member.admin) continue;
     const link = member.units.find((unit) => unit.unitId.toString() === unitId);
     let monthlyCents = link?.salaryCents ?? 0;
     for (const bonus of link?.bonuses ?? []) monthlyCents += bonus.amountCents;
     if (monthlyCents > 0) salaries.push({ monthlyCents, startDate: link?.startDate ?? null });
     if (link?.commissionPercent == null) continue;
-    if (!member.attends) grossCommissionPercent += link.commissionPercent;
+    const base = link.commissionBase ?? (member.attends ? "services" : "gross");
+    if (base === "gross") grossCommissionPercent += link.commissionPercent;
     else if (member.userId) commissionRates[member.userId.toString()] = link.commissionPercent;
   }
   return { commissionRates, grossCommissionPercent, salaries };

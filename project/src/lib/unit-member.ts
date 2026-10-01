@@ -15,6 +15,7 @@ export type UpdateUnitMemberPayError =
   | "member_not_found"
   | "invalid_input"
   | "invalid_commission"
+  | "invalid_commission_base"
   | "invalid_salary"
   | "invalid_bonus"
   | "invalid_start_date"
@@ -23,10 +24,15 @@ export type UpdateUnitMemberPayError =
 export type UpdateUnitMemberPayResult = { ok: true } | { ok: false; error: UpdateUnitMemberPayError };
 
 export type UnitMemberBonus = { description: string; amountCents: number };
+// Sobre os serviços que a pessoa fez ou sobre o faturamento bruto da unidade.
+export const COMMISSION_BASES = ["services", "gross"] as const;
+export type CommissionBase = (typeof COMMISSION_BASES)[number];
 export type UnitMemberPay = {
   startDate: string | null;
   // Dia do mês em que o mês anterior é pago, de 1 a 31.
   payDay: number | null;
+  // null sem comissão.
+  commissionBase: CommissionBase | null;
   commissionPercent: number | null;
   salaryCents: number | null;
   bonuses: UnitMemberBonus[];
@@ -66,7 +72,7 @@ export async function updateUnitMemberPay(
   if (!memberId) return { ok: false, error: "member_not_found" };
 
   if (input == null || typeof input !== "object") return { ok: false, error: "invalid_input" };
-  const { startDate, payDay, commissionPercent, salary, bonuses = [] } = input as Record<string, unknown>;
+  const { startDate, payDay, commissionBase, commissionPercent, salary, bonuses = [] } = input as Record<string, unknown>;
   if (!Array.isArray(bonuses)) return { ok: false, error: "invalid_input" };
 
   const member = await deps.findMember(memberId);
@@ -78,6 +84,8 @@ export async function updateUnitMemberPay(
   if (day === undefined) return { ok: false, error: "invalid_pay_day" };
   const percent = parseOptional(commissionPercent, parsePercent);
   if (percent === undefined) return { ok: false, error: "invalid_commission" };
+  const base = COMMISSION_BASES.find((value) => value === commissionBase) ?? null;
+  if (percent !== null && !base) return { ok: false, error: "invalid_commission_base" };
   const salaryCents = parseOptional(salary, (value) => parsePriceCents(value) || null);
   if (salaryCents === undefined) return { ok: false, error: "invalid_salary" };
   const parsedBonuses = bonuses.map(parseBonus);
@@ -86,6 +94,7 @@ export async function updateUnitMemberPay(
   await deps.update(memberId, {
     startDate: (start as string | undefined) ?? null,
     payDay: day,
+    commissionBase: percent === null ? null : base,
     commissionPercent: percent,
     salaryCents,
     bonuses: parsedBonuses as UnitMemberBonus[],
