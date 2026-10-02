@@ -1,12 +1,13 @@
 import { Types } from "mongoose"
 import type { Lot } from "@/service/workspace/[workspaceId]/stock/stock-lots"
-import { staleStockWalletLinks } from "@/service/workspace/[workspaceId]/stock/stock"
+import { stockWallet } from "@/service/workspace/[workspaceId]/stock/stock"
 import { Wallet } from "@/models/Wallet"
 import { Stock } from "@/models/Stock"
 import { StockItem } from "@/models/StockItem"
 import { StockMovement } from "@/models/StockMovement"
 
-// Estoque compartilhado em que a unidade está; walletId é a carteira que paga as compras dele.
+// Estoque compartilhado em que a unidade está; walletId é a carteira que pode pagar as compras
+// dele (a que tem todas as unidades dele), ou null.
 export type UnitStock = { id: string; name: string; unitIds: string[]; walletId: string | null }
 
 // Estoque que a unidade usa: holderId é o do compartilhado ou o dela mesma; unitIds, as
@@ -16,16 +17,29 @@ export type UnitHolder = { stock: UnitStock | null; holderId: string; unitIds: s
 // null quando a unidade não está em nenhum estoque compartilhado.
 export async function findUnitStock(unitId: string): Promise<UnitStock | null> {
   const stock = await Stock.findOne({ "units.unitId": new Types.ObjectId(unitId) })
-    .select({ name: 1, units: 1, walletId: 1 })
+    .select({ name: 1, units: 1, workspaceId: 1 })
     .lean()
-  return (
-    stock && {
-      id: stock._id.toString(),
-      name: stock.name,
-      unitIds: stock.units.map((unit) => unit.unitId.toString()),
-      walletId: stock.walletId?.toString() ?? null,
-    }
-  )
+  if (!stock) return null
+  const unitIds = stock.units.map((unit) => unit.unitId.toString())
+  const wallet = await findStockWallet(stock.workspaceId.toString(), unitIds)
+  return { id: stock._id.toString(), name: stock.name, unitIds, walletId: wallet?.id ?? null }
+}
+
+// Carteiras do workspace com as unidades de cada uma.
+export async function findWorkspaceWallets(workspaceId: string) {
+  const wallets = await Wallet.find({ workspaceId }).select({ name: 1, units: 1 }).lean()
+  return wallets.map((wallet) => ({
+    id: wallet._id.toString(),
+    name: wallet.name,
+    unitIds: wallet.units.map((unit) => unit.unitId.toString()),
+  }))
+}
+
+// Carteira que pode pagar as compras do estoque com essas unidades; null quando não há.
+export async function findStockWallet(workspaceId: string, unitIds: string[]) {
+  const wallets = await findWorkspaceWallets(workspaceId)
+  const walletId = stockWallet(unitIds, wallets)
+  return wallets.find((wallet) => wallet.id === walletId) ?? null
 }
 
 export function holderOf(unitId: string, stock: UnitStock | null): UnitHolder {
@@ -99,22 +113,4 @@ export async function updateItemLots<T>(
     if (matchedCount > 0) return next.result
   }
   throw new Error("O estoque mudou várias vezes seguidas; tente de novo.")
-}
-
-// Tira a carteira dos estoques do workspace em que ela não vale mais (excluída, ou sem todas as
-// unidades do estoque). Roda depois de mudar unidades de estoques ou de carteiras.
-export async function unlinkStaleStockWallets(workspaceId: string) {
-  const [stocks, wallets] = await Promise.all([
-    Stock.find({ workspaceId, walletId: { $ne: null } }).select({ walletId: 1, units: 1 }).lean(),
-    Wallet.find({ workspaceId }).select({ units: 1 }).lean(),
-  ])
-  const stale = staleStockWalletLinks(
-    stocks.map((stock) => ({
-      id: stock._id.toString(),
-      walletId: stock.walletId?.toString() ?? null,
-      unitIds: stock.units.map((unit) => unit.unitId.toString()),
-    })),
-    wallets.map((wallet) => ({ id: wallet._id.toString(), unitIds: wallet.units.map((unit) => unit.unitId.toString()) })),
-  )
-  if (stale.length > 0) await Stock.updateMany({ _id: { $in: stale } }, { $set: { walletId: null } })
 }

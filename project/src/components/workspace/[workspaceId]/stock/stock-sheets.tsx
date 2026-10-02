@@ -42,30 +42,12 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 
-// walletId: carteira que paga as compras do estoque; null quando cada unidade paga as suas.
-export type StockFormValue = { id: string; name: string; units: { id: string; name: string }[]; walletId: string | null }
+export type StockFormValue = { id: string; name: string; units: { id: string; name: string }[] }
 
-// Unidades do workspace; stockId/stockName dizem em qual estoque cada uma já está e
-// walletId/walletName, em qual carteira.
-export type StockUnitOption = {
-  id: string
-  name: string
-  stockId: string | null
-  stockName: string | null
-  walletId: string | null
-  walletName: string | null
-}
+// Unidades do workspace; stockId/stockName dizem em qual estoque cada uma já está.
+export type StockUnitOption = { id: string; name: string; stockId: string | null; stockName: string | null }
 
-// canLinkWallet: quem gerencia o caixa pode ligar o estoque a uma carteira.
-type Props = { workspaceId: string; units: StockUnitOption[]; canLinkWallet: boolean }
-
-// Carteira em que estão todas as unidades marcadas; null quando não há uma só.
-function sharedWallet(units: StockUnitOption[], checked: string[]) {
-  const picked = units.filter((unit) => checked.includes(unit.id))
-  const walletId = picked[0]?.walletId ?? null
-  if (!walletId || !picked.every((unit) => unit.walletId === walletId)) return null
-  return { id: walletId, name: picked[0].walletName ?? "" }
-}
+type Props = { workspaceId: string; units: StockUnitOption[] }
 
 function StockForm({
   title,
@@ -73,7 +55,6 @@ function StockForm({
   submitLabel,
   stock,
   units,
-  canLinkWallet,
   action,
   onDone,
 }: {
@@ -82,13 +63,10 @@ function StockForm({
   submitLabel: [string, string]
   stock?: StockFormValue
   units: StockUnitOption[]
-  canLinkWallet: boolean
   action: (prev: StockActionState, formData: FormData) => Promise<StockActionState>
   onDone: () => void
 }) {
-  const [checked, setChecked] = useState<string[]>(() => stock?.units.map((unit) => unit.id) ?? [])
-  const [payByWallet, setPayByWallet] = useState(!!stock?.walletId)
-  const wallet = sharedWallet(units, checked)
+
   const [state, formAction, pending] = useActionState(
     async (prev: StockActionState, formData: FormData) => {
       const next = await action(prev, formData)
@@ -135,10 +113,7 @@ function StockForm({
                     id={`${idPrefix}-unit-${unit.id}`}
                     name="unitId"
                     value={unit.id}
-                    checked={checked.includes(unit.id)}
-                    onCheckedChange={(next) =>
-                      setChecked((ids) => (next ? [...ids, unit.id] : ids.filter((id) => id !== unit.id)))
-                    }
+                    defaultChecked={stock?.units.some((stockUnit) => stockUnit.id === unit.id)}
                   />
                   <FieldLabel htmlFor={`${idPrefix}-unit-${unit.id}`} className="min-w-0 font-normal">
                     <span className="truncate">{unit.name}</span>
@@ -151,29 +126,6 @@ function StockForm({
             })}
           </div>
         </FieldSet>
-        {canLinkWallet && (
-          <FieldSet>
-            <FieldLegend variant="label">Carteira</FieldLegend>
-            <Field orientation="horizontal" data-disabled={!wallet || undefined}>
-              <Checkbox
-                id={`${idPrefix}-wallet`}
-                name="walletId"
-                value={wallet?.id ?? ""}
-                checked={!!wallet && payByWallet}
-                onCheckedChange={(next) => setPayByWallet(!!next)}
-                disabled={!wallet}
-              />
-              <FieldLabel htmlFor={`${idPrefix}-wallet`} className="font-normal">
-                {wallet ? `Pagar as compras pela carteira ${wallet.name}` : "Pagar as compras pela carteira"}
-              </FieldLabel>
-            </Field>
-            <FieldDescription>
-              {wallet
-                ? "As compras do estoque podem sair da carteira, como despesa em conjunto das unidades, ou de uma unidade, escolhida em cada compra."
-                : "Disponível quando todas as unidades marcadas estão na mesma carteira."}
-            </FieldDescription>
-          </FieldSet>
-        )}
       </FieldGroup>
       <SheetFooter>
         <Button type="submit" loading={pending}>
@@ -184,7 +136,7 @@ function StockForm({
   )
 }
 
-export function CreateStockSheet({ workspaceId, units, canLinkWallet }: Props) {
+export function CreateStockSheet({ workspaceId, units }: Props) {
   const [open, setOpen] = useState(false)
   // Muda a cada abertura para começar o formulário limpo.
   const [formKey, setFormKey] = useState(0)
@@ -208,7 +160,6 @@ export function CreateStockSheet({ workspaceId, units, canLinkWallet }: Props) {
           description="Estoque usado por várias unidades, com uma quantidade só de cada produto para todas."
           submitLabel={["Criar", "Criando..."]}
           units={units}
-          canLinkWallet={canLinkWallet}
           action={(prev, formData) => createStockAction(workspaceId, prev, formData)}
           onDone={() => setOpen(false)}
         />
@@ -222,7 +173,6 @@ export function CreateStockSheet({ workspaceId, units, canLinkWallet }: Props) {
 export function StockActions({
   workspaceId,
   units,
-  canLinkWallet,
   stock,
   catalog,
   payers,
@@ -296,7 +246,6 @@ export function StockActions({
             submitLabel={["Salvar", "Salvando..."]}
             stock={stock}
             units={units}
-            canLinkWallet={canLinkWallet}
             action={(prev, formData) => updateStockAction(workspaceId, stock.id, prev, formData)}
             onDone={() => setEditOpen(false)}
           />

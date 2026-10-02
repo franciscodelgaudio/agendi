@@ -127,3 +127,10 @@ export function mergeStockItems(items: StockItemData[]): StockItemData[] {
     depletedAt: item.depletedAt.sort((a, b) => a.getTime() - b.getTime()),
   }));
 }
+
+// Carteira que paga as compras do estoque compartilhado: a que tem todas as unidades dele (cada
+// unidade fica em uma carteira só, então há no máximo uma); null quando não há.
+export function stockWallet(unitIds: string[], wallets: { id: string; unitIds: string[] }[]): string | null {
+  if (unitIds.length === 0) return null;
+  return wallets.find((wallet) => unitIds.every((unitId) => wallet.unitIds.includes(unitId)))?.id ?? null;
+}

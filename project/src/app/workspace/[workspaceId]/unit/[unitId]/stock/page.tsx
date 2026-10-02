@@ -147,14 +147,14 @@ export default async function StockPage({
 
   const sharedWith = holder.unitIds.filter((id) => id !== unitId).map((id) => unitNames.get(id)).filter(Boolean)
 
-  // Quem pode pagar uma compra no estoque compartilhado: esta unidade (o padrão), a carteira
-  // ligada a ele (para quem gerencia o caixa) e as outras unidades dele.
+  // Quem pode pagar uma compra no estoque compartilhado: a carteira que tem todas as unidades
+  // dele (o padrão, para quem gerencia o caixa), esta unidade e as outras dele.
   const walletId = canManage && can(workspace.actor, "cash_flow.manage") ? (holder.stock?.walletId ?? null) : null
   const wallet = walletId && (await Wallet.findOne({ _id: walletId, workspaceId: workspace.id }).select({ name: 1 }).lean())
   const payers = holder.stock
     ? [
-        { value: unitId, label: unitNames.get(unitId) ?? "Esta unidade" },
         ...(wallet ? [{ value: "wallet", label: `Carteira ${wallet.name}` }] : []),
+        { value: unitId, label: unitNames.get(unitId) ?? "Esta unidade" },
         ...holder.unitIds
           .filter((id) => id !== unitId && unitNames.has(id))
           .map((id) => ({ value: id, label: unitNames.get(id)! })),

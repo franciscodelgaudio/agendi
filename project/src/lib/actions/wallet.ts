@@ -18,7 +18,6 @@ import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
-import { unlinkStaleStockWallets } from "@/service/workspace/[workspaceId]/stock/stock-store"
 
 type DeleteWalletError = Extract<DeleteWalletResult, { ok: false }>["error"]
 
@@ -120,8 +119,6 @@ export async function updateWalletAction(
     },
   })
   if (!result.ok) return { error: errorMessages[result.error] }
-  // Estoque ligado à carteira que deixou de ter todas as unidades dele perde a ligação.
-  await unlinkStaleStockWallets(target.workspaceId)
 
   refresh()
   return { error: null }
@@ -141,8 +138,6 @@ export async function deleteWalletAction(workspaceId: string, walletId: string):
     },
   })
   if (!result.ok) return { error: errorMessages[result.error] }
-  // Estoque ligado à carteira que deixou de ter todas as unidades dele perde a ligação.
-  await unlinkStaleStockWallets(target.workspaceId)
 
   refresh()
   return { error: null }

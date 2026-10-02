@@ -13,14 +13,12 @@ export function StockList({
   stocks,
   workspaceId,
   units,
-  canLinkWallet,
   catalogs,
   payers,
 }: {
   stocks: (StockFormValue & { walletName: string | null })[]
   workspaceId: string
   units: StockUnitOption[] | null
-  canLinkWallet: boolean
   catalogs: Record<string, { id: string; name: string }[]>
   payers: Record<string, PayerOption[]>
 }) {
@@ -49,7 +47,6 @@ export function StockList({
                 <StockActions
                   workspaceId={workspaceId}
                   units={units}
-                  canLinkWallet={canLinkWallet}
                   stock={stock}
                   catalog={catalogs[stock.id] ?? []}
                   payers={payers[stock.id] ?? []}

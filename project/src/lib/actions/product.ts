@@ -30,7 +30,7 @@ import { PRODUCT_SEARCH_LIMIT, productSearchPipeline } from "@/service/workspace
 import { parsePurchasePayer, recordStockPurchase, type PurchasePayerResult } from "@/service/workspace/[workspaceId]/stock/stock-purchase"
 import { addLots, consumeLots, type Lot } from "@/service/workspace/[workspaceId]/stock/stock-lots"
 import { transferProduct, type TransferProductError } from "@/service/workspace/[workspaceId]/stock/stock-movement"
-import { findUnitHolder, recordMovement, updateItemLots } from "@/service/workspace/[workspaceId]/stock/stock-store"
+import { findStockWallet, findUnitHolder, recordMovement, updateItemLots } from "@/service/workspace/[workspaceId]/stock/stock-store"
 import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Product } from "@/models/Product"
@@ -278,14 +278,12 @@ export async function addSharedStockItemAction(
   const managed = await findManagedWorkspace(workspaceId, userId, "stock.manage")
   if (!managed.ok) return { error: accessErrorMessage(managed.error, "stock.manage") }
   const stock = isObjectIdOrHexString(stockId)
-    ? await Stock.findOne({ _id: stockId, workspaceId: managed.access.id }).select({ units: 1, walletId: 1 }).lean()
+    ? await Stock.findOne({ _id: stockId, workspaceId: managed.access.id }).select({ units: 1 }).lean()
     : null
   if (!stock) return { error: errorMessages.stock_not_found }
 
-  const holder = {
-    unitIds: stock.units.map((unit) => unit.unitId.toString()),
-    walletId: stock.walletId?.toString() ?? null,
-  }
+  const unitIds = stock.units.map((unit) => unit.unitId.toString())
+  const holder = { unitIds, walletId: (await findStockWallet(managed.access.id, unitIds))?.id ?? null }
   const paying = await resolvePayer(managed.access.id, userId, formData.get("payer"), holder, null)
   if ("error" in paying) return paying
 
