@@ -365,14 +365,14 @@ export function buildReadTools(workspaceId: string) {
         date: day.optional().describe("Um dia do período; padrão hoje."),
       }),
       execute: async ({ unitId, view, date }) => {
-        const unit = await Unit.findOne({ _id: unitId, workspaceId: wid }).select({ revenueShare: 1 }).lean()
+        const unit = await Unit.findOne({ _id: unitId, workspaceId: wid }).select({ revenueShare: 1, createdAt: 1 }).lean()
         if (!unit) return noUnit
         const today = brtToday()
         const buckets = cashFlowBuckets({ view, date: date ?? today })
         const [data, [wallet]] = await Promise.all([
           loadUnitCashFlow(
             workspaceId,
-            { id: unitId, revenueShare: (unit.revenueShare ?? null) as RevenueShare | null },
+            { id: unitId, revenueShare: (unit.revenueShare ?? null) as RevenueShare | null, createdAt: unit.createdAt },
             buckets,
             today,
           ),

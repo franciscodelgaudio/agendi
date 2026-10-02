@@ -631,6 +631,52 @@ describe("applyStaffCosts", () => {
     expect(result.buckets[0].forecast.salaryCents).toBe(120_000);
   });
 
+  it("salário não conta antes do início dos registros da unidade (since), mesmo com início anterior", () => {
+    const summary = summarizeCashFlow(cashFlowBuckets({ view: "year", date: "2026-10-02" }), [], [], null, {});
+
+    // Entrou em julho, mas a unidade só passou a ter registros em 1/10.
+    const result = applyStaffCosts(summary, {
+      ...SALARY,
+      salaries: [{ monthlyCents: 560_000, startDate: "2026-07-01" }],
+      today: "2026-10-02",
+      since: "2026-10-01",
+    });
+
+    expect(result.buckets.slice(6, 9).map((bucket) => bucket.forecast.salaryCents)).toEqual([0, 0, 0]);
+    expect(result.buckets.slice(6, 9).map((bucket) => bucket.real.salaryCents)).toEqual([0, 0, 0]);
+    // Outubro até o dia 2: 2 × 560.000/31 = 36.129,03.
+    expect(result.buckets[9].real.salaryCents).toBe(36_129);
+    // Outubro a dezembro inteiros no previsto.
+    expect(result.total.forecast.salaryCents).toBe(3 * 560_000);
+  });
+
+  it("since no meio do mês conta proporcional; início posterior a since prevalece; sem data começa em since", () => {
+    const summary = summarizeCashFlow([{ from: "2026-09-01", to: "2026-09-30" }], [], [], null, {});
+
+    const result = applyStaffCosts(summary, {
+      ...SALARY,
+      salaries: [
+        { monthlyCents: 300_000, startDate: null },
+        { monthlyCents: 300_000, startDate: "2026-09-01" },
+        { monthlyCents: 300_000, startDate: "2026-09-26" },
+      ],
+      today: "2026-09-30",
+      since: "2026-09-21",
+    });
+
+    // 10 dias (21 a 30) + 10 dias + 5 dias (26 a 30), R$ 100 por dia.
+    expect(result.buckets[0].forecast.salaryCents).toBe(250_000);
+    expect(result.buckets[0].real.salaryCents).toBe(250_000);
+  });
+
+  it("since nulo mantém o comportamento sem corte", () => {
+    const summary = summarizeCashFlow([RANGE], [], [], null, {});
+
+    const result = applyStaffCosts(summary, { ...SALARY, since: null });
+
+    expect(result.buckets[0].forecast.salaryCents).toBe(70_000);
+  });
+
   it("data de início no futuro: salário só no previsto a partir dela", () => {
     const summary = summarizeCashFlow([RANGE], [], [], null, {});
 

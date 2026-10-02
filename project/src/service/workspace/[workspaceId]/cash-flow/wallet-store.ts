@@ -34,13 +34,13 @@ export async function loadWallets(workspaceId: string, today: string, unitId?: s
     Wallet.find({ workspaceId: workspace, ...(unitId && { "units.unitId": new Types.ObjectId(unitId) }) })
       .sort({ name: 1, _id: 1 })
       .lean(),
-    Unit.find({ workspaceId: workspace }).select({ name: 1, revenueShare: 1 }).lean(),
+    Unit.find({ workspaceId: workspace }).select({ name: 1, revenueShare: 1, createdAt: 1 }).lean(),
     findTeamPayMembers(workspaceId),
   ]);
   const unitsById = new Map(
     units.map((unit) => [
       unit._id.toString(),
-      { name: unit.name, revenueShare: (unit.revenueShare ?? null) as RevenueShare | null },
+      { name: unit.name, revenueShare: (unit.revenueShare ?? null) as RevenueShare | null, createdAt: unit.createdAt },
     ]),
   );
 
@@ -55,7 +55,7 @@ export async function loadWallets(workspaceId: string, today: string, unitId?: s
       const [nets, walletExpenseCents] = await Promise.all([
         Promise.all(
           walletUnits.map(({ unitId }) =>
-            range ? loadUnitNet({ id: unitId, revenueShare: unitsById.get(unitId)!.revenueShare }, range, today, team) : 0,
+            range ? loadUnitNet({ id: unitId, ...unitsById.get(unitId)! }, range, today, team) : 0,
           ),
         ),
         range ? walletPaidExpenses(wallet._id, range) : 0,

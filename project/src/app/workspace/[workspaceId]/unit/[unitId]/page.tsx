@@ -62,7 +62,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
   const [workspace] = await Workspace.aggregate<{
     id: string
     therapists: TherapistOption[]
-    unit: { revenueShare: RevenueShare | null } | null
+    unit: { revenueShare: RevenueShare | null; createdAt: Date } | null
   }>([
     ...access,
     {
@@ -73,7 +73,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
         as: "unit",
         pipeline: [
           { $match: { _id: new Types.ObjectId(unitId) } },
-          { $project: { _id: 0, revenueShare: { $ifNull: ["$revenueShare", null] } } },
+          { $project: { _id: 0, revenueShare: { $ifNull: ["$revenueShare", null] }, createdAt: 1 } },
         ],
       },
     },
@@ -88,7 +88,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
     },
   ])
   if (!workspace?.unit) notFound()
-  const { revenueShare } = workspace.unit
+  const { revenueShare, createdAt } = workspace.unit
 
   // Mês corrente para os indicadores; ano corrente para a curva de custos, numa busca só com o
   // resto dos períodos de repasse das pontas.
@@ -121,7 +121,11 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
 
   const { commissionRates, ...staffCosts } = teamPayRates(team, unitId)
   const summarize = (buckets: DayRange[]) =>
-    applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, revenueShare, commissionRates), { ...staffCosts, today })
+    applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, revenueShare, commissionRates), {
+      ...staffCosts,
+      today,
+      since: parseCashFlowQuery({}, createdAt).date,
+    })
   const monthTotal = summarize(monthBuckets).total
   const curve = costCurve([
     { buckets: applyExpenses(summarize(yearBuckets), expenses).buckets, groups: groups.map(groupLimitsOf) },

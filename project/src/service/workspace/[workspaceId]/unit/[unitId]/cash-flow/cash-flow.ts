@@ -424,7 +424,14 @@ export function summarizeTherapists(
 // o líquido (bruto menos o repasse) e salários mensais, que somados à equipe toda saem do líquido.
 // Cada salário (com os bônus) conta a partir da data de início; sem ela, conta sempre.
 export type StaffSalary = { monthlyCents: number; startDate: string | null };
-export type StaffCosts = { grossCommissionPercent: number; netCommissionPercent: number; salaries: StaffSalary[]; today: string };
+// since: início dos registros da unidade; salário de antes não conta (não há faturamento registrado).
+export type StaffCosts = {
+  grossCommissionPercent: number;
+  netCommissionPercent: number;
+  salaries: StaffSalary[];
+  today: string;
+  since?: string | null;
+};
 export type StaffCashFlowAmounts = CashFlowAmounts & { salaryCents: number };
 export type StaffCashFlowBucket = DayRange & { real: StaffCashFlowAmounts; forecast: StaffCashFlowAmounts };
 export type StaffCashFlowSummary = {
@@ -513,10 +520,10 @@ export function teamPayRates(team: TeamPayMember[], unitId: string): TeamPayRate
 }
 
 // Valores mensais (sem arredondar) dos dias do intervalo até `last`, cada um a partir da data de
-// início: cada dia vale 1/n do mês de n dias.
-function monthlyForDays({ from, to }: DayRange, salaries: StaffSalary[], last = to) {
+// início (e de since): cada dia vale 1/n do mês de n dias.
+function monthlyForDays({ from, to }: DayRange, salaries: StaffSalary[], since: string | null, last = to) {
   let salary = 0;
-  for (let date = from; date <= to && date <= last; date = addDays(date, 1)) {
+  for (let date = since && since > from ? since : from; date <= to && date <= last; date = addDays(date, 1)) {
     const [year, month] = parseDay(date)!;
     const daysInMonth = Number(utcDay(year, month + 1, 0).slice(8));
     for (const { monthlyCents, startDate } of salaries) {
@@ -548,12 +555,12 @@ function withStaffCosts(
 // total soma os intervalos arredondados.
 export function applyStaffCosts(
   summary: CashFlowSummary,
-  { salaries, today, ...percents }: StaffCosts,
+  { salaries, today, since = null, ...percents }: StaffCosts,
 ): StaffCashFlowSummary {
   const buckets = summary.buckets.map((bucket) => ({
     ...bucket,
-    real: withStaffCosts(bucket.real, percents, monthlyForDays(bucket, salaries, today)),
-    forecast: withStaffCosts(bucket.forecast, percents, monthlyForDays(bucket, salaries)),
+    real: withStaffCosts(bucket.real, percents, monthlyForDays(bucket, salaries, since, today)),
+    forecast: withStaffCosts(bucket.forecast, percents, monthlyForDays(bucket, salaries, since)),
   }));
   const zero = { grossCents: 0, partnerShareCents: 0, commissionCents: 0, salaryCents: 0, netCents: 0 };
   const add = (a: StaffCashFlowAmounts, b: StaffCashFlowAmounts) => ({

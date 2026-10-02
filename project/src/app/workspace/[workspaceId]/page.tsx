@@ -75,6 +75,7 @@ type UnitInfo = {
   name: string
   avatarUrl: string | null
   revenueShare: RevenueShare | null
+  createdAt: Date
 }
 
 // Página inicial: visão geral de todas as unidades do workspace.
@@ -110,6 +111,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
               name: 1,
               avatarUrl: { $ifNull: ["$avatarUrl", null] },
               revenueShare: { $ifNull: ["$revenueShare", null] },
+              createdAt: 1,
             },
           },
         ],
@@ -179,7 +181,11 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
   const unitSummaries = perUnit.map(({ unit, appointments, bookings, expenses, services, groupLimits }) => {
     const { commissionRates, ...staffCosts } = teamPayRates(members, unit.id)
     const summarize = (buckets: DayRange[]) =>
-      applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, unit.revenueShare, commissionRates), { ...staffCosts, today })
+      applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, unit.revenueShare, commissionRates), {
+        ...staffCosts,
+        today,
+        since: parseCashFlowQuery({}, unit.createdAt).date,
+      })
     const done = services.reduce((sum, service) => sum + service.real.count, 0)
     const all = services.reduce((sum, service) => sum + service.forecast.count, 0)
     return {

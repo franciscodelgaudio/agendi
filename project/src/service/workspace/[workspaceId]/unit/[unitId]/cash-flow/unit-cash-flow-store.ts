@@ -4,6 +4,7 @@ import {
   applyStaffCosts,
   cashFlowFetchRange,
   dailyAppointmentTotalsPipeline,
+  parseCashFlowQuery,
   summarizeCashFlow,
   teamPayRates,
   type DayRange,
@@ -49,7 +50,8 @@ export function findTeamPayMembers(workspaceId: string, unitId?: string) {
   ]);
 }
 
-export type CashFlowUnit = { id: string; revenueShare: RevenueShare | null };
+// createdAt: início dos registros da unidade; salário de antes dele não entra no caixa.
+export type CashFlowUnit = { id: string; revenueShare: RevenueShare | null; createdAt: Date };
 
 // Líquido real da unidade nos dias do saldo da carteira (até hoje), com as mesmas regras do
 // caixa; team é a equipe do workspace.
@@ -65,7 +67,7 @@ export async function loadUnitNet(unit: CashFlowUnit, range: DayRange, today: st
   ]);
   const { commissionRates, ...staffRates } = teamPayRates(team, unit.id);
   return applyExpenses(
-    applyStaffCosts(summarizeCashFlow([range], appointments, [], revenueShare, commissionRates), { ...staffRates, today }),
+    applyStaffCosts(summarizeCashFlow([range], appointments, [], revenueShare, commissionRates), { ...staffRates, today, since: parseCashFlowQuery({}, unit.createdAt).date }),
     expenses,
   ).total.real.netCents;
 }
@@ -88,7 +90,7 @@ export async function loadUnitCashFlow(workspaceId: string, unit: CashFlowUnit, 
     Expense.aggregate<ExpenseGroupTotal>([unitMatch, ...expenseGroupTotalsPipeline(shown)]),
   ]);
   const { commissionRates, ...staffRates } = teamPayRates(team, unit.id);
-  const staffCosts = { ...staffRates, today };
+  const staffCosts = { ...staffRates, today, since: parseCashFlowQuery({}, unit.createdAt).date };
   const summary = applyExpenses(
     applyStaffCosts(summarizeCashFlow(buckets, appointments, [], revenueShare, commissionRates), staffCosts),
     expenses,

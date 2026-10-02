@@ -58,6 +58,7 @@ export default async function WorkspaceCashFlowPage({
               id: { $toString: "$_id" },
               name: 1,
               revenueShare: { $ifNull: ["$revenueShare", null] },
+              createdAt: 1,
             },
           },
         ],
