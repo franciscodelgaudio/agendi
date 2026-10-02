@@ -1,6 +1,7 @@
 "use client"
 
 import { useActionState, useState, useTransition } from "react"
+import { PayerField, type PayerOption } from "@/components/workspace/[workspaceId]/shared/stock/payer-field"
 import Link from "@/components/shared/link"
 import {
   ArrowRightLeftIcon,
@@ -71,12 +72,14 @@ type Props = { workspaceId: string; unitId: string; product: Product }
 // Unidades do workspace e quanto do produto o estoque de cada uma tem.
 export type ProductTransfer = { units: { id: string; name: string }[]; quantities: Record<string, number> }
 
+// payers: quem pode pagar uma compra (unidades do estoque compartilhado e a carteira dele).
 export function ProductActions({
   workspaceId,
   unitId,
   product,
   transfer = null,
-}: Props & { transfer?: ProductTransfer | null }) {
+  payers = [],
+}: Props & { transfer?: ProductTransfer | null; payers?: PayerOption[] }) {
   const [editOpen, setEditOpen] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferKey, setTransferKey] = useState(0)
@@ -169,6 +172,7 @@ export function ProductActions({
             workspaceId={workspaceId}
             unitId={unitId}
             product={product}
+            payers={payers}
             onDone={() => setPurchaseOpen(false)}
           />
         </SheetContent>
@@ -438,7 +442,13 @@ function TransferProductForm({
 }
 
 // Compra de mais unidades: vira um lote com o preço pago, que sai depois dos que já estão aqui.
-function PurchaseForm({ workspaceId, unitId, product, onDone }: Props & { onDone: () => void }) {
+function PurchaseForm({
+  workspaceId,
+  unitId,
+  product,
+  payers,
+  onDone,
+}: Props & { payers: PayerOption[]; onDone: () => void }) {
   const [state, formAction, pending] = useActionState(
     async (prev: ProductActionState, formData: FormData) => {
       const next = await registerPurchaseAction(workspaceId, unitId, product.id, prev, formData)
@@ -454,7 +464,7 @@ function PurchaseForm({ workspaceId, unitId, product, onDone }: Props & { onDone
       <SheetHeader>
         <SheetTitle>Registrar compra</SheetTitle>
         <SheetDescription>
-          A compra de <strong>{product.name}</strong> vira um lote com o preço pago e uma despesa no caixa desta unidade.
+          A compra de <strong>{product.name}</strong> vira um lote com o preço pago e uma despesa no caixa de quem paga.
         </SheetDescription>
       </SheetHeader>
       <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
@@ -486,6 +496,7 @@ function PurchaseForm({ workspaceId, unitId, product, onDone }: Props & { onDone
           />
           <FieldDescription>Vem preenchido com o preço da última compra.</FieldDescription>
         </Field>
+        <PayerField id={`${idPrefix}-payer`} payers={payers} />
       </FieldGroup>
       <SheetFooter>
         <Button type="submit" loading={pending}>

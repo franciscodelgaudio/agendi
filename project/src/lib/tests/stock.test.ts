@@ -1,22 +1,25 @@
 import { describe, it, expect, vi } from "vitest";
-import { createStock, deleteStock, mergeStockItems, updateStock } from "@/service/workspace/[workspaceId]/stock/stock";
+import { createStock, deleteStock, mergeStockItems, staleStockWalletLinks, updateStock } from "@/service/workspace/[workspaceId]/stock/stock";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const STOCK_ID = "64b7f0c2a1b2c3d4e5f60790";
 const UNIT_A = "64b7f0c2a1b2c3d4e5f60720";
 const UNIT_B = "64b7f0c2a1b2c3d4e5f60721";
 const UNIT_C = "64b7f0c2a1b2c3d4e5f60722";
+const WALLET_ID = "64b7f0c2a1b2c3d4e5f60730";
 const PRODUCT_1 = "64b7f0c2a1b2c3d4e5f60800";
 const PRODUCT_2 = "64b7f0c2a1b2c3d4e5f60801";
 
-// Como chega do FormData: as unidades marcadas.
+// Como chega do FormData: as unidades marcadas e, opcional, a carteira que paga as compras.
 const input = { name: "Estoque central", units: [UNIT_A, UNIT_B] };
 
-function makeDeps({ exist = true } = {}) {
+// walletUnits: unidades da carteira do workspace; null quando ela não existe nele.
+function makeDeps({ exist = true, walletUnits = [UNIT_A, UNIT_B] as string[] | null } = {}) {
   return {
     insert: vi.fn().mockResolvedValue({ id: STOCK_ID }),
     update: vi.fn().mockResolvedValue(true),
     unitsExist: vi.fn().mockResolvedValue(exist),
+    findWalletUnits: vi.fn().mockResolvedValue(walletUnits),
   };
 }
 
@@ -30,8 +33,61 @@ describe("createStock", () => {
     expect(deps.insert).toHaveBeenCalledWith({
       name: "Estoque central",
       units: [{ unitId: UNIT_A }, { unitId: UNIT_B }],
+      walletId: null,
       workspaceId: WORKSPACE_ID,
     });
+    expect(deps.findWalletUnits).not.toHaveBeenCalled();
+  });
+
+  it("liga o estoque à carteira que tem todas as unidades dele", async () => {
+    const deps = makeDeps({ walletUnits: [UNIT_A, UNIT_B, UNIT_C] });
+
+    const result = await createStock({ ...input, walletId: WALLET_ID }, WORKSPACE_ID, deps);
+
+    expect(result).toEqual({ ok: true, stockId: STOCK_ID });
+    expect(deps.findWalletUnits).toHaveBeenCalledWith(WORKSPACE_ID, WALLET_ID);
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ walletId: WALLET_ID }));
+  });
+
+  it.each(["", null, undefined])("carteira %j deixa o estoque sem carteira", async (walletId) => {
+    const deps = makeDeps();
+
+    await createStock({ ...input, walletId }, WORKSPACE_ID, deps);
+
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ walletId: null }));
+  });
+
+  it("recusa a carteira que não tem todas as unidades do estoque", async () => {
+    const deps = makeDeps({ walletUnits: [UNIT_A] });
+
+    expect(await createStock({ ...input, walletId: WALLET_ID }, WORKSPACE_ID, deps)).toEqual({
+      ok: false,
+      error: "wallet_missing_units",
+    });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("recusa a carteira que não é do workspace", async () => {
+    const deps = makeDeps({ walletUnits: null });
+
+    expect(await createStock({ ...input, walletId: WALLET_ID }, WORKSPACE_ID, deps)).toEqual({
+      ok: false,
+      error: "wallet_not_found",
+    });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["que não é texto", 5],
+    ["com id inválido", "x"],
+  ])("recusa carteira %s", async (_label, walletId) => {
+    const deps = makeDeps();
+
+    expect(await createStock({ ...input, walletId }, WORKSPACE_ID, deps)).toEqual({
+      ok: false,
+      error: "wallet_not_found",
+    });
+    expect(deps.insert).not.toHaveBeenCalled();
   });
 
   it("remove espaços das pontas do nome", async () => {
@@ -92,7 +148,24 @@ describe("updateStock", () => {
     expect(deps.update).toHaveBeenCalledWith(STOCK_ID, {
       name: "Novo nome",
       units: [{ unitId: UNIT_A }, { unitId: UNIT_C }],
+      walletId: null,
     });
+  });
+
+  it("grava a carteira que tem todas as unidades", async () => {
+    const deps = makeDeps();
+
+    expect(await updateStock({ ...input, walletId: WALLET_ID }, WORKSPACE_ID, STOCK_ID, deps)).toEqual({ ok: true });
+    expect(deps.update).toHaveBeenCalledWith(STOCK_ID, expect.objectContaining({ walletId: WALLET_ID }));
+  });
+
+  it("recusa a carteira que deixou de ter todas as unidades marcadas", async () => {
+    const deps = makeDeps({ walletUnits: [UNIT_A, UNIT_B] });
+
+    expect(
+      await updateStock({ name: "Novo nome", units: [UNIT_A, UNIT_C], walletId: WALLET_ID }, WORKSPACE_ID, STOCK_ID, deps),
+    ).toEqual({ ok: false, error: "wallet_missing_units" });
+    expect(deps.update).not.toHaveBeenCalled();
   });
 
   it("recusa entrada inválida", async () => {
@@ -226,5 +299,28 @@ describe("mergeStockItems", () => {
 
     expect(depletedAt).toEqual([day(9), day(2)]);
     expect(lots).toEqual([lot(1, 100, 9), lot(1, 100, 2)]);
+  });
+});
+
+// Estoque ligado a carteira que não existe mais ou que deixou de ter todas as unidades dele perde a ligação.
+describe("staleStockWalletLinks", () => {
+  const wallets = [{ id: WALLET_ID, unitIds: [UNIT_A, UNIT_B] }];
+
+  it("mantém o estoque cuja carteira tem todas as unidades dele, mesmo com outras a mais", () => {
+    expect(staleStockWalletLinks([{ id: STOCK_ID, walletId: WALLET_ID, unitIds: [UNIT_A] }], wallets)).toEqual([]);
+  });
+
+  it("devolve o estoque com unidade que não está na carteira", () => {
+    expect(
+      staleStockWalletLinks([{ id: STOCK_ID, walletId: WALLET_ID, unitIds: [UNIT_A, UNIT_C] }], wallets),
+    ).toEqual([STOCK_ID]);
+  });
+
+  it("devolve o estoque ligado a carteira que não existe mais", () => {
+    expect(staleStockWalletLinks([{ id: STOCK_ID, walletId: WALLET_ID, unitIds: [UNIT_A] }], [])).toEqual([STOCK_ID]);
+  });
+
+  it("ignora o estoque sem carteira", () => {
+    expect(staleStockWalletLinks([{ id: STOCK_ID, walletId: null, unitIds: [UNIT_C] }], wallets)).toEqual([]);
   });
 });

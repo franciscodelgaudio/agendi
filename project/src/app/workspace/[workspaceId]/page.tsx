@@ -188,6 +188,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         !!unit.revenueShare ||
         Object.keys(commissionRates).length > 0 ||
         staffCosts.grossCommissionPercent > 0 ||
+        staffCosts.netCommissionPercent > 0 ||
         staffCosts.salaries.length > 0,
       month: summarize(monthBuckets).total,
       year: { buckets: applyExpenses(summarize(yearBuckets), expenses).buckets, groups: groupLimits },

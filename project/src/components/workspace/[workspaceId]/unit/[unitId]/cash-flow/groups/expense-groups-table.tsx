@@ -1,4 +1,4 @@
-import type { ExpenseGroupInfo, ExpenseGroupSummary } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
+import type { ExpenseGroupInfo, ExpenseGroupSummary, ExpenseOwner } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
 import type { ExpenseGroupIcon } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/expense-group-icon"
 import type { GroupSortField } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow-list"
 import type { SortDir } from "@/service/workspace/[workspaceId]/unit/unit-list"
@@ -25,7 +25,7 @@ type Props = {
   query: { q: string; sort: GroupSortField; dir: SortDir } & Record<string, string>
   pathname: string
   workspaceId: string
-  unitId: string
+  owner: ExpenseOwner
   // Sem permissão, a coluna de ações (editar/excluir) não aparece.
   canManage: boolean
   limitLabel: string
@@ -39,7 +39,7 @@ export function ExpenseGroupsTable({
   query,
   pathname,
   workspaceId,
-  unitId,
+  owner,
   canManage,
   limitLabel,
 }: Props) {
@@ -111,7 +111,7 @@ export function ExpenseGroupsTable({
                   {!group.automatic && (
                     <ExpenseGroupActions
                       workspaceId={workspaceId}
-                      unitId={unitId}
+                      owner={owner}
                       icons={icons}
                       limitMonths={limitMonths}
                       group={group}

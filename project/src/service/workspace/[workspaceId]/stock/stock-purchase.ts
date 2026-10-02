@@ -1,4 +1,5 @@
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone";
+import type { ExpenseOwner } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense";
 
 const MAX_DESCRIPTION_LENGTH = 80;
 
@@ -15,17 +16,17 @@ export function stockPurchaseExpense({ productName, previousQuantity, quantity, 
   return { description, amountCents: bought * costCents };
 }
 
-// Lança a compra como despesa paga hoje (em Brasília), no grupo de insumos da unidade.
+// Lança a compra como despesa paga hoje (em Brasília), no grupo de insumos de quem paga: a
+// unidade ou a carteira.
 export async function recordStockPurchase(
-  change: StockChange & { unitId: string; productId: string },
+  change: StockChange & { payer: ExpenseOwner; productId: string },
   {
     ensureGroup,
     insert,
     now,
   }: {
-    ensureGroup: (unitId: string, name: string) => Promise<string>;
-    insert: (data: {
-      unitId: string;
+    ensureGroup: (payer: ExpenseOwner, name: string) => Promise<string>;
+    insert: (data: ExpenseOwner & {
       groupId: string;
       description: string;
       amountCents: number;
@@ -40,10 +41,10 @@ export async function recordStockPurchase(
   const expense = stockPurchaseExpense(change);
   if (!expense) return;
 
-  const groupId = await ensureGroup(change.unitId, SUPPLIES_GROUP_NAME);
+  const groupId = await ensureGroup(change.payer, SUPPLIES_GROUP_NAME);
   const date = new Date(now.getTime() - BRT_OFFSET_HOURS * 60 * 60 * 1000).toISOString().slice(0, 10);
   await insert({
-    unitId: change.unitId,
+    ...change.payer,
     groupId,
     ...expense,
     date,
@@ -51,4 +52,25 @@ export async function recordStockPurchase(
     series: null,
     productId: change.productId,
   });
+}
+
+export type PurchasePayerResult =
+  | { ok: true; payer: ExpenseOwner }
+  | { ok: false; error: "invalid_payer" | "stock_has_no_wallet" };
+
+// Quem paga, como vem do campo "payer": "wallet" (a carteira ligada ao estoque) ou o id de uma
+// das unidades que usam o estoque. Sem escolha, paga a unidade da página (fallbackUnitId).
+export function parsePurchasePayer(
+  value: unknown,
+  stock: { unitIds: string[]; walletId: string | null },
+  fallbackUnitId: string | null,
+): PurchasePayerResult {
+  if (value == null || value === "") {
+    return fallbackUnitId ? { ok: true, payer: { unitId: fallbackUnitId } } : { ok: false, error: "invalid_payer" };
+  }
+  if (value === "wallet") {
+    return stock.walletId ? { ok: true, payer: { walletId: stock.walletId } } : { ok: false, error: "stock_has_no_wallet" };
+  }
+  if (typeof value === "string" && stock.unitIds.includes(value)) return { ok: true, payer: { unitId: value } };
+  return { ok: false, error: "invalid_payer" };
 }

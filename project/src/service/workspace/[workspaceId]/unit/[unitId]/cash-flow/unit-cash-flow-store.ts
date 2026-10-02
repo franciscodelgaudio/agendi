@@ -63,13 +63,9 @@ export async function loadUnitNet(unit: CashFlowUnit, range: DayRange, today: st
     ]),
     Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(range)]),
   ]);
-  const { commissionRates, grossCommissionPercent, salaries } = teamPayRates(team, unit.id);
+  const { commissionRates, ...staffRates } = teamPayRates(team, unit.id);
   return applyExpenses(
-    applyStaffCosts(summarizeCashFlow([range], appointments, [], revenueShare, commissionRates), {
-      grossCommissionPercent,
-      salaries,
-      today,
-    }),
+    applyStaffCosts(summarizeCashFlow([range], appointments, [], revenueShare, commissionRates), { ...staffRates, today }),
     expenses,
   ).total.real.netCents;
 }
@@ -91,8 +87,8 @@ export async function loadUnitCashFlow(workspaceId: string, unit: CashFlowUnit, 
       .lean(),
     Expense.aggregate<ExpenseGroupTotal>([unitMatch, ...expenseGroupTotalsPipeline(shown)]),
   ]);
-  const { commissionRates, grossCommissionPercent, salaries } = teamPayRates(team, unit.id);
-  const staffCosts = { grossCommissionPercent, salaries, today };
+  const { commissionRates, ...staffRates } = teamPayRates(team, unit.id);
+  const staffCosts = { ...staffRates, today };
   const summary = applyExpenses(
     applyStaffCosts(summarizeCashFlow(buckets, appointments, [], revenueShare, commissionRates), staffCosts),
     expenses,
@@ -111,8 +107,9 @@ export async function loadUnitCashFlow(workspaceId: string, unit: CashFlowUnit, 
       paidCents: paidByGroup.get(group._id.toString()) ?? 0,
     })),
     groupLimits: groups.map(groupLimitsOf),
-    hasCommission: Object.keys(commissionRates).length > 0 || grossCommissionPercent > 0,
-    hasSalary: salaries.length > 0,
+    hasCommission:
+      Object.keys(commissionRates).length > 0 || staffRates.grossCommissionPercent > 0 || staffRates.netCommissionPercent > 0,
+    hasSalary: staffRates.salaries.length > 0,
     hasExpenses: expenses.length > 0,
   };
 }

@@ -24,6 +24,7 @@ import {
 const commissionBaseItems: { value: CommissionBase; label: string }[] = [
   { value: "services", label: "Sobre os serviços que a pessoa fez" },
   { value: "gross", label: "Sobre o faturamento bruto da unidade" },
+  { value: "net", label: "Sobre o faturamento líquido da unidade (após o repasse)" },
 ]
 
 // Comissão, salário e bônus combináveis; null/vazio enquanto não foi definido.

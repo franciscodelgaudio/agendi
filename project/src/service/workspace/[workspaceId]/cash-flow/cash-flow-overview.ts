@@ -1,4 +1,10 @@
-import type { DayRange, ExpenseCashFlowAmounts, ExpenseCashFlowSummary } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
+import {
+  applyExpenses,
+  type DayRange,
+  type ExpenseCashFlowAmounts,
+  type ExpenseCashFlowSummary,
+  type ExpenseDayCents,
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
 
 // Caixa de todas as unidades: cada unidade é calculada com as próprias regras e depois somada.
 
@@ -52,4 +58,14 @@ export function mergeGroupsByName<T extends { name: string; paidCents: number }>
 export function sumBalances(balances: (number | null)[]): number | null {
   const known = balances.filter((cents) => cents !== null);
   return known.length > 0 ? known.reduce((sum, cents) => sum + cents, 0) : null;
+}
+
+// Despesas da carteira nos mesmos intervalos do caixa das unidades, para somar com elas: só
+// despesa, sem receita nem equipe.
+export function walletExpenseSummary(buckets: DayRange[], expenses: ExpenseDayCents[]): ExpenseCashFlowSummary {
+  const zero = { grossCents: 0, partnerShareCents: 0, commissionCents: 0, salaryCents: 0, netCents: 0 };
+  return applyExpenses(
+    { buckets: buckets.map((bucket) => ({ ...bucket, real: zero, forecast: zero })), total: { real: zero, forecast: zero } },
+    expenses,
+  );
 }

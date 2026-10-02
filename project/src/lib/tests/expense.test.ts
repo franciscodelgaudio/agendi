@@ -13,11 +13,16 @@ import {
   setGroupLimitForMonth,
   setExpensePaid,
   staffExpenseGroups,
+  staffExpenses,
   summarizeExpenseGroups,
   updateExpense,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
+const WALLET_ID = "64b7f0c2a1b2c3d4e5f60730";
+// Dono da despesa: a unidade ou a carteira.
+const UNIT = { unitId: UNIT_ID };
+const WALLET = { walletId: WALLET_ID };
 const GROUP_ID = "64b7f0c2a1b2c3d4e5f60740";
 const EXPENSE_ID = "64b7f0c2a1b2c3d4e5f60750";
 const SERIES_ID = "64b7f0c2a1b2c3d4e5f60790";
@@ -40,10 +45,10 @@ describe("createExpense", () => {
   it("cria a despesa pendente na unidade com o valor em centavos", async () => {
     const deps = makeDeps();
 
-    const result = await createExpense(validInput, UNIT_ID, deps);
+    const result = await createExpense(validInput, UNIT, deps);
 
     expect(result).toEqual({ ok: true, expenseIds: [`${EXPENSE_ID}-1`] });
-    expect(deps.groupExists).toHaveBeenCalledWith(UNIT_ID, GROUP_ID);
+    expect(deps.groupExists).toHaveBeenCalledWith(UNIT, GROUP_ID);
     expect(deps.insert).toHaveBeenCalledWith([
       {
         unitId: UNIT_ID,
@@ -60,7 +65,7 @@ describe("createExpense", () => {
   it("marcada como paga, guarda quando foi paga", async () => {
     const deps = makeDeps();
 
-    await createExpense({ ...validInput, paid: "on" }, UNIT_ID, deps);
+    await createExpense({ ...validInput, paid: "on" }, UNIT, deps);
 
     expect(deps.insert).toHaveBeenCalledWith([expect.objectContaining({ paidAt: NOW })]);
   });
@@ -68,7 +73,7 @@ describe("createExpense", () => {
   it("remove espaços das pontas da descrição, do valor e do dia", async () => {
     const deps = makeDeps();
 
-    await createExpense({ ...validInput, description: "  Luz  ", amount: " 10 ", date: " 2026-09-01 " }, UNIT_ID, deps);
+    await createExpense({ ...validInput, description: "  Luz  ", amount: " 10 ", date: " 2026-09-01 " }, UNIT, deps);
 
     expect(deps.insert).toHaveBeenCalledWith([
       expect.objectContaining({ description: "Luz", amountCents: 1_000, date: "2026-09-01" }),
@@ -78,7 +83,7 @@ describe("createExpense", () => {
   it("aceita descrição com exatamente 80 caracteres", async () => {
     const deps = makeDeps();
 
-    const result = await createExpense({ ...validInput, description: "a".repeat(80) }, UNIT_ID, deps);
+    const result = await createExpense({ ...validInput, description: "a".repeat(80) }, UNIT, deps);
 
     expect(result).toEqual({ ok: true, expenseIds: [`${EXPENSE_ID}-1`] });
   });
@@ -95,7 +100,7 @@ describe("createExpense", () => {
   ])("retorna erro sem salvar quando %s", async (_label, input, error) => {
     const deps = makeDeps();
 
-    const result = await createExpense(input, UNIT_ID, deps);
+    const result = await createExpense(input, UNIT, deps);
 
     expect(result).toEqual({ ok: false, error });
     expect(deps.insert).not.toHaveBeenCalled();
@@ -106,7 +111,7 @@ describe("createExpense", () => {
 
     const result = await createExpense(
       { ...validInput, amount: "100.00", date: "2026-01-31", repeat: "installments", count: "3" },
-      UNIT_ID,
+      UNIT,
       deps,
     );
 
@@ -130,7 +135,7 @@ describe("createExpense", () => {
   it("recorrente repete o mesmo valor a cada mês", async () => {
     const deps = makeDeps();
 
-    await createExpense({ ...validInput, amount: "1200.00", repeat: "recurring", count: "2" }, UNIT_ID, deps);
+    await createExpense({ ...validInput, amount: "1200.00", repeat: "recurring", count: "2" }, UNIT, deps);
 
     expect(deps.insert).toHaveBeenCalledWith([
       expect.objectContaining({
@@ -149,7 +154,7 @@ describe("createExpense", () => {
   it("numa série marcada como paga, só o primeiro lançamento fica pago", async () => {
     const deps = makeDeps();
 
-    await createExpense({ ...validInput, paid: "on", repeat: "recurring", count: "3" }, UNIT_ID, deps);
+    await createExpense({ ...validInput, paid: "on", repeat: "recurring", count: "3" }, UNIT, deps);
 
     const entries = deps.insert.mock.calls[0][0] as { paidAt: Date | null }[];
     expect(entries.map((entry) => entry.paidAt)).toEqual([NOW, null, null]);
@@ -158,7 +163,7 @@ describe("createExpense", () => {
   it.each(["none", "", undefined])("repetição %j cria um lançamento só, ignorando a quantidade", async (repeat) => {
     const deps = makeDeps();
 
-    await createExpense({ ...validInput, repeat, count: "5" }, UNIT_ID, deps);
+    await createExpense({ ...validInput, repeat, count: "5" }, UNIT, deps);
 
     expect(deps.insert).toHaveBeenCalledWith([expect.objectContaining({ series: null })]);
   });
@@ -166,7 +171,7 @@ describe("createExpense", () => {
   it("aceita série com 60 lançamentos", async () => {
     const deps = makeDeps();
 
-    const result = await createExpense({ ...validInput, repeat: "recurring", count: "60" }, UNIT_ID, deps);
+    const result = await createExpense({ ...validInput, repeat: "recurring", count: "60" }, UNIT, deps);
 
     expect(result.ok && result.expenseIds).toHaveLength(60);
   });
@@ -182,7 +187,7 @@ describe("createExpense", () => {
   ])("retorna erro sem salvar quando a série tem %s", async (_label, input, error) => {
     const deps = makeDeps();
 
-    const result = await createExpense(input, UNIT_ID, deps);
+    const result = await createExpense(input, UNIT, deps);
 
     expect(result).toEqual({ ok: false, error });
     expect(deps.insert).not.toHaveBeenCalled();
@@ -191,18 +196,50 @@ describe("createExpense", () => {
   it("não usa grupo de outra unidade", async () => {
     const deps = makeDeps({ groupExists: false });
 
-    const result = await createExpense(validInput, UNIT_ID, deps);
+    const result = await createExpense(validInput, UNIT, deps);
 
     expect(result).toEqual({ ok: false, error: "group_not_found" });
     expect(deps.insert).not.toHaveBeenCalled();
   });
 
-  it.each([null, undefined, ""])("unidade não encontrada quando o id é %j", async (unitId) => {
+  it("cria a despesa na carteira, sem unidade, com o grupo da carteira", async () => {
     const deps = makeDeps();
 
-    const result = await createExpense(validInput, unitId, deps);
+    const result = await createExpense(validInput, WALLET, deps);
 
-    expect(result).toEqual({ ok: false, error: "unit_not_found" });
+    expect(result).toEqual({ ok: true, expenseIds: [`${EXPENSE_ID}-1`] });
+    expect(deps.groupExists).toHaveBeenCalledWith(WALLET, GROUP_ID);
+    expect(deps.insert).toHaveBeenCalledWith([
+      {
+        walletId: WALLET_ID,
+        groupId: GROUP_ID,
+        description: "DAS de setembro",
+        amountCents: 85_040,
+        date: "2026-09-20",
+        paidAt: null,
+        series: null,
+      },
+    ]);
+  });
+
+  it("série da carteira grava todos os lançamentos na carteira", async () => {
+    const deps = makeDeps();
+
+    await createExpense({ ...validInput, repeat: "recurring", count: "2" }, WALLET, deps);
+
+    const entries = deps.insert.mock.calls[0][0] as Record<string, unknown>[];
+    expect(entries.map((entry) => [entry.walletId, entry.unitId])).toEqual([
+      [WALLET_ID, undefined],
+      [WALLET_ID, undefined],
+    ]);
+  });
+
+  it.each([null, undefined, { unitId: "" }, { walletId: "" }])("dono não encontrado quando é %j", async (owner) => {
+    const deps = makeDeps();
+
+    const result = await createExpense(validInput, owner, deps);
+
+    expect(result).toEqual({ ok: false, error: "owner_not_found" });
     expect(deps.insert).not.toHaveBeenCalled();
   });
 });
@@ -218,7 +255,7 @@ describe("updateExpense", () => {
   it("atualiza grupo, descrição, valor e dia sem mexer no pagamento", async () => {
     const deps = makeDeps();
 
-    const result = await updateExpense({ ...validInput, paid: "on" }, UNIT_ID, EXPENSE_ID, deps);
+    const result = await updateExpense({ ...validInput, paid: "on" }, UNIT, EXPENSE_ID, deps);
 
     expect(result).toEqual({ ok: true });
     expect(deps.update).toHaveBeenCalledWith(
@@ -231,7 +268,7 @@ describe("updateExpense", () => {
   it("nesta e nas próximas da série, atualiza grupo, descrição e valor, mas não o dia de cada uma", async () => {
     const deps = makeDeps();
 
-    const result = await updateExpense({ ...validInput, scope: "following" }, UNIT_ID, EXPENSE_ID, deps);
+    const result = await updateExpense({ ...validInput, scope: "following" }, UNIT, EXPENSE_ID, deps);
 
     expect(result).toEqual({ ok: true });
     expect(deps.update).toHaveBeenCalledWith(
@@ -244,7 +281,7 @@ describe("updateExpense", () => {
   it.each(["this", "", "all", undefined])("escopo %j altera só esta despesa", async (scope) => {
     const deps = makeDeps();
 
-    await updateExpense({ ...validInput, scope }, UNIT_ID, EXPENSE_ID, deps);
+    await updateExpense({ ...validInput, scope }, UNIT, EXPENSE_ID, deps);
 
     expect(deps.update).toHaveBeenCalledWith(EXPENSE_ID, expect.objectContaining({ date: "2026-09-20" }), "this");
   });
@@ -252,7 +289,7 @@ describe("updateExpense", () => {
   it("não salva quando o valor é inválido", async () => {
     const deps = makeDeps();
 
-    const result = await updateExpense({ ...validInput, amount: "1.234" }, UNIT_ID, EXPENSE_ID, deps);
+    const result = await updateExpense({ ...validInput, amount: "1.234" }, UNIT, EXPENSE_ID, deps);
 
     expect(result).toEqual({ ok: false, error: "invalid_amount" });
     expect(deps.update).not.toHaveBeenCalled();
@@ -261,19 +298,29 @@ describe("updateExpense", () => {
   it("não move para grupo de outra unidade", async () => {
     const deps = makeDeps({ groupExists: false });
 
-    const result = await updateExpense(validInput, UNIT_ID, EXPENSE_ID, deps);
+    const result = await updateExpense(validInput, UNIT, EXPENSE_ID, deps);
 
     expect(result).toEqual({ ok: false, error: "group_not_found" });
     expect(deps.update).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["sem unidade", null, EXPENSE_ID],
-    ["sem despesa", UNIT_ID, ""],
-  ])("despesa não encontrada quando %s", async (_label, unitId, expenseId) => {
+  it("na carteira, confere o grupo na carteira", async () => {
     const deps = makeDeps();
 
-    const result = await updateExpense(validInput, unitId, expenseId, deps);
+    const result = await updateExpense(validInput, WALLET, EXPENSE_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.groupExists).toHaveBeenCalledWith(WALLET, GROUP_ID);
+  });
+
+  it.each([
+    ["sem dono", null, EXPENSE_ID],
+    ["sem id da carteira", { walletId: "" }, EXPENSE_ID],
+    ["sem despesa", UNIT, ""],
+  ])("despesa não encontrada quando %s", async (_label, owner, expenseId) => {
+    const deps = makeDeps();
+
+    const result = await updateExpense(validInput, owner, expenseId, deps);
 
     expect(result).toEqual({ ok: false, error: "expense_not_found" });
     expect(deps.update).not.toHaveBeenCalled();
@@ -282,7 +329,7 @@ describe("updateExpense", () => {
   it("despesa não encontrada quando ela não existe na unidade", async () => {
     const deps = makeDeps({ found: false });
 
-    const result = await updateExpense(validInput, UNIT_ID, EXPENSE_ID, deps);
+    const result = await updateExpense(validInput, UNIT, EXPENSE_ID, deps);
 
     expect(result).toEqual({ ok: false, error: "expense_not_found" });
   });
@@ -763,5 +810,63 @@ describe("monthlyDates", () => {
 
   it("considera fevereiro de ano bissexto", () => {
     expect(monthlyDates("2028-01-30", 2)).toEqual(["2028-01-30", "2028-02-29"]);
+  });
+});
+
+describe("staffExpenses", () => {
+  // Valores reais do mês; bruto e líquido não viram despesa.
+  const real = (partnerShareCents: number, commissionCents: number, salaryCents: number) => ({
+    grossCents: 999_999,
+    partnerShareCents,
+    commissionCents,
+    salaryCents,
+    netCents: -1,
+  });
+
+  it("vira uma despesa paga e automática por tipo, no dia dado, nos grupos equipe e repasse", () => {
+    const result = staffExpenses(real(33_600, 27_329, 20_000), "2026-10-31");
+
+    expect(result).toEqual([
+      {
+        id: "commission",
+        groupId: "team",
+        description: "Comissões",
+        amountCents: 27_329,
+        date: "2026-10-31",
+        paid: true,
+        series: null,
+        automatic: true,
+      },
+      {
+        id: "salary",
+        groupId: "team",
+        description: "Salários",
+        amountCents: 20_000,
+        date: "2026-10-31",
+        paid: true,
+        series: null,
+        automatic: true,
+      },
+      {
+        id: "partner_share",
+        groupId: "partner_share",
+        description: "Repasse",
+        amountCents: 33_600,
+        date: "2026-10-31",
+        paid: true,
+        series: null,
+        automatic: true,
+      },
+    ]);
+  });
+
+  it("tipo sem valor no mês não aparece", () => {
+    const result = staffExpenses(real(0, 15_000, 0), "2026-10-31");
+
+    expect(result.map((expense) => expense.id)).toEqual(["commission"]);
+  });
+
+  it("sem custo da equipe nem repasse, não há despesa automática", () => {
+    expect(staffExpenses(real(0, 0, 0), "2026-10-31")).toEqual([]);
   });
 });

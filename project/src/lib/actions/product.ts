@@ -6,6 +6,7 @@ import { getSessionUserId } from "@/service/(auth)/session"
 import { findManagedUnit } from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-access"
 import { forbiddenMessage, type UnitAccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
 import type { Permission } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import type { ExpenseOwner } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
 import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
 import {
   addStockItem,
@@ -26,13 +27,14 @@ import {
 import { loadExpenseGroupIcons } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/expense-group-icon-store"
 import { findUnitProducts } from "@/service/workspace/[workspaceId]/stock/products/product-lookup"
 import { PRODUCT_SEARCH_LIMIT, productSearchPipeline } from "@/service/workspace/[workspaceId]/stock/products/product-search"
-import { recordStockPurchase } from "@/service/workspace/[workspaceId]/stock/stock-purchase"
+import { parsePurchasePayer, recordStockPurchase, type PurchasePayerResult } from "@/service/workspace/[workspaceId]/stock/stock-purchase"
 import { addLots, consumeLots, type Lot } from "@/service/workspace/[workspaceId]/stock/stock-lots"
 import { transferProduct, type TransferProductError } from "@/service/workspace/[workspaceId]/stock/stock-movement"
 import { findUnitHolder, recordMovement, updateItemLots } from "@/service/workspace/[workspaceId]/stock/stock-store"
 import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Product } from "@/models/Product"
+import { Stock } from "@/models/Stock"
 import { StockItem } from "@/models/StockItem"
 import { Unit } from "@/models/Unit"
 import type { ProductOption } from "@/components/workspace/[workspaceId]/shared/stock/product-picker"
@@ -41,6 +43,7 @@ type AddStockItemError = Extract<AddStockItemResult, { ok: false }>["error"]
 type CreateCatalogProductError = Extract<CreateCatalogProductResult, { ok: false }>["error"]
 type RegisterPurchaseError = Extract<RegisterPurchaseResult, { ok: false }>["error"]
 type AdjustStockError = Extract<AdjustStockResult, { ok: false }>["error"]
+type PayerError = Extract<PurchasePayerResult, { ok: false }>["error"]
 
 const errorMessages: Record<
   | CreateProductError
@@ -50,6 +53,8 @@ const errorMessages: Record<
   | AddStockItemError
   | RegisterPurchaseError
   | AdjustStockError
+  | PayerError
+  | "stock_not_found"
   | "out_of_stock"
   | "unauthenticated",
   string
@@ -71,6 +76,9 @@ const errorMessages: Record<
   same_unit: "Escolha uma unidade de destino diferente da de origem.",
   same_stock: "As duas unidades usam o mesmo estoque compartilhado; não há o que transferir.",
   insufficient_stock: "O estoque de origem não tem essa quantidade do produto.",
+  invalid_payer: "Escolha quem paga a compra: uma unidade do estoque ou a carteira dele.",
+  stock_has_no_wallet: "Este estoque não está ligado a uma carteira. Escolha a unidade que paga.",
+  stock_not_found: "Estoque não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
@@ -99,15 +107,45 @@ async function findManagedTarget(
   return { userId, unit: { ...access.unit, ...(await findUnitHolder(access.unit.unitId)) } }
 }
 
-// Compra vira despesa paga no grupo de insumos da unidade, criado se ela ainda não tiver.
+// Quem paga a compra (campo "payer"): uma unidade do estoque ou a carteira ligada a ele, que pede
+// também gerenciar o caixa. Sem escolha, a unidade da página.
+async function resolvePayer(
+  workspaceId: string,
+  userId: string,
+  value: FormDataEntryValue | null,
+  stock: { unitIds: string[]; walletId: string | null },
+  fallbackUnitId: string | null,
+): Promise<{ payer: ExpenseOwner } | { error: string }> {
+  const result = parsePurchasePayer(value, stock, fallbackUnitId)
+  if (!result.ok) return { error: errorMessages[result.error] }
+  if ("walletId" in result.payer) {
+    const managed = await findManagedWorkspace(workspaceId, userId, "cash_flow.manage")
+    if (!managed.ok) return { error: accessErrorMessage(managed.error, "cash_flow.manage") }
+  }
+  return { payer: result.payer }
+}
+
+// Quem paga a compra da unidade: o estoque é o compartilhado dela, se houver.
+function unitPayer(workspaceId: string, userId: string, unit: ManagedTarget["unit"], formData: FormData) {
+  return resolvePayer(
+    workspaceId,
+    userId,
+    formData.get("payer"),
+    { unitIds: unit.unitIds, walletId: unit.stock?.walletId ?? null },
+    unit.unitId,
+  )
+}
+
+// Compra vira despesa paga no grupo de insumos de quem paga, criado se ainda não houver.
 async function recordPurchase(userId: string, change: Parameters<typeof recordStockPurchase>[0]) {
   await recordStockPurchase(change, {
-    ensureGroup: async (unitId, name) => {
+    ensureGroup: async (payer, name) => {
       const icons = await loadExpenseGroupIcons()
       const iconId = (icons.find((icon) => icon.key === "package") ?? icons[0]).id
+      const owner = "unitId" in payer ? { unitId: payer.unitId } : { walletId: payer.walletId }
       const group = await ExpenseGroup.findOneAndUpdate(
-        { unitId, name },
-        { $setOnInsert: { unitId, name, monthlyLimitCents: null, iconId } },
+        { ...owner, name },
+        { $setOnInsert: { ...owner, name, monthlyLimitCents: null, iconId } },
         { upsert: true, returnDocument: "after", collation: { locale: "pt", strength: 1 } },
       )
         .select({ _id: 1 })
@@ -119,15 +157,16 @@ async function recordPurchase(userId: string, change: Parameters<typeof recordSt
   })
 }
 
-// Lote comprado: despesa da unidade pelo preço pago e registro no histórico.
+// Lote comprado: despesa de quem paga pelo preço pago e registro no histórico do estoque.
 async function recordLotPurchase(
   userId: string,
-  unit: { unitId: string; holderId: string },
+  holderId: string,
+  payer: ExpenseOwner,
   purchase: { productId: string; productName: string; quantity: number; unitCostCents: number },
 ) {
   await Promise.all([
     recordPurchase(userId, {
-      unitId: unit.unitId,
+      payer,
       productId: purchase.productId,
       productName: purchase.productName,
       previousQuantity: 0,
@@ -136,8 +175,9 @@ async function recordLotPurchase(
     }),
     recordMovement({
       productId: purchase.productId,
-      holderId: unit.holderId,
-      unitId: unit.unitId,
+      holderId,
+      unitId: "unitId" in payer ? payer.unitId : null,
+      walletId: "walletId" in payer ? payer.walletId : null,
       kind: "purchase",
       quantity: purchase.quantity,
       costCents: purchase.quantity * purchase.unitCostCents,
@@ -178,6 +218,8 @@ export async function createProductAction(
   const target = await findManagedTarget(workspaceId, unitId)
   if ("error" in target) return { error: target.error }
   const { userId, unit } = target
+  const paying = await unitPayer(workspaceId, userId, unit, formData)
+  if ("error" in paying) return paying
 
   const result = await createProduct(productInput(formData), unit.unitId, async (input) => {
     const { quantity, name, costCents, notes, rating, avatarUrl } = input
@@ -190,7 +232,12 @@ export async function createProductAction(
       lots: firstLots(quantity, costCents),
     })
     if (quantity > 0) {
-      await recordLotPurchase(userId, unit, { productId: id, productName: name, quantity, unitCostCents: costCents })
+      await recordLotPurchase(userId, unit.holderId, paying.payer, {
+        productId: id,
+        productName: name,
+        quantity,
+        unitCostCents: costCents,
+      })
     }
     return { id }
   })
@@ -212,17 +259,54 @@ export async function addStockItemAction(
   const target = await findManagedTarget(workspaceId, unitId)
   if ("error" in target) return { error: target.error }
   const { userId, unit } = target
+  const paying = await unitPayer(workspaceId, userId, unit, formData)
+  if ("error" in paying) return paying
 
+  return addCatalogItem(userId, { workspaceId: unit.workspaceId, holderId: unit.holderId }, paying.payer, formData)
+}
+
+// Põe no estoque compartilhado, pela página de estoque do workspace, um produto do catálogo;
+// paga uma das unidades dele ou a carteira ligada a ele (campo "payer").
+export async function addSharedStockItemAction(
+  workspaceId: string,
+  stockId: string,
+  _prev: ProductActionState,
+  formData: FormData,
+): Promise<ProductActionState> {
+  const userId = await getSessionUserId()
+  if (!userId) return { error: errorMessages.unauthenticated }
+  const managed = await findManagedWorkspace(workspaceId, userId, "stock.manage")
+  if (!managed.ok) return { error: accessErrorMessage(managed.error, "stock.manage") }
+  const stock = isObjectIdOrHexString(stockId)
+    ? await Stock.findOne({ _id: stockId, workspaceId: managed.access.id }).select({ units: 1, walletId: 1 }).lean()
+    : null
+  if (!stock) return { error: errorMessages.stock_not_found }
+
+  const holder = {
+    unitIds: stock.units.map((unit) => unit.unitId.toString()),
+    walletId: stock.walletId?.toString() ?? null,
+  }
+  const paying = await resolvePayer(managed.access.id, userId, formData.get("payer"), holder, null)
+  if ("error" in paying) return paying
+
+  return addCatalogItem(userId, { workspaceId: managed.access.id, holderId: stock._id.toString() }, paying.payer, formData)
+}
+
+// Cria o item do produto do catálogo no estoque, pelo preço da última compra, e lança a compra.
+async function addCatalogItem(
+  userId: string,
+  { workspaceId, holderId }: { workspaceId: string; holderId: string },
+  payer: ExpenseOwner,
+  formData: FormData,
+): Promise<ProductActionState> {
   const input = { productId: formData.get("productId"), quantity: formData.get("quantity") }
   const result = await addStockItem(input, async (productId, quantity) => {
-    const product = await Product.findOne({ _id: productId, workspaceId: unit.workspaceId })
-      .select({ name: 1, costCents: 1 })
-      .lean()
+    const product = await Product.findOne({ _id: productId, workspaceId }).select({ name: 1, costCents: 1 }).lean()
     if (!product) return "not_found"
     try {
       await StockItem.create({
         productId: product._id,
-        holderId: unit.holderId,
+        holderId,
         quantity,
         lots: firstLots(quantity, product.costCents),
       })
@@ -231,7 +315,7 @@ export async function addStockItemAction(
       throw error
     }
     if (quantity > 0) {
-      await recordLotPurchase(userId, unit, {
+      await recordLotPurchase(userId, holderId, payer, {
         productId,
         productName: product.name,
         quantity,
@@ -300,6 +384,8 @@ export async function registerPurchaseAction(
   const target = await resolveProductTarget(workspaceId, unitId, productId)
   if ("error" in target) return { error: target.error }
   const { userId } = target
+  const paying = await unitPayer(workspaceId, userId, target.unit, formData)
+  if ("error" in paying) return paying
 
   const input = { quantity: formData.get("quantity"), cost: formData.get("cost") }
   const result = await registerPurchase(input, target.productId, async (id, { quantity, unitCostCents }) => {
@@ -313,7 +399,12 @@ export async function registerPurchaseAction(
     })
     if (matchedCount === 0) return "not_found"
     await Product.updateOne({ _id: id }, { $set: { costCents: unitCostCents } })
-    await recordLotPurchase(userId, unit, { productId: id, productName: product.name, quantity, unitCostCents })
+    await recordLotPurchase(userId, unit.holderId, paying.payer, {
+      productId: id,
+      productName: product.name,
+      quantity,
+      unitCostCents,
+    })
     return "purchased"
   })
 

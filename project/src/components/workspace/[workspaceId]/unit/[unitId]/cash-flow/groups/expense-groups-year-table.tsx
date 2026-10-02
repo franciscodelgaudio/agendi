@@ -1,4 +1,4 @@
-import type { ExpenseGroupYearOverview, YearOverviewCell, YearOverviewRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
+import type { ExpenseGroupYearOverview, ExpenseOwner, YearOverviewCell, YearOverviewRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
 import { PlannedLimitCell } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/planned-limit-cell"
 import { currencyFormat } from "@/components/shared/service-format"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -21,7 +21,7 @@ const STICKY = "sticky left-0 z-10 bg-background"
 const NUMBER = "px-4 text-right whitespace-nowrap tabular-nums"
 
 // Quem gerencia edita o planejado de cada grupo em cada mês.
-type Editing = { workspaceId: string; unitId: string }
+type Editing = { workspaceId: string; owner: ExpenseOwner }
 
 // Célula de planejado editável: o grupo, o mês dela e o mês seguinte (null em dezembro).
 type EditableCell = Editing & { groupId: string; month: string; nextMonth: string | null }
@@ -38,7 +38,7 @@ function AmountCells({ plannedCents, paidCents, editable }: YearOverviewCell & {
           <PlannedLimitCell
             key={String(plannedCents)}
             workspaceId={editable.workspaceId}
-            unitId={editable.unitId}
+            owner={editable.owner}
             groupId={editable.groupId}
             month={editable.month}
             cents={plannedCents}

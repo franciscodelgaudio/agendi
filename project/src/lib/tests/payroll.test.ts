@@ -8,6 +8,8 @@ import {
   removePayrollPayment,
   type PayrollMember,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/team/payroll";
+import type { CommissionRule } from "@/service/workspace/[workspaceId]/unit/[unitId]/team/unit-member";
+import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share";
 import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
 const MEMBER_ID = "64b7f0c2a1b2c3d4e5f60721";
@@ -15,13 +17,22 @@ const MEMBER_ID = "64b7f0c2a1b2c3d4e5f60721";
 const member = (overrides: Partial<PayrollMember> = {}): PayrollMember => ({
   memberId: MEMBER_ID,
   userId: "ana",
-  // Base da comissão (do vínculo, ou da função em vínculos antigos): os próprios serviços.
-  commissionBase: "services",
   startDate: null,
   payDay: 5,
-  commissionPercent: null,
+  // Regras de comissão do vínculo, somadas; vazio sem comissão.
+  commissionRules: [],
   salaryCents: 300_000,
   bonuses: [],
+  ...overrides,
+});
+
+// Sem descontos: sobre os atendimentos da própria pessoa.
+const rule = (overrides: Partial<CommissionRule> = {}): CommissionRule => ({
+  percent: 10,
+  source: "self",
+  userIds: [],
+  deductRevenueShare: false,
+  deductExpenseGroupIds: [],
   ...overrides,
 });
 
@@ -32,6 +43,8 @@ const total = (date: string, cents: number, therapistId = "ana") => ({
   count: 1,
   cents,
 });
+
+const expense = (date: string, cents: number, groupId = "card_fees") => ({ date, groupId, cents });
 
 describe("payrollDueDate", () => {
   it("vence no dia de pagamento do mês seguinte", () => {
@@ -101,7 +114,7 @@ describe("payrollAmount", () => {
     expect(payrollAmount(member({ startDate: "2026-10-01" }), "2026-09", []).salaryCents).toBe(0);
   });
 
-  it("comissão sobre os serviços: só os que a pessoa fez no mês", () => {
+  it("comissão sobre os próprios atendimentos: só os que a pessoa fez no mês", () => {
     const appointments = [
       total("2026-09-01", 10_000),
       total("2026-09-30", 20_000),
@@ -110,28 +123,198 @@ describe("payrollAmount", () => {
       total("2026-08-31", 40_000),
     ];
 
-    const amount = payrollAmount(member({ salaryCents: null, commissionPercent: 30 }), "2026-09", appointments);
+    const amount = payrollAmount(member({ salaryCents: null, commissionRules: [rule({ percent: 30 })] }), "2026-09", appointments);
 
     expect(amount).toEqual({ salaryCents: 0, commissionCents: 9_000 });
   });
 
-  it("comissão sobre os serviços com convite pendente não rende nada", () => {
-    const amount = payrollAmount(member({ userId: null, commissionPercent: 30 }), "2026-09", [total("2026-09-01", 10_000)]);
+  it("comissão sobre os próprios atendimentos com convite pendente não rende nada", () => {
+    const amount = payrollAmount(member({ userId: null, commissionRules: [rule({ percent: 30 })] }), "2026-09", [
+      total("2026-09-01", 10_000),
+    ]);
 
     expect(amount.commissionCents).toBe(0);
   });
 
-  it("comissão sobre o bruto do mês, arredondada", () => {
+  it("comissão sobre a unidade inteira, arredondada", () => {
     const appointments = [total("2026-09-01", 10_001), total("2026-09-02", 20_000, "bia"), total("2026-10-01", 99_000)];
 
     const amount = payrollAmount(
-      member({ commissionBase: "gross", userId: "rita", salaryCents: 180_000, commissionPercent: 2.5 }),
+      member({ userId: "rita", salaryCents: 180_000, commissionRules: [rule({ source: "unit", percent: 2.5 })] }),
       "2026-09",
       appointments,
     );
 
     // 2,5% de R$ 300,01 = 750,025 centavos.
     expect(amount).toEqual({ salaryCents: 180_000, commissionCents: 750 });
+  });
+
+  it("comissão sobre a unidade inteira com convite pendente conta normalmente", () => {
+    const amount = payrollAmount(member({ userId: null, commissionRules: [rule({ source: "unit" })] }), "2026-09", [
+      total("2026-09-01", 10_000, "bia"),
+    ]);
+
+    expect(amount.commissionCents).toBe(1_000);
+  });
+
+  it("comissão sobre os atendimentos das pessoas escolhidas", () => {
+    const appointments = [total("2026-09-01", 10_000), total("2026-09-02", 20_000, "bia"), total("2026-09-03", 50_000, "caio")];
+
+    const amount = payrollAmount(
+      member({ userId: "rita", salaryCents: null, commissionRules: [rule({ source: "members", userIds: ["ana", "bia"] })] }),
+      "2026-09",
+      appointments,
+    );
+
+    // 10% de R$ 100 + R$ 200; os atendimentos do Caio ficam de fora.
+    expect(amount.commissionCents).toBe(3_000);
+  });
+
+  it("unidade descontando o repasse: bruto menos o repasse", () => {
+    const share: RevenueShare = { period: "monthly", tiers: [{ upToCents: null, percent: 20 }] };
+    const appointments = [total("2026-09-01", 10_000), total("2026-09-02", 20_000, "bia"), total("2026-10-01", 99_000)];
+
+    const amount = payrollAmount(
+      member({ userId: "rita", salaryCents: null, commissionRules: [rule({ source: "unit", deductRevenueShare: true })] }),
+      "2026-09",
+      appointments,
+      share,
+    );
+
+    // 10% de R$ 300 − R$ 60 de repasse.
+    expect(amount).toEqual({ salaryCents: 0, commissionCents: 2_400 });
+  });
+
+  it("repasse semanal que atravessa o mês conta só os dias do mês", () => {
+    // Semana de 28/09 a 04/10: R$ 1.000 passa da faixa de R$ 500 e todo o faturamento repassa 20%.
+    const share: RevenueShare = {
+      period: "weekly",
+      tiers: [
+        { upToCents: 50_000, percent: 0 },
+        { upToCents: null, percent: 20 },
+      ],
+    };
+    const appointments = [total("2026-09-30", 40_000), total("2026-10-01", 60_000)];
+
+    const amount = payrollAmount(
+      member({ salaryCents: null, commissionRules: [rule({ source: "unit", deductRevenueShare: true })] }),
+      "2026-09",
+      appointments,
+      share,
+    );
+
+    // Setembro: R$ 400 − 20% (R$ 80) = R$ 320; 10% = R$ 32.
+    expect(amount.commissionCents).toBe(3_200);
+  });
+
+  it("descontando o repasse sem repasse (espaço próprio) é sobre o bruto", () => {
+    const amount = payrollAmount(
+      member({ salaryCents: null, commissionRules: [rule({ source: "unit", deductRevenueShare: true })] }),
+      "2026-09",
+      [total("2026-09-01", 10_000), total("2026-09-02", 20_000, "bia")],
+      null,
+    );
+
+    expect(amount.commissionCents).toBe(3_000);
+  });
+
+  it("próprios atendimentos descontando o repasse: só a parte do repasse que cabe a eles", () => {
+    const share: RevenueShare = { period: "monthly", tiers: [{ upToCents: null, percent: 20 }] };
+    const appointments = [total("2026-09-01", 10_000), total("2026-09-01", 30_000, "bia")];
+
+    const amount = payrollAmount(
+      member({ salaryCents: null, commissionRules: [rule({ deductRevenueShare: true })] }),
+      "2026-09",
+      appointments,
+      share,
+    );
+
+    // Repasse do dia: R$ 80, dos quais R$ 20 sobre os R$ 100 da Ana. 10% de R$ 80.
+    expect(amount.commissionCents).toBe(800);
+  });
+
+  it("unidade descontando despesas: só os grupos escolhidos, lançados no mês", () => {
+    const expenses = [expense("2026-09-10", 1_000), expense("2026-10-01", 500), expense("2026-09-05", 5_000, "rent")];
+
+    const amount = payrollAmount(
+      member({ salaryCents: null, commissionRules: [rule({ source: "unit", deductExpenseGroupIds: ["card_fees"] })] }),
+      "2026-09",
+      [total("2026-09-01", 10_000), total("2026-09-02", 20_000, "bia")],
+      null,
+      expenses,
+    );
+
+    // 10% de R$ 300 − R$ 10 de taxas de cartão.
+    expect(amount.commissionCents).toBe(2_900);
+  });
+
+  it("próprios atendimentos descontando despesas: na proporção do faturamento da pessoa no mês", () => {
+    const amount = payrollAmount(
+      member({ salaryCents: null, commissionRules: [rule({ deductExpenseGroupIds: ["card_fees"] })] }),
+      "2026-09",
+      [total("2026-09-01", 10_000), total("2026-09-20", 30_000, "bia")],
+      null,
+      [expense("2026-09-30", 2_000)],
+    );
+
+    // A Ana fez 1/4 do faturamento: desconta R$ 5 dos R$ 20. 10% de R$ 95.
+    expect(amount.commissionCents).toBe(950);
+  });
+
+  it("descontando repasse e despesas juntos", () => {
+    const share: RevenueShare = { period: "monthly", tiers: [{ upToCents: null, percent: 20 }] };
+
+    const amount = payrollAmount(
+      member({
+        salaryCents: null,
+        commissionRules: [rule({ source: "unit", deductRevenueShare: true, deductExpenseGroupIds: ["card_fees", "rent"] })],
+      }),
+      "2026-09",
+      [total("2026-09-01", 30_000)],
+      share,
+      [expense("2026-09-10", 400), expense("2026-09-11", 600, "rent")],
+    );
+
+    // 10% de R$ 300 − R$ 60 de repasse − R$ 10 de despesas.
+    expect(amount.commissionCents).toBe(2_300);
+  });
+
+  it("várias regras somadas", () => {
+    const amount = payrollAmount(
+      member({ salaryCents: null, commissionRules: [rule({ percent: 40 }), rule({ source: "unit", percent: 2 })] }),
+      "2026-09",
+      [total("2026-09-01", 10_000), total("2026-09-02", 20_000, "bia")],
+    );
+
+    // 40% de R$ 100 + 2% de R$ 300.
+    expect(amount.commissionCents).toBe(4_600);
+  });
+
+  it("descontos maiores que a receita zeram a regra, sem tirar das outras", () => {
+    const amount = payrollAmount(
+      member({
+        salaryCents: null,
+        commissionRules: [rule({ source: "unit", deductExpenseGroupIds: ["rent"] }), rule()],
+      }),
+      "2026-09",
+      [total("2026-09-01", 10_000)],
+      null,
+      [expense("2026-09-05", 15_000, "rent")],
+    );
+
+    expect(amount.commissionCents).toBe(1_000);
+  });
+
+  it("sem faturamento no mês, despesas não geram comissão", () => {
+    const amount = payrollAmount(
+      member({ salaryCents: null, commissionRules: [rule({ deductExpenseGroupIds: ["card_fees"] })] }),
+      "2026-09",
+      [],
+      null,
+      [expense("2026-09-05", 1_000)],
+    );
+
+    expect(amount.commissionCents).toBe(0);
   });
 });
 
@@ -194,17 +377,45 @@ describe("payrollReminders", () => {
   });
 
   it("valor devido zero não gera lembrete", () => {
-    const members = [member({ salaryCents: null, commissionPercent: 30 })];
+    const members = [member({ salaryCents: null, commissionRules: [rule({ percent: 30 })] })];
 
     expect(payrollReminders(members, [], [], "2026-10-05")).toEqual([]);
   });
 
   it("comissão do mês entra no valor devido", () => {
-    const members = [member({ salaryCents: null, commissionPercent: 30 })];
+    const members = [member({ salaryCents: null, commissionRules: [rule({ percent: 30 })] })];
 
     const [reminder] = payrollReminders(members, [], [total("2026-09-10", 10_000)], "2026-10-05");
 
     expect(reminder).toMatchObject({ month: "2026-09", salaryCents: 0, commissionCents: 3_000 });
+  });
+
+  it("comissão descontando o repasse usa o repasse da unidade", () => {
+    const share: RevenueShare = { period: "monthly", tiers: [{ upToCents: null, percent: 20 }] };
+    const members = [member({ salaryCents: null, commissionRules: [rule({ source: "unit", deductRevenueShare: true })] })];
+
+    const [reminder] = payrollReminders(members, [], [total("2026-09-10", 10_000)], "2026-10-05", share);
+
+    expect(reminder).toMatchObject({ month: "2026-09", salaryCents: 0, commissionCents: 800 });
+  });
+
+  it("comissão descontando despesas usa as despesas de cada mês", () => {
+    const members = [
+      member({
+        startDate: "2026-08-01",
+        salaryCents: null,
+        commissionRules: [rule({ source: "unit", deductExpenseGroupIds: ["card_fees"] })],
+      }),
+    ];
+    const appointments = [total("2026-08-10", 10_000), total("2026-09-10", 10_000)];
+    const expenses = [expense("2026-08-15", 2_000), expense("2026-09-15", 4_000)];
+
+    const reminders = payrollReminders(members, [], appointments, "2026-10-05", null, expenses);
+
+    expect(reminders.map((reminder) => [reminder.month, reminder.commissionCents])).toEqual([
+      ["2026-08", 800],
+      ["2026-09", 600],
+    ]);
   });
 
   it("data de início no futuro, sem lembrete", () => {

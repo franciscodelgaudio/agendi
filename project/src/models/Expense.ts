@@ -13,11 +13,13 @@ const expenseSeriesSchema = new Schema(
   { _id: false },
 );
 
-// Despesa lançada na unidade. date é o dia do lançamento ("2026-09-20"), que define o período
-// em que ela entra no caixa; paidAt fica null enquanto está pendente.
+// Despesa lançada na unidade ou na carteira. date é o dia do lançamento ("2026-09-20"), que
+// define o período em que ela entra no caixa; paidAt fica null enquanto está pendente.
 const expenseSchema = new Schema(
   {
-    unitId: { type: Schema.Types.ObjectId, ref: "Unit", required: true },
+    unitId: { type: Schema.Types.ObjectId, ref: "Unit", default: null },
+    // Despesa da carteira: em conjunto das unidades dela, fora do caixa de cada uma.
+    walletId: { type: Schema.Types.ObjectId, ref: "Wallet", default: null },
     groupId: { type: Schema.Types.ObjectId, ref: "ExpenseGroup", required: true, index: true },
     description: { type: String, required: true, trim: true },
     amountCents: { type: Number, required: true, min: 1 },
@@ -32,7 +34,13 @@ const expenseSchema = new Schema(
   { collection: "expenses", timestamps: true },
 );
 
+// Dono: a unidade ou a carteira, nunca as duas.
+expenseSchema.pre("validate", function () {
+  if (!this.unitId === !this.walletId) this.invalidate("unitId", "Informe a unidade ou a carteira.");
+});
+
 expenseSchema.index({ unitId: 1, date: 1 });
+expenseSchema.index({ walletId: 1, date: 1 });
 expenseSchema.index({ "series.id": 1, "series.number": 1 });
 
 expenseSchema.plugin(connectOnUse);

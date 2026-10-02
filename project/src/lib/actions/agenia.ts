@@ -121,11 +121,11 @@ export async function runAgeniaAction(workspaceId: string, name: string, rawInpu
     case "deleteAppointment":
       return done(await deleteAppointmentAction(workspaceId, s("unitId"), s("appointmentId")))
     case "createExpense":
-      return done(await createExpenseAction(workspaceId, s("unitId"), empty, form("createExpense", i)))
+      return done(await createExpenseAction(workspaceId, { unitId: s("unitId") }, empty, form("createExpense", i)))
     case "setExpensePaid":
-      return done(await setExpensePaidAction(workspaceId, s("unitId"), s("expenseId"), i.paid === true))
+      return done(await setExpensePaidAction(workspaceId, { unitId: s("unitId") }, s("expenseId"), i.paid === true))
     case "deleteExpense":
-      return done(await deleteExpenseAction(workspaceId, s("unitId"), s("expenseId"), i.scope === "following" ? "following" : "this"))
+      return done(await deleteExpenseAction(workspaceId, { unitId: s("unitId") }, s("expenseId"), i.scope === "following" ? "following" : "this"))
     case "inviteMember":
       return done(await inviteMemberAction(workspaceId, empty, form("inviteMember", i)))
     case "updateMember":

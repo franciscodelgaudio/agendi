@@ -246,16 +246,31 @@ describe("updateWallet", () => {
 });
 
 describe("deleteWallet", () => {
-  it("exclui a carteira", async () => {
-    const remove = vi.fn().mockResolvedValue(true);
+  // hasExpenses: a carteira tem despesas ou grupos de despesa lançados nela.
+  function makeDeps({ found = true, hasExpenses = false } = {}) {
+    return { remove: vi.fn().mockResolvedValue(found), hasExpenses: vi.fn().mockResolvedValue(hasExpenses) };
+  }
 
-    expect(await deleteWallet(WALLET_ID, remove)).toEqual({ ok: true });
-    expect(remove).toHaveBeenCalledWith(WALLET_ID);
+  it("exclui a carteira sem despesas", async () => {
+    const deps = makeDeps();
+
+    expect(await deleteWallet(WALLET_ID, deps)).toEqual({ ok: true });
+    expect(deps.hasExpenses).toHaveBeenCalledWith(WALLET_ID);
+    expect(deps.remove).toHaveBeenCalledWith(WALLET_ID);
+  });
+
+  it("não exclui a carteira com despesas ou grupos, para nada ficar sem dono", async () => {
+    const deps = makeDeps({ hasExpenses: true });
+
+    expect(await deleteWallet(WALLET_ID, deps)).toEqual({ ok: false, error: "wallet_has_expenses" });
+    expect(deps.remove).not.toHaveBeenCalled();
   });
 
   it("carteira não encontrada sem id ou quando ela não existe", async () => {
-    expect(await deleteWallet(null, vi.fn())).toEqual({ ok: false, error: "wallet_not_found" });
-    expect(await deleteWallet(WALLET_ID, vi.fn().mockResolvedValue(false))).toEqual({
+    const deps = makeDeps();
+    expect(await deleteWallet(null, deps)).toEqual({ ok: false, error: "wallet_not_found" });
+    expect(deps.hasExpenses).not.toHaveBeenCalled();
+    expect(await deleteWallet(WALLET_ID, makeDeps({ found: false }))).toEqual({
       ok: false,
       error: "wallet_not_found",
     });
@@ -357,6 +372,65 @@ describe("walletBalance", () => {
       balanceCents: 100_000,
       undistributedCents: null,
       units: [],
+    });
+  });
+
+  // walletExpenseCents: despesas pagas da própria carteira do dia do saldo inicial até hoje.
+  describe("com despesas da carteira", () => {
+    it("carteira compartilhada: as despesas saem do saldo da carteira", () => {
+      const wallet = {
+        openingBalance: opening,
+        units: [
+          { unitId: UNIT_A, amountCents: null },
+          { unitId: UNIT_B, amountCents: null },
+        ],
+      };
+
+      expect(walletBalance(wallet, { [UNIT_A]: 5_000, [UNIT_B]: -2_000 }, 8_000)).toEqual({
+        balanceCents: 95_000,
+        undistributedCents: null,
+        units: [
+          { unitId: UNIT_A, balanceCents: null },
+          { unitId: UNIT_B, balanceCents: null },
+        ],
+      });
+    });
+
+    it("carteira de uma unidade só: o saldo da unidade, que é o da carteira, também desconta", () => {
+      const wallet = { openingBalance: opening, units: [{ unitId: UNIT_A, amountCents: null }] };
+
+      expect(walletBalance(wallet, { [UNIT_A]: 5_000 }, 8_000)).toEqual({
+        balanceCents: 97_000,
+        undistributedCents: null,
+        units: [{ unitId: UNIT_A, balanceCents: 97_000 }],
+      });
+    });
+
+    it("carteira distribuída: as despesas saem do não distribuído, que pode ficar negativo, e não das partes", () => {
+      const wallet = {
+        openingBalance: opening,
+        units: [
+          { unitId: UNIT_A, amountCents: 60_000 },
+          { unitId: UNIT_B, amountCents: 40_000 },
+        ],
+      };
+
+      expect(walletBalance(wallet, { [UNIT_A]: 5_000, [UNIT_B]: -50_000 }, 8_000)).toEqual({
+        balanceCents: 47_000,
+        undistributedCents: -8_000,
+        units: [
+          { unitId: UNIT_A, balanceCents: 65_000 },
+          { unitId: UNIT_B, balanceCents: -10_000 },
+        ],
+      });
+    });
+
+    it("carteira sem unidades: saldo inicial menos as despesas", () => {
+      expect(walletBalance({ openingBalance: opening, units: [] }, {}, 8_000)).toEqual({
+        balanceCents: 92_000,
+        undistributedCents: null,
+        units: [],
+      });
     });
   });
 });

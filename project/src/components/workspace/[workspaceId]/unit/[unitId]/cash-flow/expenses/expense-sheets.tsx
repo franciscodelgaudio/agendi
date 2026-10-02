@@ -1,6 +1,7 @@
 "use client"
 
 import { useActionState, useState, useTransition } from "react"
+import type { ExpenseOwner } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
 import { CheckIcon, ClockIcon, EllipsisIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
 import {
   createExpenseAction,
@@ -47,7 +48,8 @@ import {
 } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
-export type ExpenseGroupOption = { id: string; name: string; icon: ExpenseGroupIcon | null }
+// automatic: equipe e repasse, calculados pelo caixa e sem lançamentos.
+export type ExpenseGroupOption = { id: string; name: string; icon: ExpenseGroupIcon | null; automatic?: boolean }
 export type ExpenseRow = {
   id: string
   groupId: string
@@ -57,6 +59,8 @@ export type ExpenseRow = {
   paid: boolean
   // null quando a despesa é à vista.
   series: { kind: "installments" | "recurring"; number: number; count: number } | null
+  // Comissões, salários e repasse do mês, calculados pelo caixa: só leitura.
+  automatic?: boolean
 }
 
 type Repeat = "none" | "installments" | "recurring"
@@ -72,7 +76,7 @@ const scopeItems = [
   { value: "following", label: "Esta e as próximas" },
 ]
 
-type Props = { workspaceId: string; unitId: string; groups: ExpenseGroupOption[] }
+type Props = { workspaceId: string; owner: ExpenseOwner; groups: ExpenseGroupOption[] }
 
 function ExpenseForm({
   title,
@@ -249,7 +253,7 @@ function ExpenseForm({
 }
 
 // defaultDate: dia sugerido para a nova despesa (hoje, ou o primeiro dia do mês exibido).
-export function CreateExpenseSheet({ workspaceId, unitId, groups, defaultDate }: Props & { defaultDate: string }) {
+export function CreateExpenseSheet({ workspaceId, owner, groups, defaultDate }: Props & { defaultDate: string }) {
   const [open, setOpen] = useState(false)
   const [formKey, setFormKey] = useState(0)
 
@@ -273,7 +277,7 @@ export function CreateExpenseSheet({ workspaceId, unitId, groups, defaultDate }:
           submitLabel={["Lançar", "Lançando..."]}
           groups={groups}
           defaultDate={defaultDate}
-          action={(prev, formData) => createExpenseAction(workspaceId, unitId, prev, formData)}
+          action={(prev, formData) => createExpenseAction(workspaceId, owner, prev, formData)}
           onDone={() => setOpen(false)}
         />
       </SheetContent>
@@ -284,12 +288,12 @@ export function CreateExpenseSheet({ workspaceId, unitId, groups, defaultDate }:
 // Badge de pagamento que alterna ao clicar; o erro aparece num tooltip sobre o badge até ser dispensado.
 export function ExpensePaidToggle({
   workspaceId,
-  unitId,
+  owner,
   expense,
   disabled,
 }: {
   workspaceId: string
-  unitId: string
+  owner: ExpenseOwner
   expense: ExpenseRow
   disabled: boolean
 }) {
@@ -327,7 +331,7 @@ export function ExpensePaidToggle({
             const next = !checked
             setOptimistic(next)
             startTransition(async () => {
-              const result = await setExpensePaidAction(workspaceId, unitId, expense.id, next)
+              const result = await setExpensePaidAction(workspaceId, owner, expense.id, next)
               setError(result.error)
               setOptimistic(null)
             })
@@ -347,7 +351,7 @@ export function ExpensePaidToggle({
   )
 }
 
-export function ExpenseActions({ workspaceId, unitId, groups, expense }: Props & { expense: ExpenseRow }) {
+export function ExpenseActions({ workspaceId, owner, groups, expense }: Props & { expense: ExpenseRow }) {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
@@ -357,7 +361,7 @@ export function ExpenseActions({ workspaceId, unitId, groups, expense }: Props &
 
   function handleDelete(scope: "this" | "following") {
     startTransition(async () => {
-      const result = await deleteExpenseAction(workspaceId, unitId, expense.id, scope)
+      const result = await deleteExpenseAction(workspaceId, owner, expense.id, scope)
       setError(result.error)
       if (!result.error) setDeleteOpen(false)
     })
@@ -399,7 +403,7 @@ export function ExpenseActions({ workspaceId, unitId, groups, expense }: Props &
             groups={groups}
             expense={expense}
             defaultDate={expense.date}
-            action={(prev, formData) => updateExpenseAction(workspaceId, unitId, expense.id, prev, formData)}
+            action={(prev, formData) => updateExpenseAction(workspaceId, owner, expense.id, prev, formData)}
             onDone={() => setEditOpen(false)}
           />
         </SheetContent>

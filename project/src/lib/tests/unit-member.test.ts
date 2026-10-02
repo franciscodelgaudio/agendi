@@ -146,6 +146,15 @@ describe("updateUnitMemberPay", () => {
     });
   });
 
+  it("comissão sobre o líquido da unidade (bruto menos o repasse)", async () => {
+    const deps = makeDeps();
+
+    const result = await updateUnitMemberPay({ commissionBase: "net", commissionPercent: "4" }, MEMBER_ID, { actor: ADMIN }, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.update).toHaveBeenCalledWith(MEMBER_ID, expect.objectContaining({ commissionBase: "net", commissionPercent: 4 }));
+  });
+
   it("sem comissão, a base não é guardada", async () => {
     const deps = makeDeps();
 

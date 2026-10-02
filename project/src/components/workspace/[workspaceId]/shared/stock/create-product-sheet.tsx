@@ -7,6 +7,7 @@ import { createCatalogProductAction, createProductAction, type ProductActionStat
 import { Button } from "@/components/ui/button"
 import { FieldError, FieldGroup } from "@/components/ui/field"
 import { ProductFields } from "@/components/workspace/[workspaceId]/shared/stock/product-fields"
+import { PayerField, type PayerOption } from "@/components/workspace/[workspaceId]/shared/stock/payer-field"
 import {
   Sheet,
   SheetContent,
@@ -17,9 +18,17 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 
-// Com unitId, cadastra no catálogo e já põe no estoque da unidade, com a quantidade; sem, só no
-// catálogo do workspace.
-export function CreateProductSheet({ workspaceId, unitId }: { workspaceId: string; unitId?: string }) {
+// Com unitId, cadastra no catálogo e já põe no estoque da unidade, com a quantidade (paga por
+// quem for escolhido em payers); sem, só no catálogo do workspace.
+export function CreateProductSheet({
+  workspaceId,
+  unitId,
+  payers = [],
+}: {
+  workspaceId: string
+  unitId?: string
+  payers?: PayerOption[]
+}) {
   const [open, setOpen] = useState(false)
   const [state, formAction, pending] = useActionState(
     async (prev: ProductActionState, formData: FormData) => {
@@ -52,6 +61,7 @@ export function CreateProductSheet({ workspaceId, unitId }: { workspaceId: strin
           <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
             {state.error && <FieldError>{state.error}</FieldError>}
             <ProductFields idPrefix="create-product" workspaceId={workspaceId} withQuantity={!!unitId} />
+            {unitId && <PayerField id="create-product-payer" payers={payers} />}
           </FieldGroup>
           <SheetFooter>
             <Button type="submit" loading={pending}>

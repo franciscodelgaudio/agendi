@@ -1,8 +1,9 @@
 import { parseDay } from "@/service/_shared/timezone";
-import type { DayTotal } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
+import { partnerShareByDay, type DayTotal } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
+import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share";
 import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
 import { parsePriceCents } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service";
-import type { CommissionBase } from "@/service/workspace/[workspaceId]/unit/[unitId]/team/unit-member";
+import type { CommissionRule } from "@/service/workspace/[workspaceId]/unit/[unitId]/team/unit-member";
 
 // Folha da unidade: cada mês de trabalho ("2026-09") é pago no dia de pagamento do mês
 // seguinte, com salário e bônus proporcionais a partir da data de início mais a comissão
@@ -13,16 +14,17 @@ export const PAYROLL_REMINDER_DAYS = 5;
 export type PayrollMember = {
   memberId: string;
   userId: string | null;
-  // Do vínculo, ou da função em vínculos antigos sem base guardada.
-  commissionBase: CommissionBase;
   // "2026-02-15"
   startDate: string | null;
   // 1 a 31; null sem dia de pagamento definido.
   payDay: number | null;
-  commissionPercent: number | null;
+  // Somadas; vazio sem comissão.
+  commissionRules: CommissionRule[];
   salaryCents: number | null;
   bonuses: { amountCents: number }[];
 };
+// Despesa lançada na unidade, no dia do lançamento.
+export type PayrollExpense = { date: string; groupId: string; cents: number };
 export type PayrollAmount = { salaryCents: number; commissionCents: number };
 export type PayrollReminder = PayrollAmount & { memberId: string; month: string; dueDate: string; overdue: boolean };
 
@@ -63,28 +65,58 @@ export function nextPayrollDate({ startDate, payDay }: Pick<PayrollMember, "star
   return payrollDueDate(month, payDay);
 }
 
-// Comissão sobre os próprios serviços ou sobre o bruto, conforme a base.
-export function payrollAmount(member: PayrollMember, month: string, appointments: DayTotal[]): PayrollAmount {
+// Comissão de cada regra sobre os atendimentos dela no mês, menos a parte que cabe a eles do
+// repasse (rateado por dia) e das despesas dos grupos escolhidos (rateadas pelo faturamento do
+// mês). Regra com descontos maiores que a receita vale zero.
+export function payrollAmount(
+  member: PayrollMember,
+  month: string,
+  appointments: DayTotal[],
+  revenueShare: RevenueShare | null = null,
+  expenses: PayrollExpense[] = [],
+): PayrollAmount {
   const [year, monthNumber] = parseMonth(month)!;
   const days = daysInMonth(year, monthNumber);
   const first = `${month}-01`;
   const last = `${month}-${String(days).padStart(2, "0")}`;
+  const inMonth = (date: string) => date >= first && date <= last;
 
   const monthlyCents = member.bonuses.reduce((sum, bonus) => sum + bonus.amountCents, member.salaryCents ?? 0);
   const { startDate } = member;
   const startDay = !startDate || startDate <= first ? 1 : startDate > last ? days + 1 : Number(startDate.slice(8));
   const salaryCents = Math.round((monthlyCents * (days - startDay + 1)) / days);
 
-  let baseCents = 0;
-  const gross = member.commissionBase === "gross";
-  if (member.commissionPercent !== null && (gross || member.userId)) {
-    for (const { date, therapistId, cents } of appointments) {
-      if (date < first || date > last) continue;
-      if (gross || therapistId === member.userId) baseCents += cents;
+  const totals = new Map<string, number>();
+  for (const { date, cents } of appointments) totals.set(date, (totals.get(date) ?? 0) + cents);
+  const shares = partnerShareByDay(totals, revenueShare);
+  let unitCents = 0;
+  for (const [date, cents] of totals) if (inMonth(date)) unitCents += cents;
+
+  let commission = 0;
+  for (const rule of member.commissionRules) {
+    const counts = ({ therapistId }: DayTotal) =>
+      rule.source === "unit" || (rule.source === "self" ? therapistId === member.userId : rule.userIds.includes(therapistId));
+    const byDay = new Map<string, number>();
+    let revenueCents = 0;
+    for (const total of appointments) {
+      if (!inMonth(total.date) || !counts(total)) continue;
+      byDay.set(total.date, (byDay.get(total.date) ?? 0) + total.cents);
+      revenueCents += total.cents;
     }
+    if (!revenueCents) continue;
+
+    let base = revenueCents;
+    if (rule.deductRevenueShare) {
+      for (const [date, cents] of byDay) base -= ((shares.get(date) ?? 0) * cents) / totals.get(date)!;
+    }
+    let expenseCents = 0;
+    for (const { date, groupId, cents } of expenses) {
+      if (inMonth(date) && rule.deductExpenseGroupIds.includes(groupId)) expenseCents += cents;
+    }
+    base -= (expenseCents * revenueCents) / unitCents;
+    commission += (Math.max(base, 0) * rule.percent) / 100;
   }
-  const commissionCents = Math.round((baseCents * (member.commissionPercent ?? 0)) / 100);
-  return { salaryCents, commissionCents };
+  return { salaryCents, commissionCents: Math.round(commission) };
 }
 
 // Meses sem pagamento que vencem até PAYROLL_REMINDER_DAYS dias depois de hoje. Com data de
@@ -94,6 +126,8 @@ export function payrollReminders(
   payments: { memberId: string; month: string }[],
   appointments: DayTotal[],
   today: string,
+  revenueShare: RevenueShare | null = null,
+  expenses: PayrollExpense[] = [],
 ): PayrollReminder[] {
   const [year, month, day] = parseDay(today)!;
   const limit = utcDay(year, month, day + PAYROLL_REMINDER_DAYS);
@@ -107,7 +141,7 @@ export function payrollReminders(
 
     for (let current = member.startDate?.slice(0, 7) ?? latest; current <= latest; current = shiftMonth(current, 1)) {
       if (paid.has(`${member.memberId}:${current}`)) continue;
-      const amount = payrollAmount(member, current, appointments);
+      const amount = payrollAmount(member, current, appointments, revenueShare, expenses);
       if (!amount.salaryCents && !amount.commissionCents) continue;
       const dueDate = payrollDueDate(current, member.payDay);
       reminders.push({ memberId: member.memberId, month: current, dueDate, overdue: dueDate < today, ...amount });

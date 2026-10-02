@@ -13,8 +13,9 @@ const bonusSchema = new Schema(
 
 // Unidade em que o membro trabalha e como é pago nela: comissão, salário mensal e bônus,
 // combináveis (null/vazio até ser definido na Equipe). A comissão é sobre os serviços que a
-// pessoa fez ou sobre o faturamento bruto da unidade (commissionBase); vínculos antigos, sem
-// base, usam a da função (quem realiza atendimentos ganha sobre os serviços).
+// pessoa fez, sobre o faturamento bruto da unidade ou sobre o líquido, depois do repasse
+// (commissionBase); vínculos antigos, sem base, usam a da função (quem realiza atendimentos
+// ganha sobre os serviços).
 // Salário e bônus contam a partir de startDate ("2026-02-15"); null conta sempre. O mês
 // de trabalho é pago no payDay (1 a 31) do mês seguinte.
 const unitLinkSchema = new Schema(

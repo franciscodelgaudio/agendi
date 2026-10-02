@@ -1,4 +1,5 @@
 import { WalletIcon } from "lucide-react"
+import Link from "@/components/shared/link"
 import type { OpeningBalance } from "@/service/workspace/[workspaceId]/cash-flow/opening-balance"
 
 import { currencyFormat } from "@/components/shared/service-format"
@@ -15,9 +16,10 @@ export function dayLabel(day: string) {
 
 const listFormat = new Intl.ListFormat("pt-BR")
 
-// balanceCents: saldo inicial mais o líquido real desde o dia dele (null sem carteira).
-// Sem saldo inicial (ex.: soma das carteiras), só o saldo aparece. wallet: carteira da unidade;
-// sharedWith são as outras unidades quando a carteira é compartilhada, sem divisão.
+// balanceCents: saldo inicial mais o líquido real desde o dia dele; sem carteira, o líquido real
+// da unidade. Sem saldo inicial (ex.: soma das carteiras), só o saldo aparece. wallet: carteira da
+// unidade (null quando ela não tem); sharedWith são as outras unidades quando a carteira é
+// compartilhada, sem divisão.
 export function OpeningBalanceCard({
   openingBalance,
   balanceCents,
@@ -25,7 +27,8 @@ export function OpeningBalanceCard({
 }: {
   openingBalance: OpeningBalance | null
   balanceCents: number | null
-  wallet?: { name: string; sharedWith: string[] } | null
+  // href: caixa da carteira, com as despesas e o planejamento em conjunto.
+  wallet?: { name: string; sharedWith: string[]; href?: string } | null
 }) {
   return (
     <Card size="sm">
@@ -48,11 +51,20 @@ export function OpeningBalanceCard({
                 {currencyFormat.format(openingBalance.amountCents / 100)} em {dayLabel(openingBalance.date)}
               </div>
             )}
-            {wallet && (
+            {wallet ? (
               <div className="text-xs text-muted-foreground">
-                Carteira {wallet.name}
+                Carteira{" "}
+                {wallet.href ? (
+                  <Link href={wallet.href} className="underline-offset-2 hover:underline">
+                    {wallet.name}
+                  </Link>
+                ) : (
+                  wallet.name
+                )}
                 {wallet.sharedWith.length > 0 && `, compartilhada com ${listFormat.format(wallet.sharedWith)}`}
               </div>
+            ) : (
+              wallet === null && <div className="text-xs text-muted-foreground">Sem carteira</div>
             )}
           </>
         ) : (

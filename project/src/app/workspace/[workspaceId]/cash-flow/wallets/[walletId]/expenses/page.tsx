@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation"
 import { FolderIcon, ReceiptIcon } from "lucide-react"
 import { parseCashFlowQuery } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow"
 import { CASH_FLOW_PAGE_SIZE, expenseListPage, parseExpenseListQuery } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow-list"
-import { loadExpensesScreen } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow-screen-store"
+import { loadWalletExpensesScreen } from "@/service/workspace/[workspaceId]/cash-flow/wallet-screen-store"
 import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser } from "@/service/(auth)/session"
@@ -10,7 +10,6 @@ import Link from "@/components/shared/link"
 import { ExpenseGroupFilter, ExpenseStatusFilter } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow-filters"
 import { CashFlowNav } from "@/components/workspace/[workspaceId]/shared/cash-flow/cash-flow-nav"
 import { CreateExpenseSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense-sheets"
-import { ExportMenu } from "@/components/shared/export-menu"
 import { ExpensesTable } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expenses-table"
 import { ListPagination } from "@/components/shared/list-pagination"
 import { ListTotals } from "@/components/shared/list-totals"
@@ -18,26 +17,27 @@ import { ListSearch } from "@/components/shared/list-search"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 
+// Despesas do mês lançadas na carteira, em conjunto das unidades dela.
 // Layout e página podem renderizar em paralelo, então a página refaz a verificação de acesso.
-export default async function ExpensesPage({
+export default async function WalletExpensesPage({
   params,
   searchParams,
-}: PageProps<"/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses">) {
-  const { workspaceId, unitId } = await params
+}: PageProps<"/workspace/[workspaceId]/cash-flow/wallets/[walletId]/expenses">) {
+  const { workspaceId, walletId } = await params
   const now = new Date()
   const search = await searchParams
   const query = { ...parseCashFlowQuery(search, now), view: "month" as const }
   // Filtros mudam sem levar a página junto, então a lista volta para a primeira.
   const { page, ...filters } = parseExpenseListQuery(search)
   const user = await requireUser()
-  await requirePage(workspaceId, user.id, { unit: "cash_flow", unitId })
-  const data = await loadExpensesScreen(workspaceId, user.id, unitId, query, now)
+  await requirePage(workspaceId, user.id, { workspace: "cash_flow" })
+  const data = await loadWalletExpensesScreen(workspaceId, user.id, walletId, query)
   if (!data) notFound()
   const { month, groups, expenses } = data
   const canManage = can(data.actor, "cash_flow.manage")
   const today = parseCashFlowQuery({}, now).date
   const isCurrent = month.from <= today && today <= month.to
-  const base = `/workspace/${workspaceId}/unit/${unitId}/cash-flow`
+  const base = `/workspace/${workspaceId}/cash-flow/wallets/${walletId}`
   const pathname = `${base}/expenses`
   const listQuery = { date: query.date, ...filters }
   const result = expenseListPage(expenses, { ...filters, page }, groups)
@@ -49,13 +49,12 @@ export default async function ExpensesPage({
     )
     redirect(`${pathname}?${params}`)
   }
-  // Equipe e repasse são automáticos: não recebem lançamentos.
-  const registeredGroups = groups.filter((group) => !group.automatic)
-  const create = canManage && registeredGroups.length > 0 && (
+  const owner = { walletId }
+  const create = canManage && groups.length > 0 && (
     <CreateExpenseSheet
       workspaceId={workspaceId}
-      owner={{ unitId }}
-      groups={registeredGroups}
+      owner={owner}
+      groups={groups}
       defaultDate={isCurrent ? today : month.from}
     />
   )
@@ -72,12 +71,7 @@ export default async function ExpensesPage({
           views={["month"]}
           preserve={filters}
         />
-        {expenses.length > 0 && (
-          <div className="flex items-center gap-2">
-            <ExportMenu href={`/api${pathname}/export`} query={listQuery} />
-            {create}
-          </div>
-        )}
+        {expenses.length > 0 && create}
       </div>
       {groups.length === 0 ? (
         <Empty className="border">
@@ -125,7 +119,7 @@ export default async function ExpensesPage({
             pathname={pathname}
             groups={groups}
             workspaceId={workspaceId}
-            owner={{ unitId }}
+            owner={owner}
             canManage={canManage}
           />
           <ListPagination

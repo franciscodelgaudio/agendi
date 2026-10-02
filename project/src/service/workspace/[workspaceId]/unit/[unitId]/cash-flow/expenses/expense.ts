@@ -16,13 +16,22 @@ export type ExpenseInputError =
 // date é o dia do lançamento ("2026-09-20"), que define em que período a despesa entra no caixa.
 export type ExpenseData = { groupId: string; description: string; amountCents: number; date: string };
 
-// Confere se o grupo existe na unidade.
-type GroupExists = (unitId: string, groupId: string) => Promise<boolean>;
+// Dono de despesas e grupos: a unidade ou a carteira (as despesas em conjunto das unidades dela).
+export type ExpenseOwner = { unitId: string } | { walletId: string };
+
+// Dono com o id preenchido; null quando não há dono.
+export function validOwner(owner: ExpenseOwner | null | undefined): ExpenseOwner | null {
+  if (!owner) return null;
+  return ("unitId" in owner ? owner.unitId : owner.walletId) ? owner : null;
+}
+
+// Confere se o grupo existe no dono.
+type GroupExists = (owner: ExpenseOwner, groupId: string) => Promise<boolean>;
 
 // Valida e normaliza os campos como chegam do FormData; o checkbox "paid" é lido por quem cria.
 async function parseExpenseInput(
   input: unknown,
-  unitId: string,
+  owner: ExpenseOwner,
   groupExists: GroupExists,
 ): Promise<({ ok: true } & ExpenseData) | { ok: false; error: ExpenseInputError }> {
   const { groupId, description, amount, date } = (input ?? {}) as Record<string, unknown>;
@@ -45,7 +54,7 @@ async function parseExpenseInput(
   const day = date.trim();
   if (!parseDay(day)) return { ok: false, error: "invalid_date" };
 
-  if (!groupId || !(await groupExists(unitId, groupId))) return { ok: false, error: "group_not_found" };
+  if (!groupId || !(await groupExists(owner, groupId))) return { ok: false, error: "group_not_found" };
 
   return { ok: true, groupId, description: normalizedDescription, amountCents, date: day };
 }
@@ -94,16 +103,16 @@ function parseSeriesInput(repeat: unknown, count: unknown): SeriesInput {
   return { ok: true, kind: repeat as ExpenseSeries["kind"], count: n };
 }
 
-export type ExpenseEntry = ExpenseData & { unitId: string; paidAt: Date | null; series: ExpenseSeries | null };
+export type ExpenseEntry = ExpenseData & ExpenseOwner & { paidAt: Date | null; series: ExpenseSeries | null };
 
-export type CreateExpenseError = ExpenseInputError | "invalid_count" | "unit_not_found";
+export type CreateExpenseError = ExpenseInputError | "invalid_count" | "owner_not_found";
 
 export type CreateExpenseResult = { ok: true; expenseIds: string[] } | { ok: false; error: CreateExpenseError };
 
 // Uma série grava todos os lançamentos de uma vez; marcada como paga, só o primeiro fica pago.
 export async function createExpense(
   input: unknown,
-  unitId: string | null | undefined,
+  ownerInput: ExpenseOwner | null | undefined,
   {
     insert,
     groupExists,
@@ -116,9 +125,10 @@ export async function createExpense(
     now: Date;
   },
 ): Promise<CreateExpenseResult> {
-  if (!unitId) return { ok: false, error: "unit_not_found" };
+  const owner = validOwner(ownerInput);
+  if (!owner) return { ok: false, error: "owner_not_found" };
 
-  const parsed = await parseExpenseInput(input, unitId, groupExists);
+  const parsed = await parseExpenseInput(input, owner, groupExists);
   if (!parsed.ok) return parsed;
   const { repeat, count, paid } = input as Record<string, unknown>;
   const series = parseSeriesInput(repeat, count);
@@ -133,7 +143,7 @@ export async function createExpense(
 
   const seriesId = series.kind && newSeriesId();
   const entries = monthlyDates(date, series.count).map((day, index) => ({
-    unitId,
+    ...owner,
     groupId,
     description,
     amountCents: amounts[index],
@@ -149,10 +159,10 @@ export type UpdateExpenseError = ExpenseInputError | "expense_not_found";
 export type UpdateExpenseResult = { ok: true } | { ok: false; error: UpdateExpenseError };
 
 // O pagamento só muda por setExpensePaid. Nesta e nas próximas, cada uma mantém o seu dia.
-// update devolve false quando a despesa não existe (ou não é da unidade).
+// update devolve false quando a despesa não existe (ou não é do dono).
 export async function updateExpense(
   input: unknown,
-  unitId: string | null | undefined,
+  ownerInput: ExpenseOwner | null | undefined,
   expenseId: string | null | undefined,
   {
     update,
@@ -162,9 +172,10 @@ export async function updateExpense(
     groupExists: GroupExists;
   },
 ): Promise<UpdateExpenseResult> {
-  if (!unitId || !expenseId) return { ok: false, error: "expense_not_found" };
+  const owner = validOwner(ownerInput);
+  if (!owner || !expenseId) return { ok: false, error: "expense_not_found" };
 
-  const parsed = await parseExpenseInput(input, unitId, groupExists);
+  const parsed = await parseExpenseInput(input, owner, groupExists);
   if (!parsed.ok) return parsed;
 
   const { groupId, description, amountCents, date } = parsed;
@@ -386,4 +397,29 @@ export function staffExpenseGroups({ real, forecast }: { real: StaffAmounts; for
     group("team", "Equipe", forecast.commissionCents + forecast.salaryCents, real.commissionCents + real.salaryCents),
     group("partner_share", "Repasse", forecast.partnerShareCents, real.partnerShareCents),
   ].filter((row) => row.limitCents > 0);
+}
+
+// Despesas automáticas do mês, fora do banco: o que já correu de comissões, salários e repasse,
+// pagas e no dia dado. Tipo sem valor não aparece.
+export function staffExpenses(real: StaffAmounts, date: string) {
+  const expense = (
+    id: "commission" | "salary" | "partner_share",
+    groupId: "team" | "partner_share",
+    description: string,
+    amountCents: number,
+  ) => ({
+    id,
+    groupId,
+    description,
+    amountCents,
+    date,
+    paid: true,
+    series: null,
+    automatic: true as const,
+  });
+  return [
+    expense("commission", "team", "Comissões", real.commissionCents),
+    expense("salary", "team", "Salários", real.salaryCents),
+    expense("partner_share", "partner_share", "Repasse", real.partnerShareCents),
+  ].filter((row) => row.amountCents > 0);
 }

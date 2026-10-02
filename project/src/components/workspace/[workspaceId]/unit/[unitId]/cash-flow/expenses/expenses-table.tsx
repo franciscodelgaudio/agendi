@@ -1,3 +1,4 @@
+import type { ExpenseOwner } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
 import { ExpenseActions, ExpensePaidToggle, type ExpenseGroupOption, type ExpenseRow } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense-sheets"
 import { ExpenseGroupIconBadge } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/expense-group-icon"
 import { currencyFormat } from "@/components/shared/service-format"
@@ -27,7 +28,7 @@ type Props = {
   pathname: string
   groups: ExpenseGroupOption[]
   workspaceId: string
-  unitId: string
+  owner: ExpenseOwner
   // Sem permissão, o pagamento fica só para leitura e a coluna de ações não aparece.
   canManage: boolean
 }
@@ -38,10 +39,11 @@ export function ExpensesTable({
   pathname,
   groups,
   workspaceId,
-  unitId,
+  owner,
   canManage,
 }: Props) {
   const groupsById = new Map(groups.map((group) => [group.id, group]))
+  const registeredGroups = groups.filter((group) => !group.automatic)
 
   return (
     <div className="border">
@@ -69,9 +71,9 @@ export function ExpensesTable({
               <TableCell className="px-4">
                 <ExpensePaidToggle
                   workspaceId={workspaceId}
-                  unitId={unitId}
+                  owner={owner}
                   expense={expense}
-                  disabled={!canManage}
+                  disabled={!canManage || !!expense.automatic}
                 />
               </TableCell>
               <TableCell className="px-4 tabular-nums">{dayFormat.format(toDate(expense.date))}</TableCell>
@@ -95,7 +97,9 @@ export function ExpensesTable({
               <TableCell className="px-4 text-right tabular-nums">{money(expense.amountCents)}</TableCell>
               {canManage && (
                 <TableCell className="px-4 text-right">
-                  <ExpenseActions workspaceId={workspaceId} unitId={unitId} groups={groups} expense={expense} />
+                  {!expense.automatic && (
+                    <ExpenseActions workspaceId={workspaceId} owner={owner} groups={registeredGroups} expense={expense} />
+                  )}
                 </TableCell>
               )}
             </TableRow>

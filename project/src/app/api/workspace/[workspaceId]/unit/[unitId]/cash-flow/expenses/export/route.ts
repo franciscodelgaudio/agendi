@@ -23,8 +23,9 @@ export async function GET(
     return Response.json({ error: "Sem permissão para ver o caixa." }, { status: 403 })
   }
 
-  const query = { ...parseCashFlowQuery(search, new Date()), view: "month" as const }
-  const data = await loadExpensesScreen(workspaceId, userId, unitId, query)
+  const now = new Date()
+  const query = { ...parseCashFlowQuery(search, now), view: "month" as const }
+  const data = await loadExpensesScreen(workspaceId, userId, unitId, query, now)
   if (!data) return Response.json({ error: "Unidade não encontrada." }, { status: 404 })
   const filters = parseExpenseListQuery(search)
   const result = allPages((page) => expenseListPage(data.expenses, { ...filters, page }, data.groups))

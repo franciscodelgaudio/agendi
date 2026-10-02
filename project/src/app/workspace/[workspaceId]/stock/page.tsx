@@ -9,13 +9,16 @@ import { escapeRegex } from "@/service/workspace/[workspaceId]/unit/unit-list"
 import { Product } from "@/models/Product"
 import { Stock } from "@/models/Stock"
 import { StockItem } from "@/models/StockItem"
+import { Wallet } from "@/models/Wallet"
 import { Workspace } from "@/models/Workspace"
 import Link from "@/components/shared/link"
 import { ListSearch } from "@/components/shared/list-search"
 import { StockList } from "@/components/workspace/[workspaceId]/stock/stock-list"
+import { AddStockItemSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/stock/add-stock-item-sheet"
 import { CreateStockSheet } from "@/components/workspace/[workspaceId]/stock/stock-sheets"
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -50,17 +53,31 @@ export default async function WorkspaceStockPage({ params, searchParams }: PageP
   if (!workspace) notFound()
   const { units } = workspace
   const canManage = can(workspace.actor, "stock.manage")
+  // Ligar o estoque à carteira e pagar por ela mexem no dinheiro: pedem gerenciar o caixa.
+  const canUseWallet = canManage && can(workspace.actor, "cash_flow.manage")
   const unitNames = new Map(units.map((unit) => [unit.id, unit.name]))
 
-  const stockDocs = await Stock.find({ workspaceId: workspace.id }).sort({ name: 1, _id: 1 }).lean()
-  const stocks = stockDocs.map((stock) => ({
-    id: stock._id.toString(),
-    name: stock.name,
-    units: stock.units
-      .map((unit) => unit.unitId.toString())
-      .filter((unitId) => unitNames.has(unitId))
-      .map((unitId) => ({ id: unitId, name: unitNames.get(unitId)! })),
-  }))
+  const [stockDocs, walletDocs] = await Promise.all([
+    Stock.find({ workspaceId: workspace.id }).sort({ name: 1, _id: 1 }).lean(),
+    Wallet.find({ workspaceId: workspace.id }).select({ name: 1, units: 1 }).lean(),
+  ])
+  const walletNames = new Map(walletDocs.map((wallet) => [wallet._id.toString(), wallet.name]))
+  const unitWallet = new Map(
+    walletDocs.flatMap((wallet) => wallet.units.map((unit) => [unit.unitId.toString(), wallet] as const)),
+  )
+  const stocks = stockDocs.map((stock) => {
+    const walletId = stock.walletId?.toString() ?? null
+    return {
+      id: stock._id.toString(),
+      name: stock.name,
+      units: stock.units
+        .map((unit) => unit.unitId.toString())
+        .filter((unitId) => unitNames.has(unitId))
+        .map((unitId) => ({ id: unitId, name: unitNames.get(unitId)! })),
+      walletId,
+      walletName: (walletId && walletNames.get(walletId)) || null,
+    }
+  })
   const unitStock = new Map(stocks.flatMap((stock) => stock.units.map((unit) => [unit.id, stock] as const)))
 
   // Colunas: os compartilhados e as unidades fora deles; o link abre o estoque de uma unidade.
@@ -92,9 +109,57 @@ export default async function WorkspaceStockPage({ params, searchParams }: PageP
   const stockOptions = canManage
     ? units.map((unit) => {
         const stock = unitStock.get(unit.id)
-        return { id: unit.id, name: unit.name, stockId: stock?.id ?? null, stockName: stock?.name ?? null }
+        const wallet = unitWallet.get(unit.id)
+        return {
+          id: unit.id,
+          name: unit.name,
+          stockId: stock?.id ?? null,
+          stockName: stock?.name ?? null,
+          walletId: wallet?._id.toString() ?? null,
+          walletName: wallet?.name ?? null,
+        }
       })
     : null
+
+  // Catálogo do workspace, para adicionar aos estoques.
+  const catalog = canManage
+    ? await Product.find({ workspaceId: workspace.id }).select({ name: 1 }).sort({ name: 1, _id: 1 }).lean()
+    : []
+  const catalogOptions = catalog.map((product) => ({ id: product._id.toString(), name: product.name }))
+
+  // Para adicionar em cada compartilhado: os produtos do catálogo que ainda não estão nele e quem
+  // pode pagar a compra (a carteira ligada a ele primeiro, depois as unidades).
+  const catalogs = Object.fromEntries(
+    stocks.map((stock) => [
+      stock.id,
+      catalogOptions.filter((product) => !quantities.has(`${product.id}:${stock.id}`)),
+    ]),
+  )
+  const payers = Object.fromEntries(
+    stocks.map((stock) => [
+      stock.id,
+      [
+        ...(canUseWallet && stock.walletName ? [{ value: "wallet", label: `Carteira ${stock.walletName}` }] : []),
+        ...stock.units.map((unit) => ({ value: unit.id, label: unit.name })),
+      ],
+    ]),
+  )
+  // Sem nada em estoque, qualquer estoque recebe qualquer produto do catálogo; a unidade fora de
+  // compartilhado paga a própria compra.
+  const targets = [
+    ...stocks
+      .filter((stock) => stock.units.length > 0)
+      .map((stock) => ({
+        kind: "stock" as const,
+        id: stock.id,
+        name: stock.name,
+        products: catalogs[stock.id],
+        payers: payers[stock.id],
+      })),
+    ...units
+      .filter((unit) => !unitStock.has(unit.id))
+      .map((unit) => ({ kind: "unit" as const, id: unit.id, name: unit.name, products: catalogOptions, payers: [] })),
+  ]
 
   return (
     <>
@@ -111,6 +176,11 @@ export default async function WorkspaceStockPage({ params, searchParams }: PageP
                 : "Os produtos cadastrados no estoque de cada unidade aparecem aqui, com a quantidade em cada uma."}
             </EmptyDescription>
           </EmptyHeader>
+          {units.length > 0 && catalogOptions.length > 0 && (
+            <EmptyContent>
+              <AddStockItemSheet workspaceId={workspaceId} targets={targets} />
+            </EmptyContent>
+          )}
         </Empty>
       ) : (
         <>
@@ -168,9 +238,16 @@ export default async function WorkspaceStockPage({ params, searchParams }: PageP
         <>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
             <h4 className="font-semibold tracking-tight">Estoques compartilhados</h4>
-            {stockOptions && <CreateStockSheet workspaceId={workspaceId} units={stockOptions} />}
+            {stockOptions && <CreateStockSheet workspaceId={workspaceId} units={stockOptions} canLinkWallet={canUseWallet} />}
           </div>
-          <StockList stocks={stocks} workspaceId={workspaceId} units={stockOptions} />
+          <StockList
+            stocks={stocks}
+            workspaceId={workspaceId}
+            units={stockOptions}
+            canLinkWallet={canUseWallet}
+            catalogs={catalogs}
+            payers={payers}
+          />
         </>
       )}
     </>

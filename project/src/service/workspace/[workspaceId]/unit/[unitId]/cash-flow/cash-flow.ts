@@ -3,6 +3,7 @@ import { parseDay } from "@/service/workspace/[workspaceId]/unit/[unitId]/appoin
 import { groupLimitForMonth, type GroupLimits } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense";
 import { calculatePartnerShareCents, type RevenueShare, type RevenueSharePeriod } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share";
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone";
+import type { CommissionBase } from "@/service/workspace/[workspaceId]/unit/[unitId]/team/unit-member";
 import { first, type SearchParams } from "@/service/workspace/[workspaceId]/unit/unit-list";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -282,7 +283,7 @@ export function summarizeServices(appointments: ServiceTotal[], bookings: Servic
 
 // Repasse (sem arredondar) de cada dia: calculado sobre o período de repasse inteiro
 // e rateado pelo faturamento de cada dia.
-function partnerShareByDay(totals: Map<string, number>, revenueShare: RevenueShare | null) {
+export function partnerShareByDay(totals: Map<string, number>, revenueShare: RevenueShare | null) {
   const shares = new Map<string, number>();
   if (!revenueShare) return shares;
 
@@ -419,11 +420,11 @@ export function summarizeTherapists(
     .sort((a, b) => b.forecast.cents - a.forecast.cents || a.therapistName.localeCompare(b.therapistName, "pt-BR"));
 }
 
-// Custos da equipe que não dependem de quem fez o serviço: comissão sobre o bruto
-// (de quem não realiza atendimentos) e salários mensais, que somados à equipe toda saem do líquido.
+// Custos da equipe que não dependem de quem fez o serviço: comissão sobre o bruto, comissão sobre
+// o líquido (bruto menos o repasse) e salários mensais, que somados à equipe toda saem do líquido.
 // Cada salário (com os bônus) conta a partir da data de início; sem ela, conta sempre.
 export type StaffSalary = { monthlyCents: number; startDate: string | null };
-export type StaffCosts = { grossCommissionPercent: number; salaries: StaffSalary[]; today: string };
+export type StaffCosts = { grossCommissionPercent: number; netCommissionPercent: number; salaries: StaffSalary[]; today: string };
 export type StaffCashFlowAmounts = CashFlowAmounts & { salaryCents: number };
 export type StaffCashFlowBucket = DayRange & { real: StaffCashFlowAmounts; forecast: StaffCashFlowAmounts };
 export type StaffCashFlowSummary = {
@@ -477,24 +478,25 @@ export type TeamPayMember = {
   attends: boolean;
   units: {
     unitId: { toString(): string };
-    commissionBase?: "services" | "gross" | null;
+    commissionBase?: CommissionBase | null;
     commissionPercent?: number | null;
     salaryCents?: number | null;
     bonuses?: { amountCents: number }[];
     startDate?: string | null;
   }[];
 };
-export type TeamPayRates = Pick<StaffCosts, "grossCommissionPercent" | "salaries"> & {
+export type TeamPayRates = Pick<StaffCosts, "grossCommissionPercent" | "netCommissionPercent" | "salaries"> & {
   commissionRates: CommissionRates;
 };
 
 // Comissão sobre os serviços vai pelo id de usuário, que identifica quem fez o serviço; a
-// sobre o bruto soma num percentual só. A base é a do vínculo; vínculos antigos, sem base,
+// sobre o bruto soma num percentual só, e a sobre o líquido em outro. A base é a do vínculo; vínculos antigos, sem base,
 // usam a da função (quem realiza atendimentos ganha sobre os serviços). Salário e bônus fixos
 // mensais valem mesmo com convite pendente e entram juntos no custo mensal de cada vínculo.
 export function teamPayRates(team: TeamPayMember[], unitId: string): TeamPayRates {
   const commissionRates: CommissionRates = {};
   let grossCommissionPercent = 0;
+  let netCommissionPercent = 0;
   const salaries: StaffSalary[] = [];
   for (const member of team) {
     const link = member.units.find((unit) => unit.unitId.toString() === unitId);
@@ -504,9 +506,10 @@ export function teamPayRates(team: TeamPayMember[], unitId: string): TeamPayRate
     if (link?.commissionPercent == null) continue;
     const base = link.commissionBase ?? (member.attends ? "services" : "gross");
     if (base === "gross") grossCommissionPercent += link.commissionPercent;
+    else if (base === "net") netCommissionPercent += link.commissionPercent;
     else if (member.userId) commissionRates[member.userId.toString()] = link.commissionPercent;
   }
-  return { commissionRates, grossCommissionPercent, salaries };
+  return { commissionRates, grossCommissionPercent, netCommissionPercent, salaries };
 }
 
 // Valores mensais (sem arredondar) dos dias do intervalo até `last`, cada um a partir da data de
@@ -523,8 +526,15 @@ function monthlyForDays({ from, to }: DayRange, salaries: StaffSalary[], last = 
   return salary;
 }
 
-function withStaffCosts(amounts: CashFlowAmounts, grossCommissionPercent: number, salary: number): StaffCashFlowAmounts {
-  const extraCommission = Math.round((amounts.grossCents * grossCommissionPercent) / 100);
+function withStaffCosts(
+  amounts: CashFlowAmounts,
+  { grossCommissionPercent, netCommissionPercent }: Pick<StaffCosts, "grossCommissionPercent" | "netCommissionPercent">,
+  salary: number,
+): StaffCashFlowAmounts {
+  const netRevenueCents = amounts.grossCents - amounts.partnerShareCents;
+  const extraCommission = Math.round(
+    (amounts.grossCents * grossCommissionPercent + netRevenueCents * netCommissionPercent) / 100,
+  );
   const salaryCents = Math.round(salary);
   return {
     ...amounts,
@@ -538,12 +548,12 @@ function withStaffCosts(amounts: CashFlowAmounts, grossCommissionPercent: number
 // total soma os intervalos arredondados.
 export function applyStaffCosts(
   summary: CashFlowSummary,
-  { grossCommissionPercent, salaries, today }: StaffCosts,
+  { salaries, today, ...percents }: StaffCosts,
 ): StaffCashFlowSummary {
   const buckets = summary.buckets.map((bucket) => ({
     ...bucket,
-    real: withStaffCosts(bucket.real, grossCommissionPercent, monthlyForDays(bucket, salaries, today)),
-    forecast: withStaffCosts(bucket.forecast, grossCommissionPercent, monthlyForDays(bucket, salaries)),
+    real: withStaffCosts(bucket.real, percents, monthlyForDays(bucket, salaries, today)),
+    forecast: withStaffCosts(bucket.forecast, percents, monthlyForDays(bucket, salaries)),
   }));
   const zero = { grossCents: 0, partnerShareCents: 0, commissionCents: 0, salaryCents: 0, netCents: 0 };
   const add = (a: StaffCashFlowAmounts, b: StaffCashFlowAmounts) => ({

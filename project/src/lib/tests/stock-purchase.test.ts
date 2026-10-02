@@ -1,7 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
-import { recordStockPurchase, stockPurchaseExpense, SUPPLIES_GROUP_NAME } from "@/service/workspace/[workspaceId]/stock/stock-purchase";
+import {
+  parsePurchasePayer,
+  recordStockPurchase,
+  stockPurchaseExpense,
+  SUPPLIES_GROUP_NAME,
+} from "@/service/workspace/[workspaceId]/stock/stock-purchase";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
+const OTHER_UNIT_ID = "64b7f0c2a1b2c3d4e5f60721";
+const WALLET_ID = "64b7f0c2a1b2c3d4e5f60730";
 const PRODUCT_ID = "64b7f0c2a1b2c3d4e5f60761";
 const GROUP_ID = "64b7f0c2a1b2c3d4e5f60740";
 // 24/09/2026 às 23:30 em Brasília (já é dia 25 em UTC).
@@ -59,19 +66,38 @@ describe("recordStockPurchase", () => {
     };
   }
 
-  const purchase = { unitId: UNIT_ID, productId: PRODUCT_ID, productName: "Toalha", costCents: 2_000 };
+  // payer: quem paga a compra, a unidade ou a carteira.
+  const purchase = { payer: { unitId: UNIT_ID }, productId: PRODUCT_ID, productName: "Toalha", costCents: 2_000 };
 
   it("lança a compra como despesa paga hoje (em Brasília) no grupo de insumos", async () => {
     const deps = makeDeps();
 
     await recordStockPurchase({ ...purchase, previousQuantity: 4, quantity: 6 }, deps);
 
-    expect(deps.ensureGroup).toHaveBeenCalledWith(UNIT_ID, SUPPLIES_GROUP_NAME);
+    expect(deps.ensureGroup).toHaveBeenCalledWith({ unitId: UNIT_ID }, SUPPLIES_GROUP_NAME);
     expect(deps.insert).toHaveBeenCalledWith({
       unitId: UNIT_ID,
       groupId: GROUP_ID,
       description: "Compra de Toalha (2 un.)",
       amountCents: 4_000,
+      date: "2026-09-24",
+      paidAt: NOW,
+      series: null,
+      productId: PRODUCT_ID,
+    });
+  });
+
+  it("paga pela carteira, a despesa vai para o grupo de insumos da carteira, sem unidade", async () => {
+    const deps = makeDeps();
+
+    await recordStockPurchase({ ...purchase, payer: { walletId: WALLET_ID }, previousQuantity: 0, quantity: 3 }, deps);
+
+    expect(deps.ensureGroup).toHaveBeenCalledWith({ walletId: WALLET_ID }, SUPPLIES_GROUP_NAME);
+    expect(deps.insert).toHaveBeenCalledWith({
+      walletId: WALLET_ID,
+      groupId: GROUP_ID,
+      description: "Compra de Toalha (3 un.)",
+      amountCents: 6_000,
       date: "2026-09-24",
       paidAt: NOW,
       series: null,
@@ -90,5 +116,42 @@ describe("recordStockPurchase", () => {
 
     expect(deps.ensureGroup).not.toHaveBeenCalled();
     expect(deps.insert).not.toHaveBeenCalled();
+  });
+});
+
+// Quem paga a compra, como vem do campo "payer": "wallet" ou o id de uma unidade do estoque.
+// stock: unidades que usam o estoque e a carteira ligada a ele; fallbackUnitId: a unidade da
+// página, quando o campo não vem.
+describe("parsePurchasePayer", () => {
+  const shared = { unitIds: [UNIT_ID, OTHER_UNIT_ID], walletId: WALLET_ID };
+
+  it("carteira, quando o estoque está ligado a uma", () => {
+    expect(parsePurchasePayer("wallet", shared, null)).toEqual({ ok: true, payer: { walletId: WALLET_ID } });
+  });
+
+  it("uma das unidades do estoque", () => {
+    expect(parsePurchasePayer(OTHER_UNIT_ID, shared, UNIT_ID)).toEqual({ ok: true, payer: { unitId: OTHER_UNIT_ID } });
+  });
+
+  it.each([null, ""])("sem escolha (%j), paga a unidade da página", (value) => {
+    expect(parsePurchasePayer(value, shared, UNIT_ID)).toEqual({ ok: true, payer: { unitId: UNIT_ID } });
+  });
+
+  it("sem escolha e sem unidade da página, recusa", () => {
+    expect(parsePurchasePayer(null, shared, null)).toEqual({ ok: false, error: "invalid_payer" });
+  });
+
+  it("recusa a carteira quando o estoque não está ligado a nenhuma", () => {
+    expect(parsePurchasePayer("wallet", { ...shared, walletId: null }, UNIT_ID)).toEqual({
+      ok: false,
+      error: "stock_has_no_wallet",
+    });
+  });
+
+  it.each([
+    ["unidade fora do estoque", "64b7f0c2a1b2c3d4e5f60799"],
+    ["valor que não é texto", 5],
+  ])("recusa %s", (_label, value) => {
+    expect(parsePurchasePayer(value, shared, UNIT_ID)).toEqual({ ok: false, error: "invalid_payer" });
   });
 });

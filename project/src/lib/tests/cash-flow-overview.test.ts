@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mergeCashFlowSummaries, mergeGroupsByName, sumBalances } from "@/service/workspace/[workspaceId]/cash-flow/cash-flow-overview";
+import { mergeCashFlowSummaries, mergeGroupsByName, sumBalances, walletExpenseSummary } from "@/service/workspace/[workspaceId]/cash-flow/cash-flow-overview";
 import type { ExpenseCashFlowAmounts } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
 
 const WEEK_1 = { from: "2026-09-01", to: "2026-09-06" };
@@ -104,5 +104,40 @@ describe("sumBalances", () => {
   it("sem nenhuma unidade com saldo inicial, fica sem saldo", () => {
     expect(sumBalances([null, null])).toBeNull();
     expect(sumBalances([])).toBeNull();
+  });
+});
+
+// Despesas da carteira no caixa de todas as unidades: só despesa, sem receita nem equipe; real
+// conta as pagas e previsto, todas.
+describe("walletExpenseSummary", () => {
+  it("cada despesa entra no intervalo do dia do lançamento e reduz o líquido", () => {
+    const expenses = [
+      { date: "2026-09-02", totalCents: 1_000, paidCents: 1_000 },
+      { date: "2026-09-08", totalCents: 500, paidCents: 0 },
+    ];
+
+    expect(walletExpenseSummary([WEEK_1, WEEK_2], expenses)).toEqual({
+      buckets: [
+        { ...WEEK_1, real: amounts(0, { expenseCents: 1_000 }), forecast: amounts(0, { expenseCents: 1_000 }) },
+        { ...WEEK_2, real: ZERO, forecast: amounts(0, { expenseCents: 500 }) },
+      ],
+      total: { real: amounts(0, { expenseCents: 1_000 }), forecast: amounts(0, { expenseCents: 1_500 }) },
+    });
+  });
+
+  it("despesa fora dos intervalos não entra", () => {
+    const summary = walletExpenseSummary([WEEK_1], [{ date: "2026-08-31", totalCents: 1_000, paidCents: 1_000 }]);
+
+    expect(summary.total).toEqual({ real: ZERO, forecast: ZERO });
+  });
+
+  it("somada às unidades, desconta do caixa de todas sem mexer na receita", () => {
+    const unit = {
+      buckets: [{ ...WEEK_1, real: amounts(3_000), forecast: amounts(3_000) }],
+      total: { real: amounts(3_000), forecast: amounts(3_000) },
+    };
+    const wallet = walletExpenseSummary([WEEK_1], [{ date: "2026-09-03", totalCents: 1_000, paidCents: 1_000 }]);
+
+    expect(mergeCashFlowSummaries([WEEK_1], [unit, wallet]).total.real).toEqual(amounts(3_000, { expenseCents: 1_000 }));
   });
 });

@@ -14,7 +14,7 @@ const errorMessages: Record<UpdateUnitMemberPayError | "unauthenticated", string
   member_not_found: "Usuário não encontrado nesta unidade.",
   invalid_input: "Dados inválidos.",
   invalid_commission: "Informe uma comissão entre 0% e 100%.",
-  invalid_commission_base: "Escolha se a comissão é sobre os serviços da pessoa ou sobre o bruto da unidade.",
+  invalid_commission_base: "Escolha se a comissão é sobre os serviços da pessoa, sobre o bruto ou sobre o líquido da unidade.",
   invalid_salary: "Informe um salário mensal maior que zero.",
   invalid_bonus: "Cada bônus precisa de descrição (até 80 caracteres) e valor maior que zero.",
   invalid_start_date: "Data de início inválida.",

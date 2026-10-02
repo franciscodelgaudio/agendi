@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef, useState, useTransition, type KeyboardEvent } from "react"
+import type { ExpenseOwner } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
 import { toast } from "sonner"
 import { updateGroupMonthLimitAction } from "@/lib/actions/expense"
 import { AmountInput } from "@/components/shared/amount-input"
@@ -9,7 +10,7 @@ import { cn } from "@/service/_shared/utils"
 
 type Props = {
   workspaceId: string
-  unitId: string
+  owner: ExpenseOwner
   groupId: string
   // Mês da célula ("AAAA-MM") e o limite dele; null = sem limite.
   month: string
@@ -21,7 +22,7 @@ type Props = {
 
 // Planejado de um grupo num mês, editável no lugar: clique, Enter ou um dígito começa a edição;
 // Enter salva e desce para o mês seguinte, Tab salva e segue para o lado, Esc cancela.
-export function PlannedLimitCell({ workspaceId, unitId, groupId, month, cents, cellId, nextCellId }: Props) {
+export function PlannedLimitCell({ workspaceId, owner, groupId, month, cents, cellId, nextCellId }: Props) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<number | null>(cents)
   // Valor salvo e ainda não confirmado pelo servidor; undefined mostra o que veio da página.
@@ -46,7 +47,7 @@ export function PlannedLimitCell({ workspaceId, unitId, groupId, month, cents, c
     startTransition(async () => {
       const result = await updateGroupMonthLimitAction(
         workspaceId,
-        unitId,
+        owner,
         groupId,
         month,
         draft === null ? "" : (draft / 100).toFixed(2),

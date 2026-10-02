@@ -13,6 +13,9 @@ const stockSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
     units: { type: [stockUnitSchema], default: [] },
+    // Carteira que paga as compras do estoque, com todas as unidades dele; null quando cada
+    // unidade paga as suas.
+    walletId: { type: Schema.Types.ObjectId, ref: "Wallet", default: null },
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true, index: true },
   },
   { collection: "stocks", timestamps: true },

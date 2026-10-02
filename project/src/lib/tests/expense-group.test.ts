@@ -2,6 +2,10 @@ import { describe, it, expect, vi } from "vitest";
 import { createExpenseGroup, deleteExpenseGroup, updateExpenseGroup, updateGroupMonthLimit } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/expense-group";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
+const WALLET_ID = "64b7f0c2a1b2c3d4e5f60730";
+// Dono do grupo: a unidade ou a carteira.
+const UNIT = { unitId: UNIT_ID };
+const WALLET = { walletId: WALLET_ID };
 const GROUP_ID = "64b7f0c2a1b2c3d4e5f60740";
 const ICON_ID = "64b7f0c2a1b2c3d4e5f60760";
 
@@ -22,7 +26,7 @@ describe("createExpenseGroup", () => {
   it("cria o grupo na unidade com o ícone escolhido e o limite em centavos a partir do mês escolhido", async () => {
     const deps = makeDeps();
 
-    const result = await createExpenseGroup(validInput, UNIT_ID, deps);
+    const result = await createExpenseGroup(validInput, UNIT, deps);
 
     expect(result).toEqual({ ok: true, groupId: GROUP_ID });
     expect(deps.iconExists).toHaveBeenCalledWith(ICON_ID);
@@ -39,7 +43,7 @@ describe("createExpenseGroup", () => {
   it("sem limite, o grupo fica sem limite em nenhum mês", async () => {
     const deps = makeDeps();
 
-    await createExpenseGroup({ name: "Insumos", monthlyLimit: "", limitFrom: MONTH, iconId: ICON_ID }, UNIT_ID, deps);
+    await createExpenseGroup({ name: "Insumos", monthlyLimit: "", limitFrom: MONTH, iconId: ICON_ID }, UNIT, deps);
 
     expect(deps.insert).toHaveBeenCalledWith({
       name: "Insumos",
@@ -55,11 +59,11 @@ describe("createExpenseGroup", () => {
 
     await createExpenseGroup(
       { name: "  Aluguel  ", monthlyLimit: " 3000.00 ", limitFrom: MONTH, iconId: ICON_ID },
-      UNIT_ID,
+      UNIT,
       deps,
     );
 
-    expect(deps.isNameTaken).toHaveBeenCalledWith(UNIT_ID, "Aluguel", null);
+    expect(deps.isNameTaken).toHaveBeenCalledWith(UNIT, "Aluguel", null);
     expect(deps.insert).toHaveBeenCalledWith({
       name: "Aluguel",
       monthlyLimitCents: null,
@@ -73,7 +77,7 @@ describe("createExpenseGroup", () => {
     const deps = makeDeps();
     const name = "a".repeat(40);
 
-    const result = await createExpenseGroup({ name, monthlyLimit: "", limitFrom: MONTH, iconId: ICON_ID }, UNIT_ID, deps);
+    const result = await createExpenseGroup({ name, monthlyLimit: "", limitFrom: MONTH, iconId: ICON_ID }, UNIT, deps);
 
     expect(result).toEqual({ ok: true, groupId: GROUP_ID });
   });
@@ -98,7 +102,7 @@ describe("createExpenseGroup", () => {
   ])("retorna erro sem salvar quando %s", async (_label, input, error) => {
     const deps = makeDeps();
 
-    const result = await createExpenseGroup(input, UNIT_ID, deps);
+    const result = await createExpenseGroup(input, UNIT, deps);
 
     expect(result).toEqual({ ok: false, error });
     expect(deps.insert).not.toHaveBeenCalled();
@@ -107,7 +111,7 @@ describe("createExpenseGroup", () => {
   it("não cria o grupo com um ícone que não está no catálogo", async () => {
     const deps = makeDeps({ iconExists: false });
 
-    const result = await createExpenseGroup(validInput, UNIT_ID, deps);
+    const result = await createExpenseGroup(validInput, UNIT, deps);
 
     expect(result).toEqual({ ok: false, error: "invalid_icon" });
     expect(deps.insert).not.toHaveBeenCalled();
@@ -116,18 +120,34 @@ describe("createExpenseGroup", () => {
   it("não cria dois grupos com o mesmo nome na unidade", async () => {
     const deps = makeDeps({ taken: true });
 
-    const result = await createExpenseGroup(validInput, UNIT_ID, deps);
+    const result = await createExpenseGroup(validInput, UNIT, deps);
 
     expect(result).toEqual({ ok: false, error: "duplicate_group_name" });
     expect(deps.insert).not.toHaveBeenCalled();
   });
 
-  it.each([null, undefined, ""])("unidade não encontrada quando o id é %j", async (unitId) => {
+  it("cria o grupo na carteira, sem unidade, conferindo o nome entre os grupos da carteira", async () => {
     const deps = makeDeps();
 
-    const result = await createExpenseGroup(validInput, unitId, deps);
+    const result = await createExpenseGroup(validInput, WALLET, deps);
 
-    expect(result).toEqual({ ok: false, error: "unit_not_found" });
+    expect(result).toEqual({ ok: true, groupId: GROUP_ID });
+    expect(deps.isNameTaken).toHaveBeenCalledWith(WALLET, "Impostos", null);
+    expect(deps.insert).toHaveBeenCalledWith({
+      name: "Impostos",
+      monthlyLimitCents: null,
+      limitChanges: [{ month: MONTH, cents: 150_000 }],
+      iconId: ICON_ID,
+      walletId: WALLET_ID,
+    });
+  });
+
+  it.each([null, undefined, { unitId: "" }, { walletId: "" }])("dono não encontrado quando é %j", async (owner) => {
+    const deps = makeDeps();
+
+    const result = await createExpenseGroup(validInput, owner, deps);
+
+    expect(result).toEqual({ ok: false, error: "owner_not_found" });
     expect(deps.insert).not.toHaveBeenCalled();
   });
 });
@@ -146,13 +166,13 @@ describe("updateExpenseGroup", () => {
 
     const result = await updateExpenseGroup(
       { name: "Impostos", monthlyLimit: "", limitFrom: "2026-11", iconId: ICON_ID },
-      UNIT_ID,
+      UNIT,
       GROUP_ID,
       deps,
     );
 
     expect(result).toEqual({ ok: true });
-    expect(deps.isNameTaken).toHaveBeenCalledWith(UNIT_ID, "Impostos", GROUP_ID);
+    expect(deps.isNameTaken).toHaveBeenCalledWith(UNIT, "Impostos", GROUP_ID);
     expect(deps.iconExists).toHaveBeenCalledWith(ICON_ID);
     expect(deps.update).toHaveBeenCalledWith(
       GROUP_ID,
@@ -164,7 +184,7 @@ describe("updateExpenseGroup", () => {
   it("muda o limite a partir do mês escolhido", async () => {
     const deps = makeDeps();
 
-    await updateExpenseGroup({ ...validInput, monthlyLimit: "150.00", limitFrom: "2026-11" }, UNIT_ID, GROUP_ID, deps);
+    await updateExpenseGroup({ ...validInput, monthlyLimit: "150.00", limitFrom: "2026-11" }, UNIT, GROUP_ID, deps);
 
     expect(deps.update).toHaveBeenCalledWith(
       GROUP_ID,
@@ -176,7 +196,7 @@ describe("updateExpenseGroup", () => {
   it("não salva sem o mês a partir do qual o limite vale", async () => {
     const deps = makeDeps();
 
-    const result = await updateExpenseGroup({ ...validInput, limitFrom: "" }, UNIT_ID, GROUP_ID, deps);
+    const result = await updateExpenseGroup({ ...validInput, limitFrom: "" }, UNIT, GROUP_ID, deps);
 
     expect(result).toEqual({ ok: false, error: "invalid_limit_month" });
     expect(deps.update).not.toHaveBeenCalled();
@@ -185,7 +205,7 @@ describe("updateExpenseGroup", () => {
   it("não troca para um ícone que não está no catálogo", async () => {
     const deps = makeDeps({ iconExists: false });
 
-    const result = await updateExpenseGroup(validInput, UNIT_ID, GROUP_ID, deps);
+    const result = await updateExpenseGroup(validInput, UNIT, GROUP_ID, deps);
 
     expect(result).toEqual({ ok: false, error: "invalid_icon" });
     expect(deps.update).not.toHaveBeenCalled();
@@ -194,7 +214,7 @@ describe("updateExpenseGroup", () => {
   it("não troca para o nome de outro grupo da unidade", async () => {
     const deps = makeDeps({ taken: true });
 
-    const result = await updateExpenseGroup(validInput, UNIT_ID, GROUP_ID, deps);
+    const result = await updateExpenseGroup(validInput, UNIT, GROUP_ID, deps);
 
     expect(result).toEqual({ ok: false, error: "duplicate_group_name" });
     expect(deps.update).not.toHaveBeenCalled();
@@ -205,7 +225,7 @@ describe("updateExpenseGroup", () => {
 
     const result = await updateExpenseGroup(
       { name: "Impostos", monthlyLimit: "-5", limitFrom: MONTH, iconId: ICON_ID },
-      UNIT_ID,
+      UNIT,
       GROUP_ID,
       deps,
     );
@@ -214,13 +234,23 @@ describe("updateExpenseGroup", () => {
     expect(deps.update).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["sem unidade", null, GROUP_ID],
-    ["sem grupo", UNIT_ID, ""],
-  ])("grupo não encontrado quando %s", async (_label, unitId, groupId) => {
+  it("na carteira, confere o nome entre os grupos da carteira", async () => {
     const deps = makeDeps();
 
-    const result = await updateExpenseGroup(validInput, unitId, groupId, deps);
+    const result = await updateExpenseGroup(validInput, WALLET, GROUP_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.isNameTaken).toHaveBeenCalledWith(WALLET, "Impostos", GROUP_ID);
+  });
+
+  it.each([
+    ["sem dono", null, GROUP_ID],
+    ["sem id da carteira", { walletId: "" }, GROUP_ID],
+    ["sem grupo", UNIT, ""],
+  ])("grupo não encontrado quando %s", async (_label, owner, groupId) => {
+    const deps = makeDeps();
+
+    const result = await updateExpenseGroup(validInput, owner, groupId, deps);
 
     expect(result).toEqual({ ok: false, error: "group_not_found" });
     expect(deps.update).not.toHaveBeenCalled();
@@ -229,7 +259,7 @@ describe("updateExpenseGroup", () => {
   it("grupo não encontrado quando ele não existe na unidade", async () => {
     const deps = makeDeps({ found: false });
 
-    const result = await updateExpenseGroup(validInput, UNIT_ID, GROUP_ID, deps);
+    const result = await updateExpenseGroup(validInput, UNIT, GROUP_ID, deps);
 
     expect(result).toEqual({ ok: false, error: "group_not_found" });
   });
@@ -244,7 +274,7 @@ describe("updateGroupMonthLimit", () => {
   it("muda o limite do grupo só no mês, em centavos", async () => {
     const deps = makeDeps();
 
-    const result = await updateGroupMonthLimit({ month: "2026-11", limit: "150.00" }, UNIT_ID, GROUP_ID, deps);
+    const result = await updateGroupMonthLimit({ month: "2026-11", limit: "150.00" }, UNIT, GROUP_ID, deps);
 
     expect(result).toEqual({ ok: true });
     expect(deps.setMonthLimit).toHaveBeenCalledWith(GROUP_ID, "2026-11", 15_000);
@@ -253,7 +283,7 @@ describe("updateGroupMonthLimit", () => {
   it("limite vazio deixa o mês sem limite", async () => {
     const deps = makeDeps();
 
-    await updateGroupMonthLimit({ month: "2026-11", limit: " " }, UNIT_ID, GROUP_ID, deps);
+    await updateGroupMonthLimit({ month: "2026-11", limit: " " }, UNIT, GROUP_ID, deps);
 
     expect(deps.setMonthLimit).toHaveBeenCalledWith(GROUP_ID, "2026-11", null);
   });
@@ -268,19 +298,29 @@ describe("updateGroupMonthLimit", () => {
   ])("retorna erro sem salvar quando %s", async (_label, input, error) => {
     const deps = makeDeps();
 
-    const result = await updateGroupMonthLimit(input, UNIT_ID, GROUP_ID, deps);
+    const result = await updateGroupMonthLimit(input, UNIT, GROUP_ID, deps);
 
     expect(result).toEqual({ ok: false, error });
     expect(deps.setMonthLimit).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["sem unidade", null, GROUP_ID],
-    ["sem grupo", UNIT_ID, ""],
-  ])("grupo não encontrado quando %s", async (_label, unitId, groupId) => {
+  it("muda o limite de um grupo da carteira", async () => {
     const deps = makeDeps();
 
-    const result = await updateGroupMonthLimit({ month: "2026-11", limit: "150.00" }, unitId, groupId, deps);
+    const result = await updateGroupMonthLimit({ month: "2026-11", limit: "150.00" }, WALLET, GROUP_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.setMonthLimit).toHaveBeenCalledWith(GROUP_ID, "2026-11", 15_000);
+  });
+
+  it.each([
+    ["sem dono", null, GROUP_ID],
+    ["sem id da carteira", { walletId: "" }, GROUP_ID],
+    ["sem grupo", UNIT, ""],
+  ])("grupo não encontrado quando %s", async (_label, owner, groupId) => {
+    const deps = makeDeps();
+
+    const result = await updateGroupMonthLimit({ month: "2026-11", limit: "150.00" }, owner, groupId, deps);
 
     expect(result).toEqual({ ok: false, error: "group_not_found" });
     expect(deps.setMonthLimit).not.toHaveBeenCalled();
@@ -289,7 +329,7 @@ describe("updateGroupMonthLimit", () => {
   it("grupo não encontrado quando ele não existe na unidade", async () => {
     const deps = makeDeps({ found: false });
 
-    const result = await updateGroupMonthLimit({ month: "2026-11", limit: "150.00" }, UNIT_ID, GROUP_ID, deps);
+    const result = await updateGroupMonthLimit({ month: "2026-11", limit: "150.00" }, UNIT, GROUP_ID, deps);
 
     expect(result).toEqual({ ok: false, error: "group_not_found" });
   });

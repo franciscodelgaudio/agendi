@@ -1,8 +1,18 @@
 import { Types } from "mongoose";
 import { openingBalanceRange, type OpeningBalance } from "@/service/workspace/[workspaceId]/cash-flow/opening-balance";
 import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share";
-import { findTeamPayMembers, loadUnitNet } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store";
+import { findTeamPayMembers, groupLimitsOf, loadUnitNet } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store";
 import { walletBalance } from "@/service/workspace/[workspaceId]/cash-flow/wallet";
+import {
+  dailyExpenseTotalsPipeline,
+  expenseGroupTotalsPipeline,
+  type ExpenseDayTotal,
+  type ExpenseGroupTotal,
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense";
+import type { DayRange } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
+import { walletExpenseSummary } from "@/service/workspace/[workspaceId]/cash-flow/cash-flow-overview";
+import { Expense } from "@/models/Expense";
+import { ExpenseGroup } from "@/models/ExpenseGroup";
 import { Unit } from "@/models/Unit";
 import { Wallet } from "@/models/Wallet";
 
@@ -42,14 +52,18 @@ export async function loadWallets(workspaceId: string, today: string, unitId?: s
         .map((unit) => ({ unitId: unit.unitId.toString(), amountCents: unit.amountCents ?? null }))
         .filter((unit) => unitsById.has(unit.unitId));
       const range = openingBalanceRange(openingBalance, today);
-      const nets = await Promise.all(
-        walletUnits.map(({ unitId }) =>
-          range ? loadUnitNet({ id: unitId, revenueShare: unitsById.get(unitId)!.revenueShare }, range, today, team) : 0,
+      const [nets, walletExpenseCents] = await Promise.all([
+        Promise.all(
+          walletUnits.map(({ unitId }) =>
+            range ? loadUnitNet({ id: unitId, revenueShare: unitsById.get(unitId)!.revenueShare }, range, today, team) : 0,
+          ),
         ),
-      );
+        range ? walletPaidExpenses(wallet._id, range) : 0,
+      ]);
       const balance = walletBalance(
         { openingBalance, units: walletUnits },
         Object.fromEntries(walletUnits.map((unit, i) => [unit.unitId, nets[i]])),
+        walletExpenseCents,
       );
       return {
         id: wallet._id.toString(),
@@ -63,6 +77,43 @@ export async function loadWallets(workspaceId: string, today: string, unitId?: s
           amountCents: unit.amountCents,
           balanceCents: balance.units[i].balanceCents,
         })),
+      };
+    }),
+  );
+}
+
+// Despesas pagas da própria carteira no intervalo, pelo dia do lançamento.
+async function walletPaidExpenses(walletId: Types.ObjectId, range: { from: string; to: string }) {
+  const days = await Expense.aggregate<ExpenseDayTotal>([{ $match: { walletId } }, ...dailyExpenseTotalsPipeline(range)]);
+  return days.reduce((sum, day) => sum + day.paidCents, 0);
+}
+
+// Despesas das carteiras do workspace nos intervalos do caixa, no mesmo formato do caixa de uma
+// unidade, para somar com elas: resumo, gasto pago por grupo e limites dos grupos.
+export async function loadWalletCashFlows(workspaceId: string, buckets: DayRange[]) {
+  const shown = { from: buckets[0].from, to: buckets.at(-1)!.to };
+  const walletIds = (await Wallet.find({ workspaceId: new Types.ObjectId(workspaceId) }).select({ _id: 1 }).lean()).map(
+    (wallet) => wallet._id,
+  );
+  return Promise.all(
+    walletIds.map(async (walletId) => {
+      const match = { $match: { walletId } };
+      const [expenses, groups, groupTotals] = await Promise.all([
+        Expense.aggregate<ExpenseDayTotal>([match, ...dailyExpenseTotalsPipeline(shown)]),
+        ExpenseGroup.find({ walletId }).select({ name: 1, iconId: 1, monthlyLimitCents: 1, limitChanges: 1 }).sort({ name: 1 }).lean(),
+        Expense.aggregate<ExpenseGroupTotal>([match, ...expenseGroupTotalsPipeline(shown)]),
+      ]);
+      const paidByGroup = new Map(groupTotals.map((total) => [total.groupId, total.paidCents]));
+      return {
+        summary: walletExpenseSummary(buckets, expenses),
+        groups: groups.map((group) => ({
+          id: group._id.toString(),
+          name: group.name,
+          iconId: group.iconId?.toString() ?? null,
+          paidCents: paidByGroup.get(group._id.toString()) ?? 0,
+        })),
+        groupLimits: groups.map(groupLimitsOf),
+        hasExpenses: expenses.length > 0,
       };
     }),
   );

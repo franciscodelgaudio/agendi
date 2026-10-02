@@ -9,6 +9,7 @@ import { findProductUsage } from "@/service/workspace/[workspaceId]/stock/produc
 import { findHolderByUnit, findUnitHolder } from "@/service/workspace/[workspaceId]/stock/stock-store"
 import { Product } from "@/models/Product"
 import { StockItem } from "@/models/StockItem"
+import { Wallet } from "@/models/Wallet"
 import { Workspace } from "@/models/Workspace"
 import { AddStockItemSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/stock/add-stock-item-sheet"
 import { CreateProductSheet } from "@/components/workspace/[workspaceId]/shared/stock/create-product-sheet"
@@ -145,10 +146,31 @@ export default async function StockPage({
   })()
 
   const sharedWith = holder.unitIds.filter((id) => id !== unitId).map((id) => unitNames.get(id)).filter(Boolean)
+
+  // Quem pode pagar uma compra no estoque compartilhado: esta unidade (o padrão), a carteira
+  // ligada a ele (para quem gerencia o caixa) e as outras unidades dele.
+  const walletId = canManage && can(workspace.actor, "cash_flow.manage") ? (holder.stock?.walletId ?? null) : null
+  const wallet = walletId && (await Wallet.findOne({ _id: walletId, workspaceId: workspace.id }).select({ name: 1 }).lean())
+  const payers = holder.stock
+    ? [
+        { value: unitId, label: unitNames.get(unitId) ?? "Esta unidade" },
+        ...(wallet ? [{ value: "wallet", label: `Carteira ${wallet.name}` }] : []),
+        ...holder.unitIds
+          .filter((id) => id !== unitId && unitNames.has(id))
+          .map((id) => ({ value: id, label: unitNames.get(id)! })),
+      ]
+    : []
   const addActions = canManage && (
     <div className="flex flex-wrap gap-2">
-      {catalogOptions.length > 0 && <AddStockItemSheet workspaceId={workspaceId} unitId={unitId} products={catalogOptions} />}
-      <CreateProductSheet workspaceId={workspaceId} unitId={unitId} />
+      {catalogOptions.length > 0 && (
+        <AddStockItemSheet
+          workspaceId={workspaceId}
+          targets={[
+            { kind: "unit", id: unitId, name: holder.stock?.name ?? "Estoque", products: catalogOptions, payers },
+          ]}
+        />
+      )}
+      <CreateProductSheet workspaceId={workspaceId} unitId={unitId} payers={payers} />
     </div>
   )
 
@@ -196,6 +218,7 @@ export default async function StockPage({
                       unitId={unitId}
                       product={product}
                       transfer={transferOf?.(product.id) ?? null}
+                      payers={payers}
                     />
                   )
                 : undefined

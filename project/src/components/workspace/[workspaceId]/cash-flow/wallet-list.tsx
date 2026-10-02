@@ -1,4 +1,5 @@
 import { WalletIcon } from "lucide-react"
+import Link from "@/components/shared/link"
 import type { WalletView } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
 
 import { dayLabel } from "@/components/workspace/[workspaceId]/shared/cash-flow/opening-balance-card"
@@ -13,7 +14,7 @@ function money(cents: number) {
 
 const listFormat = new Intl.ListFormat("pt-BR")
 
-// Saldo de hoje de cada carteira; na distribuída, o de cada unidade e o que não foi distribuído.
+// Saldo de hoje de cada carteira (o nome leva às despesas e ao planejamento dela); na distribuída, o de cada unidade e o que não foi distribuído.
 // units só vem para quem gerencia o caixa (mostra as ações).
 export function WalletList({
   wallets,
@@ -43,7 +44,9 @@ export function WalletList({
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary [&_svg]:size-4">
                   <WalletIcon />
                 </span>
-                <span className="truncate">{wallet.name}</span>
+                <Link href={`/workspace/${workspaceId}/cash-flow/wallets/${wallet.id}`} className="truncate hover:underline">
+                  {wallet.name}
+                </Link>
               </CardTitle>
               {units && (
                 <CardAction>

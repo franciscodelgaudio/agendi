@@ -470,12 +470,12 @@ describe("summarizeCashFlow", () => {
 
 describe("applyStaffCosts", () => {
   // Setembro de 2026 tem 30 dias: R$ 3.000 por mês = R$ 100 por dia.
-  const SALARY = { grossCommissionPercent: 0, salaries: [{ monthlyCents: 300_000, startDate: null }], today: "2026-09-24" };
+  const SALARY = { grossCommissionPercent: 0, netCommissionPercent: 0, salaries: [{ monthlyCents: 300_000, startDate: null }], today: "2026-09-24" };
 
   it("sem salário nem comissão sobre o bruto, só acrescenta salário zerado", () => {
     const summary = summarizeCashFlow([day("2026-09-21")], [total("2026-09-21", 10_000)], [], null, { ana: 10 });
 
-    const result = applyStaffCosts(summary, { grossCommissionPercent: 0, salaries: [], today: "2026-09-24" });
+    const result = applyStaffCosts(summary, { grossCommissionPercent: 0, netCommissionPercent: 0, salaries: [], today: "2026-09-24" });
 
     const amounts = { grossCents: 10_000, partnerShareCents: 0, commissionCents: 1_000, salaryCents: 0, netCents: 9_000 };
     expect(result).toEqual({
@@ -536,7 +536,7 @@ describe("applyStaffCosts", () => {
       { ana: 30 },
     );
 
-    const result = applyStaffCosts(summary, { grossCommissionPercent: 5, salaries: [], today: "2026-09-24" });
+    const result = applyStaffCosts(summary, { grossCommissionPercent: 5, netCommissionPercent: 0, salaries: [], today: "2026-09-24" });
 
     // Dia 21: 30% da Ana (R$ 30) + 5% do bruto (R$ 5); repasse 20% (R$ 20).
     expect(result.buckets[0].real).toEqual({
@@ -557,11 +557,45 @@ describe("applyStaffCosts", () => {
     expect(result.total.forecast.commissionCents).toBe(14_000);
   });
 
+  it("comissão sobre o líquido incide no bruto menos o repasse e soma às demais", () => {
+    const share: RevenueShare = { period: "weekly", tiers: [{ upToCents: null, percent: 20 }] };
+    const summary = summarizeCashFlow([day("2026-09-21")], [total("2026-09-21", 10_000, "ana")], [], share, { ana: 30 });
+
+    const result = applyStaffCosts(summary, { grossCommissionPercent: 5, netCommissionPercent: 10, salaries: [], today: "2026-09-24" });
+
+    // 30% da Ana (R$ 30) + 5% do bruto (R$ 5) + 10% de R$ 100 − R$ 20 de repasse (R$ 8).
+    expect(result.buckets[0].real).toEqual({
+      grossCents: 10_000,
+      partnerShareCents: 2_000,
+      commissionCents: 4_300,
+      salaryCents: 0,
+      netCents: 3_700,
+    });
+  });
+
+  it("comissão sobre o líquido sem repasse (espaço próprio) incide no bruto", () => {
+    const summary = summarizeCashFlow([day("2026-09-21")], [total("2026-09-21", 10_000)], [], null, {});
+
+    const result = applyStaffCosts(summary, { grossCommissionPercent: 0, netCommissionPercent: 10, salaries: [], today: "2026-09-24" });
+
+    expect(result.buckets[0].real).toMatchObject({ commissionCents: 1_000, netCents: 9_000 });
+  });
+
+  it("comissão sobre o líquido arredonda por intervalo", () => {
+    const share: RevenueShare = { period: "weekly", tiers: [{ upToCents: null, percent: 20 }] };
+    const summary = summarizeCashFlow([day("2026-09-21")], [total("2026-09-21", 10_001)], [], share, {});
+
+    const result = applyStaffCosts(summary, { grossCommissionPercent: 0, netCommissionPercent: 2.5, salaries: [], today: "2026-09-24" });
+
+    // Repasse 2.000,2 → 2.000; 2,5% de 8.001 = 200,025.
+    expect(result.buckets[0].real.commissionCents).toBe(200);
+  });
+
   it("arredonda por intervalo; o total soma os intervalos arredondados", () => {
     // R$ 1,00 por mês em setembro = 3,33 centavos por dia.
     const summary = summarizeCashFlow([day("2026-09-21"), day("2026-09-22")], [], [], null, {});
 
-    const result = applyStaffCosts(summary, { grossCommissionPercent: 0, salaries: [{ monthlyCents: 100, startDate: null }], today: "2026-09-24" });
+    const result = applyStaffCosts(summary, { grossCommissionPercent: 0, netCommissionPercent: 0, salaries: [{ monthlyCents: 100, startDate: null }], today: "2026-09-24" });
 
     expect(result.buckets.map((bucket) => bucket.real.salaryCents)).toEqual([3, 3]);
     expect(result.total.real).toEqual({ grossCents: 0, partnerShareCents: 0, commissionCents: 0, salaryCents: 6, netCents: -6 });
@@ -786,6 +820,7 @@ describe("teamPayRates", () => {
     expect(teamPayRates([], UNIT.toString())).toEqual({
       commissionRates: {},
       grossCommissionPercent: 0,
+      netCommissionPercent: 0,
       salaries: [],
     });
   });
@@ -811,6 +846,7 @@ describe("teamPayRates", () => {
     expect(teamPayRates(team, UNIT.toString())).toEqual({
       commissionRates: {},
       grossCommissionPercent: 3.5,
+      netCommissionPercent: 0,
       salaries: [],
     });
   });
@@ -824,6 +860,7 @@ describe("teamPayRates", () => {
     expect(teamPayRates(team, UNIT.toString())).toEqual({
       commissionRates: {},
       grossCommissionPercent: 0,
+      netCommissionPercent: 0,
       salaries: [
         { monthlyCents: 250_000, startDate: null },
         { monthlyCents: 180_000, startDate: null },
@@ -840,6 +877,7 @@ describe("teamPayRates", () => {
     expect(teamPayRates(team, UNIT.toString())).toEqual({
       commissionRates: { [ANA.toString()]: 20 },
       grossCommissionPercent: 2,
+      netCommissionPercent: 0,
       salaries: [
         { monthlyCents: 150_000, startDate: null },
         { monthlyCents: 180_000, startDate: null },
@@ -858,6 +896,7 @@ describe("teamPayRates", () => {
     expect(teamPayRates(team, UNIT.toString())).toEqual({
       commissionRates: { [ANA.toString()]: 30 },
       grossCommissionPercent: 0,
+      netCommissionPercent: 0,
       salaries: [
         { monthlyCents: 25_000, startDate: null },
         { monthlyCents: 190_000, startDate: null },
@@ -880,6 +919,7 @@ describe("teamPayRates", () => {
     expect(teamPayRates(team, UNIT.toString())).toEqual({
       commissionRates: { [ANA.toString()]: 30 },
       grossCommissionPercent: 0,
+      netCommissionPercent: 0,
       salaries: [],
     });
   });
@@ -909,6 +949,22 @@ describe("teamPayRates", () => {
     expect(teamPayRates(team, UNIT.toString())).toEqual({
       commissionRates: { [BIA.toString()]: 25 },
       grossCommissionPercent: 3,
+      netCommissionPercent: 0,
+      salaries: [],
+    });
+  });
+
+  it("comissões sobre o líquido somam num percentual próprio, mesmo com convite pendente", () => {
+    const team = [
+      { userId: ANA, attends: true, units: [{ ...link(4, null), commissionBase: "net" as const }] },
+      { userId: null, attends: false, units: [{ ...link(1.5, null), commissionBase: "net" as const }] },
+      { userId: BIA, attends: false, units: [{ ...link(2, null), commissionBase: "gross" as const }] },
+    ];
+
+    expect(teamPayRates(team, UNIT.toString())).toEqual({
+      commissionRates: {},
+      grossCommissionPercent: 2,
+      netCommissionPercent: 5.5,
       salaries: [],
     });
   });
@@ -922,6 +978,7 @@ describe("teamPayRates", () => {
     expect(teamPayRates(team, UNIT.toString())).toEqual({
       commissionRates: { [ANA.toString()]: 30 },
       grossCommissionPercent: 2,
+      netCommissionPercent: 0,
       salaries: [],
     });
   });
@@ -932,13 +989,14 @@ describe("teamPayRates", () => {
     expect(teamPayRates(team, UNIT.toString())).toEqual({
       commissionRates: { [ANA.toString()]: 10 },
       grossCommissionPercent: 0,
+      netCommissionPercent: 0,
       salaries: [{ monthlyCents: 300_000, startDate: null }],
     });
   });
 });
 
 describe("applyExpenses", () => {
-  const STAFF = { grossCommissionPercent: 0, salaries: [], today: "2026-09-24" };
+  const STAFF = { grossCommissionPercent: 0, netCommissionPercent: 0, salaries: [], today: "2026-09-24" };
   const WEEK = [day("2026-09-21"), day("2026-09-22")];
   // Semana com R$ 100 de bruto na segunda e nada na terça, sem descontos.
   const summary = () => applyStaffCosts(summarizeCashFlow(WEEK, [total("2026-09-21", 10_000)], [], null, {}), STAFF);

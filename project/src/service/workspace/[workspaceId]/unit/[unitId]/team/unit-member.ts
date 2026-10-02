@@ -24,9 +24,19 @@ export type UpdateUnitMemberPayError =
 export type UpdateUnitMemberPayResult = { ok: true } | { ok: false; error: UpdateUnitMemberPayError };
 
 export type UnitMemberBonus = { description: string; amountCents: number };
-// Sobre os serviços que a pessoa fez ou sobre o faturamento bruto da unidade.
-export const COMMISSION_BASES = ["services", "gross"] as const;
+// Sobre os serviços que a pessoa fez, sobre o faturamento bruto da unidade ou sobre o líquido
+// (bruto menos o repasse ao estabelecimento parceiro; sem repasse, é o próprio bruto).
+export const COMMISSION_BASES = ["services", "gross", "net"] as const;
 export type CommissionBase = (typeof COMMISSION_BASES)[number];
+// Percentual sobre os atendimentos da própria pessoa, da unidade inteira ou das pessoas escolhidas
+// (ids de usuário), descontando ou não o repasse e as despesas dos grupos escolhidos.
+export type CommissionRule = {
+  percent: number;
+  source: "self" | "unit" | "members";
+  userIds: string[];
+  deductRevenueShare: boolean;
+  deductExpenseGroupIds: string[];
+};
 export type UnitMemberPay = {
   startDate: string | null;
   // Dia do mês em que o mês anterior é pago, de 1 a 31.

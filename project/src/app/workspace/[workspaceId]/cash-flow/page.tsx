@@ -13,7 +13,7 @@ import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { loadUnitCashFlow, type CashFlowUnit } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
-import { loadWallets } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
+import { loadWalletCashFlows, loadWallets } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
 import { Workspace } from "@/models/Workspace"
 import { CashFlowNav, periodLabel } from "@/components/workspace/[workspaceId]/shared/cash-flow/cash-flow-nav"
 import { OpeningBalanceCard } from "@/components/workspace/[workspaceId]/shared/cash-flow/opening-balance-card"
@@ -25,7 +25,8 @@ import { CashFlowUnitsTable } from "@/components/workspace/[workspaceId]/cash-fl
 import { WalletList } from "@/components/workspace/[workspaceId]/cash-flow/wallet-list"
 import { CreateWalletSheet } from "@/components/workspace/[workspaceId]/cash-flow/wallet-sheets"
 
-// Caixa de todas as unidades: cada uma é calculada com as próprias regras e os valores são somados.
+// Caixa de todas as unidades: cada uma é calculada com as próprias regras e os valores são somados,
+// junto com as despesas das carteiras (em conjunto das unidades de cada uma).
 // Como no caixa da unidade, é sempre do ano, mês a mês, e os gastos por grupo são de um mês só.
 export default async function WorkspaceCashFlowPage({
   params,
@@ -71,12 +72,21 @@ export default async function WorkspaceCashFlowPage({
   const shown = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const costBuckets = cashFlowBuckets({ view: "month", date: costMonthDate(search.costs, shown, today) })
   const costMonth = { from: costBuckets[0].from, to: costBuckets.at(-1)!.to }
-  const [icons, flows, monthFlows, wallets] = await Promise.all([
+  const [icons, unitFlows, unitMonthFlows, wallets, walletFlows, walletMonthFlows] = await Promise.all([
     loadExpenseGroupIcons(),
     Promise.all(workspace.units.map((unit) => loadUnitCashFlow(workspace.id, unit, buckets, today))),
     Promise.all(workspace.units.map((unit) => loadUnitCashFlow(workspace.id, unit, costBuckets, today))),
     loadWallets(workspace.id, today),
+    loadWalletCashFlows(workspace.id, buckets),
+    loadWalletCashFlows(workspace.id, costBuckets),
   ])
+  const flows = [...unitFlows, ...walletFlows]
+  // A tabela por unidade soma só as unidades; as despesas das carteiras ficam no caixa delas.
+  const unitSummary = mergeCashFlowSummaries(
+    buckets,
+    unitFlows.map((flow) => flow.summary),
+  )
+  const monthFlows = [...unitMonthFlows, ...walletMonthFlows]
   const summary = mergeCashFlowSummaries(
     buckets,
     flows.map((flow) => flow.summary),
@@ -104,7 +114,7 @@ export default async function WorkspaceCashFlowPage({
   const units = workspace.units.map((unit, i) => ({
     id: unit.id,
     name: unit.name,
-    real: flows[i].summary.total.real,
+    real: unitFlows[i].summary.total.real,
     balanceCents: unitBalances.get(unit.id) ?? null,
   }))
 
@@ -136,8 +146,8 @@ export default async function WorkspaceCashFlowPage({
         view={query.view}
         summary={summary}
         hasPartnerShare={workspace.units.some((unit) => unit.revenueShare)}
-        hasCommission={flows.some((flow) => flow.hasCommission)}
-        hasSalary={flows.some((flow) => flow.hasSalary)}
+        hasCommission={unitFlows.some((flow) => flow.hasCommission)}
+        hasSalary={unitFlows.some((flow) => flow.hasSalary)}
         hasExpenses={flows.some((flow) => flow.hasExpenses)}
         today={today}
       />
@@ -170,7 +180,7 @@ export default async function WorkspaceCashFlowPage({
       <h4 className="mt-4 font-semibold tracking-tight">Por unidade</h4>
       <CashFlowUnitsTable
         units={units}
-        total={{ real: summary.total.real, balanceCents }}
+        total={{ real: unitSummary.total.real, balanceCents }}
         query={listQuery}
         workspaceId={workspaceId}
       />

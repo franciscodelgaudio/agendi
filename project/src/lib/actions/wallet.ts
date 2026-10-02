@@ -10,13 +10,19 @@ import {
   deleteWallet,
   updateWallet,
   type CreateWalletError,
+  type DeleteWalletResult,
   type UpdateWalletError,
   type WalletUnit,
 } from "@/service/workspace/[workspaceId]/cash-flow/wallet"
+import { Expense } from "@/models/Expense"
+import { ExpenseGroup } from "@/models/ExpenseGroup"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
+import { unlinkStaleStockWallets } from "@/service/workspace/[workspaceId]/stock/stock-store"
 
-const errorMessages: Record<CreateWalletError | UpdateWalletError | "unauthenticated", string> = {
+type DeleteWalletError = Extract<DeleteWalletResult, { ok: false }>["error"]
+
+const errorMessages: Record<CreateWalletError | UpdateWalletError | DeleteWalletError | "unauthenticated", string> = {
   invalid_input: "Informe o nome, o saldo e as unidades da carteira.",
   invalid_name: "Informe o nome da carteira.",
   name_too_long: "O nome pode ter no máximo 40 caracteres.",
@@ -29,6 +35,7 @@ const errorMessages: Record<CreateWalletError | UpdateWalletError | "unauthentic
   unit_in_other_wallet: "Uma das unidades já está em outra carteira. Tire-a de lá antes.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   wallet_not_found: "Carteira não encontrada ou sem permissão.",
+  wallet_has_expenses: "Esta carteira tem despesas ou grupos lançados. Exclua-os antes.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
@@ -113,6 +120,8 @@ export async function updateWalletAction(
     },
   })
   if (!result.ok) return { error: errorMessages[result.error] }
+  // Estoque ligado à carteira que deixou de ter todas as unidades dele perde a ligação.
+  await unlinkStaleStockWallets(target.workspaceId)
 
   refresh()
   return { error: null }
@@ -123,11 +132,17 @@ export async function deleteWalletAction(workspaceId: string, walletId: string):
   if ("error" in target) return target
 
   const id = isObjectIdOrHexString(walletId) ? walletId : null
-  const result = await deleteWallet(id, async (walletId) => {
-    const { deletedCount } = await Wallet.deleteOne({ _id: walletId, workspaceId: target.workspaceId })
-    return deletedCount > 0
+  const result = await deleteWallet(id, {
+    hasExpenses: async (walletId) =>
+      !!(await Expense.exists({ walletId })) || !!(await ExpenseGroup.exists({ walletId })),
+    remove: async (walletId) => {
+      const { deletedCount } = await Wallet.deleteOne({ _id: walletId, workspaceId: target.workspaceId })
+      return deletedCount > 0
+    },
   })
   if (!result.ok) return { error: errorMessages[result.error] }
+  // Estoque ligado à carteira que deixou de ter todas as unidades dele perde a ligação.
+  await unlinkStaleStockWallets(target.workspaceId)
 
   refresh()
   return { error: null }

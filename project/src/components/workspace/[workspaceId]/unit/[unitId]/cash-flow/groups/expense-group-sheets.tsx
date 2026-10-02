@@ -1,6 +1,7 @@
 "use client"
 
 import { useActionState, useState, useTransition } from "react"
+import type { ExpenseOwner } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
 import { EllipsisIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
 import {
   createExpenseGroupAction,
@@ -48,7 +49,7 @@ type Group = { id: string; name: string; limits: (number | null)[]; icon: Expens
 // Meses ("AAAA-MM") que o limite pode passar a valer, e o já escolhido ao abrir.
 export type LimitMonths = { months: string[]; defaultMonth: string }
 
-type Props = { workspaceId: string; unitId: string; icons: ExpenseGroupIcon[]; limitMonths: LimitMonths }
+type Props = { workspaceId: string; owner: ExpenseOwner; icons: ExpenseGroupIcon[]; limitMonths: LimitMonths }
 
 // Os meses são do calendário, então são formatados em UTC para não deslocar.
 const monthFormat = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" })
@@ -161,7 +162,7 @@ function ExpenseGroupForm({
   )
 }
 
-export function CreateExpenseGroupSheet({ workspaceId, unitId, icons, limitMonths }: Props) {
+export function CreateExpenseGroupSheet({ workspaceId, owner, icons, limitMonths }: Props) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -177,7 +178,7 @@ export function CreateExpenseGroupSheet({ workspaceId, unitId, icons, limitMonth
           submitLabel={["Cadastrar", "Cadastrando..."]}
           icons={icons}
           limitMonths={limitMonths}
-          action={(prev, formData) => createExpenseGroupAction(workspaceId, unitId, prev, formData)}
+          action={(prev, formData) => createExpenseGroupAction(workspaceId, owner, prev, formData)}
           onDone={() => setOpen(false)}
         />
       </SheetContent>
@@ -185,7 +186,7 @@ export function CreateExpenseGroupSheet({ workspaceId, unitId, icons, limitMonth
   )
 }
 
-export function ExpenseGroupActions({ workspaceId, unitId, icons, limitMonths, group }: Props & { group: Group }) {
+export function ExpenseGroupActions({ workspaceId, owner, icons, limitMonths, group }: Props & { group: Group }) {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
@@ -195,7 +196,7 @@ export function ExpenseGroupActions({ workspaceId, unitId, icons, limitMonths, g
 
   function handleDelete() {
     startTransition(async () => {
-      const result = await deleteExpenseGroupAction(workspaceId, unitId, group.id)
+      const result = await deleteExpenseGroupAction(workspaceId, owner, group.id)
       setError(result.error)
       if (!result.error) setDeleteOpen(false)
     })
@@ -235,7 +236,7 @@ export function ExpenseGroupActions({ workspaceId, unitId, icons, limitMonths, g
             group={group}
             icons={icons}
             limitMonths={limitMonths}
-            action={(prev, formData) => updateExpenseGroupAction(workspaceId, unitId, group.id, prev, formData)}
+            action={(prev, formData) => updateExpenseGroupAction(workspaceId, owner, group.id, prev, formData)}
             onDone={() => setEditOpen(false)}
           />
         </SheetContent>

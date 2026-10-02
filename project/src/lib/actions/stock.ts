@@ -5,6 +5,7 @@ import { isObjectIdOrHexString, Types } from "mongoose"
 import { getSessionUserId } from "@/service/(auth)/session"
 import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
 import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
+import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import {
   createStock,
   deleteStock,
@@ -15,10 +16,11 @@ import {
   type StockUnit,
   type UpdateStockError,
 } from "@/service/workspace/[workspaceId]/stock/stock"
-import { toLots } from "@/service/workspace/[workspaceId]/stock/stock-store"
+import { toLots, unlinkStaleStockWallets } from "@/service/workspace/[workspaceId]/stock/stock-store"
 import { Stock } from "@/models/Stock"
 import { StockItem } from "@/models/StockItem"
 import { Unit } from "@/models/Unit"
+import { Wallet } from "@/models/Wallet"
 
 type DeleteStockError = Extract<DeleteStockResult, { ok: false }>["error"]
 
@@ -28,6 +30,8 @@ const errorMessages: Record<CreateStockError | UpdateStockError | DeleteStockErr
   name_too_long: "O nome pode ter no máximo 40 caracteres.",
   no_units: "Escolha pelo menos uma unidade.",
   invalid_units: "Escolha só unidades deste workspace.",
+  wallet_not_found: "Carteira não encontrada ou sem permissão.",
+  wallet_missing_units: "A carteira precisa ter todas as unidades do estoque.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   stock_not_found: "Estoque não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
@@ -36,18 +40,26 @@ const errorMessages: Record<CreateStockError | UpdateStockError | DeleteStockErr
 export type StockActionState = { error: string | null }
 
 // Id do workspace se o usuário gerenciar o estoque nele; senão a mensagem de erro.
-async function resolveWorkspace(workspaceId: string): Promise<{ workspaceId: string } | { error: string }> {
+async function resolveWorkspace(workspaceId: string): Promise<{ workspaceId: string; actor: Actor } | { error: string }> {
   const userId = await getSessionUserId()
   if (!userId) return { error: errorMessages.unauthenticated }
   const managed = await findManagedWorkspace(workspaceId, userId, "stock.manage")
   if (!managed.ok) {
     return { error: managed.error === "forbidden" ? forbiddenMessage("stock.manage") : errorMessages[managed.error] }
   }
-  return { workspaceId: managed.access.id }
+  return { workspaceId: managed.access.id, actor: managed.access.actor }
 }
 
-function stockInput(formData: FormData) {
-  return { name: formData.get("name"), units: formData.getAll("unitId") }
+// Ligar o estoque a uma carteira mexe no dinheiro: sem gerenciar o caixa, a carteira fica a que
+// já era (keepWalletId).
+function stockInput(formData: FormData, actor: Actor, keepWalletId: string | null) {
+  const walletId = can(actor, "cash_flow.manage") ? formData.get("walletId") : keepWalletId
+  return { name: formData.get("name"), units: formData.getAll("unitId"), walletId }
+}
+
+async function findWalletUnits(workspaceId: string, walletId: string) {
+  const wallet = await Wallet.findOne({ _id: walletId, workspaceId }).select({ units: 1 }).lean()
+  return wallet && wallet.units.map((unit) => unit.unitId.toString())
 }
 
 function unitsExist(workspaceId: string, unitIds: string[]) {
@@ -114,11 +126,13 @@ export async function createStockAction(
   const target = await resolveWorkspace(workspaceId)
   if ("error" in target) return target
 
-  const result = await createStock(stockInput(formData), target.workspaceId, {
+  const result = await createStock(stockInput(formData, target.actor, null), target.workspaceId, {
     unitsExist,
+    findWalletUnits,
     insert: async ({ units, ...data }) => {
       const stock = await Stock.create({ ...data, units: toUnitDocs(units) })
       await bringUnitsIn(data.workspaceId, stock._id, units)
+      await unlinkStaleStockWallets(data.workspaceId)
       return { id: stock._id.toString() }
     },
   })
@@ -140,8 +154,11 @@ export async function updateStockAction(
   if ("error" in target) return target
 
   const id = isObjectIdOrHexString(stockId) ? stockId : null
-  const result = await updateStock(stockInput(formData), target.workspaceId, id, {
+  const current = id && (await Stock.findOne({ _id: id, workspaceId: target.workspaceId }).select({ walletId: 1 }).lean())
+  const keepWalletId = current ? (current.walletId?.toString() ?? null) : null
+  const result = await updateStock(stockInput(formData, target.actor, keepWalletId), target.workspaceId, id, {
     unitsExist,
+    findWalletUnits,
     update: async (stockId, { units, ...data }) => {
       const _id = new Types.ObjectId(stockId)
       const { matchedCount } = await Stock.updateOne(
@@ -150,6 +167,7 @@ export async function updateStockAction(
       )
       if (matchedCount === 0) return false
       await bringUnitsIn(target.workspaceId, _id, units)
+      await unlinkStaleStockWallets(target.workspaceId)
       return true
     },
   })

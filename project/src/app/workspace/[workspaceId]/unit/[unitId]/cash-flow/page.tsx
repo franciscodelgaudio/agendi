@@ -67,6 +67,7 @@ export default async function CashFlowPage({
         wallet={
           wallet && {
             name: wallet.name,
+            href: `/workspace/${workspaceId}/cash-flow/wallets/${wallet.id}`,
             // Só na compartilhada (sem divisão) o saldo mostrado é o da carteira toda.
             sharedWith:
               wallet.undistributedCents === null ? wallet.units.filter((u) => u.id !== unitId).map((u) => u.name) : [],

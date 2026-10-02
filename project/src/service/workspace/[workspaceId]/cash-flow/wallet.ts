@@ -123,14 +123,19 @@ export async function updateWallet(
   return found ? { ok: true } : { ok: false, error: "wallet_not_found" };
 }
 
-export type DeleteWalletResult = { ok: true } | { ok: false; error: "wallet_not_found" };
+export type DeleteWalletResult = { ok: true } | { ok: false; error: "wallet_not_found" | "wallet_has_expenses" };
 
-// remove devolve false quando a carteira não existe (ou não é do workspace).
+// Carteira com despesas ou grupos não sai, para nada ficar sem dono. remove devolve false quando
+// a carteira não existe (ou não é do workspace).
 export async function deleteWallet(
   walletId: string | null | undefined,
-  remove: (walletId: string) => Promise<boolean>,
+  {
+    remove,
+    hasExpenses,
+  }: { remove: (walletId: string) => Promise<boolean>; hasExpenses: (walletId: string) => Promise<boolean> },
 ): Promise<DeleteWalletResult> {
   if (!walletId) return { ok: false, error: "wallet_not_found" };
+  if (await hasExpenses(walletId)) return { ok: false, error: "wallet_has_expenses" };
 
   const found = await remove(walletId);
   return found ? { ok: true } : { ok: false, error: "wallet_not_found" };
@@ -146,19 +151,25 @@ export type WalletBalance = {
 };
 
 // netByUnit: líquido real de cada unidade do dia do saldo inicial até hoje; sem ele, zero.
+// walletExpenseCents: despesas pagas da própria carteira no mesmo período; saem do saldo da
+// carteira e, na distribuída, do não distribuído (as partes das unidades não mudam).
 export function walletBalance(
   { openingBalance, units }: Pick<WalletData, "openingBalance" | "units">,
   netByUnit: Record<string, number>,
+  walletExpenseCents = 0,
 ): WalletBalance {
   const netOf = (unitId: string) => netByUnit[unitId] ?? 0;
-  const balanceCents = units.reduce((sum, unit) => sum + netOf(unit.unitId), openingBalance.amountCents);
+  const balanceCents = units.reduce(
+    (sum, unit) => sum + netOf(unit.unitId),
+    openingBalance.amountCents - walletExpenseCents,
+  );
   const distributed = units.some((unit) => unit.amountCents !== null);
   const sole = units.length === 1;
 
   return {
     balanceCents,
     undistributedCents: distributed
-      ? units.reduce((rest, unit) => rest - (unit.amountCents ?? 0), openingBalance.amountCents)
+      ? units.reduce((rest, unit) => rest - (unit.amountCents ?? 0), openingBalance.amountCents - walletExpenseCents)
       : null,
     units: units.map(({ unitId, amountCents }) => ({
       unitId,

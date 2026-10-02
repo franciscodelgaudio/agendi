@@ -136,6 +136,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
     !!revenueShare ||
     Object.keys(commissionRates).length > 0 ||
     staffCosts.grossCommissionPercent > 0 ||
+    staffCosts.netCommissionPercent > 0 ||
     staffCosts.salaries.length > 0
   const deductionsCents = monthTotal.real.partnerShareCents + monthTotal.real.commissionCents + monthTotal.real.salaryCents
 
