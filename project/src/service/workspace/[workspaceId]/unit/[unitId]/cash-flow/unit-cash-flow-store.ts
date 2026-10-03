@@ -115,37 +115,3 @@ export async function loadUnitCashFlow(workspaceId: string, unit: CashFlowUnit, 
     hasExpenses: expenses.length > 0,
   };
 }
-
-// Resumo dos atendimentos da unidade nos intervalos exibidos, com as regras do caixa para repasse
-// e comissões; salários e despesas não dependem dos atendimentos e ficam de fora. O acesso à
-// unidade é verificado por quem chama.
-export async function loadUnitAppointmentSummary(
-  workspaceId: string,
-  unit: Pick<CashFlowUnit, "id" | "revenueShare">,
-  buckets: DayRange[],
-  today: string,
-) {
-  const { revenueShare } = unit;
-  const range = cashFlowFetchRange(buckets, revenueShare?.period ?? null);
-  const [appointments, team] = await Promise.all([
-    Appointment.aggregate<DayTotal>([
-      { $match: { unitId: new Types.ObjectId(unit.id) } },
-      ...dailyAppointmentTotalsPipeline(range),
-    ]),
-    findTeamPayMembers(workspaceId, unit.id),
-  ]);
-  const { commissionRates, ...staffRates } = teamPayRates(team, unit.id);
-  const summary = applyExpenses(
-    applyStaffCosts(summarizeCashFlow(buckets, appointments, [], revenueShare, commissionRates), {
-      ...staffRates,
-      salaries: [],
-      today,
-    }),
-    [],
-  );
-  return {
-    summary,
-    hasCommission:
-      Object.keys(commissionRates).length > 0 || staffRates.grossCommissionPercent > 0 || staffRates.netCommissionPercent > 0,
-  };
-}

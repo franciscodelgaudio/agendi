@@ -13,16 +13,12 @@ import {
   type AppointmentPage,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-list"
 import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
-import { cashFlowBuckets, parseCashFlowQuery } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow"
-import { loadUnitAppointmentSummary } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
-import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share"
 import { Workspace } from "@/models/Workspace"
 import { AppointmentTable, type AppointmentRow } from "@/components/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-table"
 import { CreateAppointmentSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/appointments/create-appointment-sheet"
 import { ListPagination } from "@/components/shared/list-pagination"
 import { ListSearch } from "@/components/shared/list-search"
-import { CashFlowNav } from "@/components/workspace/[workspaceId]/shared/cash-flow/cash-flow-nav"
-import { CashFlowTable } from "@/components/workspace/[workspaceId]/shared/cash-flow/cash-flow-table"
+import { PeriodFilter } from "@/components/shared/period-filter"
 import { TherapistFilter } from "@/components/workspace/[workspaceId]/shared/team/therapist-filter"
 import { Button } from "@/components/ui/button"
 import {
@@ -37,8 +33,7 @@ import {
 type ServiceOption = { id: string; name: string; priceCents: number; durationMinutes: number; productIds: string[] }
 type TherapistOption = { id: string; name: string; image: string | null }
 
-// Atendimentos de uma unidade num período (semana, mês ou ano, como no caixa): resumo do período e
-// lista com busca e filtros.
+// Todos os atendimentos de uma unidade, em lista, com busca e filtros.
 // Layout e página podem renderizar em paralelo, então a página refaz a verificação de acesso.
 export default async function AppointmentsPage({
   params,
@@ -46,13 +41,8 @@ export default async function AppointmentsPage({
 }: PageProps<"/workspace/[workspaceId]/unit/[unitId]/appointments">) {
   const { workspaceId, unitId } = await params
   const now = new Date()
-  const search = await searchParams
-  const period = parseCashFlowQuery(search, now)
-  const today = parseCashFlowQuery({}, now).date
-  const buckets = cashFlowBuckets(period)
-  const shown = { from: buckets[0].from, to: buckets.at(-1)!.to }
-  // A unidade vem da rota e o intervalo, do período; não da URL.
-  const query = { ...parseAppointmentListQuery(search), unit: "", ...shown }
+  // A unidade vem da rota, não da URL.
+  const query = { ...parseAppointmentListQuery(await searchParams), unit: "" }
   const user = await requireUser()
   await requirePage(workspaceId, user.id, { unit: "appointments", unitId })
   const access = workspaceAccessStages(workspaceId, user.id)
@@ -64,12 +54,7 @@ export default async function AppointmentsPage({
   const [workspace] = await Workspace.aggregate<{
     actor: Actor
     therapists: TherapistOption[]
-    unit: {
-      appointments: AppointmentPage<AppointmentRow>
-      total: number
-      services: ServiceOption[]
-      revenueShare: RevenueShare | null
-    } | null
+    unit: { appointments: AppointmentPage<AppointmentRow>; total: number; services: ServiceOption[] } | null
   }>([
     ...access,
     {
@@ -116,7 +101,6 @@ export default async function AppointmentsPage({
               appointments: { $first: "$appointments" },
               services: 1,
               total: { $ifNull: [{ $first: "$total.n" }, 0] },
-              revenueShare: { $ifNull: ["$revenueShare", null] },
             },
           },
         ],
@@ -133,21 +117,13 @@ export default async function AppointmentsPage({
     },
   ])
   if (!workspace?.unit) notFound()
-  const { appointments: result, total, services, revenueShare } = workspace.unit
-  const { summary, hasCommission } = await loadUnitAppointmentSummary(
-    workspaceId,
-    { id: unitId, revenueShare },
-    buckets,
-    today,
-  )
+  const { appointments: result, total, services } = workspace.unit
   const { therapists } = workspace
   const canManage = can(workspace.actor, "appointments.manage")
 
   const pathname = `/workspace/${workspaceId}/unit/${unitId}/appointments`
-  // Filtros e período mudam sem levar a página junto, então a lista volta para a primeira.
-  const { page, q, sort, dir, therapist } = query
-  const preserve = { q, sort, dir, therapist }
-  const filters = { ...preserve, unit: "", from: "", to: "", view: period.view, date: period.date }
+  // Filtros mudam sem levar a página junto, então a lista volta para a primeira.
+  const { page, ...filters } = query
   // Página além da última (ex.: depois de excluir o último atendimento dela) vai para a última.
   const pages = Math.ceil(result.total / APPOINTMENT_PAGE_SIZE)
   if (pages > 0 && page > pages) {
@@ -203,26 +179,10 @@ export default async function AppointmentsPage({
         </Empty>
       ) : (
         <>
-          <CashFlowNav
-            query={period}
-            range={shown}
-            isCurrent={shown.from <= today && today <= shown.to}
-            today={today}
-            pathname={pathname}
-            preserve={preserve}
-          />
-          <CashFlowTable
-            view={period.view}
-            summary={summary}
-            hasPartnerShare={!!revenueShare}
-            hasCommission={hasCommission}
-            hasSalary={false}
-            hasExpenses={false}
-            today={today}
-          />
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <ListSearch query={filters} placeholder="Buscar hóspede, quarto, profissional ou serviço..." />
             <TherapistFilter query={filters} therapists={therapists} />
+            <PeriodFilter query={filters} />
           </div>
           <AppointmentTable
             appointments={result.rows}
