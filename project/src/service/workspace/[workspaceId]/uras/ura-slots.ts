@@ -8,13 +8,14 @@ const BRT_OFFSET_MS = BRT_OFFSET_HOURS * 60 * MINUTE_MS;
 
 export type AvailableSlot = {
   startsAt: Date;
-  therapistId: string;
-  therapistName: string;
+  // null quando o serviço não usa profissional.
+  therapistId: string | null;
+  therapistName: string | null;
   roomId: string;
   roomName: string;
 };
 
-type Busy = { therapistId: string; roomId: string; startsAt: Date; endsAt: Date };
+type Busy = { therapistId: string | null; roomId: string; startsAt: Date; endsAt: Date };
 
 const minutesOf = (time: string) => {
   const [hours, minutes] = time.split(":").map(Number);
@@ -25,14 +26,16 @@ const overlaps = (a: { startsAt: Date; endsAt: Date }, start: number, end: numbe
   a.startsAt.getTime() < end && a.endsAt.getTime() > start;
 
 // Horários em que dá para marcar o serviço: dentro do expediente, a partir de `from`
-// mais a antecedência, com algum profissional livre e alguma sala com maca livre.
+// mais a antecedência, com algum profissional livre e algum espaço com lugar livre.
 // Cada horário leva o primeiro profissional e a primeira sala disponíveis, na ordem dada.
+// Serviço sem profissional (requiresTherapist false) só precisa da sala.
 export function availableSlots({
   from,
   days,
   durationMinutes,
   businessHours,
   therapists,
+  requiresTherapist = true,
   rooms,
   bookings,
   stepMinutes = 30,
@@ -44,6 +47,7 @@ export function availableSlots({
   durationMinutes: number;
   businessHours: BusinessHours;
   therapists: readonly { id: string; name: string }[];
+  requiresTherapist?: boolean;
   rooms: readonly { id: string; name: string; beds: number }[];
   bookings: readonly Busy[];
   stepMinutes?: number;
@@ -51,7 +55,7 @@ export function availableSlots({
   limit?: number;
 }): AvailableSlot[] {
   const slots: AvailableSlot[] = [];
-  if (!therapists.length || !rooms.length) return slots;
+  if ((requiresTherapist && !therapists.length) || !rooms.length) return slots;
 
   const earliest = from.getTime() + leadMinutes * MINUTE_MS;
   const duration = durationMinutes * MINUTE_MS;
@@ -69,16 +73,16 @@ export function availableSlots({
       const end = start + duration;
       const busy = bookings.filter((b) => overlaps(b, start, end));
 
-      const therapist = therapists.find((t) => !busy.some((b) => b.therapistId === t.id));
-      if (!therapist) continue;
+      const therapist = requiresTherapist ? therapists.find((t) => !busy.some((b) => b.therapistId === t.id)) : null;
+      if (therapist === undefined) continue;
       const interval = { startsAt: new Date(start), endsAt: new Date(end) };
       const room = rooms.find((r) => peakOccupancy(busy.filter((b) => b.roomId === r.id), interval) < r.beds);
       if (!room) continue;
 
       slots.push({
         startsAt: new Date(start),
-        therapistId: therapist.id,
-        therapistName: therapist.name,
+        therapistId: therapist?.id ?? null,
+        therapistName: therapist?.name ?? null,
         roomId: room.id,
         roomName: room.name,
       });

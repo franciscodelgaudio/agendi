@@ -1,6 +1,6 @@
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { createBooking } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking"
-import { bookingLookups } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-store"
+import { bookingLookups, serviceRules } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-store"
 import { messagePreview } from "@/service/workspace/[workspaceId]/inbox/messaging-inbox"
 import { decryptChannelToken, messagingEnv } from "@/service/workspace/[workspaceId]/channels/messaging-config"
 import { isReplyWindowOpen } from "@/service/workspace/[workspaceId]/inbox/messaging-send"
@@ -187,10 +187,14 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
       }))
     },
 
-    findSlots: async ({ unitId, durationMinutes, from, days }) => {
-      const unit = await unitOf(unitId)
-      if (!unit) return []
-      const therapists = await unitTherapists(workspaceId, unitId)
+    findSlots: async ({ unitId, serviceId, durationMinutes, from, days }) => {
+      const [unit, service] = await Promise.all([
+        unitOf(unitId),
+        isObjectIdOrHexString(serviceId) ? Service.findOne({ _id: serviceId, unitId }).lean() : null,
+      ])
+      if (!unit || !service) return []
+      const { requiresTherapist, treatmentRoomIds } = serviceRules(service)
+      const therapists = requiresTherapist ? await unitTherapists(workspaceId, unitId) : []
       const unitIds = await Unit.find({ workspaceId }).distinct("_id")
       const until = new Date(from.getTime() + (days + 1) * DAY_MS)
       const bookings = await Booking.find({
@@ -206,9 +210,13 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
         durationMinutes,
         businessHours: unit.businessHours,
         therapists,
-        rooms: unit.treatmentRooms.map((room) => ({ id: room._id.toString(), name: room.name, beds: room.beds })),
+        requiresTherapist,
+        // Só os espaços permitidos ao serviço; sem nenhum definido, todos.
+        rooms: unit.treatmentRooms
+          .map((room) => ({ id: room._id.toString(), name: room.name, beds: room.beds }))
+          .filter((room) => !treatmentRoomIds.length || treatmentRoomIds.includes(room.id)),
         bookings: bookings.map((booking) => ({
-          therapistId: booking.therapistId.toString(),
+          therapistId: booking.therapistId?.toString() ?? null,
           roomId: booking.treatmentRoom.roomId.toString(),
           startsAt: booking.startsAt,
           endsAt: booking.endsAt,

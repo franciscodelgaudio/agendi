@@ -83,7 +83,7 @@ export function RegisterBookingDialog({
           <dt className="text-muted-foreground">Serviço</dt>
           <dd>{booking.service.serviceName}</dd>
           <dt className="text-muted-foreground">Profissional</dt>
-          <dd>{booking.therapistName}</dd>
+          <dd>{booking.therapistName ?? "Sem profissional"}</dd>
           <dt className="text-muted-foreground">Horário</dt>
           <dd className="first-letter:uppercase">
             {dateFormat.format(new Date(`${booking.startsAt}:00Z`))} · {formatDuration(booking.durationMinutes)}

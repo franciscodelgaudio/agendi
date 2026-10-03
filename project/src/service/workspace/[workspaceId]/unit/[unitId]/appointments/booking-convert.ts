@@ -46,7 +46,8 @@ export type BookingForAppointment = {
   startsAt: Date;
   endsAt: Date;
   service: { serviceId: string };
-  therapistId: string;
+  // null: serviço sem profissional.
+  therapistId: string | null;
   products: { productId: string }[];
 };
 
@@ -58,7 +59,7 @@ export function bookingAppointmentInput(booking: BookingForAppointment) {
     room: booking.guest.room,
     performedAt: new Date(booking.startsAt.getTime() - BRT_OFFSET_HOURS * HOUR_MS).toISOString().slice(0, 16),
     serviceIds: [booking.service.serviceId],
-    therapistIds: [booking.therapistId],
+    therapistIds: [booking.therapistId ?? ""],
     durations: [String(Math.round((booking.endsAt.getTime() - booking.startsAt.getTime()) / MINUTE_MS))],
     productIds: booking.products.map((product) => product.productId),
   };

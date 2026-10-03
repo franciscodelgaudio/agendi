@@ -49,6 +49,8 @@ async function currentService(workspaceId: string, input: Input) {
       price: service.priceCents / 100,
       durationMinutes: service.durationMinutes,
       productIds: service.productIds.map(String),
+      requiresTherapist: service.requiresTherapist ?? true,
+      treatmentRoomIds: (service.treatmentRoomIds ?? []).map(String),
     }
   )
 }

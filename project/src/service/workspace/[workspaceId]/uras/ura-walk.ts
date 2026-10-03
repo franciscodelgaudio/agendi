@@ -26,7 +26,14 @@ export type WalkState =
 export type WalkResult = { outgoing: Outgoing[]; variables: UraVariables; state: WalkState; trace: string[] };
 
 export type ServiceOption = { id: string; name: string; priceCents: number; durationMinutes: number };
-export type SlotOption = { startsAt: Date; therapistId: string; therapistName: string; roomId: string; roomName: string };
+// therapistId/therapistName null: serviço sem profissional.
+export type SlotOption = {
+  startsAt: Date;
+  therapistId: string | null;
+  therapistName: string | null;
+  roomId: string;
+  roomName: string;
+};
 
 export type WalkDeps = {
   listServices: (unitId: string) => Promise<ServiceOption[]>;
@@ -34,7 +41,7 @@ export type WalkDeps = {
   createBooking: (data: {
     unitId: string;
     serviceId: string;
-    therapistId: string;
+    therapistId: string | null;
     roomId: string;
     startsAt: Date;
     guestName: string;
@@ -262,12 +269,12 @@ export async function walkUra(input: WalkInput, deps: WalkDeps): Promise<WalkRes
           return {
             id: `slot_${i}`,
             title: texts.title,
-            description: `com ${slot.therapistName}`,
+            description: slot.therapistName ? `com ${slot.therapistName}` : `em ${slot.roomName}`,
             values: {
               horario_inicio: slot.startsAt.toISOString(),
               horario_texto: texts.text,
-              terapeuta_id: slot.therapistId,
-              terapeuta_nome: slot.therapistName,
+              terapeuta_id: slot.therapistId ?? "",
+              terapeuta_nome: slot.therapistName ?? "",
               sala_id: slot.roomId,
             },
           };
@@ -278,13 +285,14 @@ export async function walkUra(input: WalkInput, deps: WalkDeps): Promise<WalkRes
       case "createBooking": {
         const { unidade_id, servico_id, terapeuta_id, sala_id, horario_inicio } = variables;
         const startsAt = horario_inicio ? new Date(horario_inicio) : null;
-        if (!unidade_id || !servico_id || !terapeuta_id || !sala_id || !startsAt || Number.isNaN(startsAt.getTime())) {
+        // Sem profissional (terapeuta_id vazio), quem decide se pode é o cadastro do serviço.
+        if (!unidade_id || !servico_id || !sala_id || !startsAt || Number.isNaN(startsAt.getTime())) {
           return { handle: "error" };
         }
         const result = await deps.createBooking({
           unitId: unidade_id,
           serviceId: servico_id,
-          therapistId: terapeuta_id,
+          therapistId: terapeuta_id || null,
           roomId: sala_id,
           startsAt,
           guestName: template(node.data.guestName).trim(),

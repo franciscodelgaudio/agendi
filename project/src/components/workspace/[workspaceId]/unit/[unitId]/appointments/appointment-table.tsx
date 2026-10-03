@@ -27,10 +27,13 @@ export type AppointmentRow = {
     serviceName: string
     priceCents: number
     durationMinutes: number
-    therapistId: string
-    therapistName: string
+    // null: serviço sem profissional.
+    therapistId: string | null
+    therapistName: string | null
   }[]
   productIds: string[]
+  // Desconto no total; null nos atendimentos sem desconto.
+  discount: { type: "percent" | "amount"; percent?: number; cents: number; reason: string } | null
   totalCents: number
 }
 
@@ -105,10 +108,12 @@ function ServiceLine({ item }: { item: AppointmentRow["items"][number] }) {
   )
 }
 
-// Profissionais distintos do atendimento, na ordem dos serviços.
+// Profissionais distintos do atendimento, na ordem dos serviços; serviços sem profissional ficam de fora.
 function appointmentTherapists(items: AppointmentRow["items"]) {
   const seen = new Map<string, string>()
-  for (const item of items) if (!seen.has(item.therapistId)) seen.set(item.therapistId, item.therapistName)
+  for (const { therapistId, therapistName } of items) {
+    if (therapistId && !seen.has(therapistId)) seen.set(therapistId, therapistName ?? "")
+  }
   return [...seen].map(([id, name]) => ({ id, name }))
 }
 
@@ -206,7 +211,24 @@ export function AppointmentTable({ appointments, query, pathname, workspaceId, o
                   <FirstWithMore items={appointment.items} render={(item) => <ServiceLine item={item} />} />
                 </TableCell>
                 <TableCell className="px-4 font-medium tabular-nums @max-2xl:hidden">
-                  {currencyFormat.format(appointment.totalCents / 100)}
+                  {appointment.discount ? (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span className="cursor-help underline decoration-muted-foreground/50 decoration-dotted underline-offset-4" />
+                        }
+                      >
+                        {currencyFormat.format(appointment.totalCents / 100)}
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Desconto de {currencyFormat.format(appointment.discount.cents / 100)}
+                        {appointment.discount.type === "percent" && ` (${appointment.discount.percent}%)`}
+                        {appointment.discount.reason && ` · ${appointment.discount.reason}`}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    currencyFormat.format(appointment.totalCents / 100)
+                  )}
                 </TableCell>
                 {canManage && (
                   <TableCell className="px-4 text-right">

@@ -225,8 +225,8 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     endsAt: booking.endsAt,
     guest: booking.guest!,
     serviceName: booking.service.serviceName,
-    therapistId: booking.therapistId.toString(),
-    therapistName: booking.therapistName,
+    therapistId: booking.therapistId?.toString() ?? null,
+    therapistName: booking.therapistName ?? null,
     attended: !!booking.appointmentId,
     unitName: units.length > 1 ? unitNames.get(booking.unitId.toString()) : undefined,
   }))

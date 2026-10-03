@@ -10,10 +10,25 @@ export type ServiceInputError =
   | "name_too_long"
   | "invalid_price"
   | "invalid_duration"
+  | "treatment_room_not_found"
   | ProductSelectionError;
 
+// Espaços da unidade entre os ids pedidos; os que não existem nela ficam de fora.
+export type FindTreatmentRooms = (ids: string[]) => Promise<{ id: string }[]>;
+
 // productIds: produtos que o serviço costuma usar, pré-marcados em agendamentos e atendimentos.
-export type ServiceData = { name: string; priceCents: number; durationMinutes: number; productIds: string[] };
+// requiresTherapist false: serviço sem profissional (ex.: hidromassagem), sem comissão.
+// treatmentRoomIds: espaços em que o serviço pode ser feito; vazio aceita qualquer um.
+export type ServiceData = {
+  name: string;
+  priceCents: number;
+  durationMinutes: number;
+  productIds: string[];
+  requiresTherapist: boolean;
+  treatmentRoomIds: string[];
+};
+
+type Lookups = { findProducts: FindProducts; findTreatmentRooms: FindTreatmentRooms };
 
 // "350.5" -> 35050. Feito sobre a string para não depender de arredondamento de float.
 export function parsePriceCents(value: string) {
@@ -21,6 +36,10 @@ export function parsePriceCents(value: string) {
   if (!match) return null;
   const cents = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
   return cents <= MAX_PRICE_CENTS ? cents : null;
+}
+
+function isNonEmptyStringList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string" && item.trim());
 }
 
 function parseDurationMinutes(value: string) {
@@ -32,12 +51,23 @@ function parseDurationMinutes(value: string) {
 // Valida e normaliza os campos como chegam do FormData (strings).
 async function parseServiceInput(
   input: unknown,
-  findProducts: FindProducts,
-): Promise<({ ok: true } & ServiceData) | { ok: false; error: ServiceInputError }> {
-  const { name, price, durationMinutes, productIds } = (input ?? {}) as Record<string, unknown>;
+  { findProducts, findTreatmentRooms }: Lookups,
+): Promise<{ ok: true; data: ServiceData } | { ok: false; error: ServiceInputError }> {
+  const { name, price, durationMinutes, productIds, requiresTherapist, treatmentRoomIds } = (input ?? {}) as Record<
+    string,
+    unknown
+  >;
   if (typeof name !== "string" || typeof price !== "string" || typeof durationMinutes !== "string") {
     return { ok: false, error: "invalid_input" };
   }
+  // Sem o campo, o serviço exige profissional.
+  if (requiresTherapist !== undefined && requiresTherapist !== "true" && requiresTherapist !== "false") {
+    return { ok: false, error: "invalid_input" };
+  }
+  if (treatmentRoomIds !== undefined && !isNonEmptyStringList(treatmentRoomIds)) {
+    return { ok: false, error: "invalid_input" };
+  }
+  const roomIds = [...new Set((treatmentRoomIds ?? []).map((id) => id.trim()))];
 
   const normalizedName = name.trim();
   if (!normalizedName) return { ok: false, error: "invalid_name" };
@@ -52,12 +82,21 @@ async function parseServiceInput(
   const selection = await resolveProducts(productIds, findProducts);
   if (!selection.ok) return selection;
 
+  if (roomIds.length) {
+    const found = new Set((await findTreatmentRooms(roomIds)).map((room) => room.id));
+    if (roomIds.some((id) => !found.has(id))) return { ok: false, error: "treatment_room_not_found" };
+  }
+
   return {
     ok: true,
-    name: normalizedName,
-    priceCents,
-    durationMinutes: minutes,
-    productIds: selection.products.map((product) => product.productId),
+    data: {
+      name: normalizedName,
+      priceCents,
+      durationMinutes: minutes,
+      productIds: selection.products.map((product) => product.productId),
+      requiresTherapist: requiresTherapist !== "false",
+      treatmentRoomIds: roomIds,
+    },
   };
 }
 
@@ -70,18 +109,14 @@ export type CreateServiceResult =
 export async function createService(
   input: unknown,
   unitId: string | null | undefined,
-  {
-    insert,
-    findProducts,
-  }: { insert: (data: ServiceData & { unitId: string }) => Promise<{ id: string }>; findProducts: FindProducts },
+  { insert, ...lookups }: Lookups & { insert: (data: ServiceData & { unitId: string }) => Promise<{ id: string }> },
 ): Promise<CreateServiceResult> {
   if (!unitId) return { ok: false, error: "unit_not_found" };
 
-  const parsed = await parseServiceInput(input, findProducts);
+  const parsed = await parseServiceInput(input, lookups);
   if (!parsed.ok) return parsed;
 
-  const { name, priceCents, durationMinutes, productIds } = parsed;
-  const service = await insert({ name, priceCents, durationMinutes, productIds, unitId });
+  const service = await insert({ ...parsed.data, unitId });
   return { ok: true, serviceId: service.id };
 }
 
@@ -93,18 +128,14 @@ export type UpdateServiceResult = { ok: true } | { ok: false; error: UpdateServi
 export async function updateService(
   input: unknown,
   serviceId: string | null | undefined,
-  {
-    update,
-    findProducts,
-  }: { update: (serviceId: string, data: ServiceData) => Promise<boolean>; findProducts: FindProducts },
+  { update, ...lookups }: Lookups & { update: (serviceId: string, data: ServiceData) => Promise<boolean> },
 ): Promise<UpdateServiceResult> {
   if (!serviceId) return { ok: false, error: "service_not_found" };
 
-  const parsed = await parseServiceInput(input, findProducts);
+  const parsed = await parseServiceInput(input, lookups);
   if (!parsed.ok) return parsed;
 
-  const { name, priceCents, durationMinutes, productIds } = parsed;
-  const found = await update(serviceId, { name, priceCents, durationMinutes, productIds });
+  const found = await update(serviceId, parsed.data);
   return found ? { ok: true } : { ok: false, error: "service_not_found" };
 }
 

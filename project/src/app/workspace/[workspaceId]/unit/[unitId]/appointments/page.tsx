@@ -31,7 +31,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 
-type ServiceOption = { id: string; name: string; priceCents: number; durationMinutes: number; productIds: string[] }
+type ServiceOption = { id: string; name: string; priceCents: number; durationMinutes: number; productIds: string[]; requiresTherapist: boolean }
 type TherapistOption = { id: string; name: string; image: string | null }
 
 // Todos os atendimentos de uma unidade, em lista, com busca e filtros.
@@ -92,7 +92,7 @@ export default async function AppointmentsPage({
               as: "services",
               pipeline: [
                 { $sort: { name: 1, _id: 1 } },
-                { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, priceCents: 1, durationMinutes: 1, productIds: { $map: { input: "$productIds", as: "id", in: { $toString: "$$id" } } } } },
+                { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, priceCents: 1, durationMinutes: 1, requiresTherapist: { $ifNull: ["$requiresTherapist", true] }, productIds: { $map: { input: "$productIds", as: "id", in: { $toString: "$$id" } } } } },
               ],
             },
           },

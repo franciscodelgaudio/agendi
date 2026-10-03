@@ -423,3 +423,36 @@ export function staffExpenses(real: StaffAmounts, date: string) {
     expense("partner_share", "partner_share", "Repasse", real.partnerShareCents),
   ].filter((row) => row.amountCents > 0);
 }
+
+// Remuneração calculada do mês inteiro de uma pessoa e o registro da folha dela no mês, se houver.
+export type PayrollPerson = { memberId: string; name: string; salaryCents: number; commissionCents: number };
+export type PayrollRecord = { memberId: string; salaryCents: number; commissionCents: number; paidOn: string | null };
+
+// Salário e comissão de cada pessoa no mês, no grupo da equipe e no dia dado: com registro, os
+// valores dele (pagas se tiver o dia do pagamento); sem, os calculados, pendentes. Linha sem valor
+// não aparece. payroll leva os valores para editar o registro.
+export function payrollExpenseRows(people: PayrollPerson[], records: PayrollRecord[], date: string) {
+  const byMember = new Map(records.map((record) => [record.memberId, record]));
+  return [...people]
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+    .flatMap((person) => {
+      const record = byMember.get(person.memberId);
+      const { salaryCents, commissionCents } = record ?? person;
+      const paidOn = record?.paidOn ?? null;
+      const payroll = { memberId: person.memberId, salaryCents, commissionCents, paidOn, recorded: !!record };
+      const row = (kind: "salary" | "commission", label: string, amountCents: number) => ({
+        id: `${kind}:${person.memberId}`,
+        groupId: "team" as const,
+        description: `${label} · ${person.name}`,
+        amountCents,
+        date,
+        paid: !!paidOn,
+        series: null,
+        automatic: true as const,
+        payroll,
+      });
+      return [row("salary", "Salário", salaryCents), row("commission", "Comissão", commissionCents)].filter(
+        (expense) => expense.amountCents > 0,
+      );
+    });
+}

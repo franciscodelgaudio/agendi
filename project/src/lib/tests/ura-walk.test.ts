@@ -547,3 +547,65 @@ describe("walkUra: agendamento", () => {
     expect(result.outgoing).toEqual([{ kind: "text", text: "Esse horário acabou de ser ocupado." }]);
   });
 });
+
+// Serviço sem profissional (ex.: hidromassagem): o horário traz só o espaço.
+describe("walkUra: agendamento de serviço sem profissional", () => {
+  const flow = graph(
+    [
+      { id: "slot", type: "chooseSlot", data: { message: "Escolha o horário", buttonLabel: "Horários", daysAhead: 5 } },
+      { id: "book", type: "createBooking", data: { guestName: "{{contato_nome}}", guestRoom: "{{quarto}}" } },
+      { id: "ok", type: "sendMessage", data: { text: "Agendado em {{horario_texto}}." } },
+      { id: "erro", type: "sendMessage", data: { text: "Erro." } },
+    ],
+    [
+      ["s", "slot"],
+      ["slot", "book"],
+      ["book", "ok"],
+      ["book", "erro", "error"],
+    ],
+  );
+  const variables = { unidade_id: UNIT_ID, servico_id: SERVICE_ID, servico_duracao: "30", quarto: "204" };
+
+  function makeHydroDeps() {
+    const deps = makeDeps();
+    deps.findSlots.mockResolvedValue([
+      { startsAt: new Date("2026-09-29T12:00:00.000Z"), therapistId: null, therapistName: null, roomId: "tub", roomName: "Banheira" },
+    ]);
+    return deps;
+  }
+
+  it("oferece o horário com o nome do espaço e deixa o profissional vazio", async () => {
+    const deps = makeHydroDeps();
+
+    const result = await run(flow, { position: at("slot", "wake"), variables }, deps);
+
+    expect(result.outgoing).toEqual([
+      {
+        kind: "menu",
+        text: "Escolha o horário",
+        buttonLabel: "Horários",
+        options: [{ id: "slot_0", title: "ter 29/09 09:00", description: "em Banheira" }],
+      },
+    ]);
+  });
+
+  it("cria o agendamento sem profissional", async () => {
+    const deps = makeHydroDeps();
+    const offered = await run(flow, { position: at("slot", "wake"), variables }, deps);
+
+    const result = await run(flow, { position: at("slot"), reply: reply("1"), variables: offered.variables }, deps);
+
+    expect(result.variables).toMatchObject({ terapeuta_id: "", terapeuta_nome: "", sala_id: "tub" });
+    expect(deps.createBooking).toHaveBeenCalledWith({
+      unitId: UNIT_ID,
+      serviceId: SERVICE_ID,
+      therapistId: null,
+      roomId: "tub",
+      startsAt: new Date("2026-09-29T12:00:00.000Z"),
+      guestName: "Maria Clara",
+      guestRoom: "204",
+    });
+    expect(result.outgoing).toEqual([{ kind: "text", text: "Agendado em 29/09 às 09:00." }]);
+  });
+});
+

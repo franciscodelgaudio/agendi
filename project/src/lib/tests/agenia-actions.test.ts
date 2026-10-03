@@ -316,6 +316,67 @@ describe("actionFormEntries", () => {
   });
 });
 
+// Serviço sem profissional (ex.: hidromassagem) e espaços permitidos do serviço.
+describe("ações com serviço sem profissional", () => {
+  it("serviço: envia se exige profissional e um treatmentRoomId por espaço", () => {
+    const input = parsed("createService", {
+      unitId: UNIT,
+      name: "Hidromassagem",
+      price: 150,
+      durationMinutes: 30,
+      requiresTherapist: false,
+      treatmentRoomIds: [ID_A, ID_B],
+      summary: "x",
+    });
+    expect(grouped(actionFormEntries("createService", input))).toEqual({
+      name: ["Hidromassagem"],
+      price: ["150.00"],
+      durationMinutes: ["30"],
+      requiresTherapist: ["false"],
+      treatmentRoomId: [ID_A, ID_B],
+    });
+  });
+
+  it("edição de serviço reenvia profissional e espaços atuais, para não perdê-los", () => {
+    const current = { name: "Hidromassagem", price: 150, durationMinutes: 30, productIds: [], requiresTherapist: false, treatmentRoomIds: [ID_A] };
+    const input = mergePatch(current, { price: 180 });
+    expect(grouped(actionFormEntries("updateService", input))).toEqual({
+      name: ["Hidromassagem"],
+      price: ["180.00"],
+      durationMinutes: ["30"],
+      requiresTherapist: ["false"],
+      treatmentRoomId: [ID_A],
+    });
+  });
+
+  it("agendamento sem profissional manda o campo vazio", () => {
+    const input = parsed("createBooking", {
+      unitId: UNIT,
+      serviceId: ID_B,
+      treatmentRoomId: ID_A,
+      guestName: "Ana",
+      room: "101",
+      startsAt: "2026-09-30T14:00",
+      durationMinutes: 30,
+      summary: "x",
+    });
+    expect(grouped(actionFormEntries("createBooking", input)).therapistId).toEqual([""]);
+  });
+
+  it("atendimento aceita profissional vazio no serviço que não usa profissional", () => {
+    const input = parsed("createAppointment", {
+      unitId: UNIT,
+      guestName: "Ana",
+      room: "101",
+      performedAt: "2026-09-30T14:00",
+      serviceIds: [ID_A, ID_B],
+      therapistIds: [ID_A, ""],
+      summary: "x",
+    });
+    expect(grouped(actionFormEntries("createAppointment", input)).therapistId).toEqual([ID_A, ""]);
+  });
+});
+
 describe("mergePatch", () => {
   it("aplica só os campos informados; null limpa o campo", () => {
     expect(mergePatch({ name: "Óleo", quantity: 3, notes: "a" }, { name: undefined, quantity: 5, notes: null })).toEqual({

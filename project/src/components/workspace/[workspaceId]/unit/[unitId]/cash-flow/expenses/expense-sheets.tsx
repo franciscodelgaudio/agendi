@@ -59,8 +59,17 @@ export type ExpenseRow = {
   paid: boolean
   // null quando a despesa é à vista.
   series: { kind: "installments" | "recurring"; number: number; count: number } | null
-  // Comissões, salários e repasse do mês, calculados pelo caixa: só leitura.
+  // Salário, comissão e repasse do mês, calculados pelo caixa; só a folha (payroll) pode ser editada.
   automatic?: boolean
+  // Folha da pessoa no mês: valores atuais e se já há registro (pago ou ajustado).
+  payroll?: PayrollValues
+}
+export type PayrollValues = {
+  memberId: string
+  salaryCents: number
+  commissionCents: number
+  paidOn: string | null
+  recorded: boolean
 }
 
 type Repeat = "none" | "installments" | "recurring"

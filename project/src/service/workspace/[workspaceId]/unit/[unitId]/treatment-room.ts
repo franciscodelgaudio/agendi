@@ -1,4 +1,4 @@
-// Salas de atendimento da unidade: cada maca comporta um atendimento por vez.
+// Espaços da unidade (salas, hidromassagem...): beds é quantos atendimentos o espaço comporta ao mesmo tempo.
 
 const MAX_ROOMS = 20;
 const MAX_NAME_LENGTH = 40;

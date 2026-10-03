@@ -44,6 +44,9 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
               priceCents: 1,
               durationMinutes: 1,
               productIds: { $map: { input: "$productIds", as: "id", in: { $toString: "$$id" } } },
+              // Serviço cadastrado antes desses campos exige profissional e aceita qualquer espaço.
+              requiresTherapist: { $ifNull: ["$requiresTherapist", true] },
+              treatmentRoomIds: { $map: { input: { $ifNull: ["$treatmentRoomIds", []] }, as: "id", in: { $toString: "$$id" } } },
             },
           },
         ],

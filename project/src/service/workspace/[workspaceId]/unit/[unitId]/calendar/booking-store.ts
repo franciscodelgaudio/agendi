@@ -67,13 +67,30 @@ export async function findUnitTreatmentRoom(unitId: string | Types.ObjectId, roo
   return room ? { id: room._id.toString(), name: room.name, beds: room.beds } : null
 }
 
+// Serviços cadastrados antes desses campos não os têm: exigem profissional e aceitam qualquer espaço.
+export function serviceRules(service: {
+  _id: Types.ObjectId
+  name: string
+  requiresTherapist?: boolean | null
+  treatmentRoomIds?: Types.ObjectId[] | null
+}) {
+  return {
+    id: service._id.toString(),
+    name: service.name,
+    requiresTherapist: service.requiresTherapist ?? true,
+    treatmentRoomIds: (service.treatmentRoomIds ?? []).map((id) => id.toString()),
+  }
+}
+
 // Buscas usadas por createBooking/updateBooking, restritas à unidade e ao workspace.
 export function bookingLookups(unit: { workspaceId: string; unitId: string }, unitIds: Types.ObjectId[]) {
   return {
     findService: async (id: string) => {
       if (!isObjectIdOrHexString(id)) return null
-      const service = await Service.findOne({ _id: id, unitId: unit.unitId }).select({ name: 1 }).lean()
-      return service && { id: service._id.toString(), name: service.name }
+      const service = await Service.findOne({ _id: id, unitId: unit.unitId })
+        .select({ name: 1, requiresTherapist: 1, treatmentRoomIds: 1 })
+        .lean()
+      return service && serviceRules(service)
     },
     findTherapist: async (id: string) => (await findWorkspaceTherapists(unit.workspaceId, [id]))[0] ?? null,
     hasConflict: conflictChecker(unitIds),

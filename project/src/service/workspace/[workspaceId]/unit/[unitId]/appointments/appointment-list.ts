@@ -129,6 +129,8 @@ export function appointmentSearchPipeline({ q, sort, dir, unit, therapist, from,
               },
               // Produtos escolhidos, para pré-marcar na edição.
               productIds: { $map: { input: "$products", as: "product", in: { $toString: "$$product.productId" } } },
+              // Desconto do atendimento (null nos que não têm, inclusive os antigos), para exibir e editar.
+              discount: { $ifNull: ["$discount", null] },
               totalCents: 1,
             },
           },

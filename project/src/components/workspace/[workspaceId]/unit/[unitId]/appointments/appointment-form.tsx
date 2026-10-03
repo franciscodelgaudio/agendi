@@ -14,6 +14,22 @@ import { ProductPicker, withServiceProducts } from "@/components/workspace/[work
 import { currencyFormat, formatDuration } from "@/components/shared/service-format"
 import { TherapistLabel, TherapistSelectValue, type TherapistOption } from "@/components/workspace/[workspaceId]/shared/team/therapist-avatar"
 
+type DiscountType = "percent" | "amount"
+
+const discountTypeItems = [
+  { value: "none", label: "Sem desconto" },
+  { value: "percent", label: "Percentual (%)" },
+  { value: "amount", label: "Valor (R$)" },
+]
+
+// Prévia do desconto em centavos; o servidor recalcula e valida.
+function previewDiscountCents(totalCents: number, type: DiscountType | null, value: string) {
+  const number = Number(value)
+  if (!type || !value || !Number.isFinite(number) || number <= 0) return 0
+  const cents = type === "percent" ? Math.round((totalCents * Math.min(number, 100)) / 100) : Math.round(number * 100)
+  return Math.min(cents, totalCents)
+}
+
 // duration: minutos digitados; vazio até escolher o serviço, que preenche com a duração do cadastro.
 type Row = { key: number; serviceId: string | null; therapistId: string | null; duration: string }
 
@@ -29,6 +45,8 @@ export type AppointmentFormValues = {
   // vale a do cadastro do serviço.
   items: { serviceId: string | null; therapistId: string | null; durationMinutes?: number }[]
   productIds?: string[]
+  // value: percentual ("10") ou valor em reais ("50.00"), como no campo.
+  discount?: { type: DiscountType; value: string; reason: string } | null
 }
 
 export type AppointmentOptions = {
@@ -42,6 +60,8 @@ export type AppointmentOptions = {
     priceCents: number
     durationMinutes: number
     productIds: string[]
+    // false: serviço sem profissional (ex.: hidromassagem), que não gera comissão.
+    requiresTherapist: boolean
   }[]
   therapists: TherapistOption[]
   units?: { id: string; name: string }[]
@@ -82,6 +102,8 @@ export function AppointmentForm({
   const [unitId, setUnitId] = useState<string | null>(defaultValues.unitId ?? null)
   const services = units ? allServices.filter((service) => service.unitId === unitId) : allServices
   const [productIds, setProductIds] = useState(defaultValues.productIds ?? [])
+  const [discountType, setDiscountType] = useState<DiscountType | null>(defaultValues.discount?.type ?? null)
+  const [discountValue, setDiscountValue] = useState(defaultValues.discount?.value ?? "")
   const [rows, setRows] = useState<Row[]>(() =>
     defaultValues.items?.length
       ? defaultValues.items.map(({ serviceId, therapistId, durationMinutes }, key) => ({
@@ -106,7 +128,8 @@ export function AppointmentForm({
   const servicesById = new Map(services.map((service) => [service.id, service]))
   const serviceItems = services.map((service) => ({ value: service.id, label: service.name }))
   const therapistItems = therapists.map((therapist) => ({ value: therapist.id, label: therapist.name }))
-  const totalCents = rows.reduce((sum, row) => sum + (servicesById.get(row.serviceId ?? "")?.priceCents ?? 0), 0)
+  const subtotalCents = rows.reduce((sum, row) => sum + (servicesById.get(row.serviceId ?? "")?.priceCents ?? 0), 0)
+  const discountCents = previewDiscountCents(subtotalCents, discountType, discountValue)
 
   function updateRow(key: number, patch: Partial<Row>) {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)))
@@ -231,24 +254,29 @@ export function AppointmentForm({
                   ))}
                 </SelectContent>
               </Select>
-              <Select
-                name="therapistId"
-                items={therapistItems}
-                value={row.therapistId}
-                onValueChange={(value) => updateRow(row.key, { therapistId: value as string | null })}
-                required
-              >
-                <SelectTrigger className="w-full" aria-label={`Profissional do serviço ${index + 1}`}>
-                  <TherapistSelectValue therapists={therapists} placeholder="Escolha o profissional" />
-                </SelectTrigger>
-                <SelectContent>
-                  {therapists.map((option) => (
-                    <SelectItem key={option.id} value={option.id}>
-                      <TherapistLabel therapist={option} />
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {service && !service.requiresTherapist ? (
+                // Mantém a posição na lista de profissionais; o servidor ignora o profissional deste serviço.
+                <input type="hidden" name="therapistId" value="" />
+              ) : (
+                <Select
+                  name="therapistId"
+                  items={therapistItems}
+                  value={row.therapistId}
+                  onValueChange={(value) => updateRow(row.key, { therapistId: value as string | null })}
+                  required
+                >
+                  <SelectTrigger className="w-full" aria-label={`Profissional do serviço ${index + 1}`}>
+                    <TherapistSelectValue therapists={therapists} placeholder="Escolha o profissional" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {therapists.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        <TherapistLabel therapist={option} />
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <div className="flex items-center gap-2">
                 <Input
                   name="durationMinutes"
@@ -297,9 +325,73 @@ export function AppointmentForm({
           onChange={setProductIds}
         />
 
+        <FieldSeparator>Desconto</FieldSeparator>
+        <input type="hidden" name="discountType" value={discountType ?? ""} />
+        <div className="flex gap-2">
+          <Select
+            items={discountTypeItems}
+            value={discountType ?? "none"}
+            onValueChange={(value) => {
+              setDiscountType(value === "percent" || value === "amount" ? value : null)
+              setDiscountValue("")
+            }}
+          >
+            <SelectTrigger className="flex-1" aria-label="Tipo de desconto">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {discountTypeItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {discountType && (
+            <Input
+              name="discountValue"
+              type="number"
+              inputMode="decimal"
+              min={0.01}
+              max={discountType === "percent" ? 100 : undefined}
+              step={0.01}
+              placeholder={discountType === "percent" ? "10" : "50,00"}
+              value={discountValue}
+              onChange={(e) => setDiscountValue(e.target.value)}
+              aria-label={discountType === "percent" ? "Desconto (%)" : "Desconto (R$)"}
+              className="w-28"
+              required
+            />
+          )}
+        </div>
+        {discountType && (
+          <Field>
+            <FieldLabel htmlFor="appointment-discount-reason">Motivo (opcional)</FieldLabel>
+            <Input
+              id="appointment-discount-reason"
+              name="discountReason"
+              placeholder="Cliente fiel, cortesia..."
+              defaultValue={defaultValues.discount?.reason}
+              maxLength={120}
+            />
+          </Field>
+        )}
+
+        {discountCents > 0 && (
+          <div className="grid gap-1 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="tabular-nums">{currencyFormat.format(subtotalCents / 100)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Desconto</span>
+              <span className="tabular-nums">−{currencyFormat.format(discountCents / 100)}</span>
+            </div>
+          </div>
+        )}
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Total</span>
-          <span className="font-semibold tabular-nums">{currencyFormat.format(totalCents / 100)}</span>
+          <span className="font-semibold tabular-nums">{currencyFormat.format((subtotalCents - discountCents) / 100)}</span>
         </div>
       </FieldGroup>
       <SheetFooter>

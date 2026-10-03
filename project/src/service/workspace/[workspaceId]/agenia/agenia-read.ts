@@ -225,7 +225,9 @@ export function buildReadTools(workspaceId: string) {
 
   return {
     listServices: tool({
-      description: "Lista os serviços de uma unidade com preço (reais), duração e produtos usados.",
+      description:
+        "Lista os serviços de uma unidade com preço (reais), duração, produtos usados, se precisa de profissional " +
+        "(requiresTherapist false: agende sem profissional) e os espaços permitidos (vazio: qualquer espaço).",
       inputSchema: z.object({ unitId: objectId }),
       execute: async ({ unitId }) => {
         if (!(await ownUnit(unitId))) return noUnit
@@ -236,6 +238,8 @@ export function buildReadTools(workspaceId: string) {
           price: reais(s.priceCents),
           durationMinutes: s.durationMinutes,
           productIds: s.productIds.map(String),
+          requiresTherapist: s.requiresTherapist ?? true,
+          treatmentRoomIds: (s.treatmentRoomIds ?? []).map(String),
         }))
       },
     }),
@@ -292,7 +296,7 @@ export function buildReadTools(workspaceId: string) {
           startsAt: brtDateTime(b.startsAt),
           endsAt: brtDateTime(b.endsAt),
           guest: b.guest,
-          therapist: { id: b.therapistId.toString(), name: b.therapistName },
+          therapist: b.therapistId ? { id: b.therapistId.toString(), name: b.therapistName } : null,
           service: { id: b.service.serviceId.toString(), name: b.service.serviceName },
           treatmentRoom: { id: b.treatmentRoom.roomId.toString(), name: b.treatmentRoom.roomName },
           products: b.products.map((p) => p.productName),

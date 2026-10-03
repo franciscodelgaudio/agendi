@@ -15,8 +15,9 @@ export type BookingRange = { start: string; end: string; unit: string; therapist
 export type BookingRow = {
   id: string;
   unitId: string;
-  therapistId: string;
-  therapistName: string;
+  // null: serviço sem profissional.
+  therapistId: string | null;
+  therapistName: string | null;
   guest: { name: string; room: string };
   startsAt: string;
   endsAt: string;

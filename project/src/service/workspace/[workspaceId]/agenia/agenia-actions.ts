@@ -38,6 +38,8 @@ const serviceFields = {
   name: z.string().min(1),
   price: money.describe("Preço em reais."),
   durationMinutes: minutes,
+  requiresTherapist: z.boolean().optional().describe("false para serviço sem profissional (ex.: hidromassagem), sem comissão."),
+  treatmentRoomIds: ids.optional().describe("Espaços da unidade em que o serviço pode ser feito; vazio aceita qualquer um."),
 };
 
 const conversation = z.object({ conversationId: objectId, summary });
@@ -64,6 +66,8 @@ export const AGENIA_ACTIONS = {
     price: serviceFields.price.optional(),
     durationMinutes: minutes.optional(),
     productIds: ids.optional(),
+    requiresTherapist: serviceFields.requiresTherapist,
+    treatmentRoomIds: serviceFields.treatmentRoomIds,
     summary,
   }),
   deleteService: spec("Excluir serviço", "Exclui um serviço de uma unidade.", { unitId: objectId, serviceId: objectId, summary }),
@@ -94,9 +98,9 @@ export const AGENIA_ACTIONS = {
   deleteProduct: spec("Excluir produto", "Exclui um produto do estoque.", { unitId: objectId, productId: objectId, summary }),
   createBooking: spec("Criar agendamento", "Marca um horário na agenda de uma unidade.", {
     unitId: objectId,
-    therapistId: objectId.describe("userId do profissional."),
+    therapistId: objectId.optional().describe("userId do profissional; omita em serviço sem profissional."),
     serviceId: objectId,
-    treatmentRoomId: objectId.describe("Sala de atendimento da unidade."),
+    treatmentRoomId: objectId.describe("Espaço da unidade."),
     guestName: z.string().min(1),
     room: z.string().min(1).describe("Quarto ou identificação do hóspede/cliente."),
     startsAt: dateTime,
@@ -118,7 +122,10 @@ export const AGENIA_ACTIONS = {
     room: z.string().min(1),
     performedAt: dateTime,
     serviceIds: ids.min(1),
-    therapistIds: ids.min(1).describe("userIds dos profissionais."),
+    therapistIds: z
+      .array(z.union([objectId, z.literal("")]))
+      .min(1)
+      .describe("userIds dos profissionais, na ordem dos serviços; vazio em serviço sem profissional."),
     productIds: ids.default([]),
     summary,
   }),
@@ -217,6 +224,8 @@ export function actionFormEntries(name: AgeniaActionName, input: Record<string, 
         ["price", cents(i.price)],
         ["durationMinutes", String(i.durationMinutes)],
         ...many("productId", i.productIds),
+        ...(i.requiresTherapist === undefined ? [] : [["requiresTherapist", String(i.requiresTherapist)] as [string, string]]),
+        ...many("treatmentRoomId", i.treatmentRoomIds),
       ];
     case "createProduct":
       return [
@@ -239,7 +248,7 @@ export function actionFormEntries(name: AgeniaActionName, input: Record<string, 
     case "createBooking":
       return [
         ["unitId", String(i.unitId)],
-        ["therapistId", String(i.therapistId)],
+        ["therapistId", optional(i.therapistId)],
         ["serviceId", String(i.serviceId)],
         ["treatmentRoomId", String(i.treatmentRoomId)],
         ["guestName", String(i.guestName)],

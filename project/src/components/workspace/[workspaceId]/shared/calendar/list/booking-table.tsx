@@ -95,7 +95,7 @@ export function BookingTable({ bookings, query, pathname, workspaceId, options, 
           ) : (
             bookings.map((booking) => {
               // Quem saiu do workspace não está nas opções: fica só com o nome copiado.
-              const therapist = therapistsById.get(booking.therapistId)
+              const therapist = booking.therapistId ? therapistsById.get(booking.therapistId) : undefined
               return (
                 <TableRow key={booking.id}>
                   <CodeCell id={booking.id} className="@max-5xl:hidden" />
@@ -132,14 +132,18 @@ export function BookingTable({ bookings, query, pathname, workspaceId, options, 
                     </Tooltip>
                   </TableCell>
                   <TableCell className="px-4 @max-2xl:hidden">
-                    <span className="flex items-center gap-2">
-                      {therapist ? (
-                        <TherapistAvatar therapist={therapist} className="size-6" />
-                      ) : (
-                        <MissingTherapistIcon className="size-6 shrink-0" />
-                      )}
-                      {booking.therapistName}
-                    </span>
+                    {booking.therapistId ? (
+                      <span className="flex items-center gap-2">
+                        {therapist ? (
+                          <TherapistAvatar therapist={therapist} className="size-6" />
+                        ) : (
+                          <MissingTherapistIcon className="size-6 shrink-0" />
+                        )}
+                        {booking.therapistName}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">Sem profissional</span>
+                    )}
                   </TableCell>
                   {/* Ocupa o que sobra da linha e corta com reticências em vez de quebrar. */}
                   <TableCell className="max-w-0 truncate px-4 @max-lg:hidden">

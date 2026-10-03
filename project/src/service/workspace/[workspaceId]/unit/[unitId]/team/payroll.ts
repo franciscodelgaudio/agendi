@@ -95,7 +95,7 @@ export function payrollAmount(
   let commission = 0;
   for (const rule of member.commissionRules) {
     const counts = ({ therapistId }: DayTotal) =>
-      rule.source === "unit" || (rule.source === "self" ? therapistId === member.userId : rule.userIds.includes(therapistId));
+      rule.source === "unit" || (rule.source === "self" ? therapistId === member.userId : therapistId !== null && rule.userIds.includes(therapistId));
     const byDay = new Map<string, number>();
     let revenueCents = 0;
     for (const total of appointments) {
@@ -160,11 +160,12 @@ export type PayrollPaymentError =
   | "invalid_amount";
 
 export type PayrollPaymentResult = { ok: true } | { ok: false; error: PayrollPaymentError };
-export type PayrollPayment = PayrollAmount & { month: string; paidOn: string };
+// paidOn null: ainda não pago, só ajusta o valor do mês no caixa.
+export type PayrollPayment = PayrollAmount & { month: string; paidOn: string | null };
 
 type FindMember = (memberId: string) => Promise<{ id: string } | null>;
 
-// Mesma permissão da remuneração: gerenciar a equipe.
+// A folha é registrada no caixa: mesma permissão das despesas.
 async function checkAccess(
   memberId: string | null | undefined,
   { actor }: { actor: Actor | null },
@@ -172,7 +173,7 @@ async function checkAccess(
   validate: () => PayrollPaymentError | null,
 ): Promise<PayrollPaymentError | null> {
   if (!actor) return "workspace_not_found";
-  if (!can(actor, "team.manage")) return "forbidden";
+  if (!can(actor, "cash_flow.manage")) return "forbidden";
   if (!memberId) return "member_not_found";
   const invalid = validate();
   if (invalid) return invalid;
@@ -197,11 +198,13 @@ export async function recordPayrollPayment(
   const { month, paidOn, salary, commission } = (input ?? {}) as Record<string, unknown>;
   const salaryCents = parseAmount(salary);
   const commissionCents = parseAmount(commission);
+  // Sem o dia, é um ajuste ainda não pago.
+  const paidDay = paidOn == null || (typeof paidOn === "string" && !paidOn.trim()) ? null : paidOn;
 
   const error = await checkAccess(memberId, ctx, deps.findMember, () => {
     if (input == null || typeof input !== "object") return "invalid_input";
     if (typeof month !== "string" || !parseMonth(month)) return "invalid_month";
-    if (typeof paidOn !== "string" || !parseDay(paidOn)) return "invalid_date";
+    if (paidDay !== null && (typeof paidDay !== "string" || !parseDay(paidDay))) return "invalid_date";
     if (salaryCents === undefined || commissionCents === undefined) return "invalid_amount";
     if (!salaryCents && !commissionCents) return "invalid_amount";
     return null;
@@ -210,7 +213,7 @@ export async function recordPayrollPayment(
 
   await deps.save(memberId!, {
     month: month as string,
-    paidOn: paidOn as string,
+    paidOn: paidDay as string | null,
     salaryCents: salaryCents!,
     commissionCents: commissionCents!,
   });

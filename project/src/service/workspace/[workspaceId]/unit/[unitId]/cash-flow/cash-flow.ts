@@ -16,8 +16,16 @@ export type CashFlowView = (typeof CASH_FLOW_VIEWS)[number];
 export type CashFlowQuery = { view: CashFlowView; date: string };
 // Dias do calendário ("2026-09-24"), ambos inclusivos.
 export type DayRange = { from: string; to: string };
-// Faturamento de um profissional num dia, com a quantidade de serviços.
-export type DayTotal = { date: string; therapistId: string; therapistName: string; count: number; cents: number };
+// Faturamento de um profissional num dia, com a quantidade de serviços. therapistId null: serviços
+// sem profissional (ex.: hidromassagem), que entram no bruto mas não geram comissão.
+export type DayTotal = {
+  date: string;
+  therapistId: string | null;
+  therapistName: string | null;
+  count: number;
+  cents: number;
+};
+type TherapistDayTotal = DayTotal & { therapistId: string; therapistName: string };
 // Percentual de comissão por id de usuário do profissional; quem não está aqui não tem comissão.
 export type CommissionRates = Record<string, number>;
 
@@ -306,7 +314,8 @@ function sumTotals(rates: CommissionRates, ...lists: DayTotal[][]) {
   const commissions = new Map<string, number>();
   for (const { date, therapistId, cents } of lists.flat()) {
     totals.set(date, (totals.get(date) ?? 0) + cents);
-    commissions.set(date, (commissions.get(date) ?? 0) + (cents * (rates[therapistId] ?? 0)) / 100);
+    const rate = therapistId ? (rates[therapistId] ?? 0) : 0;
+    commissions.set(date, (commissions.get(date) ?? 0) + (cents * rate) / 100);
   }
   return { totals, commissions };
 }
@@ -378,7 +387,7 @@ export function summarizeTherapists(
   commissionRates: CommissionRates,
 ): TherapistSummary[] {
   const rows = new Map<string, { therapistName: string; real: ServiceAmounts; forecast: ServiceAmounts }>();
-  const row = ({ therapistId, therapistName }: DayTotal) => {
+  const row = ({ therapistId, therapistName }: TherapistDayTotal) => {
     const existing = rows.get(therapistId);
     if (existing) {
       existing.therapistName = therapistName;
@@ -392,7 +401,9 @@ export function summarizeTherapists(
     amounts.count += count;
     amounts.cents += cents;
   };
-  const inRange = ({ date }: DayTotal) => date >= from && date <= to;
+  // Faturamento sem profissional fica de fora.
+  const inRange = (total: DayTotal): total is TherapistDayTotal =>
+    total.therapistId !== null && total.date >= from && total.date <= to;
 
   for (const total of appointments.filter(inRange)) {
     const summary = row(total);
@@ -452,6 +463,26 @@ function withExpenses(amounts: StaffCashFlowAmounts, expenseCents: number): Expe
   return { ...amounts, expenseCents, netCents: amounts.netCents - expenseCents };
 }
 
+const ZERO_EXPENSE_AMOUNTS = { grossCents: 0, partnerShareCents: 0, commissionCents: 0, salaryCents: 0, expenseCents: 0, netCents: 0 };
+
+function addExpenseAmounts(a: ExpenseCashFlowAmounts, b: ExpenseCashFlowAmounts): ExpenseCashFlowAmounts {
+  return {
+    ...addAmounts(a, b),
+    salaryCents: a.salaryCents + b.salaryCents,
+    expenseCents: a.expenseCents + b.expenseCents,
+  };
+}
+
+function expenseSummaryOf(buckets: ExpenseCashFlowBucket[]): ExpenseCashFlowSummary {
+  return {
+    buckets,
+    total: {
+      real: buckets.reduce((sum, row) => addExpenseAmounts(sum, row.real), ZERO_EXPENSE_AMOUNTS),
+      forecast: buckets.reduce((sum, row) => addExpenseAmounts(sum, row.forecast), ZERO_EXPENSE_AMOUNTS),
+    },
+  };
+}
+
 // Cada despesa entra no intervalo do dia do lançamento; o total soma os intervalos.
 export function applyExpenses(summary: StaffCashFlowSummary, expenses: ExpenseDayCents[]): ExpenseCashFlowSummary {
   const buckets = summary.buckets.map((bucket) => {
@@ -464,19 +495,41 @@ export function applyExpenses(summary: StaffCashFlowSummary, expenses: ExpenseDa
     }
     return { ...bucket, real: withExpenses(bucket.real, paid), forecast: withExpenses(bucket.forecast, total) };
   });
-  const zero = { grossCents: 0, partnerShareCents: 0, commissionCents: 0, salaryCents: 0, expenseCents: 0, netCents: 0 };
-  const add = (a: ExpenseCashFlowAmounts, b: ExpenseCashFlowAmounts) => ({
-    ...addAmounts(a, b),
-    salaryCents: a.salaryCents + b.salaryCents,
-    expenseCents: a.expenseCents + b.expenseCents,
-  });
+  return expenseSummaryOf(buckets);
+}
+
+export type StaffPay = { salaryCents: number; commissionCents: number };
+// Registro da folha de uma pessoa no mês: com paidOn, pago; sem, só ajuste do valor.
+export type PayrollRecordPay = StaffPay & { paidOn: string | null };
+// month: mês trabalhado ("AAAA-MM"); computed: o que o caixa calculou para a pessoa no mês.
+export type PayrollAdjustment = { month: string; computed: { real: StaffPay; forecast: StaffPay }; payment: PayrollRecordPay };
+
+function withPayroll(amounts: ExpenseCashFlowAmounts, computed: StaffPay, payment: StaffPay): ExpenseCashFlowAmounts {
+  const salary = payment.salaryCents - computed.salaryCents;
+  const commission = payment.commissionCents - computed.commissionCents;
   return {
-    buckets,
-    total: {
-      real: buckets.reduce((sum, row) => add(sum, row.real), zero),
-      forecast: buckets.reduce((sum, row) => add(sum, row.forecast), zero),
-    },
+    ...amounts,
+    salaryCents: amounts.salaryCents + salary,
+    commissionCents: amounts.commissionCents + commission,
+    netCents: amounts.netCents - salary - commission,
   };
+}
+
+// O registro da folha troca o calculado da pessoa no mês trabalhado: pago, no real e no previsto;
+// ajuste, só no previsto. A diferença entra no intervalo com o último dia do mês; sem ele, é ignorada.
+export function applyPayrollPayments(summary: ExpenseCashFlowSummary, adjustments: PayrollAdjustment[]): ExpenseCashFlowSummary {
+  const buckets = summary.buckets.map((bucket) => {
+    let { real, forecast } = bucket;
+    for (const { month, computed, payment } of adjustments) {
+      const [year, monthNumber] = parseDay(`${month}-01`)!;
+      const last = utcDay(year, monthNumber + 1, 0);
+      if (last < bucket.from || last > bucket.to) continue;
+      forecast = withPayroll(forecast, computed.forecast, payment);
+      if (payment.paidOn) real = withPayroll(real, computed.real, payment);
+    }
+    return { ...bucket, real, forecast };
+  });
+  return expenseSummaryOf(buckets);
 }
 
 export type TeamPayMember = {
@@ -531,6 +584,56 @@ function monthlyForDays({ from, to }: DayRange, salaries: StaffSalary[], since: 
     }
   }
   return salary;
+}
+
+export type MemberStaffPay = { memberId: string; real: StaffPay; forecast: StaffPay };
+
+// Remuneração de cada pessoa com remuneração na unidade, nas mesmas regras do caixa: salário (com
+// os bônus) rateado por dia, o real só até hoje; comissão sobre os atendimentos do intervalo
+// (appointments pode trazer dias de fora, que só servem para o repasse).
+export function staffPayByMember(
+  range: DayRange,
+  team: (TeamPayMember & { memberId: { toString(): string } })[],
+  unitId: string,
+  appointments: DayTotal[],
+  revenueShare: RevenueShare | null,
+  { today, since = null }: { today: string; since?: string | null },
+): MemberStaffPay[] {
+  const inRange = ({ date }: { date: string }) => date >= range.from && date <= range.to;
+  const totals = new Map<string, number>();
+  for (const { date, cents } of appointments) totals.set(date, (totals.get(date) ?? 0) + cents);
+  let grossCents = 0;
+  for (const total of appointments.filter(inRange)) grossCents += total.cents;
+  let share = 0;
+  for (const [date, cents] of partnerShareByDay(totals, revenueShare)) if (inRange({ date })) share += cents;
+  const netCents = grossCents - Math.round(share);
+
+  const rows: MemberStaffPay[] = [];
+  for (const member of team) {
+    const link = member.units.find((unit) => unit.unitId.toString() === unitId);
+    if (!link) continue;
+    let monthlyCents = link.salaryCents ?? 0;
+    for (const bonus of link.bonuses ?? []) monthlyCents += bonus.amountCents;
+    if (!monthlyCents && link.commissionPercent == null) continue;
+
+    let commissionCents = 0;
+    if (link.commissionPercent != null) {
+      const base = link.commissionBase ?? (member.attends ? "services" : "gross");
+      const userId = member.userId?.toString() ?? null;
+      let baseCents = base === "gross" ? grossCents : base === "net" ? netCents : 0;
+      if (base === "services") {
+        for (const total of appointments) if (userId && total.therapistId === userId && inRange(total)) baseCents += total.cents;
+      }
+      commissionCents = Math.round((baseCents * link.commissionPercent) / 100);
+    }
+    const salaries = monthlyCents ? [{ monthlyCents, startDate: link.startDate ?? null }] : [];
+    rows.push({
+      memberId: member.memberId.toString(),
+      real: { salaryCents: Math.round(monthlyForDays(range, salaries, since, today)), commissionCents },
+      forecast: { salaryCents: Math.round(monthlyForDays(range, salaries, since)), commissionCents },
+    });
+  }
+  return rows;
 }
 
 function withStaffCosts(

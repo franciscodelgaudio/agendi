@@ -16,8 +16,9 @@ const bookingSchema = new Schema(
   {
     unitId: { type: Schema.Types.ObjectId, ref: "Unit", required: true },
     // Usuário que vai atender: o proprietário ou um membro cuja função realiza atendimentos.
-    therapistId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    therapistName: { type: String, required: true },
+    // null quando o serviço não usa profissional (ex.: hidromassagem).
+    therapistId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    therapistName: { type: String, default: null },
     guest: {
       name: { type: String, required: true, trim: true },
       room: { type: String, required: true, trim: true },

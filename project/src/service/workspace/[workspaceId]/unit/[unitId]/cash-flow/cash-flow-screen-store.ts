@@ -15,6 +15,7 @@ import {
   expenseGroupTotalsPipeline,
   expenseGroupYearOverview,
   groupLimitForMonth,
+  payrollExpenseRows,
   staffExpenseGroups,
   staffExpenses,
   summarizeExpenseGroups,
@@ -30,6 +31,7 @@ import {
   groupLimitsOf,
   loadUnitCashFlow,
   loadUnitNet,
+  monthStaffPay,
   type CashFlowUnit,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
 import { loadWallets } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
@@ -248,8 +250,17 @@ export async function loadExpensesScreen(
         : null,
       automatic: false,
     })),
-    // No último dia do mês, depois das cadastradas.
-    ...staffExpenses(cashFlow.summary.total.real, month.to),
+    // No último dia do mês, depois das cadastradas: a folha de cada pessoa e o repasse.
+    ...payrollExpenseRows(
+      monthStaffPay(unit, cashFlow.team, cashFlow.appointments, month.from.slice(0, 7), today).map((pay) => ({
+        memberId: pay.memberId,
+        name: cashFlow.team.find((member) => member.memberId.toString() === pay.memberId)!.name,
+        ...pay.forecast,
+      })),
+      cashFlow.payrollRecords,
+      month.to,
+    ),
+    ...staffExpenses({ ...cashFlow.summary.total.real, commissionCents: 0, salaryCents: 0 }, month.to),
   ]
 
   return { unitName: workspace.unit.name, actor: workspace.actor, month, groups, expenses }

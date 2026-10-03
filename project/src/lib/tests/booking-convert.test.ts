@@ -26,7 +26,7 @@ function makeDeps({
     // Devolve null quando o agendamento não existe (ou não é do workspace).
     findBooking: vi.fn().mockResolvedValue(booking),
     findServices: vi.fn(async (ids: string[]) =>
-      ids.includes(CANDLE_ID) ? [{ id: CANDLE_ID, name: "Massagem Candle", priceCents: 35000, durationMinutes: 60 }] : [],
+      ids.includes(CANDLE_ID) ? [{ id: CANDLE_ID, name: "Massagem Candle", priceCents: 35000, durationMinutes: 60, requiresTherapist: true }] : [],
     ),
     findTherapists: vi.fn(async (ids: string[]) => (ids.includes(ANA_ID) ? [{ id: ANA_ID, name: "Ana" }] : [])),
     findProducts: vi.fn(async (ids: string[]) =>
@@ -167,6 +167,10 @@ describe("bookingAppointmentInput", () => {
       durations: ["90"],
       productIds: [OIL_ID],
     });
+  });
+
+  it("manda o profissional vazio quando o agendamento não tem profissional", () => {
+    expect(bookingAppointmentInput({ ...booking, therapistId: null }).therapistIds).toEqual([""]);
   });
 
   it("converte para o dia de Brasília quando o horário em UTC já é do dia seguinte", () => {

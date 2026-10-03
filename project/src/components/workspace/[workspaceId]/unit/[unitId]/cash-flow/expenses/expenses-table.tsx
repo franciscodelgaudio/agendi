@@ -1,5 +1,6 @@
 import type { ExpenseOwner } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
 import { ExpenseActions, ExpensePaidToggle, type ExpenseGroupOption, type ExpenseRow } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense-sheets"
+import { PayrollActions, PayrollPaidToggle } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/payroll-sheets"
 import { ExpenseGroupIconBadge } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/expense-group-icon"
 import { currencyFormat } from "@/components/shared/service-format"
 import { SortableHead } from "@/components/shared/sortable-head"
@@ -69,12 +70,21 @@ export function ExpensesTable({
           {expenses.map((expense) => (
             <TableRow key={expense.id}>
               <TableCell className="px-4">
-                <ExpensePaidToggle
-                  workspaceId={workspaceId}
-                  owner={owner}
-                  expense={expense}
-                  disabled={!canManage || !!expense.automatic}
-                />
+                {expense.payroll && "unitId" in owner ? (
+                  <PayrollPaidToggle
+                    workspaceId={workspaceId}
+                    unitId={owner.unitId}
+                    expense={{ ...expense, payroll: expense.payroll }}
+                    disabled={!canManage}
+                  />
+                ) : (
+                  <ExpensePaidToggle
+                    workspaceId={workspaceId}
+                    owner={owner}
+                    expense={expense}
+                    disabled={!canManage || !!expense.automatic}
+                  />
+                )}
               </TableCell>
               <TableCell className="px-4 tabular-nums">{dayFormat.format(toDate(expense.date))}</TableCell>
               <TableCell className="max-w-0 px-4 font-medium">
@@ -97,8 +107,16 @@ export function ExpensesTable({
               <TableCell className="px-4 text-right tabular-nums">{money(expense.amountCents)}</TableCell>
               {canManage && (
                 <TableCell className="px-4 text-right">
-                  {!expense.automatic && (
-                    <ExpenseActions workspaceId={workspaceId} owner={owner} groups={registeredGroups} expense={expense} />
+                  {expense.payroll && "unitId" in owner ? (
+                    <PayrollActions
+                      workspaceId={workspaceId}
+                      unitId={owner.unitId}
+                      expense={{ ...expense, payroll: expense.payroll }}
+                    />
+                  ) : (
+                    !expense.automatic && (
+                      <ExpenseActions workspaceId={workspaceId} owner={owner} groups={registeredGroups} expense={expense} />
+                    )
                   )}
                 </TableCell>
               )}

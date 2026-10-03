@@ -150,8 +150,8 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
     endsAt: booking.endsAt,
     guest: booking.guest!,
     serviceName: booking.service.serviceName,
-    therapistId: booking.therapistId.toString(),
-    therapistName: booking.therapistName,
+    therapistId: booking.therapistId?.toString() ?? null,
+    therapistName: booking.therapistName ?? null,
     attended: !!booking.appointmentId,
   }))
   const attendedToday = schedule.filter((booking) => booking.attended).length

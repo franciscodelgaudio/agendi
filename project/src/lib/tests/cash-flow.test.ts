@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Types } from "mongoose";
 import {
   applyExpenses,
+  applyPayrollPayments,
   applyStaffCosts,
   cashFlowBuckets,
   cashFlowFetchRange,
@@ -13,6 +14,7 @@ import {
   serviceAppointmentTotalsPipeline,
   serviceBookingForecastPipeline,
   shiftCashFlowDate,
+  staffPayByMember,
   summarizeCashFlow,
   summarizeCosts,
   summarizeServices,
@@ -271,6 +273,18 @@ const total = (date: string, cents: number, therapistId = "ana", count = 1) => (
 const zero = { grossCents: 0, partnerShareCents: 0, commissionCents: 0, netCents: 0 };
 
 describe("summarizeCashFlow", () => {
+  it("faturamento sem profissional entra no bruto e não gera comissão", () => {
+    const result = summarizeCashFlow(
+      [day("2026-09-21")],
+      [total("2026-09-21", 10_000, "ana"), { ...total("2026-09-21", 15_000), therapistId: null, therapistName: null }],
+      [],
+      null,
+      { ana: 40 },
+    );
+
+    expect(result.total.real).toEqual({ grossCents: 25_000, partnerShareCents: 0, commissionCents: 4_000, netCents: 21_000 });
+  });
+
   it("sem movimento, tudo zerado", () => {
     expect(summarizeCashFlow([day("2026-09-21")], [], [], null, {})).toEqual({
       buckets: [{ ...day("2026-09-21"), real: zero, forecast: zero }],
@@ -727,6 +741,18 @@ describe("summarizeTherapists", () => {
     );
 
     expect(result.map((row) => row.forecast)).toEqual([{ count: 1, cents: 10_000, commissionCents: 0 }]);
+  });
+
+  // Serviços sem profissional (ex.: hidromassagem) vêm com therapistId null.
+  it("deixa de fora o faturamento sem profissional", () => {
+    const result = summarizeTherapists(
+      RANGE,
+      [total("2026-09-21", 10_000, "ana"), { ...total("2026-09-21", 15_000), therapistId: null, therapistName: null }],
+      [{ ...total("2026-09-26", 15_000), therapistId: null, therapistName: null }],
+      { ana: 40 },
+    );
+
+    expect(result.map((row) => row.therapistId)).toEqual(["ana"]);
   });
 
   it("usa o nome mais recente, vindo dos agendamentos", () => {
@@ -1270,5 +1296,223 @@ describe("costCurve", () => {
 
   it("sem unidades, a curva fica vazia", () => {
     expect(costCurve([])).toEqual([]);
+  });
+});
+
+describe("staffPayByMember", () => {
+  const UNIT = new Types.ObjectId();
+  const OTHER_UNIT = new Types.ObjectId();
+  // Outubro de 2026 tem 31 dias; hoje é dia 3.
+  const OCTOBER = { from: "2026-10-01", to: "2026-10-31" };
+  const TODAY = { today: "2026-10-03" };
+  const link = (overrides: Record<string, unknown> = {}) => ({
+    unitId: UNIT,
+    commissionBase: null,
+    commissionPercent: null,
+    salaryCents: null,
+    bonuses: [],
+    startDate: null,
+    ...overrides,
+  });
+  const member = (memberId: string, userId: string | null, attends: boolean, units: ReturnType<typeof link>[]) => ({
+    memberId: { toString: () => memberId },
+    userId: userId === null ? null : { toString: () => userId },
+    attends,
+    units,
+  });
+  const pay = (salaryCents: number, commissionCents: number) => ({ salaryCents, commissionCents });
+
+  it("salário com bônus: real até hoje, previsto no intervalo inteiro", () => {
+    const team = [member("jane", null, false, [link({ salaryCents: 200_000, bonuses: [{ amountCents: 80_000 }] })])];
+
+    const result = staffPayByMember(OCTOBER, team, UNIT.toString(), [], null, TODAY);
+
+    // R$ 2.800 × 3/31 = 270,97.
+    expect(result).toEqual([{ memberId: "jane", real: pay(27_097, 0), forecast: pay(280_000, 0) }]);
+  });
+
+  it("salário conta a partir da data de início", () => {
+    const team = [member("jane", null, false, [link({ salaryCents: 280_000, startDate: "2026-10-02" })])];
+
+    const result = staffPayByMember(OCTOBER, team, UNIT.toString(), [], null, TODAY);
+
+    // Real: dias 2 e 3. Previsto: 30 dias.
+    expect(result).toEqual([{ memberId: "jane", real: pay(18_065, 0), forecast: pay(270_968, 0) }]);
+  });
+
+  it("salário de antes do início da unidade (since) não conta", () => {
+    const team = [
+      member("jane", null, false, [link({ salaryCents: 280_000, startDate: "2026-10-02" })]),
+      member("bia", null, false, [link({ salaryCents: 280_000 })]),
+    ];
+
+    const result = staffPayByMember(OCTOBER, team, UNIT.toString(), [], null, { today: "2026-10-03", since: "2026-10-03" });
+
+    // A partir do dia 3: um dia real e 29 previstos para as duas.
+    expect(result).toEqual([
+      { memberId: "jane", real: pay(9_032, 0), forecast: pay(261_935, 0) },
+      { memberId: "bia", real: pay(9_032, 0), forecast: pay(261_935, 0) },
+    ]);
+  });
+
+  it("comissão sobre os serviços conta só os atendimentos da própria pessoa no intervalo", () => {
+    const team = [member("ana", "ana", true, [link({ commissionBase: "services", commissionPercent: 10 })])];
+    const appointments = [total("2026-10-02", 50_000, "ana"), total("2026-10-02", 30_000, "bia"), total("2026-09-30", 90_000, "ana")];
+
+    const result = staffPayByMember(OCTOBER, team, UNIT.toString(), appointments, null, TODAY);
+
+    expect(result).toEqual([{ memberId: "ana", real: pay(0, 5_000), forecast: pay(0, 5_000) }]);
+  });
+
+  it("comissão sobre o bruto incide no faturamento da unidade inteira no intervalo", () => {
+    const team = [member("rita", "rita", false, [link({ commissionBase: "gross", commissionPercent: 5 })])];
+    const appointments = [total("2026-10-02", 50_000, "ana"), total("2026-10-02", 30_000, "bia"), total("2026-09-30", 90_000, "ana")];
+
+    const result = staffPayByMember(OCTOBER, team, UNIT.toString(), appointments, null, TODAY);
+
+    expect(result).toEqual([{ memberId: "rita", real: pay(0, 4_000), forecast: pay(0, 4_000) }]);
+  });
+
+  it("comissão sobre o líquido incide no bruto menos o repasse", () => {
+    const share: RevenueShare = { period: "monthly", tiers: [{ upToCents: null, percent: 20 }] };
+    const team = [member("rita", "rita", false, [link({ commissionBase: "net", commissionPercent: 5 })])];
+    const appointments = [total("2026-10-02", 50_000, "ana"), total("2026-10-02", 30_000, "bia")];
+
+    const result = staffPayByMember(OCTOBER, team, UNIT.toString(), appointments, share, TODAY);
+
+    // R$ 800 − R$ 160 de repasse = R$ 640; 5% = R$ 32.
+    expect(result).toEqual([{ memberId: "rita", real: pay(0, 3_200), forecast: pay(0, 3_200) }]);
+  });
+
+  it("vínculo sem base usa a da função: quem atende ganha sobre os serviços, os demais sobre o bruto", () => {
+    const team = [
+      member("ana", "ana", true, [link({ commissionPercent: 10 })]),
+      member("rita", "rita", false, [link({ commissionPercent: 5 })]),
+    ];
+    const appointments = [total("2026-10-02", 50_000, "ana"), total("2026-10-02", 30_000, "bia")];
+
+    const result = staffPayByMember(OCTOBER, team, UNIT.toString(), appointments, null, TODAY);
+
+    expect(result).toEqual([
+      { memberId: "ana", real: pay(0, 5_000), forecast: pay(0, 5_000) },
+      { memberId: "rita", real: pay(0, 4_000), forecast: pay(0, 4_000) },
+    ]);
+  });
+
+  it("salário e comissão do mesmo vínculo vêm juntos; comissão sem faturamento vale zero", () => {
+    const team = [member("ana", "ana", true, [link({ commissionPercent: 10, salaryCents: 310_000 })])];
+
+    const result = staffPayByMember(OCTOBER, team, UNIT.toString(), [], null, TODAY);
+
+    expect(result).toEqual([{ memberId: "ana", real: pay(30_000, 0), forecast: pay(310_000, 0) }]);
+  });
+
+  it("fica de fora quem não tem remuneração na unidade", () => {
+    const team = [
+      member("ana", "ana", true, [link()]),
+      member("bia", "bia", true, [link({ unitId: OTHER_UNIT, salaryCents: 100_000 })]),
+    ];
+
+    expect(staffPayByMember(OCTOBER, team, UNIT.toString(), [], null, TODAY)).toEqual([]);
+  });
+
+  it("a soma das pessoas bate com o custo da equipe do caixa", () => {
+    const share: RevenueShare = { period: "monthly", tiers: [{ upToCents: null, percent: 20 }] };
+    const team = [
+      member("ana", "ana", true, [link({ commissionBase: "services", commissionPercent: 10, salaryCents: 310_000 })]),
+      member("rita", "rita", false, [link({ commissionBase: "gross", commissionPercent: 5 })]),
+      member("lia", null, false, [link({ commissionBase: "net", commissionPercent: 2.5, bonuses: [{ amountCents: 62_000 }] })]),
+    ];
+    const appointments = [total("2026-10-02", 50_000, "ana"), total("2026-10-03", 30_000, "bia")];
+
+    const result = staffPayByMember(OCTOBER, team, UNIT.toString(), appointments, share, TODAY);
+
+    const { commissionRates, ...rates } = teamPayRates(team, UNIT.toString());
+    const cashFlow = applyStaffCosts(summarizeCashFlow([OCTOBER], appointments, [], share, commissionRates), { ...rates, ...TODAY });
+    const sum = (key: "real" | "forecast", field: "salaryCents" | "commissionCents") =>
+      result.reduce((acc, row) => acc + row[key][field], 0);
+    expect(sum("real", "salaryCents")).toBe(cashFlow.total.real.salaryCents);
+    expect(sum("forecast", "salaryCents")).toBe(cashFlow.total.forecast.salaryCents);
+    expect(sum("real", "commissionCents")).toBe(cashFlow.total.real.commissionCents);
+  });
+});
+
+describe("applyPayrollPayments", () => {
+  // R$ 2.800 por mês; hoje é 03/10/2026, então outubro tem R$ 270,97 de salário real.
+  const STAFF = { grossCommissionPercent: 0, netCommissionPercent: 0, salaries: [{ monthlyCents: 280_000, startDate: null }], today: "2026-10-03" };
+  const year = () =>
+    applyExpenses(applyStaffCosts(summarizeCashFlow(cashFlowBuckets({ view: "year", date: "2026-10-03" }), [], [], null, {}), STAFF), []);
+  const COMPUTED = { real: { salaryCents: 27_097, commissionCents: 0 }, forecast: { salaryCents: 280_000, commissionCents: 0 } };
+  const PAID = { salaryCents: 300_000, commissionCents: 10_000, paidOn: "2026-11-12" };
+
+  it("sem pagamentos, não muda nada", () => {
+    expect(applyPayrollPayments(year(), [])).toEqual(year());
+  });
+
+  it("mês pago: o valor pago troca o calculado no real e no previsto e sai do líquido", () => {
+    const before = year();
+
+    const result = applyPayrollPayments(before, [{ month: "2026-10", computed: COMPUTED, payment: PAID }]);
+
+    expect(result.buckets[9].real).toEqual({
+      ...before.buckets[9].real,
+      salaryCents: 300_000,
+      commissionCents: 10_000,
+      netCents: before.buckets[9].real.netCents - (300_000 - 27_097) - 10_000,
+    });
+    expect(result.buckets[9].forecast).toEqual({
+      ...before.buckets[9].forecast,
+      salaryCents: 300_000,
+      commissionCents: 10_000,
+      netCents: before.buckets[9].forecast.netCents - (300_000 - 280_000) - 10_000,
+    });
+    expect(result.buckets.filter((_, i) => i !== 9)).toEqual(before.buckets.filter((_, i) => i !== 9));
+    expect(result.total.real.salaryCents).toBe(before.total.real.salaryCents + 300_000 - 27_097);
+    expect(result.total.forecast.netCents).toBe(before.total.forecast.netCents - 20_000 - 10_000);
+  });
+
+  it("ajuste sem data de pagamento muda só o previsto", () => {
+    const before = year();
+
+    const result = applyPayrollPayments(before, [{ month: "2026-10", computed: COMPUTED, payment: { ...PAID, paidOn: null } }]);
+
+    expect(result.buckets[9].real).toEqual(before.buckets[9].real);
+    expect(result.buckets[9].forecast).toMatchObject({ salaryCents: 300_000, commissionCents: 10_000 });
+    expect(result.total.real).toEqual(before.total.real);
+  });
+
+  it("pagamentos de pessoas diferentes no mesmo mês somam", () => {
+    const before = year();
+    const half = { real: { salaryCents: 13_548, commissionCents: 0 }, forecast: { salaryCents: 140_000, commissionCents: 0 } };
+
+    const result = applyPayrollPayments(before, [
+      { month: "2026-10", computed: half, payment: { salaryCents: 140_000, commissionCents: 0, paidOn: "2026-11-05" } },
+      { month: "2026-10", computed: half, payment: { salaryCents: 150_000, commissionCents: 0, paidOn: "2026-11-05" } },
+    ]);
+
+    expect(result.buckets[9].real.salaryCents).toBe(before.buckets[9].real.salaryCents - 27_096 + 290_000);
+    expect(result.buckets[9].forecast.salaryCents).toBe(290_000);
+  });
+
+  it("a diferença entra no intervalo que tem o último dia do mês", () => {
+    const weeks = applyExpenses(
+      applyStaffCosts(summarizeCashFlow(cashFlowBuckets({ view: "month", date: "2026-10-01" }), [], [], null, {}), STAFF),
+      [],
+    );
+
+    const result = applyPayrollPayments(weeks, [{ month: "2026-10", computed: COMPUTED, payment: PAID }]);
+
+    // A última semana (26 a 31) recebe toda a diferença.
+    const last = weeks.buckets.length - 1;
+    expect(result.buckets.slice(0, last)).toEqual(weeks.buckets.slice(0, last));
+    expect(result.buckets[last].forecast.salaryCents).toBe(weeks.buckets[last].forecast.salaryCents + 20_000);
+    expect(result.total.real.salaryCents).toBe(300_000);
+    expect(result.total.forecast.salaryCents).toBe(weeks.total.forecast.salaryCents + 20_000);
+  });
+
+  it("mês cujo último dia está fora dos intervalos é ignorado", () => {
+    const before = year();
+
+    expect(applyPayrollPayments(before, [{ month: "2025-12", computed: COMPUTED, payment: PAID }])).toEqual(before);
   });
 });

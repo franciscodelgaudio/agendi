@@ -9,6 +9,7 @@ import {
   expenseGroupMonthTotalsPipeline,
   expenseGroupYearOverview,
   groupLimitForMonth,
+  payrollExpenseRows,
   setGroupLimitFrom,
   setGroupLimitForMonth,
   setExpensePaid,
@@ -868,5 +869,78 @@ describe("staffExpenses", () => {
 
   it("sem custo da equipe nem repasse, não há despesa automática", () => {
     expect(staffExpenses(real(0, 0, 0), "2026-10-31")).toEqual([]);
+  });
+});
+
+describe("payrollExpenseRows", () => {
+  // Remuneração calculada do mês inteiro de cada pessoa.
+  const JANE = { memberId: "jane", name: "Jane", salaryCents: 280_000, commissionCents: 4_000 };
+  const ANA = { memberId: "ana", name: "Ana", salaryCents: 0, commissionCents: 7_840 };
+  const row = (kind: "salary" | "commission", person: { memberId: string; name: string }, amountCents: number, payroll: object, paid = false) => ({
+    id: `${kind}:${person.memberId}`,
+    groupId: "team",
+    description: `${kind === "salary" ? "Salário" : "Comissão"} · ${person.name}`,
+    amountCents,
+    date: "2026-10-31",
+    paid,
+    series: null,
+    automatic: true,
+    payroll: { memberId: person.memberId, ...payroll },
+  });
+
+  it("sem registro: salário e comissão calculados, pendentes, no dia dado", () => {
+    const result = payrollExpenseRows([JANE], [], "2026-10-31");
+
+    const payroll = { salaryCents: 280_000, commissionCents: 4_000, paidOn: null, recorded: false };
+    expect(result).toEqual([row("salary", JANE, 280_000, payroll), row("commission", JANE, 4_000, payroll)]);
+  });
+
+  it("pago: os valores do registro trocam os calculados e as duas linhas ficam pagas", () => {
+    const payment = { memberId: "jane", salaryCents: 300_000, commissionCents: 5_000, paidOn: "2026-11-12" };
+
+    const result = payrollExpenseRows([JANE], [payment], "2026-10-31");
+
+    const payroll = { salaryCents: 300_000, commissionCents: 5_000, paidOn: "2026-11-12", recorded: true };
+    expect(result).toEqual([row("salary", JANE, 300_000, payroll, true), row("commission", JANE, 5_000, payroll, true)]);
+  });
+
+  it("ajuste sem data: valores do registro, ainda pendentes", () => {
+    const payment = { memberId: "jane", salaryCents: 250_000, commissionCents: 4_000, paidOn: null };
+
+    const result = payrollExpenseRows([JANE], [payment], "2026-10-31");
+
+    expect(result.map(({ amountCents, paid }) => ({ amountCents, paid }))).toEqual([
+      { amountCents: 250_000, paid: false },
+      { amountCents: 4_000, paid: false },
+    ]);
+    expect(result[0].payroll).toEqual({ memberId: "jane", salaryCents: 250_000, commissionCents: 4_000, paidOn: null, recorded: true });
+  });
+
+  it("linha sem valor não aparece, mesmo com registro", () => {
+    const payment = { memberId: "jane", salaryCents: 280_000, commissionCents: 0, paidOn: "2026-11-12" };
+
+    const result = payrollExpenseRows([ANA, JANE], [payment], "2026-10-31");
+
+    expect(result.map((expense) => expense.id)).toEqual(["commission:ana", "salary:jane"]);
+  });
+
+  it("ordena pelo nome e, de cada pessoa, salário antes da comissão", () => {
+    const bia = { memberId: "bia", name: "Bia", salaryCents: 100_000, commissionCents: 1_000 };
+
+    const result = payrollExpenseRows([JANE, bia, ANA], [], "2026-10-31");
+
+    expect(result.map((expense) => expense.id)).toEqual([
+      "commission:ana",
+      "salary:bia",
+      "commission:bia",
+      "salary:jane",
+      "commission:jane",
+    ]);
+  });
+
+  it("registro de quem não está na lista é ignorado", () => {
+    const payment = { memberId: "lia", salaryCents: 100_000, commissionCents: 0, paidOn: "2026-11-12" };
+
+    expect(payrollExpenseRows([], [payment], "2026-10-31")).toEqual([]);
   });
 });

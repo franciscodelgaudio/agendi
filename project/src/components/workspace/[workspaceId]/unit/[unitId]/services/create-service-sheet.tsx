@@ -6,7 +6,7 @@ import { createServiceAction, type ServiceActionState } from "@/lib/actions/serv
 
 import { Button } from "@/components/ui/button"
 import { FieldError, FieldGroup } from "@/components/ui/field"
-import { ServiceFields } from "@/components/workspace/[workspaceId]/unit/[unitId]/services/service-fields"
+import { ServiceFields, type ServiceRoomOption } from "@/components/workspace/[workspaceId]/unit/[unitId]/services/service-fields"
 import {
   Sheet,
   SheetContent,
@@ -17,9 +17,9 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 
-type Props = { workspaceId: string; unitId: string }
+type Props = { workspaceId: string; unitId: string; treatmentRooms: ServiceRoomOption[] }
 
-export function CreateServiceSheet({ workspaceId, unitId }: Props) {
+export function CreateServiceSheet({ workspaceId, unitId, treatmentRooms }: Props) {
   const [open, setOpen] = useState(false)
   const [state, formAction, pending] = useActionState(
     async (prev: ServiceActionState, formData: FormData) => {
@@ -45,7 +45,7 @@ export function CreateServiceSheet({ workspaceId, unitId }: Props) {
           {/* Só os campos rolam; título e botões ficam fixos. */}
           <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
             {state.error && <FieldError>{state.error}</FieldError>}
-            <ServiceFields idPrefix="create-service" />
+            <ServiceFields idPrefix="create-service" treatmentRooms={treatmentRooms} />
           </FieldGroup>
           <SheetFooter>
             <Button type="submit" loading={pending}>

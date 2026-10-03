@@ -34,15 +34,15 @@ const errorMessages: Record<CreateUnitError | UpdateUnitError | PlanUnitTeamErro
   too_many_tiers: "Cadastre no máximo 10 faixas.",
   invalid_tier_limit: "Os limites das faixas devem ser valores maiores que zero, em ordem crescente.",
   invalid_tier_percent: "Os percentuais devem estar entre 0 e 100, com até 2 casas decimais.",
-  no_treatment_rooms: "Cadastre pelo menos uma sala.",
-  too_many_treatment_rooms: "Cadastre no máximo 20 salas.",
-  invalid_treatment_room_name: "Informe o nome de cada sala.",
-  treatment_room_name_too_long: "O nome da sala pode ter no máximo 40 caracteres.",
-  duplicate_treatment_room_name: "Cada sala precisa de um nome diferente.",
-  invalid_treatment_room_beds: "Cada sala precisa ter de 1 a 10 macas.",
+  no_treatment_rooms: "Cadastre pelo menos um espaço.",
+  too_many_treatment_rooms: "Cadastre no máximo 20 espaços.",
+  invalid_treatment_room_name: "Informe o nome de cada espaço.",
+  treatment_room_name_too_long: "O nome do espaço pode ter no máximo 40 caracteres.",
+  duplicate_treatment_room_name: "Cada espaço precisa de um nome diferente.",
+  invalid_treatment_room_beds: "Cada espaço precisa comportar de 1 a 10 atendimentos ao mesmo tempo.",
   invalid_business_hours: "Informe o horário de funcionamento.",
   invalid_business_hours_order: "O horário de fechamento deve ser depois da abertura.",
-  treatment_room_in_use: "Uma sala removida ainda tem agendamentos. Mova ou exclua os agendamentos antes.",
+  treatment_room_in_use: "Um espaço removido ainda tem agendamentos. Mova ou exclua os agendamentos antes.",
   invalid_opening_balance: "Informe um saldo em caixa de até R$ 1.000.000,00.",
   invalid_opening_balance_date: "Informe o dia do saldo em caixa.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
@@ -209,6 +209,9 @@ export async function updateUnitAction(
         },
       )
       if (matchedCount === 0) return false
+      // Espaço removido deixa de ser permitido nos serviços da unidade.
+      const keptRoomIds = treatmentRooms.flatMap((room) => (room.id ? [new Types.ObjectId(room.id)] : []))
+      await Service.updateMany({ unitId: id }, { $pull: { treatmentRoomIds: { $nin: keptRoomIds } } })
       if (team) await applyTeam(target.ownedId, id, team)
       return true
     },

@@ -71,8 +71,9 @@ export type TodayBooking = {
   endsAt: Date
   guest: { name: string; room: string }
   serviceName: string
-  therapistId: string
-  therapistName: string
+  // null: serviço sem profissional.
+  therapistId: string | null
+  therapistName: string | null
   attended: boolean
   // Na visão do workspace, a unidade do agendamento.
   unitName?: string
@@ -116,7 +117,8 @@ export function TodaySchedule({
       <ol className="flex flex-col">
         {visible.map((booking, index) => {
           const done = booking.attended || booking.endsAt <= now
-          const therapist = therapistsById.get(booking.therapistId) ?? { name: booking.therapistName, image: null }
+          const therapist =
+            booking.therapistId && (therapistsById.get(booking.therapistId) ?? { name: booking.therapistName ?? "", image: null })
           return (
             <li key={booking.id} className="relative flex gap-4 pb-4 last:pb-0">
               {index < visible.length - 1 && <span className="absolute top-3 bottom-0 left-[4.75rem] w-px bg-border" />}
@@ -139,10 +141,12 @@ export function TodaySchedule({
                 </div>
                 <div className="flex items-center gap-3">
                   <BookingStatus booking={booking} now={now} isNext={booking === next} />
-                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <TherapistAvatar therapist={therapist} className="size-6" />
-                    <span className="max-w-28 truncate">{booking.therapistName}</span>
-                  </span>
+                  {therapist && (
+                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <TherapistAvatar therapist={therapist} className="size-6" />
+                      <span className="max-w-28 truncate">{booking.therapistName}</span>
+                    </span>
+                  )}
                 </div>
               </div>
             </li>

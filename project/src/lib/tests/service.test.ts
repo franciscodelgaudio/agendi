@@ -28,7 +28,7 @@ describe("createService", () => {
   it("cria o serviço na unidade com o preço em centavos e retorna o id", async () => {
     const insert = makeInsert();
 
-    const result = await createService(validInput, UNIT_ID, { insert, findProducts: makeFindProducts() });
+    const result = await createService(validInput, UNIT_ID, { insert, findProducts: makeFindProducts(), findTreatmentRooms: makeFindTreatmentRooms() });
 
     expect(result).toEqual({ ok: true, serviceId: SERVICE_ID });
     expect(insert).toHaveBeenCalledWith({
@@ -36,6 +36,8 @@ describe("createService", () => {
       priceCents: 35000,
       durationMinutes: 60,
       productIds: [],
+      requiresTherapist: true,
+      treatmentRoomIds: [],
       unitId: UNIT_ID,
     });
   });
@@ -46,7 +48,7 @@ describe("createService", () => {
     await createService(
       { name: "  Massagem Candle  ", price: " 350 ", durationMinutes: " 90 " },
       UNIT_ID,
-      { insert, findProducts: makeFindProducts() },
+      { insert, findProducts: makeFindProducts(), findTreatmentRooms: makeFindTreatmentRooms() },
     );
 
     expect(insert).toHaveBeenCalledWith({
@@ -54,6 +56,8 @@ describe("createService", () => {
       priceCents: 35000,
       durationMinutes: 90,
       productIds: [],
+      requiresTherapist: true,
+      treatmentRoomIds: [],
       unitId: UNIT_ID,
     });
   });
@@ -68,7 +72,7 @@ describe("createService", () => {
   ])("converte o preço %j em %d centavos", async (price, priceCents) => {
     const insert = makeInsert();
 
-    await createService({ ...validInput, price }, UNIT_ID, { insert, findProducts: makeFindProducts() });
+    await createService({ ...validInput, price }, UNIT_ID, { insert, findProducts: makeFindProducts(), findTreatmentRooms: makeFindTreatmentRooms() });
 
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ priceCents }));
   });
@@ -79,13 +83,13 @@ describe("createService", () => {
   ])("aceita duração de %s minuto(s) (limites)", async (durationMinutes, expected) => {
     const insert = makeInsert();
 
-    await createService({ ...validInput, durationMinutes }, UNIT_ID, { insert, findProducts: makeFindProducts() });
+    await createService({ ...validInput, durationMinutes }, UNIT_ID, { insert, findProducts: makeFindProducts(), findTreatmentRooms: makeFindTreatmentRooms() });
 
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ durationMinutes: expected }));
   });
 
   it("aceita nome com exatamente 80 caracteres", async () => {
-    const result = await createService({ ...validInput, name: "a".repeat(80) }, UNIT_ID, { insert: makeInsert(), findProducts: makeFindProducts() });
+    const result = await createService({ ...validInput, name: "a".repeat(80) }, UNIT_ID, { insert: makeInsert(), findProducts: makeFindProducts(), findTreatmentRooms: makeFindTreatmentRooms() });
 
     expect(result).toEqual({ ok: true, serviceId: SERVICE_ID });
   });
@@ -114,7 +118,7 @@ describe("createService", () => {
   ])("retorna erro sem salvar quando %s", async (_label, input, error) => {
     const insert = makeInsert();
 
-    const result = await createService(input, UNIT_ID, { insert, findProducts: makeFindProducts() });
+    const result = await createService(input, UNIT_ID, { insert, findProducts: makeFindProducts(), findTreatmentRooms: makeFindTreatmentRooms() });
 
     expect(result).toEqual({ ok: false, error });
     expect(insert).not.toHaveBeenCalled();
@@ -125,7 +129,7 @@ describe("createService", () => {
     async (unitId) => {
       const insert = makeInsert();
 
-      const result = await createService(validInput, unitId, { insert, findProducts: makeFindProducts() });
+      const result = await createService(validInput, unitId, { insert, findProducts: makeFindProducts(), findTreatmentRooms: makeFindTreatmentRooms() });
 
       expect(result).toEqual({ ok: false, error: "unit_not_found" });
       expect(insert).not.toHaveBeenCalled();
@@ -141,7 +145,7 @@ describe("createService com produtos padrão", () => {
     const result = await createService(
       { ...validInput, productIds: [TOWEL_ID, OIL_ID, TOWEL_ID] },
       UNIT_ID,
-      { insert, findProducts },
+      { insert, findProducts, findTreatmentRooms: makeFindTreatmentRooms() },
     );
 
     expect(result).toEqual({ ok: true, serviceId: SERVICE_ID });
@@ -156,10 +160,95 @@ describe("createService com produtos padrão", () => {
   ])("retorna erro sem salvar quando há %s", async (_label, input, error) => {
     const insert = vi.fn().mockResolvedValue({ id: SERVICE_ID });
 
-    const result = await createService(input, UNIT_ID, { insert, findProducts: makeFindProducts() });
+    const result = await createService(input, UNIT_ID, { insert, findProducts: makeFindProducts(), findTreatmentRooms: makeFindTreatmentRooms() });
 
     expect(result).toEqual({ ok: false, error });
     expect(insert).not.toHaveBeenCalled();
+  });
+});
+
+// Espaços da unidade em que o serviço pode ser feito; lista vazia aceita qualquer um.
+const TUB_ID = "64b7f0c2a1b2c3d4e5f60783";
+const SINGLE_ID = "64b7f0c2a1b2c3d4e5f60781";
+const OTHER_UNIT_ROOM_ID = "64b7f0c2a1b2c3d4e5f60789";
+
+// Devolve só os espaços que existem na unidade.
+function makeFindTreatmentRooms() {
+  return vi.fn(async (ids: string[]) => [TUB_ID, SINGLE_ID].filter((id) => ids.includes(id)).map((id) => ({ id })));
+}
+
+describe("createService com profissional e espaços", () => {
+  function makeDeps() {
+    return {
+      insert: vi.fn().mockResolvedValue({ id: SERVICE_ID }),
+      findProducts: makeFindProducts(),
+      findTreatmentRooms: makeFindTreatmentRooms(),
+    };
+  }
+
+  it("por padrão exige profissional e aceita qualquer espaço, sem buscar espaços", async () => {
+    const deps = makeDeps();
+
+    await createService(validInput, UNIT_ID, deps);
+
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ requiresTherapist: true, treatmentRoomIds: [] }));
+    expect(deps.findTreatmentRooms).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["true", true],
+    ["false", false],
+  ])("lê requiresTherapist %j do formulário", async (requiresTherapist, expected) => {
+    const deps = makeDeps();
+
+    await createService({ ...validInput, requiresTherapist }, UNIT_ID, deps);
+
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ requiresTherapist: expected }));
+  });
+
+  it("salva os espaços escolhidos da unidade, sem repetição e na ordem escolhida", async () => {
+    const deps = makeDeps();
+
+    const result = await createService(
+      { ...validInput, requiresTherapist: "false", treatmentRoomIds: [` ${TUB_ID} `, SINGLE_ID, TUB_ID] },
+      UNIT_ID,
+      deps,
+    );
+
+    expect(result).toEqual({ ok: true, serviceId: SERVICE_ID });
+    expect(deps.findTreatmentRooms).toHaveBeenCalledWith([TUB_ID, SINGLE_ID]);
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ treatmentRoomIds: [TUB_ID, SINGLE_ID] }));
+  });
+
+  it.each([
+    ["requiresTherapist inválido", { ...validInput, requiresTherapist: "sim" }, "invalid_input"],
+    ["requiresTherapist que não é texto", { ...validInput, requiresTherapist: true }, "invalid_input"],
+    ["espaços que não são lista", { ...validInput, treatmentRoomIds: TUB_ID }, "invalid_input"],
+    ["espaço vazio", { ...validInput, treatmentRoomIds: ["  "] }, "invalid_input"],
+    ["espaço de outra unidade", { ...validInput, treatmentRoomIds: [TUB_ID, OTHER_UNIT_ROOM_ID] }, "treatment_room_not_found"],
+  ])("retorna erro sem salvar quando há %s", async (_label, input, error) => {
+    const deps = makeDeps();
+
+    const result = await createService(input, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("ao editar, troca profissional e espaços pelos escolhidos", async () => {
+    const update = vi.fn().mockResolvedValue(true);
+
+    const result = await updateService(
+      { ...validInput, requiresTherapist: "false", treatmentRoomIds: [TUB_ID] },
+      SERVICE_ID,
+      { update, findProducts: makeFindProducts(), findTreatmentRooms: makeFindTreatmentRooms() },
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(update).toHaveBeenCalledWith(
+      SERVICE_ID,
+      expect.objectContaining({ requiresTherapist: false, treatmentRoomIds: [TUB_ID] }),
+    );
   });
 });
 
@@ -174,7 +263,7 @@ describe("updateService", () => {
     const result = await updateService(
       { name: "  Massagem Candle  ", price: "380.90", durationMinutes: "75" },
       SERVICE_ID,
-      { update, findProducts: makeFindProducts() },
+      { update, findProducts: makeFindProducts(), findTreatmentRooms: makeFindTreatmentRooms() },
     );
 
     expect(result).toEqual({ ok: true });
@@ -183,6 +272,8 @@ describe("updateService", () => {
       priceCents: 38090,
       durationMinutes: 75,
       productIds: [],
+      requiresTherapist: true,
+      treatmentRoomIds: [],
     });
   });
 
@@ -193,6 +284,7 @@ describe("updateService", () => {
     await updateService({ ...validInput, productIds: [OIL_ID] }, SERVICE_ID, {
       update,
       findProducts: makeFindProducts(),
+      findTreatmentRooms: makeFindTreatmentRooms(),
     });
 
     expect(update).toHaveBeenCalledWith(SERVICE_ID, expect.objectContaining({ productIds: [OIL_ID] }));
@@ -208,7 +300,7 @@ describe("updateService", () => {
   ])("retorna erro sem salvar quando %s", async (_label, input, error) => {
     const update = makeUpdate();
 
-    const result = await updateService(input, SERVICE_ID, { update, findProducts: makeFindProducts() });
+    const result = await updateService(input, SERVICE_ID, { update, findProducts: makeFindProducts(), findTreatmentRooms: makeFindTreatmentRooms() });
 
     expect(result).toEqual({ ok: false, error });
     expect(update).not.toHaveBeenCalled();
@@ -219,7 +311,7 @@ describe("updateService", () => {
     async (serviceId) => {
       const update = makeUpdate();
 
-      const result = await updateService(validInput, serviceId, { update, findProducts: makeFindProducts() });
+      const result = await updateService(validInput, serviceId, { update, findProducts: makeFindProducts(), findTreatmentRooms: makeFindTreatmentRooms() });
 
       expect(result).toEqual({ ok: false, error: "service_not_found" });
       expect(update).not.toHaveBeenCalled();
@@ -227,7 +319,7 @@ describe("updateService", () => {
   );
 
   it("retorna service_not_found quando o serviço não existe (ou não é da unidade)", async () => {
-    const result = await updateService(validInput, SERVICE_ID, { update: makeUpdate(false), findProducts: makeFindProducts() });
+    const result = await updateService(validInput, SERVICE_ID, { update: makeUpdate(false), findProducts: makeFindProducts(), findTreatmentRooms: makeFindTreatmentRooms() });
 
     expect(result).toEqual({ ok: false, error: "service_not_found" });
   });

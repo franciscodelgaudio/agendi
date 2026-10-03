@@ -6,7 +6,8 @@ const BOOKING_ID = "64b7f0c2a1b2c3d4e5f60740";
 const CANDLE_ID = "64b7f0c2a1b2c3d4e5f60731";
 const ANA_ID = "64b7f0c2a1b2c3d4e5f60751";
 
-const CANDLE = { id: CANDLE_ID, name: "Massagem Candle" };
+// treatmentRoomIds vazio: o serviço pode usar qualquer espaço da unidade.
+const CANDLE = { id: CANDLE_ID, name: "Massagem Candle", requiresTherapist: true, treatmentRoomIds: [] as string[] };
 const ANA = { id: ANA_ID, name: "Ana" };
 const OIL_ID = "64b7f0c2a1b2c3d4e5f60761";
 const TOWEL_ID = "64b7f0c2a1b2c3d4e5f60762";
@@ -20,6 +21,11 @@ const SINGLE_ID = "64b7f0c2a1b2c3d4e5f60781";
 const COUPLE_ID = "64b7f0c2a1b2c3d4e5f60782";
 const SINGLE = { id: SINGLE_ID, name: "Sala Single", beds: 1 };
 const COUPLE = { id: COUPLE_ID, name: "Sala Casal", beds: 2 };
+// Hidromassagem: serviço sem profissional que só pode usar o espaço da banheira (2 pessoas).
+const HYDRO_ID = "64b7f0c2a1b2c3d4e5f60733";
+const TUB_ID = "64b7f0c2a1b2c3d4e5f60783";
+const HYDRO = { id: HYDRO_ID, name: "Hidromassagem", requiresTherapist: false, treatmentRoomIds: [TUB_ID] };
+const TUB = { id: TUB_ID, name: "Banheira", beds: 2 };
 
 // Como chega do FormData: início no horário de Brasília e duração em minutos (texto).
 const validInput = {
@@ -166,7 +172,6 @@ describe("createBooking", () => {
     ["serviço não é string", { ...validInput, serviceId: 123 }, "invalid_input"],
     ["serviço ausente (null do FormData)", { ...validInput, serviceId: null }, "invalid_input"],
     ["sala ausente (null do FormData)", { ...validInput, treatmentRoomId: null }, "invalid_input"],
-    ["profissional não escolhido", { ...validInput, therapistId: "  " }, "invalid_therapist"],
     ["serviço vazio", { ...validInput, serviceId: "" }, "invalid_service"],
     ["serviço não escolhido", { ...validInput, serviceId: "   " }, "invalid_service"],
     ["sala não escolhida", { ...validInput, treatmentRoomId: "  " }, "invalid_treatment_room"],
@@ -457,7 +462,6 @@ describe("updateBooking", () => {
 
   it.each([
     ["input nulo", null, "invalid_input"],
-    ["profissional não escolhido", { ...validInput, therapistId: "" }, "invalid_therapist"],
     ["serviço não escolhido", { ...validInput, serviceId: "" }, "invalid_service"],
     ["sala não escolhida", { ...validInput, treatmentRoomId: "" }, "invalid_treatment_room"],
     ["nome do hóspede vazio", { ...validInput, guestName: "   " }, "invalid_guest_name"],
@@ -676,5 +680,149 @@ describe("deleteBooking", () => {
     const result = await deleteBooking(BOOKING_ID, vi.fn().mockResolvedValue(false));
 
     expect(result).toEqual({ ok: false, error: "booking_not_found" });
+  });
+});
+
+// O profissional só é obrigatório quando o serviço exige (ex.: hidromassagem não tem quem atenda).
+describe("agendamento de serviço sem profissional", () => {
+  const hydroInput = { ...validInput, therapistId: "", serviceId: HYDRO_ID, treatmentRoomId: TUB_ID };
+
+  function makeDeps(options?: Parameters<typeof makeLookups>[0]) {
+    return {
+      ...makeLookups({ service: HYDRO, room: TUB, ...options }),
+      insert: vi.fn().mockResolvedValue({ id: BOOKING_ID }),
+      update: vi.fn().mockResolvedValue(true),
+    };
+  }
+
+  it("cria o agendamento sem profissional e sem checar conflito de profissional", async () => {
+    const deps = makeDeps();
+
+    const result = await createBooking(hydroInput, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: true, bookingId: BOOKING_ID });
+    expect(deps.insert).toHaveBeenCalledWith({
+      unitId: UNIT_ID,
+      therapistId: null,
+      therapistName: null,
+      guest: { name: "João Silva", room: "204" },
+      startsAt: new Date("2026-09-24T17:30:00.000Z"),
+      endsAt: new Date("2026-09-24T18:30:00.000Z"),
+      service: { serviceId: HYDRO_ID, serviceName: "Hidromassagem" },
+      treatmentRoom: { roomId: TUB_ID, roomName: "Banheira" },
+      products: [],
+      color: null,
+    });
+    expect(deps.findTherapist).not.toHaveBeenCalled();
+    expect(deps.hasConflict).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, null])("aceita o profissional ausente do formulário (%j)", async (therapistId) => {
+    const deps = makeDeps();
+
+    const result = await createBooking({ ...hydroInput, therapistId }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: true, bookingId: BOOKING_ID });
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ therapistId: null, therapistName: null }));
+  });
+
+  it("descarta o profissional informado quando o serviço não usa profissional", async () => {
+    const deps = makeDeps();
+
+    await createBooking({ ...hydroInput, therapistId: ANA_ID }, UNIT_ID, deps);
+
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ therapistId: null, therapistName: null }));
+    expect(deps.findTherapist).not.toHaveBeenCalled();
+    expect(deps.hasConflict).not.toHaveBeenCalled();
+  });
+
+  it("continua checando a capacidade do espaço", async () => {
+    const full = [
+      { startsAt: at("14:00"), endsAt: at("15:00") },
+      { startsAt: at("14:30"), endsAt: at("15:30") },
+    ];
+    const deps = makeDeps({ roomBookings: full });
+
+    const result = await createBooking(hydroInput, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "room_full" });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("ao editar, troca para o serviço sem profissional e limpa o profissional", async () => {
+    const deps = makeDeps();
+
+    const result = await updateBooking({ ...hydroInput, therapistId: ANA_ID }, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.update).toHaveBeenCalledWith(
+      BOOKING_ID,
+      expect.objectContaining({ therapistId: null, therapistName: null, service: { serviceId: HYDRO_ID, serviceName: "Hidromassagem" } }),
+    );
+  });
+
+  it.each(["", "  ", null, undefined])(
+    "retorna invalid_therapist sem salvar quando o serviço exige profissional e ele não vem (%j)",
+    async (therapistId) => {
+      const deps = makeDeps({ service: CANDLE, room: SINGLE });
+
+      const created = await createBooking({ ...validInput, therapistId }, UNIT_ID, deps);
+      const updated = await updateBooking({ ...validInput, therapistId }, BOOKING_ID, deps);
+
+      expect(created).toEqual({ ok: false, error: "invalid_therapist" });
+      expect(updated).toEqual({ ok: false, error: "invalid_therapist" });
+      expect(deps.findTherapist).not.toHaveBeenCalled();
+      expect(deps.hasConflict).not.toHaveBeenCalled();
+      expect(deps.insert).not.toHaveBeenCalled();
+      expect(deps.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it("ao arrastar no calendário, não checa conflito de profissional quando o agendamento não tem", async () => {
+    const deps = {
+      findBooking: vi.fn().mockResolvedValue({ therapistId: null, treatmentRoom: { roomId: TUB_ID, beds: 2 } }),
+      hasConflict: vi.fn().mockResolvedValue(true),
+      findRoomBookings: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue(true),
+    };
+
+    const result = await rescheduleBooking({ startsAt: "2026-09-24T15:00", endsAt: "2026-09-24T16:00" }, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.hasConflict).not.toHaveBeenCalled();
+    expect(deps.findRoomBookings).toHaveBeenCalled();
+  });
+});
+
+// Serviço com espaços definidos só pode ser marcado num deles; lista vazia aceita qualquer espaço.
+describe("espaços permitidos do serviço", () => {
+  function makeDeps(options?: Parameters<typeof makeLookups>[0]) {
+    return { ...makeLookups(options), insert: vi.fn().mockResolvedValue({ id: BOOKING_ID }) };
+  }
+
+  it("retorna treatment_room_not_allowed sem checar ocupação nem salvar quando o espaço não é do serviço", async () => {
+    const deps = makeDeps({ service: HYDRO, room: SINGLE });
+
+    const result = await createBooking({ ...validInput, serviceId: HYDRO_ID, therapistId: "" }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "treatment_room_not_allowed" });
+    expect(deps.findRoomBookings).not.toHaveBeenCalled();
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("aceita qualquer espaço da unidade quando o serviço não define nenhum", async () => {
+    const deps = makeDeps({ room: COUPLE });
+
+    const result = await createBooking({ ...validInput, treatmentRoomId: COUPLE_ID }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: true, bookingId: BOOKING_ID });
+  });
+
+  it("aceita o espaço quando ele está entre os do serviço", async () => {
+    const deps = makeDeps({ service: { ...CANDLE, treatmentRoomIds: [SINGLE_ID, COUPLE_ID] }, room: COUPLE });
+
+    const result = await createBooking({ ...validInput, treatmentRoomId: COUPLE_ID }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: true, bookingId: BOOKING_ID });
   });
 });

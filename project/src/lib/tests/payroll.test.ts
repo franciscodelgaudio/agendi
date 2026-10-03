@@ -467,10 +467,24 @@ describe("recordPayrollPayment", () => {
     expect(deps.save).toHaveBeenCalledWith(MEMBER_ID, expect.objectContaining({ salaryCents: 0, commissionCents: 12_000 }));
   });
 
-  it("role com permissão de gerenciar a equipe registra o pagamento", async () => {
+  it("role com permissão de gerenciar o caixa registra o pagamento", async () => {
     const deps = makeDeps();
 
-    expect(await recordPayrollPayment(INPUT, MEMBER_ID, { actor: actorWith("team.manage") }, deps)).toEqual({ ok: true });
+    expect(await recordPayrollPayment(INPUT, MEMBER_ID, { actor: actorWith("cash_flow.manage") }, deps)).toEqual({ ok: true });
+  });
+
+  it.each(["", "  ", null, undefined])("sem dia do pagamento (%j) grava um ajuste ainda pendente", async (paidOn) => {
+    const deps = makeDeps();
+
+    const result = await recordPayrollPayment({ ...INPUT, paidOn }, MEMBER_ID, { actor: ADMIN }, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.save).toHaveBeenCalledWith(MEMBER_ID, {
+      month: "2026-09",
+      paidOn: null,
+      salaryCents: 300_000,
+      commissionCents: 45_050,
+    });
   });
 
   it("salário e comissão zerados → invalid_amount", async () => {
@@ -500,7 +514,7 @@ describe("recordPayrollPayment", () => {
     expect(deps.save).not.toHaveBeenCalled();
   });
 
-  it.each(["2026-02-30", "05/10/2026", "", null])("dia do pagamento %j → invalid_date", async (paidOn) => {
+  it.each(["2026-02-30", "05/10/2026", 20261005])("dia do pagamento %j → invalid_date", async (paidOn) => {
     const deps = makeDeps();
 
     const result = await recordPayrollPayment({ ...INPUT, paidOn }, MEMBER_ID, { actor: ADMIN }, deps);
@@ -521,7 +535,7 @@ describe("recordPayrollPayment", () => {
 
   it.each([
     ["role sem permissões", STAFF],
-    ["role que só gerencia o caixa", actorWith("cash_flow.manage")],
+    ["role que só gerencia a equipe", actorWith("team.manage")],
   ] as const)("%s não registra pagamentos → forbidden", async (_label, actor) => {
     const deps = makeDeps();
 
@@ -574,10 +588,19 @@ describe("removePayrollPayment", () => {
     expect(deps.remove).not.toHaveBeenCalled();
   });
 
-  it("role sem permissão de gerenciar a equipe não desfaz pagamento", async () => {
+  it("role com permissão de gerenciar o caixa desfaz o pagamento", async () => {
     const deps = makeDeps();
 
-    expect(await removePayrollPayment("2026-09", MEMBER_ID, { actor: STAFF }, deps)).toEqual({
+    expect(await removePayrollPayment("2026-09", MEMBER_ID, { actor: actorWith("cash_flow.manage") }, deps)).toEqual({ ok: true });
+  });
+
+  it.each([
+    ["role sem permissões", STAFF],
+    ["role que só gerencia a equipe", actorWith("team.manage")],
+  ] as const)("%s não desfaz pagamento → forbidden", async (_label, actor) => {
+    const deps = makeDeps();
+
+    expect(await removePayrollPayment("2026-09", MEMBER_ID, { actor }, deps)).toEqual({
       ok: false,
       error: "forbidden",
     });

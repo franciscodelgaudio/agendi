@@ -201,7 +201,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
         start: booking.startsAt,
         end: booking.endsAt,
         // A cor escolhida no agendamento vale mais que a do profissional.
-        color: booking.color ?? colors.get(booking.therapistId) ?? "#64748b",
+        color: booking.color ?? (booking.therapistId && colors.get(booking.therapistId)) ?? "#64748b",
         // Já atendido: fica no calendário como histórico, esmaecido e sem arrastar.
         ...(booking.appointmentId && { editable: false, className: "opacity-55" }),
         extendedProps: { booking },
@@ -271,7 +271,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
         event.setDates(new Date(`${times.startsAt}:00Z`), new Date(`${times.endsAt}:00Z`))
         event.setExtendedProp("booking", withTimes(event.extendedProps.booking, times))
       },
-      // Arraste recusado (sala, profissional ou horário ocupado): o evento volta e o motivo aparece num toast.
+      // Arraste recusado (espaço lotado, profissional ou horário ocupado): o evento volta e o motivo aparece num toast.
       onError: (message) => {
         setError((current) => (current === RETRY_MESSAGE ? null : current))
         toast.error(message)
@@ -326,7 +326,9 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
   }
 
   // Nos eventos, o avatar vem da lista de profissionais; quem saiu do workspace fica com a exclamação.
+  // Serviço sem profissional não tem avatar.
   const therapistAvatar = (booking: BookingRow, className: string) => {
+    if (!booking.therapistId) return null
     const option = therapistsById.get(booking.therapistId)
     return option ? (
       <TherapistAvatar therapist={option} className={className} />
@@ -489,7 +491,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
                     </div>
                     <div className="w-full truncate opacity-85 @max-[8rem]:hidden">
                       {booking.service.serviceName}
-                      <span className="@max-[12rem]:hidden"> · {booking.therapistName}</span>
+                      {booking.therapistName && <span className="@max-[12rem]:hidden"> · {booking.therapistName}</span>}
                     </div>
                   </div>
                 </div>
@@ -699,8 +701,8 @@ function DoneSummary({ workspaceId, booking }: { workspaceId: string; booking: B
           {booking.guest.name} · Quarto {booking.guest.room}
         </dd>
         <dt className="text-muted-foreground">Profissional</dt>
-        <dd>{booking.therapistName}</dd>
-        <dt className="text-muted-foreground">Sala</dt>
+        <dd>{booking.therapistName ?? "Sem profissional"}</dd>
+        <dt className="text-muted-foreground">Espaço</dt>
         <dd>{booking.treatmentRoom.roomName}</dd>
         <dt className="text-muted-foreground">Horário</dt>
         <dd className="first-letter:uppercase">

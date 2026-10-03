@@ -8,9 +8,13 @@ const RELAX_ID = "64b7f0c2a1b2c3d4e5f60732";
 const ANA_ID = "64b7f0c2a1b2c3d4e5f60751";
 const BIA_ID = "64b7f0c2a1b2c3d4e5f60752";
 
+const HYDRO_ID = "64b7f0c2a1b2c3d4e5f60733";
+
+// A hidromassagem não tem profissional (e, portanto, não gera comissão).
 const SERVICES = [
-  { id: CANDLE_ID, name: "Massagem Candle", priceCents: 35000, durationMinutes: 60 },
-  { id: RELAX_ID, name: "Massagem Relaxante", priceCents: 28000, durationMinutes: 50 },
+  { id: CANDLE_ID, name: "Massagem Candle", priceCents: 35000, durationMinutes: 60, requiresTherapist: true },
+  { id: RELAX_ID, name: "Massagem Relaxante", priceCents: 28000, durationMinutes: 50, requiresTherapist: true },
+  { id: HYDRO_ID, name: "Hidromassagem", priceCents: 15000, durationMinutes: 30, requiresTherapist: false },
 ];
 const THERAPISTS = [
   { id: ANA_ID, name: "Ana" },
@@ -223,7 +227,6 @@ describe("createAppointment", () => {
     ],
     ["serviço sem profissional (listas de tamanhos diferentes)", { ...validInput, therapistIds: [] }, "invalid_item"],
     ["serviço não escolhido", { ...validInput, serviceIds: [""] }, "invalid_item"],
-    ["profissional não escolhido", { ...validInput, therapistIds: ["  "] }, "invalid_item"],
   ])("retorna erro sem buscar nem salvar quando %s", async (_label, input, error) => {
     const deps = makeDeps();
 
@@ -466,4 +469,230 @@ describe("deleteAppointment", () => {
 
     expect(result).toEqual({ ok: false, error: "appointment_not_found" });
   });
+});
+
+// Desconto no total do atendimento, em % ou R$, rateado entre os serviços proporcionalmente ao
+// valor: priceCents de cada item passa a ser o valor cobrado, então fluxo de caixa, comissão e
+// repasse já saem sobre o valor com desconto.
+describe("desconto no atendimento", () => {
+  // Candle (R$ 350) + Relaxante (R$ 280) = R$ 630.
+  const twoServices = { ...validInput, serviceIds: [CANDLE_ID, RELAX_ID], therapistIds: [ANA_ID, BIA_ID] };
+
+  function insertedPrices(deps: ReturnType<typeof makeDeps>) {
+    return deps.insert.mock.calls[0][0].items.map((item: { priceCents: number }) => item.priceCents);
+  }
+
+  it("sem tipo de desconto, não aplica desconto e ignora o motivo", async () => {
+    const deps = makeDeps();
+
+    await createAppointment({ ...twoServices, discountType: "", discountValue: "", discountReason: "x" }, UNIT_ID, deps);
+
+    expect(deps.insert.mock.calls[0][0].discount).toBeUndefined();
+    expect(insertedPrices(deps)).toEqual([35000, 28000]);
+  });
+
+  it("aplica desconto percentual rateado entre os serviços e guarda o motivo", async () => {
+    const deps = makeDeps();
+
+    const result = await createAppointment(
+      { ...twoServices, discountType: "percent", discountValue: " 10 ", discountReason: "  Cliente fiel  " },
+      UNIT_ID,
+      deps,
+    );
+
+    expect(result).toEqual({ ok: true, appointmentId: APPOINTMENT_ID });
+    expect(deps.insert.mock.calls[0][0].discount).toEqual({
+      type: "percent",
+      percent: 10,
+      cents: 6300,
+      reason: "Cliente fiel",
+    });
+    expect(insertedPrices(deps)).toEqual([31500, 25200]);
+  });
+
+  it("arredonda o desconto percentual para o centavo mais próximo e aceita até 2 casas", async () => {
+    const deps = makeDeps();
+
+    // 33,33% de R$ 350,00 = R$ 116,655 -> R$ 116,66.
+    await createAppointment({ ...validInput, discountType: "percent", discountValue: "33.33" }, UNIT_ID, deps);
+
+    expect(deps.insert.mock.calls[0][0].discount).toEqual({ type: "percent", percent: 33.33, cents: 11666, reason: "" });
+    expect(insertedPrices(deps)).toEqual([23334]);
+  });
+
+  it("aplica desconto em valor, distribuindo os centavos que sobram pelo maior resto", async () => {
+    const deps = makeDeps();
+
+    // R$ 100 sobre R$ 630: 5555,55 e 4444,44 -> o centavo que sobra vai para o primeiro.
+    await createAppointment({ ...twoServices, discountType: "amount", discountValue: "100" }, UNIT_ID, deps);
+
+    expect(deps.insert.mock.calls[0][0].discount).toEqual({ type: "amount", cents: 10000, reason: "" });
+    expect(insertedPrices(deps)).toEqual([35000 - 5556, 28000 - 4444]);
+  });
+
+  it("aceita desconto de 100% e desconto em valor igual ao total (cortesia)", async () => {
+    const percentDeps = makeDeps();
+    const amountDeps = makeDeps();
+
+    await createAppointment({ ...twoServices, discountType: "percent", discountValue: "100" }, UNIT_ID, percentDeps);
+    await createAppointment({ ...twoServices, discountType: "amount", discountValue: "630.00" }, UNIT_ID, amountDeps);
+
+    expect(insertedPrices(percentDeps)).toEqual([0, 0]);
+    expect(insertedPrices(amountDeps)).toEqual([0, 0]);
+  });
+
+  it("aceita motivo com 120 caracteres (limite)", async () => {
+    const result = await createAppointment(
+      { ...validInput, discountType: "amount", discountValue: "10", discountReason: "a".repeat(120) },
+      UNIT_ID,
+      makeDeps(),
+    );
+
+    expect(result).toEqual({ ok: true, appointmentId: APPOINTMENT_ID });
+  });
+
+  it.each([
+    ["discountType não é string", { discountType: 1, discountValue: "10" }, "invalid_input"],
+    ["discountValue não é string", { discountType: "percent", discountValue: 10 }, "invalid_input"],
+    ["discountReason não é string", { discountType: "percent", discountValue: "10", discountReason: 1 }, "invalid_input"],
+    ["tipo desconhecido", { discountType: "brinde", discountValue: "10" }, "invalid_discount"],
+    ["valor vazio", { discountType: "percent", discountValue: " " }, "invalid_discount"],
+    ["percentual zero", { discountType: "percent", discountValue: "0" }, "invalid_discount"],
+    ["percentual acima de 100", { discountType: "percent", discountValue: "100.01" }, "invalid_discount"],
+    ["percentual com 3 casas", { discountType: "percent", discountValue: "10.555" }, "invalid_discount"],
+    ["percentual negativo", { discountType: "percent", discountValue: "-10" }, "invalid_discount"],
+    ["valor zero", { discountType: "amount", discountValue: "0" }, "invalid_discount"],
+    ["valor não numérico", { discountType: "amount", discountValue: "dez" }, "invalid_discount"],
+    ["motivo com mais de 120 caracteres", { discountType: "amount", discountValue: "10", discountReason: "a".repeat(121) }, "discount_reason_too_long"],
+  ])("retorna erro sem buscar nem salvar quando %s", async (_label, discount, error) => {
+    const deps = makeDeps();
+
+    const result = await createAppointment({ ...validInput, ...discount }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error });
+    expect(deps.findServices).not.toHaveBeenCalled();
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("retorna discount_exceeds_total sem salvar quando o valor passa do total dos serviços", async () => {
+    const deps = makeDeps();
+
+    const result = await createAppointment(
+      { ...twoServices, discountType: "amount", discountValue: "630.01" },
+      UNIT_ID,
+      deps,
+    );
+
+    expect(result).toEqual({ ok: false, error: "discount_exceeds_total" });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("recalcula o desconto sobre os valores atuais dos serviços ao editar", async () => {
+    const update = vi.fn().mockResolvedValue(true);
+    const { insert: _insert, ...lookups } = makeDeps();
+
+    const result = await updateAppointment(
+      { ...twoServices, discountType: "percent", discountValue: "50", discountReason: "Cortesia parcial" },
+      APPOINTMENT_ID,
+      { ...lookups, update },
+    );
+
+    expect(result).toEqual({ ok: true });
+    const fields = update.mock.calls[0][1];
+    expect(fields.discount).toEqual({ type: "percent", percent: 50, cents: 31500, reason: "Cortesia parcial" });
+    expect(fields.items.map((item: { priceCents: number }) => item.priceCents)).toEqual([17500, 14000]);
+  });
+});
+
+// O profissional de cada item só é obrigatório quando o serviço exige.
+describe("atendimento com serviço sem profissional", () => {
+  function makeUpdateDeps() {
+    return { ...makeDeps(), update: vi.fn().mockResolvedValue(true) };
+  }
+
+  it("registra o item sem profissional e não busca profissionais quando nenhum item precisa", async () => {
+    const deps = makeDeps();
+
+    const result = await createAppointment(
+      { ...validInput, serviceIds: [HYDRO_ID], therapistIds: [""] },
+      UNIT_ID,
+      deps,
+    );
+
+    expect(result).toEqual({ ok: true, appointmentId: APPOINTMENT_ID });
+    expect(deps.insert.mock.calls[0][0].items).toEqual([
+      {
+        serviceId: HYDRO_ID,
+        serviceName: "Hidromassagem",
+        priceCents: 15000,
+        durationMinutes: 30,
+        therapistId: null,
+        therapistName: null,
+      },
+    ]);
+    expect(deps.findTherapists).not.toHaveBeenCalled();
+  });
+
+  it("mistura itens com e sem profissional, buscando só os profissionais necessários", async () => {
+    const deps = makeDeps();
+
+    await createAppointment(
+      { ...validInput, serviceIds: [CANDLE_ID, HYDRO_ID], therapistIds: [ANA_ID, ""] },
+      UNIT_ID,
+      deps,
+    );
+
+    expect(deps.findTherapists).toHaveBeenCalledWith([ANA_ID]);
+    expect(deps.insert.mock.calls[0][0].items.map((item: { therapistId: string | null; therapistName: string | null }) => [item.therapistId, item.therapistName])).toEqual([
+      [ANA_ID, "Ana"],
+      [null, null],
+    ]);
+  });
+
+  it("descarta o profissional informado num serviço que não usa profissional", async () => {
+    const deps = makeDeps();
+
+    await createAppointment(
+      { ...validInput, serviceIds: [HYDRO_ID], therapistIds: [BIA_ID] },
+      UNIT_ID,
+      deps,
+    );
+
+    expect(deps.findTherapists).not.toHaveBeenCalled();
+    expect(deps.insert.mock.calls[0][0].items[0]).toEqual(expect.objectContaining({ therapistId: null, therapistName: null }));
+  });
+
+  it("ao editar, aceita o serviço sem profissional", async () => {
+    const deps = makeUpdateDeps();
+
+    const result = await updateAppointment(
+      { ...validInput, serviceIds: [HYDRO_ID], therapistIds: [""] },
+      APPOINTMENT_ID,
+      deps,
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.update.mock.calls[0][1].items[0]).toEqual(expect.objectContaining({ therapistId: null, therapistName: null }));
+  });
+
+  it.each(["", "  "])(
+    "retorna invalid_item sem buscar profissionais nem salvar quando o serviço exige profissional e ele não vem (%j)",
+    async (therapistId) => {
+      const deps = makeDeps();
+      const updateDeps = makeUpdateDeps();
+
+      const created = await createAppointment(
+        { ...validInput, serviceIds: [HYDRO_ID, CANDLE_ID], therapistIds: ["", therapistId] },
+        UNIT_ID,
+        deps,
+      );
+      const updated = await updateAppointment({ ...validInput, therapistIds: [therapistId] }, APPOINTMENT_ID, updateDeps);
+
+      expect(created).toEqual({ ok: false, error: "invalid_item" });
+      expect(updated).toEqual({ ok: false, error: "invalid_item" });
+      expect(deps.findTherapists).not.toHaveBeenCalled();
+      expect(deps.insert).not.toHaveBeenCalled();
+      expect(updateDeps.update).not.toHaveBeenCalled();
+    },
+  );
 });

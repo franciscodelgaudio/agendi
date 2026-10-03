@@ -173,7 +173,7 @@ const start: Tour = {
       action: "form",
       expect: "booking-event",
       title: "Dados do agendamento",
-      body: "Escolha o profissional, a sala e o serviço e informe o hóspede. Depois clique em Agendar.",
+      body: "Escolha o profissional, o espaço e o serviço e informe o hóspede. Depois clique em Agendar.",
       show: managesUnitPage("calendar", "bookings.manage"),
     },
     {

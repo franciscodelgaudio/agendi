@@ -52,8 +52,8 @@ export function workspaceSection(ctx: WorkspaceContext) {
       "Unidades",
       ctx.units,
       (u) =>
-        `- ${u.name} (id=${u.id}), funciona ${u.opensAt}–${u.closesAt}; salas: ${
-          u.rooms.map((r) => `${r.name} (id=${r.id}, ${r.beds} maca${r.beds > 1 ? "s" : ""})`).join(", ") || "nenhuma"
+        `- ${u.name} (id=${u.id}), funciona ${u.opensAt}–${u.closesAt}; espaços: ${
+          u.rooms.map((r) => `${r.name} (id=${r.id}, ${r.beds} por vez)`).join(", ") || "nenhum"
         }`,
     ),
     list(

@@ -40,6 +40,9 @@ const errorMessages: Record<
   invalid_duration: "A duração de cada serviço deve ser entre 5 minutos e 12 horas.",
   service_not_found: "Algum serviço não foi encontrado nesta unidade. Recarregue a página.",
   therapist_not_found: "Algum profissional escolhido não pode atender neste workspace. Recarregue a página.",
+  invalid_discount: "O desconto deve ser um percentual entre 0,01% e 100% ou um valor maior que zero.",
+  discount_reason_too_long: "O motivo do desconto pode ter no máximo 120 caracteres.",
+  discount_exceeds_total: "O desconto não pode ser maior que o total dos serviços.",
   unit_not_found: "Escolha uma unidade válida deste workspace.",
   too_many_products: "Escolha no máximo 20 produtos.",
   product_not_found: "Algum produto não foi encontrado nesta unidade. Recarregue a página.",
@@ -71,6 +74,10 @@ function appointmentInput(formData: FormData) {
     // Sem o campo, vale a duração do cadastro de cada serviço.
     durations: formData.has("durationMinutes") ? formData.getAll("durationMinutes") : undefined,
     productIds: formData.getAll("productId"),
+    // Tipo vazio (ou sem o campo) = sem desconto.
+    discountType: formData.get("discountType") ?? undefined,
+    discountValue: formData.get("discountValue") ?? undefined,
+    discountReason: formData.get("discountReason") ?? undefined,
   }
 }
 
@@ -79,13 +86,15 @@ function appointmentLookups(unit: { workspaceId: string; unitId: string }) {
   return {
     findServices: async (ids: string[]) => {
       const services = await Service.find({ _id: { $in: objectIds(ids) }, unitId: unit.unitId })
-        .select({ name: 1, priceCents: 1, durationMinutes: 1 })
+        .select({ name: 1, priceCents: 1, durationMinutes: 1, requiresTherapist: 1 })
         .lean()
-      return services.map(({ _id, name, priceCents, durationMinutes }) => ({
+      // Serviço cadastrado antes do campo exige profissional.
+      return services.map(({ _id, name, priceCents, durationMinutes, requiresTherapist }) => ({
         id: _id.toString(),
         name,
         priceCents,
         durationMinutes,
+        requiresTherapist: requiresTherapist ?? true,
       }))
     },
     findTherapists: (ids: string[]) => findWorkspaceTherapists(unit.workspaceId, ids),
@@ -140,7 +149,7 @@ export async function updateAppointmentAction(
     {
       ...appointmentLookups(unit),
       update: async (id, fields) => {
-        const { matchedCount } = await Appointment.updateOne({ _id: id, unitId: unit.unitId }, { $set: fields })
+        const { matchedCount } = await Appointment.updateOne({ _id: id, unitId: unit.unitId }, { $set: { ...fields, discount: fields.discount ?? null } })
         return matchedCount > 0
       },
     },
@@ -186,7 +195,7 @@ export async function updateWorkspaceAppointmentAction(
         const workspaceUnitIds = await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id")
         const { matchedCount } = await Appointment.updateOne(
           { _id: id, unitId: { $in: workspaceUnitIds } },
-          { $set: { ...fields, unitId: unit.unitId } },
+          { $set: { ...fields, discount: fields.discount ?? null, unitId: unit.unitId } },
         )
         return matchedCount > 0
       },
@@ -260,7 +269,7 @@ export async function registerBookingAction(workspaceId: string, bookingId: stri
     startsAt: booking.startsAt,
     endsAt: booking.endsAt,
     service: { serviceId: booking.service.serviceId.toString() },
-    therapistId: booking.therapistId.toString(),
+    therapistId: booking.therapistId?.toString() ?? null,
     products: booking.products.map((product) => ({ productId: product.productId.toString() })),
   })
   return convertBookingInUnit(input, bookingId, access.unit, userId)

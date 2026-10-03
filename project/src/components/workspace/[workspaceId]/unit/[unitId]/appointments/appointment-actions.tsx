@@ -35,8 +35,9 @@ type Appointment = {
   unitId: string
   performedAt: Date
   guest: { name: string; room: string }
-  items: { serviceId: string; therapistId: string; durationMinutes: number }[]
+  items: { serviceId: string; therapistId: string | null; durationMinutes: number }[]
   productIds: string[]
+  discount: { type: "percent" | "amount"; percent?: number; cents: number; reason: string } | null
 }
 
 // Com units (visão do workspace), a edição permite trocar a unidade.
@@ -98,6 +99,14 @@ export function AppointmentActions({ workspaceId, appointment, ...options }: Pro
                 durationMinutes,
               })),
               productIds: appointment.productIds,
+              discount: appointment.discount && {
+                type: appointment.discount.type,
+                value:
+                  appointment.discount.type === "percent"
+                    ? String(appointment.discount.percent)
+                    : (appointment.discount.cents / 100).toFixed(2),
+                reason: appointment.discount.reason,
+              },
             }}
             action={(prev, formData) =>
               options.units

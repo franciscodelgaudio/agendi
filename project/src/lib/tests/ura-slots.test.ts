@@ -122,4 +122,22 @@ describe("availableSlots", () => {
     expect(availableSlots({ ...base, therapists: [], rooms: [SALA_1] })).toEqual([]);
     expect(availableSlots({ ...base, therapists: [ANA], rooms: [] })).toEqual([]);
   });
+
+  // Serviço sem profissional (ex.: hidromassagem): só o espaço precisa estar livre.
+  it("sem profissional, oferece os horários com espaço livre, sem profissional no horário", () => {
+    const slots = availableSlots({
+      from: FROM,
+      days: 1,
+      durationMinutes: 60,
+      businessHours: hours,
+      therapists: [],
+      requiresTherapist: false,
+      rooms: [SALA_1],
+      bookings: [anaBooked],
+    });
+
+    expect(slots).toEqual([
+      { startsAt: new Date("2026-09-28T14:00:00.000Z"), therapistId: null, therapistName: null, roomId: SALA_1.id, roomName: SALA_1.name },
+    ]);
+  });
 });
