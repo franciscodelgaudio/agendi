@@ -43,7 +43,7 @@ export default async function AppointmentsPage({
   const { workspaceId, unitId } = await params
   const now = new Date()
   // A unidade vem da rota, não da URL.
-  const query = { ...parseAppointmentListQuery(await searchParams), unit: "" }
+  const query = { ...parseAppointmentListQuery(await searchParams, now), unit: "" }
   const user = await requireUser()
   await requirePage(workspaceId, user.id, { unit: "appointments", unitId })
   const access = workspaceAccessStages(workspaceId, user.id)
@@ -124,16 +124,19 @@ export default async function AppointmentsPage({
 
   const pathname = `/workspace/${workspaceId}/unit/${unitId}/appointments`
   // Filtros mudam sem levar a página junto, então a lista volta para a primeira.
-  const { page, ...filters } = query
+  const { page, ...parsed } = query
+  // Hora atual de Brasília.
+  const defaultPerformedAt = new Date(now.getTime() - BRT_OFFSET_HOURS * 60 * 60 * 1000).toISOString().slice(0, 16)
+  // O padrão (hoje) fica fora dos links, para que a lista acompanhe a virada do dia.
+  const today = defaultPerformedAt.slice(0, 10)
+  const isToday = !parsed.period && parsed.from === today && parsed.to === today
+  const filters = isToday ? { ...parsed, from: "", to: "" } : parsed
   // Página além da última (ex.: depois de excluir o último atendimento dela) vai para a última.
   const pages = Math.ceil(result.total / APPOINTMENT_PAGE_SIZE)
   if (pages > 0 && page > pages) {
     const params = new URLSearchParams(Object.entries({ ...filters, page: pages > 1 ? String(pages) : "" }).filter(([, v]) => v))
     redirect(`${pathname}?${params}`)
   }
-  // Hora atual de Brasília.
-  const defaultPerformedAt = new Date(now.getTime() - BRT_OFFSET_HOURS * 60 * 60 * 1000).toISOString().slice(0, 16)
-
   // O proprietário sempre está entre quem pode atender, então basta haver serviço.
   const createButton = canManage && services.length > 0 && (
     <CreateAppointmentSheet
@@ -183,7 +186,7 @@ export default async function AppointmentsPage({
           <div className="flex flex-wrap items-center gap-2">
             <ListSearch query={filters} placeholder="Buscar hóspede, quarto, profissional ou serviço..." />
             <TherapistFilter query={filters} therapists={therapists} />
-            <PeriodFilter query={filters} />
+            <PeriodFilter query={filters} today={today} />
             <ListTotals items={[{ label: "Total", cents: result.totalCents }]} />
           </div>
           <AppointmentTable

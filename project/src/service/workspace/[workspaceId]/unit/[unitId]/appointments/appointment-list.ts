@@ -12,6 +12,7 @@ export const APPOINTMENT_PAGE_SIZE = 20;
 
 export type AppointmentSortField = keyof typeof SORT_PATHS;
 // from/to: dias de Brasília, ambos incluídos; vazios = sem limite. unit/therapist vazios = todos.
+// period "all": todo o período, escolhido de propósito (sem datas na URL, o padrão é hoje).
 export type AppointmentListQuery = {
   q: string;
   sort: AppointmentSortField;
@@ -20,6 +21,7 @@ export type AppointmentListQuery = {
   therapist: string;
   from: string;
   to: string;
+  period: "" | "all";
   page: number;
 };
 
@@ -41,17 +43,25 @@ function dayStart(value: string) {
   return new Date(Date.UTC(year, month - 1, day, BRT_OFFSET_HOURS));
 }
 
-export function parseAppointmentListQuery(params: SearchParams): AppointmentListQuery {
+// Sem period=all nem datas válidas, mostra o dia de hoje em Brasília.
+export function parseAppointmentListQuery(params: SearchParams, now = new Date()): AppointmentListQuery {
   const sort = first(params.sort);
   const page = first(params.page);
+  const all = first(params.period) === "all";
+  let from = all ? "" : dayOrEmpty(first(params.from));
+  let to = all ? "" : dayOrEmpty(first(params.to));
+  if (!all && !from && !to) {
+    from = to = new Date(now.getTime() - BRT_OFFSET_HOURS * 60 * 60 * 1000).toISOString().slice(0, 10);
+  }
   return {
     q: first(params.q)?.trim() ?? "",
     sort: isSortField(sort) ? sort : "performedAt",
     dir: first(params.dir) === "asc" ? "asc" : "desc",
     unit: objectIdOrEmpty(first(params.unit)),
     therapist: objectIdOrEmpty(first(params.therapist)),
-    from: dayOrEmpty(first(params.from)),
-    to: dayOrEmpty(first(params.to)),
+    from,
+    to,
+    period: all ? "all" : "",
     page: page && /^[1-9]\d*$/.test(page) ? Number(page) : 1,
   };
 }
@@ -61,7 +71,7 @@ export type AppointmentPage<Row> = { rows: Row[]; total: number; totalCents: num
 
 // Etapas para o $lookup de appointments a partir das unidades; os filtros só estreitam o
 // resultado, a restrição ao workspace/unidade vem do $lookup. Termina num único AppointmentPage.
-export function appointmentSearchPipeline({ q, sort, dir, unit, therapist, from, to, page }: AppointmentListQuery) {
+export function appointmentSearchPipeline({ q, sort, dir, unit, therapist, from, to, page }: Omit<AppointmentListQuery, "period">) {
   const match: Record<string, unknown> = {};
   if (from || to) {
     const performedAt: Record<string, Date> = {};

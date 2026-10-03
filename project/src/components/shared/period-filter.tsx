@@ -32,18 +32,26 @@ function label(from: string, to: string) {
 type Props = {
   // from/to vazios = sem limite; os demais campos da query são preservados na URL.
   query: { from: string; to: string } & Record<string, string>
+  // Com today, o padrão (from/to vazios) é o dia de hoje e "todo o período" vai como period=all.
+  today?: string
 }
 
 // Intervalo de dias (ambos incluídos) escolhido num Calendar de intervalo.
-export function PeriodFilter({ query }: Props) {
+export function PeriodFilter({ query, today }: Props) {
   const replaceQuery = useReplaceQuery()
   const [open, setOpen] = useState(false)
 
-  function apply(from: string, to: string) {
-    replaceQuery({ ...query, from, to })
+  function apply(from: string, to: string, period = "") {
+    replaceQuery(today ? { ...query, from, to, period } : { ...query, from, to })
   }
 
-  const selected = query.from ? { from: toDate(query.from), to: query.to ? toDate(query.to) : undefined } : undefined
+  const all = !!today && query.period === "all"
+  const isDefault = !!today && !all && !query.from && !query.to
+  // Sem datas na URL, o padrão (hoje) aparece no botão e no calendário.
+  const from = isDefault ? today : query.from
+  const to = isDefault ? today : query.to
+  const selected = from ? { from: toDate(from), to: to ? toDate(to) : undefined } : undefined
+  const text = all ? "Todo o período" : from === today && to === today ? "Hoje" : label(from, to)
 
   return (
     <div className="flex w-full items-center gap-1 sm:w-auto">
@@ -58,9 +66,33 @@ export function PeriodFilter({ query }: Props) {
           }
         >
           <CalendarIcon />
-          {label(query.from, query.to)}
+          {text}
         </PopoverTrigger>
         <PopoverContent className="w-auto overflow-hidden p-0" align="start">
+          {today && (
+            <div className="flex gap-1 border-b p-2">
+              <Button
+                variant={isDefault || (from === today && to === today) ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => {
+                  apply("", "")
+                  setOpen(false)
+                }}
+              >
+                Hoje
+              </Button>
+              <Button
+                variant={all ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => {
+                  apply("", "", "all")
+                  setOpen(false)
+                }}
+              >
+                Todo o período
+              </Button>
+            </div>
+          )}
           <Calendar
             mode="range"
             locale={ptBR}
@@ -75,8 +107,13 @@ export function PeriodFilter({ query }: Props) {
           />
         </PopoverContent>
       </Popover>
-      {(query.from || query.to) && (
-        <Button variant="ghost" size="icon-sm" aria-label="Limpar período" onClick={() => apply("", "")}>
+      {(today ? !isDefault : query.from || query.to) && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={today ? "Voltar para hoje" : "Limpar período"}
+          onClick={() => apply("", "")}
+        >
           <XIcon />
         </Button>
       )}

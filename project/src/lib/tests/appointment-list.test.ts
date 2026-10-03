@@ -10,17 +10,43 @@ const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const ANA_ID = "64b7f0c2a1b2c3d4e5f60751";
 
 describe("parseAppointmentListQuery", () => {
-  it("sem parâmetros, não tem busca nem filtros e ordena pelos mais recentes primeiro", () => {
-    expect(parseAppointmentListQuery({})).toEqual({
+  // 02:00 UTC de 3/out é 23:00 de 2/out em Brasília: hoje é 2/out.
+  const NOW = new Date("2026-10-03T02:00:00Z");
+  const TODAY = { from: "2026-10-02", to: "2026-10-02", period: "" };
+
+  it("sem parâmetros, não tem busca nem filtros, mostra o dia de hoje (Brasília) e ordena pelos mais recentes primeiro", () => {
+    expect(parseAppointmentListQuery({}, NOW)).toEqual({
       q: "",
       sort: "performedAt",
       dir: "desc",
       unit: "",
       therapist: "",
-      from: "",
-      to: "",
+      ...TODAY,
       page: 1,
     });
+  });
+
+  it("com period=all, mostra todo o período, sem limite de datas", () => {
+    expect(parseAppointmentListQuery({ period: "all" }, NOW)).toEqual(
+      expect.objectContaining({ from: "", to: "", period: "all" }),
+    );
+  });
+
+  it("com period=all, ignora início e fim da URL", () => {
+    expect(parseAppointmentListQuery({ period: "all", from: "2026-09-01", to: "2026-09-30" }, NOW)).toEqual(
+      expect.objectContaining({ from: "", to: "", period: "all" }),
+    );
+  });
+
+  it("volta para o dia de hoje quando period tem outro valor", () => {
+    expect(parseAppointmentListQuery({ period: "week" }, NOW)).toEqual(expect.objectContaining(TODAY));
+  });
+
+  it.each([
+    ["só o início", { from: "2026-09-01" }, { from: "2026-09-01", to: "" }],
+    ["só o fim", { to: "2026-09-30" }, { from: "", to: "2026-09-30" }],
+  ])("com %s, mantém a outra ponta sem limite", (_label, params, expected) => {
+    expect(parseAppointmentListQuery(params, NOW)).toEqual(expect.objectContaining({ ...expected, period: "" }));
   });
 
   it("lê busca, ordenação, direção e filtros válidos", () => {
@@ -34,7 +60,7 @@ describe("parseAppointmentListQuery", () => {
         from: "2026-09-01",
         to: "2026-09-30",
         page: "3",
-      }),
+      }, NOW),
     ).toEqual({
       q: "joão",
       sort: "totalCents",
@@ -43,6 +69,7 @@ describe("parseAppointmentListQuery", () => {
       therapist: ANA_ID,
       from: "2026-09-01",
       to: "2026-09-30",
+      period: "",
       page: 3,
     });
   });
@@ -70,7 +97,7 @@ describe("parseAppointmentListQuery", () => {
         from: ["2026-09-01", "2026-08-01"],
         to: ["2026-09-30", "2026-08-31"],
         page: ["3", "5"],
-      }),
+      }, NOW),
     ).toEqual({
       q: "a",
       sort: "guestName",
@@ -79,6 +106,7 @@ describe("parseAppointmentListQuery", () => {
       therapist: ANA_ID,
       from: "2026-09-01",
       to: "2026-09-30",
+      period: "",
       page: 3,
     });
   });
@@ -87,10 +115,8 @@ describe("parseAppointmentListQuery", () => {
     ["formato errado", "24/09/2026"],
     ["dia que não existe", "2026-02-30"],
     ["com hora", "2026-09-20T10:00"],
-  ])("ignora o período quando a data tem %s", (_label, date) => {
-    expect(parseAppointmentListQuery({ from: date, to: date })).toEqual(
-      expect.objectContaining({ from: "", to: "" }),
-    );
+  ])("volta para o dia de hoje quando a data tem %s", (_label, date) => {
+    expect(parseAppointmentListQuery({ from: date, to: date }, NOW)).toEqual(expect.objectContaining(TODAY));
   });
 
   it.each([
