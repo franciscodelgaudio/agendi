@@ -56,8 +56,8 @@ export function parseAppointmentListQuery(params: SearchParams): AppointmentList
   };
 }
 
-// Uma página da lista e a quantidade de tudo que passou pela busca e pelos filtros.
-export type AppointmentPage<Row> = { rows: Row[]; total: number };
+// Uma página da lista, a quantidade de tudo que passou pela busca e pelos filtros e a soma dos totais.
+export type AppointmentPage<Row> = { rows: Row[]; total: number; totalCents: number };
 
 // Etapas para o $lookup de appointments a partir das unidades; os filtros só estreitam o
 // resultado, a restrição ao workspace/unidade vem do $lookup. Termina num único AppointmentPage.
@@ -123,13 +123,14 @@ export function appointmentSearchPipeline({ q, sort, dir, unit, therapist, from,
             },
           },
         ],
-        summary: [{ $count: "n" }],
+        summary: [{ $group: { _id: null, n: { $sum: 1 }, totalCents: { $sum: "$totalCents" } } }],
       },
     },
     {
       $project: {
         rows: 1,
         total: { $ifNull: [{ $first: "$summary.n" }, 0] },
+        totalCents: { $ifNull: [{ $first: "$summary.totalCents" }, 0] },
       },
     },
   );

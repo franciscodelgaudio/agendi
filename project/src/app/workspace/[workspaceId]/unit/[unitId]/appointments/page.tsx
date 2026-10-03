@@ -18,6 +18,7 @@ import { AppointmentTable, type AppointmentRow } from "@/components/workspace/[w
 import { CreateAppointmentSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/appointments/create-appointment-sheet"
 import { ListPagination } from "@/components/shared/list-pagination"
 import { ListSearch } from "@/components/shared/list-search"
+import { ListTotals } from "@/components/shared/list-totals"
 import { PeriodFilter } from "@/components/shared/period-filter"
 import { TherapistFilter } from "@/components/workspace/[workspaceId]/shared/team/therapist-filter"
 import { Button } from "@/components/ui/button"
@@ -183,6 +184,7 @@ export default async function AppointmentsPage({
             <ListSearch query={filters} placeholder="Buscar hóspede, quarto, profissional ou serviço..." />
             <TherapistFilter query={filters} therapists={therapists} />
             <PeriodFilter query={filters} />
+            <ListTotals items={[{ label: "Total", cents: result.totalCents }]} />
           </div>
           <AppointmentTable
             appointments={result.rows}
