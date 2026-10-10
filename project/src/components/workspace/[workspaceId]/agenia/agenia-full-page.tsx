@@ -24,7 +24,7 @@ export function AgeniaFullPage() {
   const { session } = agenia
 
   return (
-    <div className="flex h-svh min-h-0">
+    <div className="flex h-app-screen min-h-0">
       <aside className={cn("w-full min-w-0 flex-col border-r md:flex md:w-80 md:shrink-0", showList ? "flex" : "hidden")}>
         <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
           <h2 className="font-semibold">AgenIA</h2>

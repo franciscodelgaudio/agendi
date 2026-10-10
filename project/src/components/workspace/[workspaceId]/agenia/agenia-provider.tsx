@@ -46,7 +46,7 @@ export function AgeniaProvider({ workspaceId, enabled, children }: { workspaceId
             data-tour="agenia-button"
             render={
               <Button
-                className="fixed right-5 bottom-5 z-30 size-14 rounded-full shadow-lg motion-safe:animate-agenia-breathe"
+                className="fixed right-5 bottom-[calc(var(--bottom-nav-height)+1.25rem)] z-30 size-14 rounded-full shadow-lg motion-safe:animate-agenia-breathe"
                 aria-label={open ? "Fechar AgenIA" : "Abrir AgenIA"}
               />
             }
@@ -56,7 +56,7 @@ export function AgeniaProvider({ workspaceId, enabled, children }: { workspaceId
           </Popover.Trigger>
           <Popover.Portal>
             <Popover.Positioner side="top" align="end" sideOffset={14} collisionPadding={16} className="isolate z-50">
-              <Popover.Popup className="flex h-[min(38rem,calc(100svh-7rem))] w-[min(26rem,calc(100vw-2rem))] origin-(--transform-origin) flex-col rounded-2xl bg-background shadow-xl ring-1 ring-foreground/10 outline-hidden transition duration-200 data-ending-style:translate-y-2 data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:translate-y-2 data-starting-style:scale-95 data-starting-style:opacity-0">
+              <Popover.Popup className="flex h-[min(38rem,calc(100svh-7rem-var(--bottom-nav-height)))] w-[min(26rem,calc(100vw-2rem))] origin-(--transform-origin) flex-col rounded-2xl bg-background shadow-xl ring-1 ring-foreground/10 outline-hidden transition duration-200 data-ending-style:translate-y-2 data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:translate-y-2 data-starting-style:scale-95 data-starting-style:opacity-0">
                 <Popover.Title className="sr-only">AgenIA</Popover.Title>
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl">
                   <AgeniaChat

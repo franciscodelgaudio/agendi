@@ -32,6 +32,11 @@ import { useAgenia } from "@/components/workspace/[workspaceId]/agenia/agenia-pr
 // tour: marca do item para o tutorial destacá-lo.
 type NavItem = { title: string; href: string; icon: LucideIcon; tour: string }
 
+// Itens com subpáginas (ex.: a lista do calendário) seguem ativos nelas; o Início só na própria página.
+export function isNavItemActive(pathname: string, href: string, base: string) {
+  return pathname === href || (href !== base && pathname.startsWith(`${href}/`))
+}
+
 // pages: páginas do sistema liberadas para a role do usuário; Conversas, Canais, URAs e
 // Custos de IA seguem as permissões dela (actor). Tickets é de todos.
 export function NavMain({ workspaceId, pages, actor }: { workspaceId: string; pages: WorkspacePage[]; actor: Actor }) {
@@ -87,8 +92,7 @@ export function NavMain({ workspaceId, pages, actor }: { workspaceId: string; pa
             <SidebarMenuButton
               data-tour={item.tour}
               tooltip={item.title}
-              // Itens com subpáginas (ex.: a lista do calendário) seguem ativos nelas.
-              isActive={pathname === item.href || (item.href !== base && pathname.startsWith(`${item.href}/`))}
+              isActive={isNavItemActive(pathname, item.href, base)}
               render={<Link href={item.href} />}
             >
               <item.icon />

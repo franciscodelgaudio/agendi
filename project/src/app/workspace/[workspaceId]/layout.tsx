@@ -3,7 +3,8 @@ import { notFound } from "next/navigation"
 import { AgeniaProvider } from "@/components/workspace/[workspaceId]/agenia/agenia-provider"
 import { NavigationProgressBar, NavigationProgressProvider } from "@/components/shared/navigation-progress"
 import { TourProvider } from "@/components/workspace/[workspaceId]/tour/tour"
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { MobileNav } from "@/components/workspace/[workspaceId]/mobile-nav"
 import { WorkspacePaywall } from "@/components/workspace/[workspaceId]/workspace-paywall"
 import { hasActiveSubscription } from "@/service/subscribe/billing"
 import { visiblePages } from "@/service/workspace/[workspaceId]/page-access"
@@ -56,11 +57,11 @@ export default async function WorkspaceLayout({
           autoStart={!tutorial?.tutorialCompletedAt}
         >
           {sidebar}
-          <SidebarInset>
-            <SidebarTrigger className="fixed bottom-4 left-4 z-20 bg-background shadow-sm md:hidden" />
+          <SidebarInset className="pb-(--bottom-nav-height)">
             <NavigationProgressBar />
             {children}
           </SidebarInset>
+          <MobileNav workspaceId={workspaceId} pages={visiblePages(workspace.actor).workspace} actor={workspace.actor} />
         </TourProvider>
       </SidebarProvider>
       </AgeniaProvider>

@@ -138,6 +138,16 @@
   --sidebar-accent-foreground: oklch(0.3 0.045 177);
   --sidebar-border: oklch(0.91 0.013 82);
   --sidebar-ring: oklch(0.587 0.069 172.5);
+  /* Barra de abas do workspace no celular (mobile-nav.tsx); some a partir do md. */
+  --bottom-nav-height: calc(4rem + env(safe-area-inset-bottom));
+  @media (width >= 48rem) {
+    --bottom-nav-height: 0px;
+  }
+}
+
+/* Altura da tela menos a barra de abas do celular, para as páginas que ocupam a tela inteira. */
+@utility h-app-screen {
+  height: calc(100svh - var(--bottom-nav-height));
 }
 
 .dark {

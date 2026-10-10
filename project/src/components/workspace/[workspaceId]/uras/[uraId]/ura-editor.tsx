@@ -231,7 +231,7 @@ function Editor({ workspaceId, ura, channels, units, users }: Props) {
   }
 
   return (
-    <div className="flex h-svh min-h-0 flex-col">
+    <div className="flex h-app-screen min-h-0 flex-col">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
         <Button variant="ghost" size="icon-sm" aria-label="Voltar para as URAs" nativeButton={false} render={<Link href={`/workspace/${workspaceId}/uras`} />}>
           <ArrowLeftIcon />
