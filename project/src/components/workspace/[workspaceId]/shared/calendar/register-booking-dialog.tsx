@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { TriangleAlertIcon } from "lucide-react"
-import { registerBookingAction } from "@/lib/actions/appointment"
+import { deleteAppointmentAction, registerBookingAction } from "@/lib/actions/appointment"
 import type { BookingRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
 
 import {
@@ -105,6 +105,64 @@ export function RegisterBookingDialog({
           </Button>
           <Button onClick={handleRegister} loading={pending}>
             {pending ? "Registrando..." : "Registrar"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+// Desfaz um registro feito por engano: exclui o atendimento e o agendamento volta a ser editável.
+export function UndoRegisterDialog({
+  workspaceId,
+  booking,
+  open,
+  onOpenChange,
+  onUndone,
+}: {
+  workspaceId: string
+  booking: BookingRow
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onUndone: () => void
+}) {
+  const [error, setError] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
+
+  function handleUndo() {
+    const { appointmentId } = booking
+    if (!appointmentId) return
+    startTransition(async () => {
+      const result = await deleteAppointmentAction(workspaceId, booking.unitId, appointmentId)
+      setError(result.error)
+      if (!result.error) {
+        onOpenChange(false)
+        onUndone()
+      }
+    })
+  }
+
+  return (
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setError(null)
+        onOpenChange(next)
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Desfazer registro?</AlertDialogTitle>
+          <AlertDialogDescription>
+            O atendimento de <strong>{booking.guest.name}</strong> (quarto {booking.guest.room}) será excluído, com
+            os valores e ajustes feitos nele. O agendamento continua no calendário e volta a ser editável.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {error && <FieldError>{error}</FieldError>}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
+          <Button variant="destructive" onClick={handleUndo} loading={pending}>
+            {pending ? "Desfazendo..." : "Desfazer registro"}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

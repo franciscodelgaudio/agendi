@@ -14,8 +14,7 @@ import interactionPlugin from "@fullcalendar/react/interaction"
 import ptBrLocale from "@fullcalendar/react/locales/pt-br"
 import "@fullcalendar/react/skeleton.css"
 import "@fullcalendar/react/themes/monarch/theme.css"
-import Link from "@/components/shared/link"
-import { CheckIcon, PlusIcon, XIcon } from "lucide-react"
+import { CheckIcon, LockIcon, PlusIcon, XIcon } from "lucide-react"
 import { toast } from "sonner"
 import { convertBookingAction } from "@/lib/actions/appointment"
 import {
@@ -25,8 +24,10 @@ import {
   updateBookingAction,
 } from "@/lib/actions/booking"
 import { BOOKING_COLORS } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-colors"
-import type { BookingRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
+import type { BookingRow, TherapistBlockRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
 import { createRescheduleQueue, type RescheduleTimes } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/reschedule-queue"
+import { calendarRange } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/calendar-range"
+import type { BusinessHours } from "@/service/workspace/[workspaceId]/unit/[unitId]/business-hours"
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
 
 import {
@@ -42,11 +43,15 @@ import { Button } from "@/components/ui/button"
 import { FieldError } from "@/components/ui/field"
 import { Popover, PopoverClose, PopoverContent } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { AppointmentForm } from "@/components/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-form"
-import { BookingForm, type BookingFormOptions, type BookingFormValues } from "@/components/workspace/[workspaceId]/shared/calendar/booking-form"
+import { BookingForm, withSavedValues, type BookingFormOptions, type BookingFormValues } from "@/components/workspace/[workspaceId]/shared/calendar/booking-form"
 import { RegisterBookingDialog } from "@/components/workspace/[workspaceId]/shared/calendar/register-booking-dialog"
-import { formatDuration } from "@/components/shared/service-format"
+import { CorrectBookingForm } from "@/components/workspace/[workspaceId]/shared/calendar/correct-booking-form"
+import {
+  TherapistBlockForm,
+  TherapistBlockSummary,
+} from "@/components/workspace/[workspaceId]/shared/calendar/therapist-block-sheet"
 import {
   MissingTherapistIcon,
   TherapistAvatar,
@@ -57,7 +62,9 @@ import {
 export type BookingOptions = Required<BookingFormOptions>
 
 // unitId: calendário de uma unidade (units traz só ela); sem filtro nem escolha de unidade.
-type Props = BookingOptions & {
+// Cada unidade traz o horário de funcionamento, que define a faixa de horas visível.
+type Props = Omit<BookingOptions, "units"> & {
+  units: (BookingOptions["units"][number] & { businessHours: BusinessHours })[]
   workspaceId: string
   canManage: boolean
   unitId?: string
@@ -91,11 +98,13 @@ function brtNow() {
 }
 
 // convert: formulário de atendimento pré-preenchido (o "ajustar antes de registrar");
-// done: resumo do agendamento já atendido.
+// done: correção do agendamento já atendido. block: travar a agenda; blocked: resumo da trava.
 type SheetInput =
   | { mode: "edit"; values: BookingFormValues; booking: BookingRow }
   | { mode: "convert"; booking: BookingRow }
   | { mode: "done"; booking: BookingRow }
+  | { mode: "block" }
+  | { mode: "blocked"; block: TherapistBlockRow }
 
 // key muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
 type SheetState = SheetInput & { key: number }
@@ -148,6 +157,8 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
   // O proprietário sempre está entre os profissionais, então basta haver uma unidade.
   const canCreate = canManage && units.length > 0
   const options = { units: unitId ? undefined : units, therapists, services, treatmentRooms }
+  // Com uma unidade filtrada, o horário dela; sem filtro, o de todas.
+  const range = calendarRange(units.filter((option) => !unit || option.id === unit).map((option) => option.businessHours))
 
   // Cada busca recria os ids internos dos eventos, e ao soltar um arraste o FullCalendar grava
   // a cópia do evento feita no início dele. Uma busca que chegasse no meio deixaria as duas
@@ -180,11 +191,12 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
         Object.entries({ start: toDay(info.start), end: toDay(info.end), unit, therapist }).filter(([, v]) => v),
       )
       let bookings: BookingRow[]
+      let blocks: TherapistBlockRow[]
       for (;;) {
         await whenIdle()
         const seen = changes.current
         const response = await fetch(`/api/workspace/${workspaceId}/bookings?${params}`)
-        const result: { bookings: BookingRow[] } | { error: string } = await response.json()
+        const result: { bookings: BookingRow[]; blocks: TherapistBlockRow[] } | { error: string } = await response.json()
         if ("error" in result) {
           setError(result.error)
           throw new Error(result.error)
@@ -192,20 +204,29 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
         await whenIdle()
         if (changes.current === seen) {
           bookings = result.bookings
+          blocks = result.blocks
           break
         }
       }
-      return bookings.map((booking) => ({
+      // Agenda travada: cinza, listrada e sem arrastar.
+      const blockEvents: EventInput[] = blocks.map((block) => ({
+        id: `block-${block.id}`,
+        start: block.startsAt,
+        end: block.endsAt,
+        editable: false,
+        color: "#94a3b8",
+        className: "bg-[repeating-linear-gradient(45deg,transparent,transparent_6px,rgb(255_255_255/0.25)_6px,rgb(255_255_255/0.25)_12px)]",
+        extendedProps: { block },
+      }))
+      return blockEvents.concat(bookings.map((booking) => ({
         id: booking.id,
         title: `${booking.guest.name} · Quarto ${booking.guest.room}`,
         start: booking.startsAt,
         end: booking.endsAt,
         // A cor escolhida no agendamento vale mais que a do profissional.
         color: booking.color ?? (booking.therapistId && colors.get(booking.therapistId)) ?? "#64748b",
-        // Já atendido: fica no calendário como histórico, esmaecido e sem arrastar.
-        ...(booking.appointmentId && { editable: false, className: "opacity-55" }),
         extendedProps: { booking },
-      }))
+      })))
     },
     // colors deriva de therapists, que só muda com um novo render do servidor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -387,6 +408,12 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
             Novo agendamento
           </Button>
         )}
+        {canCreate && (
+          <Button variant="outline" onClick={() => openSheet({ mode: "block" })}>
+            <LockIcon />
+            Travar agenda
+          </Button>
+        )}
       </div>
 
       {canManage && !canCreate && (
@@ -406,7 +433,9 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
             headerToolbar={{ start: "prev,next today", center: "title", end: "dayGridMonth,timeGridWeek,timeGridDay" }}
             height="auto"
             allDaySlot={false}
-            scrollTime="08:00"
+            slotMinTime={range.start}
+            slotMaxTime={range.end}
+            scrollTime={range.start}
             // Uma faixa por hora, como no Google Agenda; arrastar e selecionar continuam de 30 em 30 min.
             slotDuration="01:00"
             snapDuration="00:30"
@@ -442,6 +471,16 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
             columnEventInnerClass={({ isShort }) => (isShort ? undefined : "h-full")}
             eventContent={({ event, timeText, view, isShort }) => {
               // O evento-espelho da seleção (selectMirror) não tem agendamento associado.
+              const block = event.extendedProps.block as TherapistBlockRow | undefined
+              if (block) {
+                return (
+                  <div className="flex min-w-0 items-center gap-1 overflow-hidden px-1.5 py-1 text-xs leading-snug">
+                    <LockIcon className="size-3 shrink-0" aria-label="Agenda travada" />
+                    <span className="truncate font-semibold">{block.therapistName}</span>
+                    <span className="truncate opacity-85">· {block.reason ?? "Indisponível"}</span>
+                  </div>
+                )
+              }
               const booking = event.extendedProps.booking as BookingRow | undefined
               if (!booking) {
                 return (
@@ -513,6 +552,11 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
             eventDrop={handleChange}
             eventResize={handleChange}
             eventClick={({ event }) => {
+              const block = event.extendedProps.block as TherapistBlockRow | undefined
+              if (block) {
+                setDraft(null)
+                return openSheet({ mode: "blocked", block })
+              }
               if (!canManage) return
               const booking = event.extendedProps.booking as BookingRow | undefined
               if (!booking) return
@@ -583,6 +627,30 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent>
+          {sheet?.mode === "block" && (
+            <TherapistBlockForm
+              key={sheet.key}
+              workspaceId={workspaceId}
+              therapists={therapists}
+              defaultTherapistId={therapist || null}
+              defaultDay={toDay(calendarRef.current?.getApi().getDate() ?? brtNow())}
+              onDone={() => {
+                setSheetOpen(false)
+                refetch()
+              }}
+            />
+          )}
+          {sheet?.mode === "blocked" && (
+            <TherapistBlockSummary
+              workspaceId={workspaceId}
+              block={sheet.block}
+              canManage={canManage}
+              onDone={() => {
+                setSheetOpen(false)
+                refetch()
+              }}
+            />
+          )}
           {sheet?.mode === "edit" && (
             <BookingForm
               key={sheet.key}
@@ -594,9 +662,10 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
                 setSheetOpen(false)
                 refetch()
               }}
-              onConvert={() => {
+              onConvert={(values) => {
                 setSheetOpen(false)
-                setRegister({ open: true, booking: sheet.booking })
+                refetch()
+                setRegister({ open: true, booking: withSavedValues(sheet.booking, values, options) })
               }}
               onDelete={() => setDeleteOpen(true)}
             />
@@ -627,7 +696,22 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
               }}
             />
           )}
-          {sheet?.mode === "done" && <DoneSummary workspaceId={workspaceId} booking={sheet.booking} />}
+          {sheet?.mode === "done" && (
+            <CorrectBookingForm
+              key={sheet.key}
+              {...options}
+              workspaceId={workspaceId}
+              booking={sheet.booking}
+              onDone={() => {
+                setSheetOpen(false)
+                refetch()
+              }}
+              onUndone={() => {
+                setSheetOpen(false)
+                refetch()
+              }}
+            />
+          )}
         </SheetContent>
       </Sheet>
 
@@ -668,63 +752,6 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
           </AlertDialogContent>
         </AlertDialog>
       )}
-    </div>
-  )
-}
-
-// A data do agendamento é um horário de Brasília "de parede", então é formatada em UTC.
-const doneDateFormat = new Intl.DateTimeFormat("pt-BR", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  hour: "2-digit",
-  minute: "2-digit",
-  timeZone: "UTC",
-})
-
-// Agendamento que já virou atendimento: só leitura, com atalho para Atendimentos filtrado pelo dia
-// na unidade do agendamento.
-function DoneSummary({ workspaceId, booking }: { workspaceId: string; booking: BookingRow }) {
-  const date = booking.startsAt.slice(0, 10)
-  return (
-    <div className="flex flex-1 flex-col">
-      <SheetHeader>
-        <SheetTitle>Atendimento registrado</SheetTitle>
-        <SheetDescription>
-          Este agendamento já virou atendimento. Para alterar valores e serviços, edite o atendimento. Se ele for
-          excluído, o agendamento volta a ser editável.
-        </SheetDescription>
-      </SheetHeader>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 px-4 text-sm">
-        <dt className="text-muted-foreground">Hóspede</dt>
-        <dd>
-          {booking.guest.name} · Quarto {booking.guest.room}
-        </dd>
-        <dt className="text-muted-foreground">Profissional</dt>
-        <dd>{booking.therapistName ?? "Sem profissional"}</dd>
-        <dt className="text-muted-foreground">Espaço</dt>
-        <dd>{booking.treatmentRoom.roomName}</dd>
-        <dt className="text-muted-foreground">Horário</dt>
-        <dd className="first-letter:uppercase">
-          {doneDateFormat.format(new Date(`${booking.startsAt}:00Z`))} · {formatDuration(booking.durationMinutes)}
-        </dd>
-        <dt className="text-muted-foreground">Serviço agendado</dt>
-        <dd>{booking.service.serviceName}</dd>
-      </dl>
-      <SheetFooter>
-        <Button
-          nativeButton={false}
-          render={
-            <Link
-              href={
-                `/workspace/${workspaceId}/unit/${booking.unitId}/appointments?${new URLSearchParams({ from: date, to: date })}`
-              }
-            />
-          }
-        >
-          Ver em Atendimentos
-        </Button>
-      </SheetFooter>
     </div>
   )
 }

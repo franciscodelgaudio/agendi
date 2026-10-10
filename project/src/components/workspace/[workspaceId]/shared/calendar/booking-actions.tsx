@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import Link from "@/components/shared/link"
 import { useRouter } from "next/navigation"
-import { ClipboardCheckIcon, CircleCheckIcon, EllipsisIcon, PencilIcon, Trash2Icon } from "lucide-react"
+import { ClipboardCheckIcon, CircleCheckIcon, EllipsisIcon, PencilIcon, Trash2Icon, Undo2Icon } from "lucide-react"
 import { convertBookingAction } from "@/lib/actions/appointment"
 import { deleteBookingAction, updateBookingAction } from "@/lib/actions/booking"
 import type { BookingRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
@@ -28,8 +28,12 @@ import {
 import { FieldError } from "@/components/ui/field"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { AppointmentForm } from "@/components/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-form"
-import { BookingForm, type BookingFormOptions } from "@/components/workspace/[workspaceId]/shared/calendar/booking-form"
-import { RegisterBookingDialog } from "@/components/workspace/[workspaceId]/shared/calendar/register-booking-dialog"
+import { BookingForm, withSavedValues, type BookingFormOptions } from "@/components/workspace/[workspaceId]/shared/calendar/booking-form"
+import {
+  RegisterBookingDialog,
+  UndoRegisterDialog,
+} from "@/components/workspace/[workspaceId]/shared/calendar/register-booking-dialog"
+import { CorrectBookingForm } from "@/components/workspace/[workspaceId]/shared/calendar/correct-booking-form"
 
 // Com units (visão do workspace), a edição permite trocar a unidade.
 type Props = BookingFormOptions & { workspaceId: string; booking: BookingRow }
@@ -37,13 +41,17 @@ type Props = BookingFormOptions & { workspaceId: string; booking: BookingRow }
 // As ações não recarregam a página (o calendário refaz a busca sozinho), então a lista pede o refresh.
 export function BookingActions({ workspaceId, booking, ...options }: Props) {
   const router = useRouter()
-  const [sheet, setSheet] = useState<"edit" | "convert" | null>(null)
+  const [sheet, setSheet] = useState<"edit" | "convert" | "correct" | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [registerOpen, setRegisterOpen] = useState(false)
+  const [undoOpen, setUndoOpen] = useState(false)
+  // Agendamento mostrado na confirmação do registro: após "Registrar atendimento" na edição,
+  // já com o que acabou de ser salvo.
+  const [registering, setRegistering] = useState(booking)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
   const [formKey, setFormKey] = useState(0)
 
-  function openSheet(next: "edit" | "convert") {
+  function openSheet(next: "edit" | "convert" | "correct") {
     setFormKey((k) => k + 1)
     setSheet(next)
   }
@@ -53,7 +61,7 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
     router.refresh()
   }
 
-  // Já atendido: não é mais editável; o atalho leva a Atendimentos filtrado pelo dia.
+  // Já atendido: só horário, hóspede, quarto, espaço e cor se corrigem; o atalho leva a Atendimentos filtrado pelo dia.
   const day = booking.startsAt.slice(0, 10)
   const appointmentsHref = `/workspace/${workspaceId}/unit/${booking.unitId}/appointments?${new URLSearchParams({ from: day, to: day })}`
 
@@ -69,17 +77,32 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           {booking.appointmentId ? (
-            <DropdownMenuItem render={<Link href={appointmentsHref} />}>
-              <CircleCheckIcon />
-              Ver em Atendimentos
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuItem onClick={() => openSheet("correct")}>
+                <PencilIcon />
+                Corrigir agendamento
+              </DropdownMenuItem>
+              <DropdownMenuItem render={<Link href={appointmentsHref} />}>
+                <CircleCheckIcon />
+                Ver em Atendimentos
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setUndoOpen(true)}>
+                <Undo2Icon />
+                Desfazer registro
+              </DropdownMenuItem>
+            </>
           ) : (
             <>
               <DropdownMenuItem onClick={() => openSheet("edit")}>
                 <PencilIcon />
                 Editar
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setRegisterOpen(true)}>
+              <DropdownMenuItem
+                onClick={() => {
+                  setRegistering(booking)
+                  setRegisterOpen(true)
+                }}
+              >
                 <ClipboardCheckIcon />
                 Registrar atendimento
               </DropdownMenuItem>
@@ -95,6 +118,16 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
 
       <Sheet open={sheet !== null} onOpenChange={(next) => !next && setSheet(null)}>
         <SheetContent>
+          {sheet === "correct" && (
+            <CorrectBookingForm
+              key={formKey}
+              {...options}
+              workspaceId={workspaceId}
+              booking={booking}
+              onDone={done}
+              onUndone={done}
+            />
+          )}
           {sheet === "edit" && (
             <BookingForm
               key={formKey}
@@ -114,8 +147,10 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
               }}
               action={(prev, formData) => updateBookingAction(workspaceId, booking.id, prev, formData)}
               onDone={done}
-              onConvert={() => {
+              onConvert={(values) => {
                 setSheet(null)
+                router.refresh()
+                setRegistering(withSavedValues(booking, values, options))
                 setRegisterOpen(true)
               }}
               onDelete={() => setDeleteOpen(true)}
@@ -127,18 +162,18 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
               {...options}
               mode="create"
               defaultValues={{
-                unitId: booking.unitId,
-                guestName: booking.guest.name,
-                room: booking.guest.room,
-                performedAt: booking.startsAt,
+                unitId: registering.unitId,
+                guestName: registering.guest.name,
+                room: registering.guest.room,
+                performedAt: registering.startsAt,
                 items: [
                   {
-                    serviceId: booking.service.serviceId,
-                    therapistId: booking.therapistId,
-                    durationMinutes: booking.durationMinutes,
+                    serviceId: registering.service.serviceId,
+                    therapistId: registering.therapistId,
+                    durationMinutes: registering.durationMinutes,
                   },
                 ],
-                productIds: booking.productIds,
+                productIds: registering.productIds,
               }}
               action={(prev, formData) => convertBookingAction(workspaceId, booking.id, prev, formData)}
               onDone={done}
@@ -149,11 +184,19 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
 
       <RegisterBookingDialog
         workspaceId={workspaceId}
-        booking={booking}
+        booking={registering}
         open={registerOpen}
         onOpenChange={setRegisterOpen}
         onRegistered={done}
         onAdjust={() => openSheet("convert")}
+      />
+
+      <UndoRegisterDialog
+        workspaceId={workspaceId}
+        booking={booking}
+        open={undoOpen}
+        onOpenChange={setUndoOpen}
+        onUndone={() => router.refresh()}
       />
 
       <DeleteBookingDialog

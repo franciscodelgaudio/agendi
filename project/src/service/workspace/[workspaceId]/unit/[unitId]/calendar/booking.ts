@@ -29,11 +29,14 @@ export type BookingError =
   | "service_not_found"
   | "therapist_not_found"
   | "therapist_busy"
+  | "therapist_unavailable"
   | "treatment_room_not_found"
   | "treatment_room_not_allowed"
   | "room_full"
   | "unit_not_found"
   | "booking_not_found"
+  | "booking_registered"
+  | "duration_locked"
   | ProductSelectionError;
 
 // Dados editáveis de um agendamento (tudo menos a unidade). Os nomes do profissional e do
@@ -55,6 +58,7 @@ export type BookingFields = {
 export type BookingData = BookingFields & { unitId: string };
 
 type Interval = { therapistId: string; startsAt: Date; endsAt: Date; excludeId?: string };
+type BlockInterval = { therapistId: string; startsAt: Date; endsAt: Date };
 type RoomInterval = { treatmentRoomId: string; startsAt: Date; endsAt: Date; excludeId?: string };
 type FindRoomBookings = (interval: RoomInterval) => Promise<readonly { startsAt: Date; endsAt: Date }[]>;
 
@@ -67,6 +71,8 @@ type Lookups = {
   findTherapist: (id: string) => Promise<{ id: string; name: string } | null>;
   // true quando o profissional já tem outro agendamento que se sobrepõe ao intervalo.
   hasConflict: (interval: Interval) => Promise<boolean>;
+  // true quando a agenda do profissional está travada em algum momento do intervalo.
+  isBlocked: (interval: BlockInterval) => Promise<boolean>;
   // Sala da unidade; null quando não existe nela.
   findTreatmentRoom: (id: string) => Promise<{ id: string; name: string; beds: number } | null>;
   // Outros agendamentos da sala que se sobrepõem ao intervalo.
@@ -74,7 +80,10 @@ type Lookups = {
   findProducts: FindProducts;
 };
 
-type FieldsError = Exclude<BookingError, "unit_not_found" | "booking_not_found">;
+type FieldsError = Exclude<
+  BookingError,
+  "unit_not_found" | "booking_not_found" | "booking_registered" | "duration_locked"
+>;
 
 function isDurationValid(minutes: number) {
   return minutes >= MIN_DURATION_MINUTES && minutes <= MAX_DURATION_MINUTES;
@@ -85,29 +94,27 @@ async function isRoomFull(interval: RoomInterval, beds: number, findRoomBookings
   return peakOccupancy(await findRoomBookings(interval), interval) >= beds;
 }
 
-// Valida o input do formulário, resolve profissional, serviço e sala e confere conflito
-// de horário do profissional e ocupação da sala, ignorando o próprio agendamento na edição.
-async function resolveBookingFields(
-  input: unknown,
-  { findService, findTherapist, hasConflict, findTreatmentRoom, findRoomBookings, findProducts }: Lookups,
-  excludeId?: string,
-): Promise<{ ok: true; fields: BookingFields } | { ok: false; error: FieldsError }> {
-  const { therapistId, guestName, room, startsAt, durationMinutes, serviceId, treatmentRoomId, productIds, color } =
-    (input ?? {}) as Record<string, unknown>;
+type Schedule = {
+  treatmentRoomId: string;
+  guest: { name: string; room: string };
+  startsAt: Date;
+  endsAt: Date;
+  durationMinutes: number;
+  color: string | null;
+};
+
+// Valida espaço, hóspede, quarto, início, duração e cor do formulário.
+function parseSchedule(input: Record<string, unknown>): { ok: true; schedule: Schedule } | { ok: false; error: FieldsError } {
+  const { guestName, room, startsAt, durationMinutes, treatmentRoomId, color } = input;
   if (
-    (therapistId != null && typeof therapistId !== "string") ||
     typeof guestName !== "string" ||
     typeof room !== "string" ||
     typeof startsAt !== "string" ||
     typeof durationMinutes !== "string" ||
-    typeof serviceId !== "string" ||
     typeof treatmentRoomId !== "string"
   ) {
     return { ok: false, error: "invalid_input" };
   }
-
-  const normalizedServiceId = serviceId.trim();
-  if (!normalizedServiceId) return { ok: false, error: "invalid_service" };
 
   const normalizedRoomId = treatmentRoomId.trim();
   if (!normalizedRoomId) return { ok: false, error: "invalid_treatment_room" };
@@ -125,12 +132,70 @@ async function resolveBookingFields(
 
   const duration = durationMinutes.trim();
   if (!/^\d+$/.test(duration) || !isDurationValid(Number(duration))) return { ok: false, error: "invalid_duration" };
-  const end = new Date(start.getTime() + Number(duration) * MINUTE_MS);
 
   // Sem cor (campo ausente ou vazio) fica null.
   if (color != null && typeof color !== "string") return { ok: false, error: "invalid_color" };
   const normalizedColor = color?.trim() || null;
   if (normalizedColor && !isBookingColor(normalizedColor)) return { ok: false, error: "invalid_color" };
+
+  return {
+    ok: true,
+    schedule: {
+      treatmentRoomId: normalizedRoomId,
+      guest: { name, room: normalizedRoom },
+      startsAt: start,
+      endsAt: new Date(start.getTime() + Number(duration) * MINUTE_MS),
+      durationMinutes: Number(duration),
+      color: normalizedColor,
+    },
+  };
+}
+
+// Confere agenda travada e conflito do profissional (se houver) e ocupação do espaço,
+// ignorando o próprio agendamento na edição.
+async function checkAvailability(
+  {
+    therapistId,
+    room,
+    startsAt,
+    endsAt,
+    excludeId,
+  }: { therapistId: string | null; room: { roomId: string; beds: number }; startsAt: Date; endsAt: Date; excludeId?: string },
+  { hasConflict, isBlocked, findRoomBookings }: Pick<Lookups, "hasConflict" | "isBlocked" | "findRoomBookings">,
+): Promise<"therapist_unavailable" | "therapist_busy" | "room_full" | null> {
+  if (therapistId) {
+    if (await isBlocked({ therapistId, startsAt, endsAt })) return "therapist_unavailable";
+    const interval: Interval = { therapistId, startsAt, endsAt };
+    if (excludeId) interval.excludeId = excludeId;
+    if (await hasConflict(interval)) return "therapist_busy";
+  }
+
+  const roomInterval: RoomInterval = { treatmentRoomId: room.roomId, startsAt, endsAt };
+  if (excludeId) roomInterval.excludeId = excludeId;
+  if (await isRoomFull(roomInterval, room.beds, findRoomBookings)) return "room_full";
+  return null;
+}
+
+// Valida o input do formulário, resolve profissional, serviço e sala e confere agenda travada,
+// conflito de horário do profissional e ocupação da sala, ignorando o próprio agendamento na edição.
+async function resolveBookingFields(
+  input: unknown,
+  { findService, findTherapist, hasConflict, isBlocked, findTreatmentRoom, findRoomBookings, findProducts }: Lookups,
+  excludeId?: string,
+): Promise<{ ok: true; fields: BookingFields } | { ok: false; error: FieldsError }> {
+  const fields = (input ?? {}) as Record<string, unknown>;
+  const { therapistId, serviceId, productIds } = fields;
+  if ((therapistId != null && typeof therapistId !== "string") || typeof serviceId !== "string") {
+    return { ok: false, error: "invalid_input" };
+  }
+  const parsed = parseSchedule(fields);
+  if (!parsed.ok && parsed.error === "invalid_input") return parsed;
+
+  const normalizedServiceId = serviceId.trim();
+  if (!normalizedServiceId) return { ok: false, error: "invalid_service" };
+  if (!parsed.ok) return parsed;
+  const { treatmentRoomId: normalizedRoomId, guest, startsAt: start, endsAt: end, color: normalizedColor } =
+    parsed.schedule;
 
   const [service, treatmentRoom, selection] = await Promise.all([
     findService(normalizedServiceId),
@@ -153,22 +218,24 @@ async function resolveBookingFields(
   }
   if (!selection.ok) return selection;
 
-  if (therapist) {
-    const interval: Interval = { therapistId: therapist.id, startsAt: start, endsAt: end };
-    if (excludeId) interval.excludeId = excludeId;
-    if (await hasConflict(interval)) return { ok: false, error: "therapist_busy" };
-  }
-
-  const roomInterval: RoomInterval = { treatmentRoomId: normalizedRoomId, startsAt: start, endsAt: end };
-  if (excludeId) roomInterval.excludeId = excludeId;
-  if (await isRoomFull(roomInterval, treatmentRoom.beds, findRoomBookings)) return { ok: false, error: "room_full" };
+  const unavailable = await checkAvailability(
+    {
+      therapistId: therapist?.id ?? null,
+      room: { roomId: normalizedRoomId, beds: treatmentRoom.beds },
+      startsAt: start,
+      endsAt: end,
+      excludeId,
+    },
+    { hasConflict, isBlocked, findRoomBookings },
+  );
+  if (unavailable) return { ok: false, error: unavailable };
 
   return {
     ok: true,
     fields: {
       therapistId: therapist?.id ?? null,
       therapistName: therapist?.name ?? null,
-      guest: { name, room: normalizedRoom },
+      guest,
       startsAt: start,
       endsAt: end,
       service: { serviceId: normalizedServiceId, serviceName: service.name },
@@ -197,11 +264,15 @@ export async function createBooking(
 
 export type BookingResult = { ok: true } | { ok: false; error: BookingError };
 
-// update devolve false quando o agendamento não existe (ou não é da unidade).
+// update devolve false quando o agendamento não existe (ou não é da unidade) e "registered"
+// quando ele já virou atendimento (e não foi alterado).
 export async function updateBooking(
   input: unknown,
   bookingId: string | null | undefined,
-  { update, ...lookups }: Lookups & { update: (bookingId: string, fields: BookingFields) => Promise<boolean> },
+  {
+    update,
+    ...lookups
+  }: Lookups & { update: (bookingId: string, fields: BookingFields) => Promise<boolean | "registered"> },
 ): Promise<BookingResult> {
   if (!bookingId) return { ok: false, error: "booking_not_found" };
 
@@ -209,6 +280,76 @@ export async function updateBooking(
   if (!resolved.ok) return resolved;
 
   const found = await update(bookingId, resolved.fields);
+  if (found === "registered") return { ok: false, error: "booking_registered" };
+  return found ? { ok: true } : { ok: false, error: "booking_not_found" };
+}
+
+// Agendamento que já virou atendimento, com o que a correção precisa saber dele.
+type RegisteredBooking = { therapistId: string | null; serviceId: string; durationMinutes: number; serviceCount: number };
+
+// Campos do agendamento corrigíveis depois do registro.
+export type CorrectionFields = Pick<BookingFields, "guest" | "startsAt" | "endsAt" | "treatmentRoom" | "color">;
+
+// O que a correção leva para o atendimento. durationMinutes null: a duração não mudou.
+export type AppointmentSync = {
+  performedAt: Date;
+  guest: { name: string; room: string };
+  durationMinutes: number | null;
+};
+
+// Corrige pelo formulário um agendamento que já virou atendimento: horário, duração, hóspede,
+// quarto, espaço e cor. Serviço, profissional e produtos ficam com o atendimento. Com vários
+// serviços no atendimento, a duração não muda. findBooking devolve null quando o agendamento
+// não existe (ou não é do workspace) ou ainda não virou atendimento; update, false quando ele some.
+export async function correctRegisteredBooking(
+  input: unknown,
+  bookingId: string | null | undefined,
+  {
+    findBooking,
+    findService,
+    findTreatmentRoom,
+    update,
+    ...availability
+  }: Pick<Lookups, "findService" | "findTreatmentRoom" | "hasConflict" | "isBlocked" | "findRoomBookings"> & {
+    findBooking: (bookingId: string) => Promise<RegisteredBooking | null>;
+    update: (bookingId: string, fields: CorrectionFields, appointment: AppointmentSync) => Promise<boolean>;
+  },
+): Promise<BookingResult> {
+  if (!bookingId) return { ok: false, error: "booking_not_found" };
+
+  const parsed = parseSchedule((input ?? {}) as Record<string, unknown>);
+  if (!parsed.ok) return parsed;
+  const { treatmentRoomId, guest, startsAt, endsAt, durationMinutes, color } = parsed.schedule;
+
+  const booking = await findBooking(bookingId);
+  if (!booking) return { ok: false, error: "booking_not_found" };
+  const durationChanged = durationMinutes !== booking.durationMinutes;
+  if (durationChanged && booking.serviceCount > 1) return { ok: false, error: "duration_locked" };
+
+  const [service, treatmentRoom] = await Promise.all([findService(booking.serviceId), findTreatmentRoom(treatmentRoomId)]);
+  if (!treatmentRoom) return { ok: false, error: "treatment_room_not_found" };
+  // Serviço removido da unidade: qualquer espaço dela serve.
+  if (service?.treatmentRoomIds.length && !service.treatmentRoomIds.includes(treatmentRoomId)) {
+    return { ok: false, error: "treatment_room_not_allowed" };
+  }
+
+  const unavailable = await checkAvailability(
+    {
+      therapistId: booking.therapistId,
+      room: { roomId: treatmentRoomId, beds: treatmentRoom.beds },
+      startsAt,
+      endsAt,
+      excludeId: bookingId,
+    },
+    availability,
+  );
+  if (unavailable) return { ok: false, error: unavailable };
+
+  const found = await update(
+    bookingId,
+    { guest, startsAt, endsAt, treatmentRoom: { roomId: treatmentRoomId, roomName: treatmentRoom.name }, color },
+    { performedAt: startsAt, guest, durationMinutes: durationChanged ? durationMinutes : null },
+  );
   return found ? { ok: true } : { ok: false, error: "booking_not_found" };
 }
 
@@ -219,16 +360,26 @@ export async function rescheduleBooking(
   {
     findBooking,
     hasConflict,
+    isBlocked,
     findRoomBookings,
     update,
   }: {
     // treatmentRoom null: a sala foi removida da unidade. therapistId null: serviço sem profissional.
-    findBooking: (
-      bookingId: string,
-    ) => Promise<{ therapistId: string | null; treatmentRoom: { roomId: string; beds: number } | null } | null>;
+    // registered: já virou atendimento, com quantos serviços ele tem e a duração atual do agendamento.
+    findBooking: (bookingId: string) => Promise<{
+      therapistId: string | null;
+      treatmentRoom: { roomId: string; beds: number } | null;
+      registered?: { serviceCount: number; durationMinutes: number };
+    } | null>;
     hasConflict: Lookups["hasConflict"];
+    isBlocked: Lookups["isBlocked"];
     findRoomBookings: FindRoomBookings;
-    update: (bookingId: string, times: { startsAt: Date; endsAt: Date }) => Promise<boolean>;
+    // appointment: o que levar para o atendimento, só quando o agendamento já virou um.
+    update: (
+      bookingId: string,
+      times: { startsAt: Date; endsAt: Date },
+      appointment?: Omit<AppointmentSync, "guest">,
+    ) => Promise<boolean>;
   },
 ): Promise<BookingResult> {
   if (!bookingId) return { ok: false, error: "booking_not_found" };
@@ -239,22 +390,26 @@ export async function rescheduleBooking(
   const start = parsePerformedAt(startsAt.trim());
   if (!start) return { ok: false, error: "invalid_starts_at" };
   const end = parsePerformedAt(endsAt.trim());
-  if (!end || !isDurationValid((end.getTime() - start.getTime()) / MINUTE_MS)) {
-    return { ok: false, error: "invalid_duration" };
-  }
+  const durationMinutes = end ? (end.getTime() - start.getTime()) / MINUTE_MS : 0;
+  if (!end || !isDurationValid(durationMinutes)) return { ok: false, error: "invalid_duration" };
 
   const booking = await findBooking(bookingId);
   if (!booking) return { ok: false, error: "booking_not_found" };
+  const { registered } = booking;
+  const durationChanged = registered && durationMinutes !== registered.durationMinutes;
+  if (durationChanged && registered.serviceCount > 1) return { ok: false, error: "duration_locked" };
   if (!booking.treatmentRoom) return { ok: false, error: "treatment_room_not_found" };
-  const { therapistId } = booking;
-  if (therapistId && (await hasConflict({ therapistId, startsAt: start, endsAt: end, excludeId: bookingId }))) {
-    return { ok: false, error: "therapist_busy" };
-  }
-  const { roomId, beds } = booking.treatmentRoom;
-  const roomInterval = { treatmentRoomId: roomId, startsAt: start, endsAt: end, excludeId: bookingId };
-  if (await isRoomFull(roomInterval, beds, findRoomBookings)) return { ok: false, error: "room_full" };
 
-  const found = await update(bookingId, { startsAt: start, endsAt: end });
+  const unavailable = await checkAvailability(
+    { therapistId: booking.therapistId, room: booking.treatmentRoom, startsAt: start, endsAt: end, excludeId: bookingId },
+    { hasConflict, isBlocked, findRoomBookings },
+  );
+  if (unavailable) return { ok: false, error: unavailable };
+
+  const times = { startsAt: start, endsAt: end };
+  const found = registered
+    ? await update(bookingId, times, { performedAt: start, durationMinutes: durationChanged ? durationMinutes : null })
+    : await update(bookingId, times);
   return found ? { ok: true } : { ok: false, error: "booking_not_found" };
 }
 

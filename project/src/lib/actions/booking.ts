@@ -1,18 +1,21 @@
 "use server"
 
-import { isObjectIdOrHexString } from "mongoose"
+import { isObjectIdOrHexString, type Types } from "mongoose"
 import { forbiddenMessage, type UnitAccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
 import { getSessionUserId } from "@/service/(auth)/session"
-import { bookingLookups, conflictChecker, findUnitTreatmentRoom, roomBookingsFinder } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-store"
+import { blockChecker, bookingLookups, conflictChecker, findUnitTreatmentRoom, roomBookingsFinder } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-store"
 import { findManagedUnit } from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-access"
 import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
 import {
+  correctRegisteredBooking,
   createBooking,
   deleteBooking,
   rescheduleBooking,
   updateBooking,
+  type AppointmentSync,
   type BookingError,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking"
+import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
 import { Unit } from "@/models/Unit"
 
@@ -31,11 +34,14 @@ const errorMessages: Record<BookingError | "workspace_not_found" | "unauthentica
   service_not_found: "O serviço escolhido não é desta unidade. Recarregue a página.",
   therapist_not_found: "O profissional escolhido não pode atender neste workspace. Recarregue a página.",
   therapist_busy: "O profissional já tem um agendamento nesse horário.",
+  therapist_unavailable: "O profissional está indisponível nesse horário (agenda travada).",
   treatment_room_not_found: "O espaço escolhido não é desta unidade. Recarregue a página.",
   treatment_room_not_allowed: "Este serviço não pode ser feito no espaço escolhido.",
   room_full: "O espaço já está lotado nesse horário.",
   unit_not_found: "Escolha uma unidade válida deste workspace.",
   booking_not_found: "Agendamento não encontrado ou sem permissão.",
+  booking_registered: "Este agendamento acabou de virar atendimento. Recarregue a página para corrigi-lo.",
+  duration_locked: "Este atendimento tem mais de um serviço: a duração só pode ser alterada em Atendimentos.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   too_many_products: "Escolha no máximo 20 produtos.",
   product_not_found: "Algum produto não foi encontrado nesta unidade. Recarregue a página.",
@@ -122,7 +128,73 @@ export async function updateBookingAction(
         { _id: id, unitId: { $in: unitIds }, appointmentId: null },
         { $set: { ...fields, unitId: unit.unitId } },
       )
-      return matchedCount > 0
+      if (matchedCount > 0) return true
+      const registered = await Booking.exists({ _id: id, unitId: { $in: unitIds }, appointmentId: { $ne: null } })
+      return registered ? "registered" : false
+    },
+  })
+
+  return { error: result.ok ? null : errorMessages[result.error] }
+}
+
+const MINUTE_MS = 60 * 1000
+
+// Leva a correção do agendamento para o atendimento de onde ele virou. A duração só muda
+// em atendimento de um serviço (o serviço recusa mudar a dos demais).
+async function syncAppointment(
+  appointmentId: Types.ObjectId,
+  { performedAt, guest, durationMinutes }: Omit<AppointmentSync, "guest"> & { guest?: AppointmentSync["guest"] },
+) {
+  await Appointment.updateOne(
+    { _id: appointmentId, ...(durationMinutes != null && { items: { $size: 1 } }) },
+    {
+      $set: {
+        performedAt,
+        ...(guest && { guest }),
+        ...(durationMinutes != null && { "items.0.durationMinutes": durationMinutes }),
+      },
+    },
+  )
+}
+
+// Corrige pelo formulário um agendamento que já virou atendimento; o atendimento acompanha.
+export async function correctBookingAction(
+  workspaceId: string,
+  bookingId: string,
+  _prev: BookingActionState,
+  formData: FormData,
+): Promise<BookingActionState> {
+  const userId = await getSessionUserId()
+  if (!userId) return { error: errorMessages.unauthenticated }
+  if (!isObjectIdOrHexString(bookingId)) return { error: errorMessages.booking_not_found }
+  const booking = await Booking.findOne({ _id: bookingId, appointmentId: { $ne: null } })
+    .select({ unitId: 1, therapistId: 1, service: 1, startsAt: 1, endsAt: 1, appointmentId: 1 })
+    .lean()
+  if (!booking?.appointmentId) return { error: errorMessages.booking_not_found }
+  // A unidade é a do agendamento (e do atendimento) e precisa ser gerenciável.
+  const access = await findManagedUnit(workspaceId, booking.unitId.toString(), userId, "bookings.manage")
+  if (!access.ok) return accessError(access.error)
+  const { unit } = access
+  const unitIds = await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id")
+  const { appointmentId } = booking
+
+  const result = await correctRegisteredBooking(bookingInput(formData), bookingId, {
+    ...bookingLookups(unit, unitIds),
+    findBooking: async () => {
+      const appointment = await Appointment.findById(appointmentId).select({ items: 1 }).lean()
+      if (!appointment) return null
+      return {
+        therapistId: booking.therapistId?.toString() ?? null,
+        serviceId: booking.service.serviceId.toString(),
+        durationMinutes: (booking.endsAt.getTime() - booking.startsAt.getTime()) / MINUTE_MS,
+        serviceCount: appointment.items.length,
+      }
+    },
+    update: async (id, fields, appointment) => {
+      const { matchedCount } = await Booking.updateOne({ _id: id, appointmentId }, { $set: fields })
+      if (matchedCount === 0) return false
+      await syncAppointment(appointmentId, appointment)
+      return true
     },
   })
 
@@ -141,28 +213,43 @@ export async function rescheduleBookingAction(
   if (!managed.ok) return accessError(managed.error)
   const { unitIds } = managed
 
+  // Atendimento de onde o agendamento virou, se virou; a escrita confere que continua o mesmo.
+  let appointmentId: Types.ObjectId | null = null
+
   // A escrita ainda filtra pelas unidades do workspace.
   const result = await rescheduleBooking(times, isObjectIdOrHexString(bookingId) ? bookingId : null, {
     findBooking: async (id) => {
-      // Agendamento que já virou atendimento não pode ser arrastado.
-      const booking = await Booking.findOne({ _id: id, unitId: { $in: unitIds }, appointmentId: null })
-        .select({ therapistId: 1, unitId: 1, treatmentRoom: 1 })
+      const booking = await Booking.findOne({ _id: id, unitId: { $in: unitIds } })
+        .select({ therapistId: 1, unitId: 1, treatmentRoom: 1, startsAt: 1, endsAt: 1, appointmentId: 1 })
         .lean()
       if (!booking) return null
-      const room = await findUnitTreatmentRoom(booking.unitId, booking.treatmentRoom.roomId.toString())
+      const [room, appointment] = await Promise.all([
+        findUnitTreatmentRoom(booking.unitId, booking.treatmentRoom.roomId.toString()),
+        booking.appointmentId && Appointment.findById(booking.appointmentId).select({ items: 1 }).lean(),
+      ])
+      appointmentId = appointment ? booking.appointmentId ?? null : null
       return {
         therapistId: booking.therapistId?.toString() ?? null,
         treatmentRoom: room && { roomId: room.id, beds: room.beds },
+        ...(appointment && {
+          registered: {
+            serviceCount: appointment.items.length,
+            durationMinutes: (booking.endsAt.getTime() - booking.startsAt.getTime()) / MINUTE_MS,
+          },
+        }),
       }
     },
     hasConflict: conflictChecker(unitIds),
+    isBlocked: blockChecker(workspaceId),
     findRoomBookings: roomBookingsFinder(unitIds),
-    update: async (id, fields) => {
+    update: async (id, fields, appointment) => {
       const { matchedCount } = await Booking.updateOne(
-        { _id: id, unitId: { $in: unitIds }, appointmentId: null },
+        { _id: id, unitId: { $in: unitIds }, appointmentId },
         { $set: fields },
       )
-      return matchedCount > 0
+      if (matchedCount === 0) return false
+      if (appointmentId && appointment) await syncAppointment(appointmentId, appointment)
+      return true
     },
   })
 

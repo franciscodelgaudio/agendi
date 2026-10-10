@@ -1,8 +1,9 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useActionState, useState, type ReactNode } from "react"
 import { CheckIcon, ClipboardCheckIcon, UserRoundIcon } from "lucide-react"
 import type { BookingActionState } from "@/lib/actions/booking"
+import type { BookingRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
 import { BOOKING_COLORS } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-colors"
 
 import { Button } from "@/components/ui/button"
@@ -54,15 +55,19 @@ export type BookingFormOptions = {
 }
 
 type Props = BookingFormOptions & {
-  mode: "create" | "edit"
+  // correct: agendamento que já virou atendimento; serviço, profissional, unidade e produtos ficam travados.
+  mode: "create" | "edit" | "correct"
   // popover: dentro do balão do calendário, que usa o título e a descrição do Popover.
   variant?: "sheet" | "popover"
   defaultValues: BookingFormValues
   action: (prev: BookingActionState, formData: FormData) => Promise<BookingActionState>
   onDone: () => void
-  // Só na edição: botões de registrar atendimento e de excluir no rodapé.
-  onConvert?: () => void
+  // Só na edição: botões de registrar atendimento e de excluir no rodapé. Registrar salva
+  // antes, para o atendimento não sair com os dados antigos; onConvert recebe o que foi salvo.
+  onConvert?: (values: BookingFormValues) => void
   onDelete?: () => void
+  // Ações extras no rodapé, depois do botão de salvar.
+  footer?: ReactNode
 }
 
 const copy = {
@@ -76,6 +81,13 @@ const copy = {
     title: "Editar agendamento",
     description: "Altere os dados do agendamento.",
     submit: "Salvar",
+    pending: "Salvando...",
+  },
+  correct: {
+    title: "Corrigir agendamento",
+    description:
+      "Este agendamento já virou atendimento. Horário, hóspede e quarto são corrigidos nele também; serviço, profissional e produtos se alteram em Atendimentos.",
+    submit: "Salvar correção",
     pending: "Salvando...",
   },
 }
@@ -96,6 +108,53 @@ function onlyRoomId(rooms: BookingFormOptions["treatmentRooms"], unitId: string 
   return options.length === 1 ? options[0].id : null
 }
 
+// Valores enviados pelo formulário, para seguir com o que acabou de ser salvo.
+function submittedValues(formData: FormData): BookingFormValues {
+  const text = (name: string) => {
+    const value = formData.get(name)
+    return typeof value === "string" ? value : ""
+  }
+  return {
+    unitId: text("unitId") || null,
+    therapistId: text("therapistId") || null,
+    guestName: text("guestName").trim(),
+    room: text("room").trim(),
+    startsAt: text("startsAt"),
+    durationMinutes: Number(text("durationMinutes")),
+    serviceId: text("serviceId") || null,
+    treatmentRoomId: text("treatmentRoomId") || null,
+    productIds: formData.getAll("productId").filter((id) => typeof id === "string"),
+    color: text("color") || null,
+  }
+}
+
+// O agendamento com os valores salvos no formulário, com os nomes tirados das opções.
+export function withSavedValues(
+  booking: BookingRow,
+  values: BookingFormValues,
+  { therapists, services, treatmentRooms }: BookingFormOptions,
+): BookingRow {
+  const service = services.find((option) => option.id === values.serviceId)
+  const room = treatmentRooms.find((option) => option.id === values.treatmentRoomId)
+  // Serviço sem profissional: o servidor descarta o que vier no formulário.
+  const therapist = service?.requiresTherapist === false ? undefined : therapists.find((t) => t.id === values.therapistId)
+  const endsAt = new Date(new Date(`${values.startsAt}:00Z`).getTime() + values.durationMinutes * 60000)
+  return {
+    ...booking,
+    unitId: values.unitId ?? booking.unitId,
+    therapistId: therapist?.id ?? null,
+    therapistName: therapist?.name ?? null,
+    guest: { name: values.guestName, room: values.room },
+    startsAt: values.startsAt,
+    endsAt: endsAt.toISOString().slice(0, 16),
+    durationMinutes: values.durationMinutes,
+    service: service ? { serviceId: service.id, serviceName: service.name } : booking.service,
+    treatmentRoom: room ? { roomId: room.id, roomName: room.name } : booking.treatmentRoom,
+    productIds: values.productIds,
+    color: values.color,
+  }
+}
+
 export function capacityLabel(beds: number) {
   return `${beds} por vez`
 }
@@ -112,7 +171,9 @@ export function BookingForm({
   onDone,
   onConvert,
   onDelete,
+  footer,
 }: Props) {
+  const locked = mode === "correct"
   const [unitId, setUnitId] = useState(defaultValues.unitId)
   const [therapistId, setTherapistId] = useState(defaultValues.therapistId)
   const [serviceId, setServiceId] = useState(defaultValues.serviceId)
@@ -127,7 +188,10 @@ export function BookingForm({
   const [state, formAction, pending] = useActionState(
     async (prev: BookingActionState, formData: FormData) => {
       const next = await action(prev, formData)
-      if (!next.error) onDone()
+      if (next.error) return next
+      // O botão de registrar também envia o formulário: salva e segue para o registro.
+      if (formData.get("intent") === "convert" && onConvert) onConvert(submittedValues(formData))
+      else onDone()
       return next
     },
     { error: null },
@@ -173,6 +237,7 @@ export function BookingForm({
               items={therapists.map((therapist) => ({ value: therapist.id, label: therapist.name }))}
               value={therapistId}
               onValueChange={(value) => setTherapistId(value as string | null)}
+              disabled={locked}
               required
             >
               <SelectTrigger id="booking-therapist" className="w-full">
@@ -202,6 +267,7 @@ export function BookingForm({
                 setTreatmentRoomId(onlyRoomId(allRooms, value as string | null))
                 setProductIds([])
               }}
+              disabled={locked}
               required
             >
               <SelectTrigger id="booking-unit" className="w-full">
@@ -282,7 +348,7 @@ export function BookingForm({
               const rooms = allowedRooms(allRooms, unitId, chosen)
               if (!rooms.some((room) => room.id === treatmentRoomId)) setTreatmentRoomId(onlyRoomId(allRooms, unitId, chosen))
             }}
-            disabled={!unitId}
+            disabled={!unitId || locked}
             required
           >
             <SelectTrigger id="booking-service" className="w-full">
@@ -343,21 +409,25 @@ export function BookingForm({
             ))}
           </div>
         </Field>
-        <Field>
-          <FieldLabel>Produtos (opcional)</FieldLabel>
-          <ProductPicker
-            unitId={unitId}
-            value={productIds}
-            onChange={setProductIds}
-          />
-        </Field>
+        {/* Depois do registro, os produtos são os do atendimento. */}
+        {!locked && (
+          <Field>
+            <FieldLabel>Produtos (opcional)</FieldLabel>
+            <ProductPicker
+              unitId={unitId}
+              value={productIds}
+              onChange={setProductIds}
+            />
+          </Field>
+        )}
       </FieldGroup>
       <SheetFooter>
         <Button type="submit" loading={pending}>
           {pending ? copy[mode].pending : copy[mode].submit}
         </Button>
+        {footer}
         {onConvert && (
-          <Button type="button" variant="outline" onClick={onConvert} disabled={pending}>
+          <Button type="submit" name="intent" value="convert" variant="outline" disabled={pending}>
             <ClipboardCheckIcon />
             Registrar atendimento
           </Button>

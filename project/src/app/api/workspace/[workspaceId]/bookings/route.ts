@@ -1,9 +1,15 @@
-import { bookingListPipeline, parseBookingRange, type BookingRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
+import {
+  bookingListPipeline,
+  parseBookingRange,
+  therapistBlockListPipeline,
+  type BookingRow,
+  type TherapistBlockRow,
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
 import { findVisiblePages } from "@/service/workspace/[workspaceId]/page-guard"
 import { getSessionUserId, workspaceAccessStages } from "@/service/(auth)/session"
 import { Workspace } from "@/models/Workspace"
 
-// Agendamentos do intervalo visível no calendário (?start=&end=&unit=&therapist=), de todas
+// Agendamentos e agendas travadas do intervalo visível no calendário (?start=&end=&unit=&therapist=), de todas
 // as unidades do workspace ou das filtradas. Qualquer membro do workspace que veja o calendário
 // do sistema pode ver; filtrado por unidade, basta ver o calendário das unidades.
 // É GET (e não server action) porque o FullCalendar busca os eventos durante o render.
@@ -21,7 +27,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/works
     return Response.json({ error: "Sem permissão para ver a agenda." }, { status: 403 })
   }
 
-  const [workspace] = await Workspace.aggregate<{ bookings: BookingRow[] }>([
+  const [workspace] = await Workspace.aggregate<{ bookings: BookingRow[]; blocks: TherapistBlockRow[] }>([
     ...access,
     { $lookup: { from: "units", localField: "_id", foreignField: "workspaceId", as: "units" } },
     {
@@ -33,8 +39,17 @@ export async function GET(request: Request, { params }: RouteContext<"/api/works
         pipeline: bookingListPipeline(query),
       },
     },
-    { $project: { _id: 0, bookings: 1 } },
+    {
+      $lookup: {
+        from: "therapist_blocks",
+        localField: "_id",
+        foreignField: "workspaceId",
+        as: "blocks",
+        pipeline: therapistBlockListPipeline(query),
+      },
+    },
+    { $project: { _id: 0, bookings: 1, blocks: 1 } },
   ])
   if (!workspace) return Response.json({ error: "Workspace não encontrado." }, { status: 404 })
-  return Response.json({ bookings: workspace.bookings })
+  return Response.json({ bookings: workspace.bookings, blocks: workspace.blocks })
 }

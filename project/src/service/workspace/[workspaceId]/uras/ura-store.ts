@@ -21,6 +21,7 @@ import { Conversation } from "@/models/Conversation"
 import { Message } from "@/models/Message"
 import { MessagingChannel } from "@/models/MessagingChannel"
 import { Service } from "@/models/Service"
+import { TherapistBlock } from "@/models/TherapistBlock"
 import { Unit } from "@/models/Unit"
 import { User } from "@/models/User"
 import { Ura } from "@/models/Ura"
@@ -204,6 +205,16 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
       })
         .select({ therapistId: 1, "treatmentRoom.roomId": 1, startsAt: 1, endsAt: 1 })
         .lean()
+      const blocks = therapists.length
+        ? await TherapistBlock.find({
+            workspaceId,
+            therapistId: { $in: therapists.map((t) => t.id) },
+            startsAt: { $lt: until },
+            endsAt: { $gt: from },
+          })
+            .select({ therapistId: 1, startsAt: 1, endsAt: 1 })
+            .lean()
+        : []
       return availableSlots({
         from,
         days,
@@ -220,7 +231,15 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
           roomId: booking.treatmentRoom.roomId.toString(),
           startsAt: booking.startsAt,
           endsAt: booking.endsAt,
-        })),
+        })).concat(
+          // Agenda travada ocupa só o profissional, nenhum espaço.
+          blocks.map((block) => ({
+            therapistId: block.therapistId.toString(),
+            roomId: "",
+            startsAt: block.startsAt,
+            endsAt: block.endsAt,
+          })),
+        ),
       })
     },
 

@@ -5,6 +5,7 @@ import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
 import { Workspace } from "@/models/Workspace"
 import { BookingCalendar, type BookingOptions } from "@/components/workspace/[workspaceId]/shared/calendar/booking-calendar"
+import type { BusinessHours } from "@/service/workspace/[workspaceId]/unit/[unitId]/business-hours"
 import { CalendarNav } from "@/components/workspace/[workspaceId]/shared/calendar/calendar-nav"
 
 // Agenda de todas as unidades do workspace. Os agendamentos são buscados pelo próprio
@@ -16,7 +17,10 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access) notFound()
 
-  const [workspace] = await Workspace.aggregate<BookingOptions & { actor: Actor }>([
+  const [workspace] = await Workspace.aggregate<Omit<BookingOptions, "units"> & {
+    actor: Actor
+    units: (BookingOptions["units"][number] & { businessHours: BusinessHours })[]
+  }>([
     ...access,
     {
       $lookup: {
@@ -24,7 +28,7 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
         localField: "_id",
         foreignField: "workspaceId",
         as: "units",
-        pipeline: [{ $sort: { name: 1, _id: 1 } }, { $project: { name: 1, treatmentRooms: 1 } }],
+        pipeline: [{ $sort: { name: 1, _id: 1 } }, { $project: { name: 1, treatmentRooms: 1, businessHours: 1 } }],
       },
     },
     {
@@ -61,7 +65,7 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
           $map: {
             input: "$units",
             as: "unit",
-            in: { id: { $toString: "$$unit._id" }, name: "$$unit.name" },
+            in: { id: { $toString: "$$unit._id" }, name: "$$unit.name", businessHours: "$$unit.businessHours" },
           },
         },
         services: 1,

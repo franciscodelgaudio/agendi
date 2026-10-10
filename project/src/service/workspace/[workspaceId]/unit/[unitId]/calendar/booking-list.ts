@@ -97,6 +97,42 @@ export function bookingListPipeline({ start, end, unit, therapist }: BookingRang
   return stages;
 }
 
+// Agenda travada como sai de therapistBlockListPipeline: datas no horário de Brasília.
+export type TherapistBlockRow = {
+  id: string;
+  therapistId: string;
+  therapistName: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string | null;
+};
+
+// Etapas para o $lookup de therapist_blocks a partir do workspace. Travas valem em todas as
+// unidades, então só o filtro de profissional estreita o resultado.
+export function therapistBlockListPipeline({ start, end, therapist }: BookingRange) {
+  const match: Record<string, unknown> = {
+    startsAt: { $lt: dayStart(end) },
+    endsAt: { $gt: dayStart(start) },
+  };
+  if (therapist) match.therapistId = new Types.ObjectId(therapist);
+  const stages: PipelineStage.FacetPipelineStage[] = [
+    { $match: match },
+    { $sort: { startsAt: 1, _id: 1 } },
+    {
+      $project: {
+        _id: 0,
+        id: { $toString: "$_id" },
+        therapistId: { $toString: "$therapistId" },
+        therapistName: 1,
+        startsAt: brtDateTime("$startsAt"),
+        endsAt: brtDateTime("$endsAt"),
+        reason: { $ifNull: ["$reason", null] },
+      },
+    },
+  ];
+  return stages;
+}
+
 // Lista: chaves aceitas na URL e o campo correspondente no banco.
 const SORT_PATHS = { startsAt: "startsAt", guestName: "guest.name", therapistName: "therapistName" } as const;
 export const BOOKING_PAGE_SIZE = 20;

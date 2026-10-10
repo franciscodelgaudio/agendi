@@ -141,3 +141,31 @@ describe("availableSlots", () => {
     ]);
   });
 });
+
+// Agenda travada entra como ocupação do profissional sem espaço (roomId vazio).
+describe("availableSlots com agenda travada", () => {
+  it("pula o profissional travado sem ocupar nenhum espaço", () => {
+    const anaBlocked = {
+      therapistId: ANA.id,
+      roomId: "",
+      startsAt: new Date("2026-09-28T03:00:00.000Z"),
+      endsAt: new Date("2026-09-29T03:00:00.000Z"),
+    };
+
+    const slots = availableSlots({
+      from: FROM,
+      days: 1,
+      durationMinutes: 60,
+      businessHours: hours,
+      therapists: [ANA, BIA],
+      rooms: [SALA_1],
+      bookings: [anaBlocked],
+    });
+
+    expect(slots).toEqual([
+      slot("2026-09-28T13:00:00.000Z", BIA),
+      slot("2026-09-28T13:30:00.000Z", BIA),
+      slot("2026-09-28T14:00:00.000Z", BIA),
+    ]);
+  });
+});

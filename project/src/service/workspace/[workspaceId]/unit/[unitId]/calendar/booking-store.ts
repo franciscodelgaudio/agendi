@@ -3,6 +3,7 @@ import { findUnitProducts } from "@/service/workspace/[workspaceId]/stock/produc
 import { findWorkspaceTherapists } from "@/service/workspace/[workspaceId]/team/therapist-lookup"
 import { Booking } from "@/models/Booking"
 import { Service } from "@/models/Service"
+import { TherapistBlock } from "@/models/TherapistBlock"
 import { Unit } from "@/models/Unit"
 
 // Buscas no banco usadas por lib/booking, compartilhadas pelas server actions e pela URA.
@@ -28,6 +29,19 @@ export function conflictChecker(unitIds: Types.ObjectId[]) {
       ...(excludeId && { _id: { $ne: excludeId } }),
     })
     return conflict !== null
+  }
+}
+
+// Agenda do profissional travada em algum momento do intervalo, no workspace.
+export function blockChecker(workspaceId: string) {
+  return async ({ therapistId, startsAt, endsAt }: { therapistId: string; startsAt: Date; endsAt: Date }) => {
+    const block = await TherapistBlock.exists({
+      workspaceId,
+      therapistId,
+      startsAt: { $lt: endsAt },
+      endsAt: { $gt: startsAt },
+    })
+    return block !== null
   }
 }
 
@@ -94,6 +108,7 @@ export function bookingLookups(unit: { workspaceId: string; unitId: string }, un
     },
     findTherapist: async (id: string) => (await findWorkspaceTherapists(unit.workspaceId, [id]))[0] ?? null,
     hasConflict: conflictChecker(unitIds),
+    isBlocked: blockChecker(unit.workspaceId),
     findTreatmentRoom: (id: string) => findUnitTreatmentRoom(unit.unitId, id),
     findRoomBookings: roomBookingsFinder([unit.unitId]),
     findProducts: (ids: string[]) => findUnitProducts(unit.unitId, ids),

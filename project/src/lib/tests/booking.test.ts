@@ -49,6 +49,7 @@ function makeLookups({
   service = CANDLE as typeof CANDLE | null,
   therapist = ANA as typeof ANA | null,
   busy = false,
+  blocked = false,
   room = SINGLE as typeof SINGLE | null,
   roomBookings = [] as readonly RoomBooking[],
 } = {}) {
@@ -58,6 +59,8 @@ function makeLookups({
     findTherapist: vi.fn(async (id: string) => (therapist?.id === id ? therapist : null)),
     // true quando o profissional já tem outro agendamento que se sobrepõe ao intervalo.
     hasConflict: vi.fn(async () => busy),
+    // true quando a agenda do profissional está travada em algum momento do intervalo.
+    isBlocked: vi.fn(async () => blocked),
     // Sala da unidade, ou null quando não existe nela.
     findTreatmentRoom: vi.fn(async (id: string) => (room?.id === id ? room : null)),
     // Outros agendamentos da sala que se sobrepõem ao intervalo.
@@ -510,6 +513,14 @@ describe("updateBooking", () => {
 
     expect(result).toEqual({ ok: false, error: "booking_not_found" });
   });
+  // update devolve "registered" quando o agendamento já virou atendimento (e não foi alterado).
+  it("retorna booking_registered quando o agendamento já virou atendimento", async () => {
+    const deps = { ...makeLookups(), update: vi.fn().mockResolvedValue("registered") };
+
+    const result = await updateBooking(validInput, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "booking_registered" });
+  });
 });
 
 // Arrastar ou redimensionar no calendário: só início e fim mudam.
@@ -521,6 +532,7 @@ describe("rescheduleBooking", () => {
   function makeDeps({
     booking = { therapistId: ANA_ID, treatmentRoom: { roomId: SINGLE_ID, beds: 1 } } as FoundBooking | null,
     busy = false,
+    blocked = false,
     roomBookings = [] as RoomBooking[],
     found = true,
   } = {}) {
@@ -529,6 +541,7 @@ describe("rescheduleBooking", () => {
       // treatmentRoom null: a sala foi removida da unidade.
       findBooking: vi.fn().mockResolvedValue(booking),
       hasConflict: vi.fn().mockResolvedValue(busy),
+      isBlocked: vi.fn().mockResolvedValue(blocked),
       findRoomBookings: vi.fn().mockResolvedValue(roomBookings),
       update: vi.fn().mockResolvedValue(found),
     };
@@ -782,6 +795,7 @@ describe("agendamento de serviço sem profissional", () => {
     const deps = {
       findBooking: vi.fn().mockResolvedValue({ therapistId: null, treatmentRoom: { roomId: TUB_ID, beds: 2 } }),
       hasConflict: vi.fn().mockResolvedValue(true),
+      isBlocked: vi.fn().mockResolvedValue(true),
       findRoomBookings: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue(true),
     };
@@ -790,6 +804,7 @@ describe("agendamento de serviço sem profissional", () => {
 
     expect(result).toEqual({ ok: true });
     expect(deps.hasConflict).not.toHaveBeenCalled();
+    expect(deps.isBlocked).not.toHaveBeenCalled();
     expect(deps.findRoomBookings).toHaveBeenCalled();
   });
 });
@@ -824,5 +839,77 @@ describe("espaços permitidos do serviço", () => {
     const result = await createBooking({ ...validInput, treatmentRoomId: COUPLE_ID }, UNIT_ID, deps);
 
     expect(result).toEqual({ ok: true, bookingId: BOOKING_ID });
+  });
+});
+
+// Agenda travada: o profissional não está disponível no intervalo (folga, consulta...).
+describe("agenda do profissional travada", () => {
+  function makeDeps(options?: Parameters<typeof makeLookups>[0]) {
+    return {
+      ...makeLookups(options),
+      insert: vi.fn().mockResolvedValue({ id: BOOKING_ID }),
+      update: vi.fn().mockResolvedValue(true),
+    };
+  }
+
+  it("confere a trava do profissional no intervalo do agendamento", async () => {
+    const deps = makeDeps();
+
+    await createBooking(validInput, UNIT_ID, deps);
+
+    expect(deps.isBlocked).toHaveBeenCalledWith({ therapistId: ANA_ID, startsAt: at("14:30"), endsAt: at("15:30") });
+  });
+
+  it("retorna therapist_unavailable sem salvar ao criar num horário travado", async () => {
+    const deps = makeDeps({ blocked: true });
+
+    const result = await createBooking(validInput, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "therapist_unavailable" });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("retorna therapist_unavailable antes de checar conflito de agendamento e a sala", async () => {
+    const deps = makeDeps({ blocked: true, busy: true });
+
+    const result = await createBooking(validInput, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "therapist_unavailable" });
+    expect(deps.hasConflict).not.toHaveBeenCalled();
+    expect(deps.findRoomBookings).not.toHaveBeenCalled();
+  });
+
+  it("retorna therapist_unavailable sem salvar ao editar para um horário travado", async () => {
+    const deps = makeDeps({ blocked: true });
+
+    const result = await updateBooking(validInput, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "therapist_unavailable" });
+    expect(deps.update).not.toHaveBeenCalled();
+  });
+
+  it("não confere trava quando o serviço não usa profissional", async () => {
+    const deps = makeDeps({ service: HYDRO, room: TUB, blocked: true });
+
+    const result = await createBooking({ ...validInput, serviceId: HYDRO_ID, treatmentRoomId: TUB_ID }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: true, bookingId: BOOKING_ID });
+    expect(deps.isBlocked).not.toHaveBeenCalled();
+  });
+
+  it("retorna therapist_unavailable sem salvar ao arrastar para um horário travado", async () => {
+    const deps = {
+      findBooking: vi.fn().mockResolvedValue({ therapistId: ANA_ID, treatmentRoom: { roomId: SINGLE_ID, beds: 1 } }),
+      hasConflict: vi.fn().mockResolvedValue(false),
+      isBlocked: vi.fn().mockResolvedValue(true),
+      findRoomBookings: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue(true),
+    };
+
+    const result = await rescheduleBooking({ startsAt: "2026-09-24T15:00", endsAt: "2026-09-24T16:00" }, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "therapist_unavailable" });
+    expect(deps.isBlocked).toHaveBeenCalledWith({ therapistId: ANA_ID, startsAt: at("15:00"), endsAt: at("16:00") });
+    expect(deps.update).not.toHaveBeenCalled();
   });
 });
