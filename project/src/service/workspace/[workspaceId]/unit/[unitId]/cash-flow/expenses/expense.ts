@@ -400,8 +400,9 @@ export function staffExpenseGroups({ real, forecast }: { real: StaffAmounts; for
 }
 
 // Despesas automáticas do mês, fora do banco: o que já correu de comissões, salários e repasse,
-// pagas e no dia dado. Tipo sem valor não aparece.
-export function staffExpenses(real: StaffAmounts, date: string) {
+// no dia dado. Comissões e salários são pagas; o repasse, só se marcado (partnerSharePaid).
+// Tipo sem valor não aparece.
+export function staffExpenses(real: StaffAmounts, date: string, partnerSharePaid: boolean) {
   const expense = (
     id: "commission" | "salary" | "partner_share",
     groupId: "team" | "partner_share",
@@ -413,7 +414,7 @@ export function staffExpenses(real: StaffAmounts, date: string) {
     description,
     amountCents,
     date,
-    paid: true,
+    paid: id !== "partner_share" || partnerSharePaid,
     series: null,
     automatic: true as const,
   });

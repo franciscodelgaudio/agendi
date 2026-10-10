@@ -1,5 +1,6 @@
 import type { ExpenseOwner } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
 import { ExpenseActions, ExpensePaidToggle, type ExpenseGroupOption, type ExpenseRow } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense-sheets"
+import { setPartnerSharePaidAction } from "@/lib/actions/expense"
 import { PayrollActions, PayrollPaidToggle } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/payroll-sheets"
 import { ExpenseGroupIconBadge } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/expense-group-icon"
 import { currencyFormat } from "@/components/shared/service-format"
@@ -76,6 +77,14 @@ export function ExpensesTable({
                     unitId={owner.unitId}
                     expense={{ ...expense, payroll: expense.payroll }}
                     disabled={!canManage}
+                  />
+                ) : expense.id === "partner_share" && "unitId" in owner ? (
+                  <ExpensePaidToggle
+                    workspaceId={workspaceId}
+                    owner={owner}
+                    expense={expense}
+                    disabled={!canManage}
+                    setPaid={setPartnerSharePaidAction.bind(null, workspaceId, owner.unitId, expense.date.slice(0, 7))}
                   />
                 ) : (
                   <ExpensePaidToggle

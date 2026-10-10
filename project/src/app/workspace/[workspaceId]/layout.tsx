@@ -14,7 +14,7 @@ import { User } from "@/models/User"
 import { Workspace } from "@/models/Workspace"
 
 // O layout espera o workspace antes de renderizar: ao abrir a página inteira, a espera cai no
-// loading.tsx da raiz (tela do agendi). Na navegação interna ele não recarrega, e as páginas
+// loading.tsx da raiz (tela do Agendi). Na navegação interna ele não recarrega, e as páginas
 // mostram seus skeletons dentro da moldura.
 export default async function WorkspaceLayout({
   children,
@@ -57,7 +57,8 @@ export default async function WorkspaceLayout({
           autoStart={!tutorial?.tutorialCompletedAt}
         >
           {sidebar}
-          <SidebarInset className="pb-(--bottom-nav-height)">
+          {/* Folga do botão da AgenIA (--agenia-space), menos nas páginas de tela inteira. */}
+          <SidebarInset className="pb-[calc(var(--bottom-nav-height)+var(--agenia-space,0px))] has-[.h-app-screen]:pb-(--bottom-nav-height)">
             <NavigationProgressBar />
             {children}
           </SidebarInset>

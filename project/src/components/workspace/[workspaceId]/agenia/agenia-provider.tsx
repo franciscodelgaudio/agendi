@@ -39,7 +39,8 @@ export function AgeniaProvider({ workspaceId, enabled, children }: { workspaceId
 
   return (
     <Context value={{ session, open, setOpen, pageHref }}>
-      {children}
+      {/* --agenia-space: folga que o layout dá no fim da página para o botão não cobrir a última linha. */}
+      <div className={floating ? "contents [--agenia-space:4.5rem]" : "contents"}>{children}</div>
       {floating && (
         <Popover.Root open={open} onOpenChange={setOpen}>
           <Popover.Trigger

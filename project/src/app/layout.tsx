@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   // Base das URLs absolutas da imagem de compartilhamento (opengraph-image.jpg).
   metadataBase: process.env.SITE_URL ? new URL(process.env.SITE_URL) : undefined,
-  title: "agendi",
-  description: "agendi",
+  title: "Agendi",
+  description: "Agendi",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

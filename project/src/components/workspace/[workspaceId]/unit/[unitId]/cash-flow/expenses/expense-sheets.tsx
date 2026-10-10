@@ -59,7 +59,7 @@ export type ExpenseRow = {
   paid: boolean
   // null quando a despesa é à vista.
   series: { kind: "installments" | "recurring"; number: number; count: number } | null
-  // Salário, comissão e repasse do mês, calculados pelo caixa; só a folha (payroll) pode ser editada.
+  // Salário, comissão e repasse do mês, calculados pelo caixa; só a folha (payroll) e o status do repasse podem ser editados.
   automatic?: boolean
   // Folha da pessoa no mês: valores atuais e se já há registro (pago ou ajustado).
   payroll?: PayrollValues
@@ -295,16 +295,19 @@ export function CreateExpenseSheet({ workspaceId, owner, groups, defaultDate }: 
 }
 
 // Badge de pagamento que alterna ao clicar; o erro aparece num tooltip sobre o badge até ser dispensado.
+// setPaid troca a ação de despesa cadastrada (o repasse, que é calculado, usa a dele).
 export function ExpensePaidToggle({
   workspaceId,
   owner,
   expense,
   disabled,
+  setPaid = (paid) => setExpensePaidAction(workspaceId, owner, expense.id, paid),
 }: {
   workspaceId: string
   owner: ExpenseOwner
   expense: ExpenseRow
   disabled: boolean
+  setPaid?: (paid: boolean) => Promise<ExpenseActionState>
 }) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -340,7 +343,7 @@ export function ExpensePaidToggle({
             const next = !checked
             setOptimistic(next)
             startTransition(async () => {
-              const result = await setExpensePaidAction(workspaceId, owner, expense.id, next)
+              const result = await setPaid(next)
               setError(result.error)
               setOptimistic(null)
             })

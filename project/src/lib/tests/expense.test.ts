@@ -824,8 +824,8 @@ describe("staffExpenses", () => {
     netCents: -1,
   });
 
-  it("vira uma despesa paga e automática por tipo, no dia dado, nos grupos equipe e repasse", () => {
-    const result = staffExpenses(real(33_600, 27_329, 20_000), "2026-10-31");
+  it("vira uma despesa automática por tipo, no dia dado, nos grupos equipe e repasse", () => {
+    const result = staffExpenses(real(33_600, 27_329, 20_000), "2026-10-31", true);
 
     expect(result).toEqual([
       {
@@ -862,13 +862,23 @@ describe("staffExpenses", () => {
   });
 
   it("tipo sem valor no mês não aparece", () => {
-    const result = staffExpenses(real(0, 15_000, 0), "2026-10-31");
+    const result = staffExpenses(real(0, 15_000, 0), "2026-10-31", true);
 
     expect(result.map((expense) => expense.id)).toEqual(["commission"]);
   });
 
   it("sem custo da equipe nem repasse, não há despesa automática", () => {
-    expect(staffExpenses(real(0, 0, 0), "2026-10-31")).toEqual([]);
+    expect(staffExpenses(real(0, 0, 0), "2026-10-31", true)).toEqual([]);
+  });
+
+  it("repasse não marcado fica pendente; comissões e salários seguem pagos", () => {
+    const result = staffExpenses(real(33_600, 27_329, 20_000), "2026-10-31", false);
+
+    expect(result.map(({ id, paid }) => ({ id, paid }))).toEqual([
+      { id: "commission", paid: true },
+      { id: "salary", paid: true },
+      { id: "partner_share", paid: false },
+    ]);
   });
 });
 

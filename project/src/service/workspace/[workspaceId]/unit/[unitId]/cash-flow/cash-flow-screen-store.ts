@@ -37,6 +37,7 @@ import {
 import { loadWallets } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
 import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
+import { PartnerSharePayment } from "@/models/PartnerSharePayment"
 import { Workspace } from "@/models/Workspace"
 
 // Dados das abas do caixa, usados pela página e pelo export. Não verificam a página oculta
@@ -205,7 +206,7 @@ export async function loadExpensesScreen(
   const month = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const unitObjectId = new Types.ObjectId(unitId)
   const unit = { id: unitId, revenueShare: workspace.unit.revenueShare, createdAt: workspace.unit.createdAt }
-  const [groupDocs, expenseDocs, icons, cashFlow] = await Promise.all([
+  const [groupDocs, expenseDocs, icons, cashFlow, partnerSharePaid] = await Promise.all([
     ExpenseGroup.find({ unitId: unitObjectId })
       .sort({ name: 1 })
       .collation({ locale: "pt" })
@@ -217,6 +218,7 @@ export async function loadExpensesScreen(
       .lean(),
     loadExpenseGroupIcons(),
     loadUnitCashFlow(workspace.id, unit, buckets, today),
+    PartnerSharePayment.exists({ unitId: unitObjectId, month: month.from.slice(0, 7) }),
   ])
   const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
   const groups = [
@@ -260,7 +262,7 @@ export async function loadExpensesScreen(
       cashFlow.payrollRecords,
       month.to,
     ),
-    ...staffExpenses({ ...cashFlow.summary.total.real, commissionCents: 0, salaryCents: 0 }, month.to),
+    ...staffExpenses({ ...cashFlow.summary.total.real, commissionCents: 0, salaryCents: 0 }, month.to, !!partnerSharePaid),
   ]
 
   return { unitName: workspace.unit.name, actor: workspace.actor, month, groups, expenses }
