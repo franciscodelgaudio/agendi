@@ -225,6 +225,8 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
         end: booking.endsAt,
         // A cor escolhida no agendamento vale mais que a do profissional.
         color: booking.color ?? (booking.therapistId && colors.get(booking.therapistId)) ?? "#64748b",
+        // Já atendido: fica no calendário como histórico, esmaecido e sem arrastar.
+        ...(booking.appointmentId && { editable: false, className: "opacity-55" }),
         extendedProps: { booking },
       })))
     },
