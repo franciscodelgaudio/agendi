@@ -26,8 +26,6 @@ import {
 import { BOOKING_COLORS } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-colors"
 import type { BookingRow, TherapistBlockRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
 import { createRescheduleQueue, type RescheduleTimes } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/reschedule-queue"
-import { calendarRange } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/calendar-range"
-import type { BusinessHours } from "@/service/workspace/[workspaceId]/unit/[unitId]/business-hours"
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
 
 import {
@@ -62,9 +60,7 @@ import {
 export type BookingOptions = Required<BookingFormOptions>
 
 // unitId: calendário de uma unidade (units traz só ela); sem filtro nem escolha de unidade.
-// Cada unidade traz o horário de funcionamento, que define a faixa de horas visível.
-type Props = Omit<BookingOptions, "units"> & {
-  units: (BookingOptions["units"][number] & { businessHours: BusinessHours })[]
+type Props = BookingOptions & {
   workspaceId: string
   canManage: boolean
   unitId?: string
@@ -157,8 +153,6 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
   // O proprietário sempre está entre os profissionais, então basta haver uma unidade.
   const canCreate = canManage && units.length > 0
   const options = { units: unitId ? undefined : units, therapists, services, treatmentRooms }
-  // Com uma unidade filtrada, o horário dela; sem filtro, o de todas.
-  const range = calendarRange(units.filter((option) => !unit || option.id === unit).map((option) => option.businessHours))
 
   // Cada busca recria os ids internos dos eventos, e ao soltar um arraste o FullCalendar grava
   // a cópia do evento feita no início dele. Uma busca que chegasse no meio deixaria as duas
@@ -435,9 +429,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
             headerToolbar={{ start: "prev,next today", center: "title", end: "dayGridMonth,timeGridWeek,timeGridDay" }}
             height="auto"
             allDaySlot={false}
-            slotMinTime={range.start}
-            slotMaxTime={range.end}
-            scrollTime={range.start}
+            scrollTime="08:00"
             // Uma faixa por hora, como no Google Agenda; arrastar e selecionar continuam de 30 em 30 min.
             slotDuration="01:00"
             snapDuration="00:30"
