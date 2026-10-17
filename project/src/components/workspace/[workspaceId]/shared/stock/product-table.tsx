@@ -16,6 +16,7 @@ import { CodeCell, CodeHead } from "@/components/shared/record-code"
 import { SortableHead } from "@/components/shared/sortable-head"
 import { StarRating } from "@/components/shared/star-rating"
 import { Avatar, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { InitialFallback } from "@/components/shared/initial-fallback"
 import {
   Table,
@@ -48,6 +49,8 @@ type ProductRow = {
   rating: number | null
   avatarUrl: string | null
   usage: ProductUsageSummary
+  // false: desativado no catálogo (só o catálogo traz; nos estoques, os desativados não aparecem).
+  active?: boolean
 }
 
 type Props<T extends ProductRow> = {
@@ -137,6 +140,7 @@ export function ProductTable<T extends ProductRow>({ products, query, pathname, 
           ) : (
             products.map((product) => {
               const details = [product.origin, product.notes].filter(Boolean).join(" · ")
+              const inactive = product.active === false
               return (
                 <TableRow key={product.id}>
                   <CodeCell id={product.id} className="@max-7xl:hidden" />
@@ -154,7 +158,9 @@ export function ProductTable<T extends ProductRow>({ products, query, pathname, 
                             {product.name}
                           </Link>
                         ) : (
-                          <span className="truncate font-medium">{product.name}</span>
+                          <span className={cn("truncate font-medium", inactive && "text-muted-foreground")}>
+                            {product.name}
+                          </span>
                         )}
                         {details && (
                           <span className="truncate text-xs text-muted-foreground" title={details}>
@@ -162,6 +168,7 @@ export function ProductTable<T extends ProductRow>({ products, query, pathname, 
                           </span>
                         )}
                       </div>
+                      {inactive && <Badge variant="outline" className="shrink-0">Desativado</Badge>}
                     </div>
                   </TableCell>
                   <TableCell className="px-4 tabular-nums">{product.quantity}</TableCell>

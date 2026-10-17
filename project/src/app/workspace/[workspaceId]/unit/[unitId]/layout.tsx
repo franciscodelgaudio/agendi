@@ -54,7 +54,8 @@ async function UnitHeader({ workspaceId, unitId }: { workspaceId: string; unitId
               localField: "_id",
               foreignField: "unitId",
               as: "services",
-              pipeline: [{ $limit: 1 }, { $project: { _id: 1 } }],
+              // Só os ativos contam como serviço oferecido.
+              pipeline: [{ $match: { deactivatedAt: null } }, { $limit: 1 }, { $project: { _id: 1 } }],
             },
           },
           {

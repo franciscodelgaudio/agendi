@@ -64,6 +64,8 @@ export type AppointmentOptions = {
     productIds: string[]
     // false: serviço sem profissional (ex.: hidromassagem), que não gera comissão.
     requiresTherapist: boolean
+    // false: serviço desativado, que só aparece no atendimento que já o usa.
+    active: boolean
   }[]
   therapists: TherapistOption[]
   units?: { id: string; name: string }[]
@@ -106,7 +108,11 @@ export function AppointmentForm({
   onDone,
 }: Props) {
   const [unitId, setUnitId] = useState<string | null>(defaultValues.unitId ?? null)
-  const services = units ? allServices.filter((service) => service.unitId === unitId) : allServices
+  // Desativado sai da escolha, mas o atendimento que já o usa continua com ele.
+  const savedServiceIds = new Set(defaultValues.items?.map((item) => item.serviceId))
+  const services = allServices.filter(
+    (service) => (!units || service.unitId === unitId) && (service.active || savedServiceIds.has(service.id)),
+  )
   const [productIds, setProductIds] = useState(defaultValues.productIds ?? [])
   const [discountType, setDiscountType] = useState<DiscountType | null>(defaultValues.discount?.type ?? null)
   const [discountValue, setDiscountValue] = useState(defaultValues.discount?.value ?? "")

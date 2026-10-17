@@ -230,16 +230,52 @@ export async function adjustStock(
   return { ok: false, error: outcome === "not_found" ? "product_not_found" : outcome };
 }
 
-export type DeleteProductResult = { ok: true } | { ok: false; error: "product_not_found" };
+export type RemoveProductResult = { ok: true } | { ok: false; error: "product_not_found" | "product_has_stock" };
 
-// remove devolve false quando o produto não existe (ou não é da unidade).
-export async function deleteProduct(
+// Tira o produto do estoque da unidade só com saldo zero, para nenhuma quantidade sumir sem
+// registro. hasBalance: true quando o estoque da unidade ainda tem o produto; remove devolve
+// false quando o produto não está nele.
+export async function removeProductFromStock(
   productId: string | null | undefined,
-  remove: (productId: string) => Promise<boolean>,
-): Promise<DeleteProductResult> {
+  {
+    hasBalance,
+    remove,
+  }: { hasBalance: (productId: string) => Promise<boolean>; remove: (productId: string) => Promise<boolean> },
+): Promise<RemoveProductResult> {
   if (!productId) return { ok: false, error: "product_not_found" };
+  if (await hasBalance(productId)) return { ok: false, error: "product_has_stock" };
 
   const found = await remove(productId);
+  return found ? { ok: true } : { ok: false, error: "product_not_found" };
+}
+
+// O produto do catálogo nunca é excluído: desativado, sai dos seletores e mantém o histórico.
+// Só desativa sem saldo em nenhum estoque. deactivate devolve false quando o produto não
+// existe, não é do workspace ou já está desativado.
+export async function deactivateProduct(
+  productId: string | null | undefined,
+  {
+    hasBalance,
+    deactivate,
+  }: { hasBalance: (productId: string) => Promise<boolean>; deactivate: (productId: string) => Promise<boolean> },
+): Promise<RemoveProductResult> {
+  if (!productId) return { ok: false, error: "product_not_found" };
+  if (await hasBalance(productId)) return { ok: false, error: "product_has_stock" };
+
+  const found = await deactivate(productId);
+  return found ? { ok: true } : { ok: false, error: "product_not_found" };
+}
+
+export type ReactivateProductResult = { ok: true } | { ok: false; error: "product_not_found" };
+
+// reactivate devolve false quando o produto não existe, não é do workspace ou já está ativo.
+export async function reactivateProduct(
+  productId: string | null | undefined,
+  reactivate: (productId: string) => Promise<boolean>,
+): Promise<ReactivateProductResult> {
+  if (!productId) return { ok: false, error: "product_not_found" };
+
+  const found = await reactivate(productId);
   return found ? { ok: true } : { ok: false, error: "product_not_found" };
 }
 

@@ -95,8 +95,10 @@ export default async function WorkspaceStockPage({ params, searchParams }: PageP
     .select({ productId: 1, holderId: 1, quantity: 1 })
     .lean()
   const quantities = new Map(items.map((item) => [`${item.productId}:${item.holderId}`, item.quantity]))
+  // Desativado (sempre com saldo zero) não aparece nos estoques.
   const products = await Product.find({
     workspaceId: workspace.id,
+    deactivatedAt: null,
     _id: { $in: [...new Set(items.map((item) => item.productId.toString()))] },
     ...(q && { name: { $regex: escapeRegex(q), $options: "i" } }),
   })
@@ -111,9 +113,9 @@ export default async function WorkspaceStockPage({ params, searchParams }: PageP
       })
     : null
 
-  // Catálogo do workspace, para adicionar aos estoques.
+  // Catálogo do workspace (só os ativos), para adicionar aos estoques.
   const catalog = canManage
-    ? await Product.find({ workspaceId: workspace.id }).select({ name: 1 }).sort({ name: 1, _id: 1 }).lean()
+    ? await Product.find({ workspaceId: workspace.id, deactivatedAt: null }).select({ name: 1 }).sort({ name: 1, _id: 1 }).lean()
     : []
   const catalogOptions = catalog.map((product) => ({ id: product._id.toString(), name: product.name }))
 

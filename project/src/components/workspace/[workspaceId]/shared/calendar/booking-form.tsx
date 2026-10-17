@@ -41,6 +41,7 @@ export type BookingFormOptions = {
   // O preço só aparece quando o agendamento vira atendimento.
   // productIds: produtos padrão do serviço, pré-marcados ao escolhê-lo.
   // requiresTherapist false: sem campo de profissional. treatmentRoomIds: espaços permitidos (vazio: todos).
+  // active false: serviço desativado, que só aparece no agendamento que já o usa.
   services: {
     id: string
     unitId: string
@@ -50,6 +51,7 @@ export type BookingFormOptions = {
     productIds: string[]
     requiresTherapist: boolean
     treatmentRoomIds: string[]
+    active: boolean
   }[]
   // Espaços de cada unidade; o formulário só oferece os da unidade escolhida.
   treatmentRooms: { id: string; unitId: string; name: string; beds: number }[]
@@ -204,7 +206,10 @@ export function BookingForm({
 
   const Title = variant === "popover" ? PopoverTitle : SheetTitle
   const Description = variant === "popover" ? PopoverDescription : SheetDescription
-  const services = allServices.filter((service) => service.unitId === unitId)
+  // Desativado sai da escolha, mas o agendamento que já o usa continua com ele.
+  const services = allServices.filter(
+    (service) => service.unitId === unitId && (service.active || service.id === defaultValues.serviceId),
+  )
   const serviceItems = services.map((service) => ({ value: service.id, label: service.name }))
   const service = services.find((option) => option.id === serviceId)
   // Serviço sem profissional (ex.: hidromassagem) esconde o campo; o servidor ignora o profissional.

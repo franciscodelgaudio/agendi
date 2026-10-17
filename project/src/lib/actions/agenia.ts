@@ -7,8 +7,8 @@ import { createBookingAction, deleteBookingAction, rescheduleBookingAction } fro
 import { createExpenseAction, deleteExpenseAction, setExpensePaidAction } from "@/lib/actions/expense"
 import { inviteMemberAction, removeMemberAction, updateMemberAction } from "@/lib/actions/member"
 import { sendReplyAction } from "@/lib/actions/messaging"
-import { createProductAction, deleteProductAction, updateProductAction } from "@/lib/actions/product"
-import { createServiceAction, deleteServiceAction, updateServiceAction } from "@/lib/actions/service"
+import { createProductAction, removeProductFromStockAction, updateProductAction } from "@/lib/actions/product"
+import { createServiceAction, deactivateServiceAction, updateServiceAction } from "@/lib/actions/service"
 import { createTicketAction } from "@/lib/actions/ticket"
 import {
   closeConversationAction,
@@ -101,7 +101,7 @@ export async function runAgeniaAction(workspaceId: string, name: string, rawInpu
       return done(await updateServiceAction(workspaceId, s("unitId"), s("serviceId"), empty, form("updateService", merged)))
     }
     case "deleteService":
-      return done(await deleteServiceAction(workspaceId, s("unitId"), s("serviceId")))
+      return done(await deactivateServiceAction(workspaceId, s("unitId"), s("serviceId")))
     case "createProduct":
       return done(await createProductAction(workspaceId, s("unitId"), empty, form("createProduct", i)))
     case "updateProduct": {
@@ -111,7 +111,7 @@ export async function runAgeniaAction(workspaceId: string, name: string, rawInpu
       return done(await updateProductAction(workspaceId, s("unitId"), s("productId"), empty, form("updateProduct", merged)))
     }
     case "deleteProduct":
-      return done(await deleteProductAction(workspaceId, s("unitId"), s("productId")))
+      return done(await removeProductFromStockAction(workspaceId, s("unitId"), s("productId")))
     case "createBooking":
       return done(await createBookingAction(workspaceId, empty, form("createBooking", i)))
     case "rescheduleBooking":

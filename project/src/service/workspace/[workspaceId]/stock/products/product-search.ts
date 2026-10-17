@@ -9,7 +9,8 @@ const MAX_QUERY_LENGTH = 80;
 // workspace e a ordem por nome usam o índice { workspaceId: 1, name: 1 }; o trecho do nome é
 // conferido nas chaves do índice.
 export function productSearchPipeline(workspaceId: string, q: string): PipelineStage[] {
-  const match: Record<string, unknown> = { workspaceId: new Types.ObjectId(workspaceId) };
+  // Produto desativado não é oferecido para escolha (null também casa com o campo ausente).
+  const match: Record<string, unknown> = { workspaceId: new Types.ObjectId(workspaceId), deactivatedAt: null };
   const term = q.trim().slice(0, MAX_QUERY_LENGTH);
   if (term) match.name = { $regex: escapeRegex(term), $options: "i" };
   return [

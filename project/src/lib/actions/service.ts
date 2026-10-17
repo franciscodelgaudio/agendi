@@ -8,15 +8,20 @@ import { findUnitProducts } from "@/service/workspace/[workspaceId]/stock/produc
 import { findManagedUnit } from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-access"
 import {
   createService,
-  deleteService,
+  deactivateService,
+  reactivateService,
   updateService,
   type CreateServiceError,
   type UpdateServiceError,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service"
+import { Booking } from "@/models/Booking"
 import { Service } from "@/models/Service"
 import { Unit } from "@/models/Unit"
 
-const errorMessages: Record<CreateServiceError | UpdateServiceError | "workspace_not_found" | "unauthenticated", string> = {
+const errorMessages: Record<
+  CreateServiceError | UpdateServiceError | "service_has_pending_bookings" | "workspace_not_found" | "unauthenticated",
+  string
+> = {
   invalid_input: "Preencha nome, valor e duração.",
   too_many_products: "Escolha no máximo 20 produtos.",
   product_not_found: "Algum produto não foi encontrado nesta unidade. Recarregue a página.",
@@ -27,6 +32,7 @@ const errorMessages: Record<CreateServiceError | UpdateServiceError | "workspace
   treatment_room_not_found: "Algum espaço escolhido não é desta unidade. Recarregue a página.",
   unit_not_found: "Unidade não encontrada ou sem permissão.",
   service_not_found: "Serviço não encontrado ou sem permissão.",
+  service_has_pending_bookings: "O serviço ainda tem agendamentos por vir. Remarque ou exclua os agendamentos antes de desativá-lo.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
@@ -119,7 +125,7 @@ export async function updateServiceAction(
   return { error: null }
 }
 
-export async function deleteServiceAction(
+export async function deactivateServiceAction(
   workspaceId: string,
   unitId: string,
   serviceId: string,
@@ -127,9 +133,44 @@ export async function deleteServiceAction(
   const target = await resolveServiceTarget(workspaceId, unitId, serviceId)
   if ("error" in target) return target
 
-  const result = await deleteService(target.serviceId, async (id) => {
-    const { deletedCount } = await Service.deleteOne({ _id: id, unitId: target.ownedUnitId })
-    return deletedCount > 0
+  // Nada é apagado: a oferta sai dos formulários e o histórico continua ligado a ela.
+  const result = await deactivateService(target.serviceId, {
+    hasPendingBookings: async (id) =>
+      (await Booking.exists({
+        unitId: target.ownedUnitId,
+        "service.serviceId": id,
+        appointmentId: null,
+        endsAt: { $gt: new Date() },
+      })) !== null,
+    deactivate: async (id) => {
+      const { matchedCount } = await Service.updateOne(
+        { _id: id, unitId: target.ownedUnitId, deactivatedAt: null },
+        { $set: { deactivatedAt: new Date() } },
+      )
+      return matchedCount > 0
+    },
+  })
+
+  if (!result.ok) return { error: errorMessages[result.error] }
+
+  refresh()
+  return { error: null }
+}
+
+export async function reactivateServiceAction(
+  workspaceId: string,
+  unitId: string,
+  serviceId: string,
+): Promise<ServiceActionState> {
+  const target = await resolveServiceTarget(workspaceId, unitId, serviceId)
+  if ("error" in target) return target
+
+  const result = await reactivateService(target.serviceId, async (id) => {
+    const { matchedCount } = await Service.updateOne(
+      { _id: id, unitId: target.ownedUnitId, deactivatedAt: { $ne: null } },
+      { $unset: { deactivatedAt: 1 } },
+    )
+    return matchedCount > 0
   })
 
   if (!result.ok) return { error: errorMessages[result.error] }

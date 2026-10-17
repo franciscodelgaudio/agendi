@@ -70,7 +70,11 @@ export const AGENIA_ACTIONS = {
     treatmentRoomIds: serviceFields.treatmentRoomIds,
     summary,
   }),
-  deleteService: spec("Excluir serviço", "Exclui um serviço de uma unidade.", { unitId: objectId, serviceId: objectId, summary }),
+  deleteService: spec(
+    "Desativar serviço",
+    "Desativa a oferta do serviço numa unidade: sai dos formulários e o histórico continua. Recusado se houver agendamentos por vir com ele.",
+    { unitId: objectId, serviceId: objectId, summary },
+  ),
   createProduct: spec("Cadastrar produto", "Cadastra um produto no estoque de uma unidade.", {
     unitId: objectId,
     name: productFields.name,
@@ -95,7 +99,11 @@ export const AGENIA_ACTIONS = {
       summary,
     },
   ),
-  deleteProduct: spec("Excluir produto", "Exclui um produto do estoque.", { unitId: objectId, productId: objectId, summary }),
+  deleteProduct: spec(
+    "Tirar produto do estoque",
+    "Tira o produto do estoque da unidade; ele continua no catálogo. Só com quantidade zero (ajuste a contagem antes).",
+    { unitId: objectId, productId: objectId, summary },
+  ),
   createBooking: spec("Criar agendamento", "Marca um horário na agenda de uma unidade.", {
     unitId: objectId,
     therapistId: objectId.optional().describe("userId do profissional; omita em serviço sem profissional."),

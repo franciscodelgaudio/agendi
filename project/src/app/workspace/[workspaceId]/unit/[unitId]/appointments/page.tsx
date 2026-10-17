@@ -13,6 +13,7 @@ import {
   type AppointmentPage,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-list"
 import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
+import { ACTIVE_SERVICE } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service-list"
 import { Workspace } from "@/models/Workspace"
 import { AppointmentTable, type AppointmentRow } from "@/components/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-table"
 import { CreateAppointmentSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/appointments/create-appointment-sheet"
@@ -31,7 +32,15 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 
-type ServiceOption = { id: string; name: string; priceCents: number; durationMinutes: number; productIds: string[]; requiresTherapist: boolean }
+type ServiceOption = {
+  id: string
+  name: string
+  priceCents: number
+  durationMinutes: number
+  productIds: string[]
+  requiresTherapist: boolean
+  active: boolean
+}
 type TherapistOption = { id: string; name: string; image: string | null }
 
 // Todos os atendimentos de uma unidade, em lista, com busca e filtros.
@@ -97,7 +106,7 @@ export default async function AppointmentsPage({
               as: "services",
               pipeline: [
                 { $sort: { name: 1, _id: 1 } },
-                { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, priceCents: 1, durationMinutes: 1, requiresTherapist: { $ifNull: ["$requiresTherapist", true] }, productIds: { $map: { input: "$productIds", as: "id", in: { $toString: "$$id" } } } } },
+                { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, priceCents: 1, durationMinutes: 1, requiresTherapist: { $ifNull: ["$requiresTherapist", true] }, productIds: { $map: { input: "$productIds", as: "id", in: { $toString: "$$id" } } }, active: ACTIVE_SERVICE } },
               ],
             },
           },
@@ -145,8 +154,10 @@ export default async function AppointmentsPage({
     const params = new URLSearchParams(Object.entries({ ...filters, page: pages > 1 ? String(pages) : "" }).filter(([, v]) => v))
     redirect(`${pathname}?${params}`)
   }
-  // O proprietário sempre está entre quem pode atender, então basta haver serviço.
-  const createButton = canManage && services.length > 0 && (
+  // O proprietário sempre está entre quem pode atender, então basta haver serviço ativo. Os
+  // desativados vêm só para editar os atendimentos que já os usam.
+  const hasActiveServices = services.some((service) => service.active)
+  const createButton = canManage && hasActiveServices && (
     <CreateAppointmentSheet
       workspaceId={workspaceId}
       unitId={unitId}
@@ -175,13 +186,13 @@ export default async function AppointmentsPage({
             <EmptyDescription>
               {!canManage
                 ? "Os atendimentos registrados nesta unidade aparecerão aqui."
-                : !services.length
+                : !hasActiveServices
                   ? "Cadastre os serviços da unidade antes de registrar atendimentos."
                   : "Registre os atendimentos com o hóspede, os serviços e os profissionais."}
             </EmptyDescription>
           </EmptyHeader>
           {createButton && <EmptyContent>{createButton}</EmptyContent>}
-          {canManage && !services.length && (
+          {canManage && !hasActiveServices && (
             <EmptyContent>
               <Button nativeButton={false} render={<Link href={`/workspace/${workspaceId}/unit/${unitId}/services`} />}>
                 Cadastrar serviços

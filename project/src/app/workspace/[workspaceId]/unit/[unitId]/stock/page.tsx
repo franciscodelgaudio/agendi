@@ -4,7 +4,7 @@ import { ArchiveIcon } from "lucide-react"
 import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
-import { parseProductListQuery, productListPipeline } from "@/service/workspace/[workspaceId]/stock/products/product-list"
+import { ACTIVE_PRODUCT, parseProductListQuery, productListPipeline } from "@/service/workspace/[workspaceId]/stock/products/product-list"
 import { findProductUsage } from "@/service/workspace/[workspaceId]/stock/products/product-lookup"
 import { findHolderByUnit, findUnitHolder } from "@/service/workspace/[workspaceId]/stock/stock-store"
 import { Product } from "@/models/Product"
@@ -78,7 +78,8 @@ export default async function StockPage({
         localField: "_id",
         foreignField: "workspaceId",
         as: "products",
-        pipeline: productListPipeline(query, holder.holderId),
+        // Desativado (sempre com saldo zero) não aparece no estoque.
+        pipeline: [ACTIVE_PRODUCT, ...productListPipeline(query, holder.holderId)],
       },
     },
     {
@@ -87,7 +88,7 @@ export default async function StockPage({
         localField: "_id",
         foreignField: "workspaceId",
         as: "productCount",
-        pipeline: [...productListPipeline({ ...query, q: "" }, holder.holderId).slice(0, 2), { $count: "n" }],
+        pipeline: [ACTIVE_PRODUCT, ...productListPipeline({ ...query, q: "" }, holder.holderId).slice(0, 2), { $count: "n" }],
       },
     },
     {
@@ -114,10 +115,11 @@ export default async function StockPage({
     usage: usageOf(product.id),
   }))
 
-  // Produtos do catálogo que ainda não estão neste estoque, para adicionar.
+  // Produtos ativos do catálogo que ainda não estão neste estoque, para adicionar.
   const catalog = canManage
     ? await Product.find({
         workspaceId: workspace.id,
+        deactivatedAt: null,
         _id: { $nin: await StockItem.distinct("productId", { holderId: new Types.ObjectId(holder.holderId) }) },
       })
         .select({ name: 1 })

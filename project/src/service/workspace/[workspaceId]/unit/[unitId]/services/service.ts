@@ -139,15 +139,35 @@ export async function updateService(
   return found ? { ok: true } : { ok: false, error: "service_not_found" };
 }
 
-export type DeleteServiceResult = { ok: true } | { ok: false; error: "service_not_found" };
+export type DeactivateServiceResult = { ok: true } | { ok: false; error: "service_not_found" | "service_has_pending_bookings" };
 
-// remove devolve false quando o serviço não existe (ou não é da unidade).
-export async function deleteService(
+// A oferta do serviço na unidade nunca é excluída: desativada, sai dos formulários e o histórico
+// continua ligado a ela. hasPendingBookings: true quando há agendamento por vir, ainda não
+// registrado, com o serviço. deactivate devolve false quando o serviço não existe, não é da
+// unidade ou já está desativado.
+export async function deactivateService(
   serviceId: string | null | undefined,
-  remove: (serviceId: string) => Promise<boolean>,
-): Promise<DeleteServiceResult> {
+  {
+    hasPendingBookings,
+    deactivate,
+  }: { hasPendingBookings: (serviceId: string) => Promise<boolean>; deactivate: (serviceId: string) => Promise<boolean> },
+): Promise<DeactivateServiceResult> {
+  if (!serviceId) return { ok: false, error: "service_not_found" };
+  if (await hasPendingBookings(serviceId)) return { ok: false, error: "service_has_pending_bookings" };
+
+  const found = await deactivate(serviceId);
+  return found ? { ok: true } : { ok: false, error: "service_not_found" };
+}
+
+export type ReactivateServiceResult = { ok: true } | { ok: false; error: "service_not_found" };
+
+// reactivate devolve false quando o serviço não existe, não é da unidade ou já está ativo.
+export async function reactivateService(
+  serviceId: string | null | undefined,
+  reactivate: (serviceId: string) => Promise<boolean>,
+): Promise<ReactivateServiceResult> {
   if (!serviceId) return { ok: false, error: "service_not_found" };
 
-  const found = await remove(serviceId);
+  const found = await reactivate(serviceId);
   return found ? { ok: true } : { ok: false, error: "service_not_found" };
 }

@@ -14,6 +14,8 @@ const serviceSchema = new Schema(
     // Espaços da unidade (treatmentRooms) em que o serviço pode ser feito; vazio aceita qualquer um.
     treatmentRoomIds: { type: [Schema.Types.ObjectId], default: [] },
     unitId: { type: Schema.Types.ObjectId, ref: "Unit", required: true, index: true },
+    // Desativado sai dos formulários e mantém o histórico; ausente quando está ativo.
+    deactivatedAt: { type: Date },
   },
   { collection: "services", timestamps: true },
 );

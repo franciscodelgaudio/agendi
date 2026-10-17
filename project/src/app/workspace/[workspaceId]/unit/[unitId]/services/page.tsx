@@ -19,7 +19,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 
-type ServiceRow = ServiceFieldValues & { id: string }
+type ServiceRow = ServiceFieldValues & { id: string; active: boolean }
 
 // Layout e página podem renderizar em paralelo, então a página refaz a verificação de acesso.
 export default async function ServicesPage({
@@ -54,7 +54,7 @@ export default async function ServicesPage({
               localField: "_id",
               foreignField: "unitId",
               as: "services",
-              pipeline: serviceListPipeline(query),
+              pipeline: serviceListPipeline(query, { withActive: true }),
             },
           },
           {

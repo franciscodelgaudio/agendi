@@ -19,8 +19,12 @@ export function parseServiceListQuery(params: SearchParams): ServiceListQuery {
   };
 }
 
-// Etapas para a pipeline do $lookup de services da unidade.
-export function serviceListPipeline({ q, sort, dir }: ServiceListQuery) {
+// Serviço ativo: sem deactivatedAt (ausente ou null).
+export const ACTIVE_SERVICE = { $eq: [{ $ifNull: ["$deactivatedAt", null] }, null] };
+
+// Etapas para a pipeline do $lookup de services da unidade. withActive: projeta active, para a
+// tela de serviços marcar os desativados.
+export function serviceListPipeline({ q, sort, dir }: ServiceListQuery, { withActive = false } = {}) {
   const stages: PipelineStage.FacetPipelineStage[] = [];
   if (q) stages.push({ $match: { name: { $regex: escapeRegex(q), $options: "i" } } });
   stages.push(
@@ -37,6 +41,7 @@ export function serviceListPipeline({ q, sort, dir }: ServiceListQuery) {
         // Serviço cadastrado antes desses campos exige profissional e aceita qualquer espaço.
         requiresTherapist: { $ifNull: ["$requiresTherapist", true] },
         treatmentRoomIds: { $map: { input: { $ifNull: ["$treatmentRoomIds", []] }, as: "id", in: { $toString: "$$id" } } },
+        ...(withActive && { active: ACTIVE_SERVICE }),
       },
     },
   );

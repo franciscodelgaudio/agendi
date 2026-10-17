@@ -3,6 +3,7 @@ import { ServiceActions } from "@/components/workspace/[workspaceId]/unit/[unitI
 import type { ServiceFieldValues, ServiceRoomOption } from "@/components/workspace/[workspaceId]/unit/[unitId]/services/service-fields"
 import { CodeCell, CodeHead } from "@/components/shared/record-code"
 import { SortableHead } from "@/components/shared/sortable-head"
+import { Badge } from "@/components/ui/badge"
 import {
   Table,
   TableBody,
@@ -13,15 +14,16 @@ import {
 } from "@/components/ui/table"
 import type { ServiceListQuery } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service-list"
 import { currencyFormat, formatDuration } from "@/components/shared/service-format"
+import { cn } from "@/service/_shared/utils"
 
 type Props = {
-  services: (ServiceFieldValues & { id: string })[]
+  services: (ServiceFieldValues & { id: string; active: boolean })[]
   treatmentRooms: ServiceRoomOption[]
   query: ServiceListQuery
   pathname: string
   workspaceId: string
   unitId: string
-  // Sem permissão, a coluna de ações (editar/excluir) não aparece.
+  // Sem permissão, a coluna de ações (editar/desativar) não aparece.
   canManage: boolean
 }
 
@@ -63,7 +65,14 @@ export function ServiceTable({ services, treatmentRooms, query, pathname, worksp
             services.map((service) => (
               <TableRow key={service.id} data-tour="service-row">
                 <CodeCell id={service.id} className="@max-xl:hidden" />
-                <TableCell className="max-w-0 truncate px-4 font-medium">{service.name}</TableCell>
+                <TableCell className="max-w-0 px-4">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("truncate font-medium", !service.active && "text-muted-foreground")}>
+                      {service.name}
+                    </span>
+                    {!service.active && <Badge variant="outline" className="shrink-0">Desativado</Badge>}
+                  </div>
+                </TableCell>
                 <TableCell className="px-4 tabular-nums">{currencyFormat.format(service.priceCents / 100)}</TableCell>
                 <TableCell className="px-4 text-muted-foreground @max-md:hidden">{formatDuration(service.durationMinutes)}</TableCell>
                 {canManage && (

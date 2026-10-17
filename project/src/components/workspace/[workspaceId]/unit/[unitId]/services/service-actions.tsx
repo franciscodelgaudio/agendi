@@ -1,8 +1,13 @@
 "use client"
 
 import { useActionState, useState, useTransition } from "react"
-import { EllipsisIcon, PencilIcon, Trash2Icon } from "lucide-react"
-import { deleteServiceAction, updateServiceAction, type ServiceActionState } from "@/lib/actions/service"
+import { ArchiveIcon, ArchiveRestoreIcon, EllipsisIcon, PencilIcon } from "lucide-react"
+import {
+  deactivateServiceAction,
+  reactivateServiceAction,
+  updateServiceAction,
+  type ServiceActionState,
+} from "@/lib/actions/service"
 
 import {
   AlertDialog,
@@ -13,6 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -36,15 +42,18 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 
-type Service = ServiceFieldValues & { id: string }
+type Service = ServiceFieldValues & { id: string; active: boolean }
 
 type Props = { workspaceId: string; unitId: string; service: Service; treatmentRooms: ServiceRoomOption[] }
 
 export function ServiceActions({ workspaceId, unitId, service, treatmentRooms }: Props) {
   const [editOpen, setEditOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deactivateOpen, setDeactivateOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
   const [editKey, setEditKey] = useState(0)
+
+  // Desativado não aceita alteração: só reativar.
+  if (!service.active) return <ReactivateServiceButton workspaceId={workspaceId} unitId={unitId} service={service} />
 
   return (
     <>
@@ -65,9 +74,9 @@ export function ServiceActions({ workspaceId, unitId, service, treatmentRooms }:
             Editar
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-            <Trash2Icon />
-            Excluir
+          <DropdownMenuItem variant="destructive" onClick={() => setDeactivateOpen(true)}>
+            <ArchiveIcon />
+            Desativar
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -85,12 +94,12 @@ export function ServiceActions({ workspaceId, unitId, service, treatmentRooms }:
         </SheetContent>
       </Sheet>
 
-      <DeleteServiceDialog
+      <DeactivateServiceDialog
         workspaceId={workspaceId}
         unitId={unitId}
         service={service}
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
+        open={deactivateOpen}
+        onOpenChange={setDeactivateOpen}
       />
     </>
   )
@@ -126,7 +135,7 @@ function EditServiceForm({ workspaceId, unitId, service, treatmentRooms, onDone 
   )
 }
 
-function DeleteServiceDialog({
+function DeactivateServiceDialog({
   workspaceId,
   unitId,
   service,
@@ -136,9 +145,9 @@ function DeleteServiceDialog({
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
-  function handleDelete() {
+  function handleDeactivate() {
     startTransition(async () => {
-      const result = await deleteServiceAction(workspaceId, unitId, service.id)
+      const result = await deactivateServiceAction(workspaceId, unitId, service.id)
       setError(result.error)
       if (!result.error) onOpenChange(false)
     })
@@ -154,19 +163,39 @@ function DeleteServiceDialog({
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Excluir serviço?</AlertDialogTitle>
+          <AlertDialogTitle>Desativar serviço?</AlertDialogTitle>
           <AlertDialogDescription>
-            O serviço <strong>{service.name}</strong> será excluído permanentemente. Essa ação não pode ser desfeita.
+            O serviço <strong>{service.name}</strong> deixa de ser oferecido nesta unidade e sai dos formulários de
+            agendamento e de atendimento. Nada é apagado: os agendamentos e atendimentos antigos continuam com ele, e
+            você pode reativá-lo quando quiser. Só é possível desativar sem agendamentos por vir com este serviço.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error && <FieldError>{error}</FieldError>}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
-          <Button variant="destructive" onClick={handleDelete} loading={pending}>
-            {pending ? "Excluindo..." : "Excluir"}
+          <Button variant="destructive" onClick={handleDeactivate} loading={pending}>
+            {pending ? "Desativando..." : "Desativar"}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  )
+}
+
+function ReactivateServiceButton({ workspaceId, unitId, service }: Omit<Props, "treatmentRooms">) {
+  const [pending, startTransition] = useTransition()
+
+  function handleReactivate() {
+    startTransition(async () => {
+      const result = await reactivateServiceAction(workspaceId, unitId, service.id)
+      if (result.error) toast.error(result.error)
+    })
+  }
+
+  return (
+    <Button variant="outline" size="sm" onClick={handleReactivate} loading={pending}>
+      <ArchiveRestoreIcon />
+      {pending ? "Reativando..." : "Reativar"}
+    </Button>
   )
 }

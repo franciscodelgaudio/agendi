@@ -13,6 +13,8 @@ const productSchema = new Schema(
     // Imagem do produto (futuramente enviada para uma CDN).
     avatarUrl: { type: String, default: null, trim: true },
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
+    // Desativado sai dos seletores e mantém o histórico; ausente quando está ativo.
+    deactivatedAt: { type: Date },
   },
   { collection: "products", timestamps: true },
 );

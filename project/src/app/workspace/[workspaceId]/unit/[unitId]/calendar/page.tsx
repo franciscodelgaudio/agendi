@@ -4,6 +4,7 @@ import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permiss
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
+import { ACTIVE_SERVICE } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service-list"
 import { Workspace } from "@/models/Workspace"
 import { BookingCalendar, type BookingOptions } from "@/components/workspace/[workspaceId]/shared/calendar/booking-calendar"
 import { CalendarNav } from "@/components/workspace/[workspaceId]/shared/calendar/calendar-nav"
@@ -56,6 +57,8 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
               // Serviço cadastrado antes desses campos exige profissional e aceita qualquer espaço.
               requiresTherapist: { $ifNull: ["$requiresTherapist", true] },
               treatmentRoomIds: { $map: { input: { $ifNull: ["$treatmentRoomIds", []] }, as: "id", in: { $toString: "$$id" } } },
+              // Desativado só aparece no formulário do registro que já o usa.
+              active: ACTIVE_SERVICE,
             },
           },
         ],

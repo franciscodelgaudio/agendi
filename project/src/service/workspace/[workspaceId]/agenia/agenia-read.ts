@@ -231,7 +231,8 @@ export function buildReadTools(workspaceId: string) {
       inputSchema: z.object({ unitId: objectId }),
       execute: async ({ unitId }) => {
         if (!(await ownUnit(unitId))) return noUnit
-        const services = await Service.find({ unitId }).sort({ name: 1 }).lean()
+        // Desativado não é oferecido: não entra em agendamentos novos.
+        const services = await Service.find({ unitId, deactivatedAt: null }).sort({ name: 1 }).lean()
         return services.map((s) => ({
           id: s._id.toString(),
           name: s.name,
@@ -260,7 +261,8 @@ export function buildReadTools(workspaceId: string) {
           rating: number | null
           avatarUrl: string | null
         }>([
-          { $match: { workspaceId: wid } },
+          // Desativado (sempre com saldo zero) não aparece no estoque.
+          { $match: { workspaceId: wid, deactivatedAt: null } },
           ...productListPipeline({ q: search?.trim() ?? "", sort: "name", dir: "asc" }, holderId),
           { $limit: MAX_ROWS },
         ])

@@ -1,9 +1,10 @@
 "use client"
 
 import { useActionState, useState, useTransition } from "react"
-import { EllipsisIcon, PencilIcon, Trash2Icon } from "lucide-react"
+import { ArchiveIcon, ArchiveRestoreIcon, EllipsisIcon, PencilIcon } from "lucide-react"
 import {
-  deleteCatalogProductAction,
+  deactivateCatalogProductAction,
+  reactivateCatalogProductAction,
   updateCatalogProductAction,
   type ProductActionState,
 } from "@/lib/actions/product"
@@ -17,6 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -43,6 +45,7 @@ type Product = {
   notes: string | null
   rating: number | null
   avatarUrl: string | null
+  active: boolean
 }
 
 type Props = { workspaceId: string; product: Product }
@@ -50,19 +53,22 @@ type Props = { workspaceId: string; product: Product }
 // Ações do produto no catálogo do workspace: os dados dele valem para todos os estoques.
 export function CatalogProductActions({ workspaceId, product }: Props) {
   const [editOpen, setEditOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deactivateOpen, setDeactivateOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
   const [editKey, setEditKey] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
-  function handleDelete() {
+  function handleDeactivate() {
     startTransition(async () => {
-      const result = await deleteCatalogProductAction(workspaceId, product.id)
+      const result = await deactivateCatalogProductAction(workspaceId, product.id)
       setError(result.error)
-      if (!result.error) setDeleteOpen(false)
+      if (!result.error) setDeactivateOpen(false)
     })
   }
+
+  // Desativado não aceita alteração: só reativar.
+  if (!product.active) return <ReactivateCatalogProductButton workspaceId={workspaceId} product={product} />
 
   return (
     <>
@@ -81,9 +87,9 @@ export function CatalogProductActions({ workspaceId, product }: Props) {
             Editar
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-            <Trash2Icon />
-            Excluir
+          <DropdownMenuItem variant="destructive" onClick={() => setDeactivateOpen(true)}>
+            <ArchiveIcon />
+            Desativar
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -100,25 +106,26 @@ export function CatalogProductActions({ workspaceId, product }: Props) {
       </Sheet>
 
       <AlertDialog
-        open={deleteOpen}
+        open={deactivateOpen}
         onOpenChange={(next) => {
           if (!next) setError(null)
-          setDeleteOpen(next)
+          setDeactivateOpen(next)
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
+            <AlertDialogTitle>Desativar produto?</AlertDialogTitle>
             <AlertDialogDescription>
-              O produto <strong>{product.name}</strong> sai do catálogo e do estoque de todas as unidades. Essa ação não
-              pode ser desfeita.
+              O produto <strong>{product.name}</strong> sai dos estoques e da escolha de produtos nos serviços,
+              agendamentos e atendimentos. Nada é apagado: o histórico de compras e de uso continua, e você pode
+              reativá-lo quando quiser. Só é possível desativar sem quantidade em nenhum estoque.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {error && <FieldError>{error}</FieldError>}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
-            <Button variant="destructive" onClick={handleDelete} loading={pending}>
-              {pending ? "Excluindo..." : "Excluir"}
+            <Button variant="destructive" onClick={handleDeactivate} loading={pending}>
+              {pending ? "Desativando..." : "Desativar"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -159,5 +166,23 @@ function EditCatalogProductForm({ workspaceId, product, onDone }: Props & { onDo
         </Button>
       </SheetFooter>
     </form>
+  )
+}
+
+function ReactivateCatalogProductButton({ workspaceId, product }: Props) {
+  const [pending, startTransition] = useTransition()
+
+  function handleReactivate() {
+    startTransition(async () => {
+      const result = await reactivateCatalogProductAction(workspaceId, product.id)
+      if (result.error) toast.error(result.error)
+    })
+  }
+
+  return (
+    <Button variant="outline" size="sm" onClick={handleReactivate} loading={pending}>
+      <ArchiveRestoreIcon />
+      {pending ? "Reativando..." : "Reativar"}
+    </Button>
   )
 }

@@ -179,7 +179,8 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
   return {
     listServices: async (unitId) => {
       if (!(await unitOf(unitId))) return []
-      const services = await Service.find({ unitId }).sort({ name: 1 }).lean()
+      // Desativado não é oferecido na conversa.
+      const services = await Service.find({ unitId, deactivatedAt: null }).sort({ name: 1 }).lean()
       return services.map((service) => ({
         id: service._id.toString(),
         name: service.name,
@@ -191,7 +192,7 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
     findSlots: async ({ unitId, serviceId, durationMinutes, from, days }) => {
       const [unit, service] = await Promise.all([
         unitOf(unitId),
-        isObjectIdOrHexString(serviceId) ? Service.findOne({ _id: serviceId, unitId }).lean() : null,
+        isObjectIdOrHexString(serviceId) ? Service.findOne({ _id: serviceId, unitId, deactivatedAt: null }).lean() : null,
       ])
       if (!unit || !service) return []
       const { requiresTherapist, treatmentRoomIds } = serviceRules(service)
@@ -243,11 +244,12 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
       })
     },
 
-    // Passa pelas mesmas validações do agendamento feito na tela (conflito, sala cheia).
+    // Passa pelas mesmas validações do agendamento feito na tela (conflito, sala cheia). Serviço
+    // desativado no meio da conversa não agenda.
     createBooking: async ({ unitId, serviceId, therapistId, roomId, startsAt, guestName, guestRoom }) => {
       const [unit, service, workspace] = await Promise.all([
         unitOf(unitId),
-        isObjectIdOrHexString(serviceId) ? Service.findOne({ _id: serviceId, unitId }).lean() : null,
+        isObjectIdOrHexString(serviceId) ? Service.findOne({ _id: serviceId, unitId, deactivatedAt: null }).lean() : null,
         Workspace.findById(workspaceId).select({ userId: 1 }).lean(),
       ])
       if (!unit || !service || !workspace) return { ok: false }

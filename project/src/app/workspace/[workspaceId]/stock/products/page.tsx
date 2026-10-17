@@ -30,6 +30,7 @@ type ProductRow = {
   notes: string | null
   rating: number | null
   avatarUrl: string | null
+  active: boolean
 }
 
 // Catálogo de produtos do workspace, cadastrados uma vez só, com a soma de todos os estoques.
@@ -70,7 +71,7 @@ export default async function StockProductsPage({
         localField: "_id",
         foreignField: "workspaceId",
         as: "products",
-        pipeline: productListPipeline(query),
+        pipeline: productListPipeline(query, undefined, { withActive: true }),
       },
     },
     {

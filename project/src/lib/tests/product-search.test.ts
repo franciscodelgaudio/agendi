@@ -3,7 +3,9 @@ import { Types } from "mongoose";
 import { PRODUCT_SEARCH_LIMIT, productSearchPipeline } from "@/service/workspace/[workspaceId]/stock/products/product-search";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
-const WORKSPACE = { workspaceId: new Types.ObjectId(WORKSPACE_ID) };
+// Só produtos ativos: o desativado não é oferecido para escolha (deactivatedAt: null também
+// casa com o campo ausente).
+const WORKSPACE = { workspaceId: new Types.ObjectId(WORKSPACE_ID), deactivatedAt: null };
 
 // Busca do seletor de produtos no catálogo do workspace: poucos resultados por vez, para não
 // trazer o catálogo inteiro. O workspace e a ordem por nome usam o índice { workspaceId: 1, name: 1 }.
@@ -14,6 +16,11 @@ describe("productSearchPipeline", () => {
 
   it("limita a 20 resultados", () => {
     expect(PRODUCT_SEARCH_LIMIT).toBe(20);
+  });
+
+  it("deixa de fora os produtos desativados", () => {
+    const [stage] = productSearchPipeline(WORKSPACE_ID, "óleo") as [{ $match: Record<string, unknown> }];
+    expect(stage.$match.deactivatedAt).toBeNull();
   });
 
   it("sem busca, traz os primeiros do catálogo em ordem alfabética", () => {

@@ -354,3 +354,9 @@ Além das premissas de negócio em [Pendências](05-pendencias.md) (R2/R3, L5/L6
 - **`src/contextos/barramento.ts`:** raiz de composição que inscreve os consumidores; o resto do sistema só chama `publicar`.
 - **Primeiro evento:** a Organização publica `UnidadeCriada` (só id e nome). O Financeiro consome e cria a carteira própria da unidade com saldo zero no dia da criação, sem duplicar em evento repetido (ADR-026). O saldo informado no cadastro passa a ser gravado nessa carteira. Unidades antigas sem carteira continuam sem (exige migração).
 - **Fronteiras no lint:** ninguém importa `@/contextos/<x>/...`, só o `index` do contexto; `dominio/` não importa `mongoose`, `next`, `react` nem o código legado (`@/models`, `@/lib`, `@/service`).
+
+### Fase 3: andamento
+
+- **3.1 Quarto opcional (feito):** obrigatório só em unidade dentro de parceiro, a não ser para cliente de fora (ADR-041); vale para agendamento, correção, atendimento, registro com um clique, URA e AgenIA.
+- **3.2 Desativar produtos e serviços (feito):** `Product.deactivatedAt` e `Service.deactivatedAt`; nada é excluído. Serviço só desativa sem agendamentos por vir; produto só desativa sem saldo em nenhum estoque; "tirar do estoque" da unidade só com quantidade zero. Desativados saem da escolha (formulários, busca de produtos, estoques, URA, AgenIA) e continuam no histórico e na edição de registros antigos. Lacuna conhecida: o servidor ainda aceita um serviço desativado num agendamento novo vindo por id (só a URA recusa); fica para a 3.4. A unidade base do produto ficou para a fase do Estoque.
+- **3.3 Clientes** e **3.4 Catálogo (tipo de serviço + oferta por unidade)**: pendentes.

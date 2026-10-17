@@ -13,8 +13,10 @@ import {
   adjustStock,
   createCatalogProduct,
   createProduct,
-  deleteProduct,
+  deactivateProduct,
   depleteProduct,
+  reactivateProduct,
+  removeProductFromStock,
   registerPurchase,
   updateCatalogProduct,
   type AddStockItemResult,
@@ -54,6 +56,7 @@ const errorMessages: Record<
   | RegisterPurchaseError
   | AdjustStockError
   | PayerError
+  | "product_has_stock"
   | "stock_not_found"
   | "out_of_stock"
   | "unauthenticated",
@@ -69,6 +72,7 @@ const errorMessages: Record<
   unit_not_found: "Unidade não encontrada ou sem permissão.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   product_not_found: "Produto não encontrado ou sem permissão.",
+  product_has_stock: "O produto ainda tem quantidade em estoque. Ajuste a contagem para zero antes.",
   already_in_stock: "Este produto já está no estoque desta unidade.",
   out_of_stock: "A quantidade deste produto já é zero. Registre uma compra antes de marcar que acabou.",
   above_current: "A contagem passa do que há em estoque. Para pôr mais unidades, registre uma compra.",
@@ -454,7 +458,7 @@ export async function adjustStockAction(
 }
 
 // Tira o produto do estoque da unidade; ele continua no catálogo e nos outros estoques.
-export async function deleteProductAction(
+export async function removeProductFromStockAction(
   workspaceId: string,
   unitId: string,
   productId: string,
@@ -462,9 +466,14 @@ export async function deleteProductAction(
   const target = await resolveProductTarget(workspaceId, unitId, productId)
   if ("error" in target) return { error: target.error }
 
-  const result = await deleteProduct(target.productId, async (id) => {
-    const { deletedCount } = await StockItem.deleteOne(stockItemOf(target.unit.holderId, id))
-    return deletedCount > 0
+  // Só sai com saldo zero: nenhuma quantidade some sem registro.
+  const result = await removeProductFromStock(target.productId, {
+    hasBalance: async (id) =>
+      (await StockItem.exists({ ...stockItemOf(target.unit.holderId, id), quantity: { $gt: 0 } })) !== null,
+    remove: async (id) => {
+      const { deletedCount } = await StockItem.deleteOne(stockItemOf(target.unit.holderId, id))
+      return deletedCount > 0
+    },
   })
 
   if (!result.ok) return { error: errorMessages[result.error] }
@@ -617,16 +626,41 @@ export async function updateCatalogProductAction(
 }
 
 // Exclui o produto do catálogo e de todos os estoques.
-export async function deleteCatalogProductAction(workspaceId: string, productId: string): Promise<ProductActionState> {
+export async function deactivateCatalogProductAction(workspaceId: string, productId: string): Promise<ProductActionState> {
+  const target = await resolveCatalogWorkspace(workspaceId)
+  if ("error" in target) return { error: target.error }
+
+  // Nada é apagado: o produto sai dos seletores, e os estoques e o histórico continuam.
+  const id = isObjectIdOrHexString(productId) ? productId : null
+  const result = await deactivateProduct(id, {
+    hasBalance: async (productId) =>
+      (await StockItem.exists({ productId: new Types.ObjectId(productId), quantity: { $gt: 0 } })) !== null,
+    deactivate: async (productId) => {
+      const { matchedCount } = await Product.updateOne(
+        { _id: productId, workspaceId: target.workspaceId, deactivatedAt: null },
+        { $set: { deactivatedAt: new Date() } },
+      )
+      return matchedCount > 0
+    },
+  })
+
+  if (!result.ok) return { error: errorMessages[result.error] }
+
+  refresh()
+  return { error: null }
+}
+
+export async function reactivateCatalogProductAction(workspaceId: string, productId: string): Promise<ProductActionState> {
   const target = await resolveCatalogWorkspace(workspaceId)
   if ("error" in target) return { error: target.error }
 
   const id = isObjectIdOrHexString(productId) ? productId : null
-  const result = await deleteProduct(id, async (productId) => {
-    const { deletedCount } = await Product.deleteOne({ _id: productId, workspaceId: target.workspaceId })
-    if (deletedCount === 0) return false
-    await StockItem.deleteMany({ productId })
-    return true
+  const result = await reactivateProduct(id, async (productId) => {
+    const { matchedCount } = await Product.updateOne(
+      { _id: productId, workspaceId: target.workspaceId, deactivatedAt: { $ne: null } },
+      { $unset: { deactivatedAt: 1 } },
+    )
+    return matchedCount > 0
   })
 
   if (!result.ok) return { error: errorMessages[result.error] }

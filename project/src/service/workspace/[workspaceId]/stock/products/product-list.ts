@@ -43,10 +43,19 @@ const NEXT_UNIT_COST = {
   $ifNull: [{ $getField: { field: "unitCostCents", input: { $first: { $first: "$items.lots" } } } }, null],
 };
 
+// Produto ativo no catálogo: sem deactivatedAt (null também casa com o campo ausente). O
+// desativado não tem saldo em nenhum estoque e sai das listas de estoque e dos seletores.
+export const ACTIVE_PRODUCT: PipelineStage.Match = { $match: { deactivatedAt: null } };
+
 // Etapas sobre os produtos do catálogo, com a quantidade dos itens de estoque. Com holderId
 // (o estoque da unidade ou o compartilhado), só os produtos que estão nele, com a quantidade de
-// lá; sem, todos do catálogo, com a soma de todos os estoques.
-export function productListPipeline({ q, sort, dir }: ProductListQuery, holderId?: string) {
+// lá; sem, todos do catálogo, com a soma de todos os estoques. withActive: projeta active, para
+// o catálogo marcar os desativados.
+export function productListPipeline(
+  { q, sort, dir }: ProductListQuery,
+  holderId?: string,
+  { withActive = false } = {},
+) {
   const stages: PipelineStage.FacetPipelineStage[] = [];
   if (q) stages.push({ $match: { name: { $regex: escapeRegex(q), $options: "i" } } });
   stages.push({
@@ -81,6 +90,7 @@ export function productListPipeline({ q, sort, dir }: ProductListQuery, holderId
         notes: { $ifNull: ["$notes", null] },
         rating: { $ifNull: ["$rating", null] },
         avatarUrl: { $ifNull: ["$avatarUrl", null] },
+        ...(withActive && { active: { $eq: [{ $ifNull: ["$deactivatedAt", null] }, null] } }),
       },
     },
   );

@@ -4,7 +4,9 @@ import {
   createCatalogProduct,
   createProduct,
   adjustStock,
-  deleteProduct,
+  deactivateProduct,
+  reactivateProduct,
+  removeProductFromStock,
   depleteProduct,
   registerPurchase,
   updateCatalogProduct,
@@ -174,30 +176,121 @@ describe("createProduct", () => {
   );
 });
 
-describe("deleteProduct", () => {
-  it("exclui o produto pelo id", async () => {
-    const remove = vi.fn().mockResolvedValue(true);
+// Nada some sem registro: o produto só sai do estoque da unidade com saldo zero.
+// hasBalance: true quando o estoque da unidade ainda tem quantidade do produto.
+describe("removeProductFromStock", () => {
+  function makeDeps({ balance = false, found = true } = {}) {
+    return { hasBalance: vi.fn().mockResolvedValue(balance), remove: vi.fn().mockResolvedValue(found) };
+  }
 
-    const result = await deleteProduct(PRODUCT_ID, remove);
+  it("tira o produto do estoque da unidade quando o saldo é zero", async () => {
+    const deps = makeDeps();
+
+    const result = await removeProductFromStock(PRODUCT_ID, deps);
 
     expect(result).toEqual({ ok: true });
-    expect(remove).toHaveBeenCalledWith(PRODUCT_ID);
+    expect(deps.hasBalance).toHaveBeenCalledWith(PRODUCT_ID);
+    expect(deps.remove).toHaveBeenCalledWith(PRODUCT_ID);
+  });
+
+  it("com saldo, retorna product_has_stock sem tirar", async () => {
+    const deps = makeDeps({ balance: true });
+
+    const result = await removeProductFromStock(PRODUCT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "product_has_stock" });
+    expect(deps.remove).not.toHaveBeenCalled();
   });
 
   it.each([undefined, null, ""])(
-    "retorna product_not_found sem excluir quando não há productId (%j)",
+    "retorna product_not_found sem consultar nem tirar quando não há productId (%j)",
     async (productId) => {
-      const remove = vi.fn().mockResolvedValue(true);
+      const deps = makeDeps();
 
-      const result = await deleteProduct(productId, remove);
+      const result = await removeProductFromStock(productId, deps);
 
       expect(result).toEqual({ ok: false, error: "product_not_found" });
-      expect(remove).not.toHaveBeenCalled();
+      expect(deps.hasBalance).not.toHaveBeenCalled();
+      expect(deps.remove).not.toHaveBeenCalled();
     },
   );
 
-  it("retorna product_not_found quando o produto não existe (ou não é da unidade)", async () => {
-    const result = await deleteProduct(PRODUCT_ID, vi.fn().mockResolvedValue(false));
+  it("retorna product_not_found quando o produto não está no estoque da unidade", async () => {
+    const result = await removeProductFromStock(PRODUCT_ID, makeDeps({ found: false }));
+
+    expect(result).toEqual({ ok: false, error: "product_not_found" });
+  });
+});
+
+// O produto do catálogo nunca é excluído: desativado, sai dos seletores e mantém o histórico.
+// hasBalance: true quando algum estoque ainda tem quantidade do produto.
+describe("deactivateProduct", () => {
+  function makeDeps({ balance = false, found = true } = {}) {
+    return { hasBalance: vi.fn().mockResolvedValue(balance), deactivate: vi.fn().mockResolvedValue(found) };
+  }
+
+  it("desativa o produto quando nenhum estoque tem saldo dele", async () => {
+    const deps = makeDeps();
+
+    const result = await deactivateProduct(PRODUCT_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.hasBalance).toHaveBeenCalledWith(PRODUCT_ID);
+    expect(deps.deactivate).toHaveBeenCalledWith(PRODUCT_ID);
+  });
+
+  it("com saldo em algum estoque, retorna product_has_stock sem desativar", async () => {
+    const deps = makeDeps({ balance: true });
+
+    const result = await deactivateProduct(PRODUCT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "product_has_stock" });
+    expect(deps.deactivate).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, null, ""])(
+    "retorna product_not_found sem consultar nem desativar quando não há productId (%j)",
+    async (productId) => {
+      const deps = makeDeps();
+
+      const result = await deactivateProduct(productId, deps);
+
+      expect(result).toEqual({ ok: false, error: "product_not_found" });
+      expect(deps.hasBalance).not.toHaveBeenCalled();
+      expect(deps.deactivate).not.toHaveBeenCalled();
+    },
+  );
+
+  // deactivate devolve false quando o produto não existe, não é do workspace ou já está desativado.
+  it("retorna product_not_found quando o produto não existe, não é do workspace ou já está desativado", async () => {
+    const result = await deactivateProduct(PRODUCT_ID, makeDeps({ found: false }));
+
+    expect(result).toEqual({ ok: false, error: "product_not_found" });
+  });
+});
+
+describe("reactivateProduct", () => {
+  it("reativa o produto pelo id", async () => {
+    const reactivate = vi.fn().mockResolvedValue(true);
+
+    const result = await reactivateProduct(PRODUCT_ID, reactivate);
+
+    expect(result).toEqual({ ok: true });
+    expect(reactivate).toHaveBeenCalledWith(PRODUCT_ID);
+  });
+
+  it.each([undefined, null, ""])("retorna product_not_found sem reativar quando não há productId (%j)", async (productId) => {
+    const reactivate = vi.fn().mockResolvedValue(true);
+
+    const result = await reactivateProduct(productId, reactivate);
+
+    expect(result).toEqual({ ok: false, error: "product_not_found" });
+    expect(reactivate).not.toHaveBeenCalled();
+  });
+
+  // reactivate devolve false quando o produto não existe, não é do workspace ou já está ativo.
+  it("retorna product_not_found quando o produto não existe, não é do workspace ou já está ativo", async () => {
+    const result = await reactivateProduct(PRODUCT_ID, vi.fn().mockResolvedValue(false));
 
     expect(result).toEqual({ ok: false, error: "product_not_found" });
   });

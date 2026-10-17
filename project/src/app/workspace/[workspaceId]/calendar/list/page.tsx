@@ -11,6 +11,7 @@ import {
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
 import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
+import { ACTIVE_SERVICE } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service-list"
 import { Workspace } from "@/models/Workspace"
 import type { BookingOptions } from "@/components/workspace/[workspaceId]/shared/calendar/booking-calendar"
 import { BookingTable } from "@/components/workspace/[workspaceId]/shared/calendar/list/booking-table"
@@ -106,6 +107,8 @@ export default async function CalendarListPage({
               // Serviço cadastrado antes desses campos exige profissional e aceita qualquer espaço.
               requiresTherapist: { $ifNull: ["$requiresTherapist", true] },
               treatmentRoomIds: { $map: { input: { $ifNull: ["$treatmentRoomIds", []] }, as: "id", in: { $toString: "$$id" } } },
+              // Desativado só aparece no formulário do registro que já o usa.
+              active: ACTIVE_SERVICE,
             },
           },
         ],

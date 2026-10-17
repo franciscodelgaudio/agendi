@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createService, deleteService, updateService } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service";
+import { createService, deactivateService, reactivateService, updateService } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const SERVICE_ID = "64b7f0c2a1b2c3d4e5f60730";
@@ -325,31 +325,78 @@ describe("updateService", () => {
   });
 });
 
-describe("deleteService", () => {
-  it("exclui o serviço pelo id", async () => {
-    const remove = vi.fn().mockResolvedValue(true);
+// A oferta do serviço na unidade nunca é excluída: desativada, sai dos formulários e o
+// histórico (agendamentos, atendimentos, caixa) continua ligado a ela.
+// hasPendingBookings: true quando há agendamento por vir, ainda não registrado, com o serviço.
+describe("deactivateService", () => {
+  function makeDeps({ pending = false, found = true } = {}) {
+    return { hasPendingBookings: vi.fn().mockResolvedValue(pending), deactivate: vi.fn().mockResolvedValue(found) };
+  }
 
-    const result = await deleteService(SERVICE_ID, remove);
+  it("desativa o serviço pelo id", async () => {
+    const deps = makeDeps();
+
+    const result = await deactivateService(SERVICE_ID, deps);
 
     expect(result).toEqual({ ok: true });
-    expect(remove).toHaveBeenCalledWith(SERVICE_ID);
+    expect(deps.hasPendingBookings).toHaveBeenCalledWith(SERVICE_ID);
+    expect(deps.deactivate).toHaveBeenCalledWith(SERVICE_ID);
+  });
+
+  it("com agendamentos por vir, retorna service_has_pending_bookings sem desativar", async () => {
+    const deps = makeDeps({ pending: true });
+
+    const result = await deactivateService(SERVICE_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "service_has_pending_bookings" });
+    expect(deps.deactivate).not.toHaveBeenCalled();
   });
 
   it.each([undefined, null, ""])(
-    "retorna service_not_found sem excluir quando não há serviceId (%j)",
+    "retorna service_not_found sem consultar nem desativar quando não há serviceId (%j)",
     async (serviceId) => {
-      const remove = vi.fn().mockResolvedValue(true);
+      const deps = makeDeps();
 
-      const result = await deleteService(serviceId, remove);
+      const result = await deactivateService(serviceId, deps);
 
       expect(result).toEqual({ ok: false, error: "service_not_found" });
-      expect(remove).not.toHaveBeenCalled();
+      expect(deps.hasPendingBookings).not.toHaveBeenCalled();
+      expect(deps.deactivate).not.toHaveBeenCalled();
     },
   );
 
-  it("retorna service_not_found quando o serviço não existe (ou não é da unidade)", async () => {
-    const result = await deleteService(SERVICE_ID, vi.fn().mockResolvedValue(false));
+  // deactivate devolve false quando o serviço não existe, não é da unidade ou já está desativado.
+  it("retorna service_not_found quando o serviço não existe, não é da unidade ou já está desativado", async () => {
+    const result = await deactivateService(SERVICE_ID, makeDeps({ found: false }));
 
     expect(result).toEqual({ ok: false, error: "service_not_found" });
   });
 });
+
+describe("reactivateService", () => {
+  it("reativa o serviço pelo id", async () => {
+    const reactivate = vi.fn().mockResolvedValue(true);
+
+    const result = await reactivateService(SERVICE_ID, reactivate);
+
+    expect(result).toEqual({ ok: true });
+    expect(reactivate).toHaveBeenCalledWith(SERVICE_ID);
+  });
+
+  it.each([undefined, null, ""])("retorna service_not_found sem reativar quando não há serviceId (%j)", async (serviceId) => {
+    const reactivate = vi.fn().mockResolvedValue(true);
+
+    const result = await reactivateService(serviceId, reactivate);
+
+    expect(result).toEqual({ ok: false, error: "service_not_found" });
+    expect(reactivate).not.toHaveBeenCalled();
+  });
+
+  // reactivate devolve false quando o serviço não existe, não é da unidade ou já está ativo.
+  it("retorna service_not_found quando o serviço não existe, não é da unidade ou já está ativo", async () => {
+    const result = await reactivateService(SERVICE_ID, vi.fn().mockResolvedValue(false));
+
+    expect(result).toEqual({ ok: false, error: "service_not_found" });
+  });
+});
+

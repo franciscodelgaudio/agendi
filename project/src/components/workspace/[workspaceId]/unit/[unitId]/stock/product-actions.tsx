@@ -14,10 +14,10 @@ import {
   Trash2Icon,
 } from "lucide-react"
 import {
-  deleteProductAction,
   adjustStockAction,
   depleteProductAction,
   registerPurchaseAction,
+  removeProductFromStockAction,
   transferProductAction,
   updateProductAction,
   type ProductActionState,
@@ -83,7 +83,7 @@ export function ProductActions({
   const [editOpen, setEditOpen] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferKey, setTransferKey] = useState(0)
-  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [removeOpen, setRemoveOpen] = useState(false)
   const [depleteOpen, setDepleteOpen] = useState(false)
   const [purchaseOpen, setPurchaseOpen] = useState(false)
   const [adjustOpen, setAdjustOpen] = useState(false)
@@ -146,7 +146,7 @@ export function ProductActions({
             Histórico de uso
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
+          <DropdownMenuItem variant="destructive" onClick={() => setRemoveOpen(true)}>
             <Trash2Icon />
             Tirar do estoque
           </DropdownMenuItem>
@@ -205,12 +205,12 @@ export function ProductActions({
         </Sheet>
       )}
 
-      <DeleteProductDialog
+      <RemoveProductDialog
         workspaceId={workspaceId}
         unitId={unitId}
         product={product}
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
+        open={removeOpen}
+        onOpenChange={setRemoveOpen}
       />
 
       <DepleteProductDialog
@@ -261,7 +261,7 @@ function EditProductForm({ workspaceId, unitId, product, onDone }: Props & { onD
   )
 }
 
-function DeleteProductDialog({
+function RemoveProductDialog({
   workspaceId,
   unitId,
   product,
@@ -271,9 +271,9 @@ function DeleteProductDialog({
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
-  function handleDelete() {
+  function handleRemove() {
     startTransition(async () => {
-      const result = await deleteProductAction(workspaceId, unitId, product.id)
+      const result = await removeProductFromStockAction(workspaceId, unitId, product.id)
       setError(result.error)
       if (!result.error) onOpenChange(false)
     })
@@ -291,14 +291,15 @@ function DeleteProductDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Tirar do estoque?</AlertDialogTitle>
           <AlertDialogDescription>
-            O produto <strong>{product.name}</strong> sai do estoque desta unidade, com a quantidade dele. Ele continua no
-            catálogo e nos estoques das outras unidades.
+            O produto <strong>{product.name}</strong> sai do estoque desta unidade e continua no catálogo e nos estoques
+            das outras unidades. Nada do histórico de compras e de uso é apagado. Só é possível tirar com a quantidade
+            zerada: se ainda houver unidades, ajuste a contagem para zero antes.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error && <FieldError>{error}</FieldError>}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
-          <Button variant="destructive" onClick={handleDelete} loading={pending}>
+          <Button variant="destructive" onClick={handleRemove} loading={pending}>
             {pending ? "Tirando..." : "Tirar"}
           </Button>
         </AlertDialogFooter>
