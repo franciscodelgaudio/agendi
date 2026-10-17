@@ -304,8 +304,8 @@ Cada passo segue a skill `tdd` do projeto: caracterizar, RED, aprovação, GREEN
 | Fase | O quê | Por quê |
 |---|---|---|
 | **0** | **Parar a perda de histórico:** desativar unidade em vez de excluir; proteger no servidor fatos que hoje podem ser apagados | Cada dia sem isso pode destruir dados de forma irrecuperável |
-| 1 | Rede de segurança: testes de caracterização das actions; *golden master* dos números de caixa, folha e participação do parceiro sobre dados semeados; projeto vitest de integração com Mongo real | Esses números são hoje a "verdade" de três contextos |
-| 2 | Base comum: envelope de eventos, regras de lint, módulo de acesso | Pré-requisito de todos os contextos |
+| ~~1~~ | ~~Rede de segurança com testes de integração (Mongo real) e *golden master*~~ **Descartada pelo negócio.** A proteção fica nos testes unitários e na caracterização por função exigida pela skill `tdd` | — |
+| 2 | Base comum: envelope de eventos, regras de lint (o módulo de acesso fica para a fase 4, junto com o `Profissional`) | Pré-requisito de todos os contextos |
 | 3 | Catálogo e Clientes | Genéricos, a montante, baixo risco |
 | 4 | Organização: esvaziar `Unit` e `WorkspaceMember`, criar `Profissional` | Desbloqueia Atendimento, Remuneração e Liquidação |
 | 5 | Atendimento: agregado novo, agenda versionada, `AtendimentoConcluido`; projeção legada mantém o caixa atual | Core; origem de todos os eventos |
@@ -342,3 +342,10 @@ Além das premissas de negócio em [Pendências](05-pendencias.md) (R2/R3, F1–
 | D8 | O ambiente local e o de CI rodam Mongo em replica set (necessário para transações e outbox)? |
 | D9 | Agendamentos passados nunca registrados: no-show, esquecimento ou cancelamento? Define o estado na migração |
 | D10 | Profissional sem login: impacto em relatórios e comissão hoje ligados a `User` |
+
+### Fase 2: o que foi feito
+
+- **`src/compartilhado/eventos`:** envelope `EventoDeDominio` (`id`, `tipo`, `versao`, `ocorridoEm`, `empresaId`, `agregadoId`, `dados`) e publicador síncrono no mesmo processo. Os consumidores rodam um de cada vez; a falha de um vai para o log e não impede os outros. Sem outbox ainda: o efeito de um consumidor que falha se perde.
+- **`src/contextos/barramento.ts`:** raiz de composição que inscreve os consumidores; o resto do sistema só chama `publicar`.
+- **Primeiro evento:** a Organização publica `UnidadeCriada` (só id e nome). O Financeiro consome e cria a carteira própria da unidade com saldo zero no dia da criação, sem duplicar em evento repetido (ADR-026). O saldo informado no cadastro passa a ser gravado nessa carteira. Unidades antigas sem carteira continuam sem (exige migração).
+- **Fronteiras no lint:** ninguém importa `@/contextos/<x>/...`, só o `index` do contexto; `dominio/` não importa `mongoose`, `next`, `react` nem o código legado (`@/models`, `@/lib`, `@/service`).

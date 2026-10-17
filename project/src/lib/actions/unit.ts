@@ -2,6 +2,8 @@
 
 import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
+import { publicar } from "@/contextos/barramento"
+import { unidadeCriada } from "@/contextos/organizacao"
 import { getSessionUserId } from "@/service/(auth)/session"
 import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
 import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
@@ -146,15 +148,10 @@ export async function createUnitAction(
       const { openingBalance, ...unitData } = data
       const unit = await Unit.create({ ...unitData, treatmentRooms: toTreatmentRoomDocs(data.treatmentRooms) })
       const id = unit._id.toString()
-      // O saldo informado no cadastro vira uma carteira só da unidade, com o nome dela.
-      if (openingBalance) {
-        await Wallet.create({
-          name: unit.name.slice(0, 40),
-          openingBalance,
-          units: [{ unitId: unit._id, amountCents: null }],
-          workspaceId: data.workspaceId,
-        })
-      }
+      // O Financeiro reage criando a carteira própria da unidade, com saldo zero.
+      await publicar(unidadeCriada({ empresaId: data.workspaceId, unidadeId: id, nome: unit.name }))
+      // O saldo informado no cadastro vai para essa carteira.
+      if (openingBalance) await Wallet.updateOne({ "units.unitId": unit._id }, { $set: { openingBalance } })
       if (team) await applyTeam(data.workspaceId, id, team)
       return { id }
     },

@@ -48,7 +48,8 @@ export function CreateUnitSheet({ workspaceId, team }: { workspaceId: string; te
             <Field>
               <OpeningBalanceFields idPrefix="create-unit" />
               <FieldDescription>
-                Cria uma carteira só desta unidade. Para dividir uma conta com outras unidades, use Carteiras no Caixa.
+                Toda unidade ganha uma carteira só dela; o saldo informado é o inicial dessa carteira. Para dividir uma
+                conta com outras unidades, use Carteiras no Caixa.
               </FieldDescription>
             </Field>
           </FieldGroup>
