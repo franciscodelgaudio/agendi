@@ -60,7 +60,12 @@ export default async function CalendarListPage({
         localField: "_id",
         foreignField: "workspaceId",
         as: "units",
-        pipeline: [{ $match: { deactivatedAt: null } }, { $sort: { name: 1, _id: 1 } }, { $project: { name: 1, treatmentRooms: 1 } }],
+        pipeline: [
+          { $match: { deactivatedAt: null } },
+          { $sort: { name: 1, _id: 1 } },
+          // partner: funciona dentro de um parceiro (tem repasse), então o quarto do cliente é obrigatório.
+          { $project: { name: 1, treatmentRooms: 1, partner: { $ne: [{ $ifNull: ["$revenueShare", null] }, null] } } },
+        ],
       },
     },
     {
@@ -137,6 +142,13 @@ export default async function CalendarListPage({
                 },
               ],
             },
+          },
+        },
+        partnerUnitIds: {
+          $map: {
+            input: { $filter: { input: "$units", as: "unit", cond: "$$unit.partner" } },
+            as: "unit",
+            in: { $toString: "$$unit._id" },
           },
         },
         therapists: 1,

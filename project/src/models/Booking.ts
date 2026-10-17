@@ -21,7 +21,8 @@ const bookingSchema = new Schema(
     therapistName: { type: String, default: null },
     guest: {
       name: { type: String, required: true, trim: true },
-      room: { type: String, required: true, trim: true },
+      // Vazio quando o cliente não tem quarto: espaço próprio ou cliente de fora numa unidade com parceiro.
+      room: { type: String, default: "", trim: true },
     },
     startsAt: { type: Date, required: true },
     endsAt: { type: Date, required: true },

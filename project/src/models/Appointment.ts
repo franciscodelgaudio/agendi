@@ -45,7 +45,8 @@ const appointmentSchema = new Schema(
     performedAt: { type: Date, required: true },
     guest: {
       name: { type: String, required: true, trim: true },
-      room: { type: String, required: true, trim: true },
+      // Vazio quando o cliente não tem quarto: espaço próprio ou cliente de fora numa unidade com parceiro.
+      room: { type: String, default: "", trim: true },
     },
     items: { type: [appointmentItemSchema], required: true },
     products: { type: [selectedProductSchema], default: [] },

@@ -162,8 +162,9 @@ function DeleteAppointmentDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Excluir atendimento?</AlertDialogTitle>
           <AlertDialogDescription>
-            O atendimento de <strong>{appointment.guest.name}</strong> (quarto {appointment.guest.room}) será excluído
-            permanentemente. Essa ação não pode ser desfeita.
+            O atendimento de <strong>{appointment.guest.name}</strong>
+            {appointment.guest.room && ` (quarto ${appointment.guest.room})`} será excluído permanentemente.
+            Essa ação não pode ser desfeita.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error && <FieldError>{error}</FieldError>}

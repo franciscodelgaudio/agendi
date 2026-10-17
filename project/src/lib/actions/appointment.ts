@@ -7,6 +7,7 @@ import { findWorkspaceTherapists, objectIds } from "@/service/workspace/[workspa
 import { findUnitProducts } from "@/service/workspace/[workspaceId]/stock/products/product-lookup"
 import { forbiddenMessage, type UnitAccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
 import { findManagedUnit } from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-access"
+import { isGuestRoomRequired } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-store"
 import {
   createAppointment,
   deleteAppointment,
@@ -31,7 +32,7 @@ const errorMessages: Record<
   invalid_input: "Preencha hóspede, quarto, data/hora e os serviços.",
   invalid_guest_name: "Informe o nome do hóspede.",
   guest_name_too_long: "O nome do hóspede pode ter no máximo 80 caracteres.",
-  invalid_room: "Informe o quarto.",
+  invalid_room: "Informe o quarto ou marque cliente de fora.",
   room_too_long: "O quarto pode ter no máximo 20 caracteres.",
   invalid_performed_at: "Informe uma data e hora válidas.",
   no_items: "Adicione pelo menos um serviço.",
@@ -67,7 +68,9 @@ function findAppointmentUnit(workspaceId: string, unitId: unknown, userId: strin
 function appointmentInput(formData: FormData) {
   return {
     guestName: formData.get("guestName"),
-    room: formData.get("room"),
+    // O campo some do formulário quando o cliente é de fora.
+    room: formData.get("room") ?? "",
+    outsideGuest: formData.get("outsideGuest") === "on",
     performedAt: formData.get("performedAt"),
     serviceIds: formData.getAll("serviceId"),
     therapistIds: formData.getAll("therapistId"),
@@ -82,8 +85,9 @@ function appointmentInput(formData: FormData) {
 }
 
 // Buscas usadas por createAppointment/updateAppointment, restritas à unidade e ao workspace.
-function appointmentLookups(unit: { workspaceId: string; unitId: string }) {
+async function appointmentLookups(unit: { workspaceId: string; unitId: string }) {
   return {
+    guestRoomRequired: await isGuestRoomRequired(unit.unitId),
     findServices: async (ids: string[]) => {
       const services = await Service.find({ _id: { $in: objectIds(ids) }, unitId: unit.unitId })
         .select({ name: 1, priceCents: 1, durationMinutes: 1, requiresTherapist: 1 })
@@ -116,7 +120,7 @@ export async function createAppointmentAction(
   const { unit } = access
 
   const result = await createAppointment(appointmentInput(formData), unit.unitId, {
-    ...appointmentLookups(unit),
+    ...(await appointmentLookups(unit)),
     insert: async (data) => {
       const appointment = await Appointment.create({ ...data, createdBy: userId })
       return { id: appointment._id.toString() }
@@ -147,7 +151,7 @@ export async function updateAppointmentAction(
     appointmentInput(formData),
     isObjectIdOrHexString(appointmentId) ? appointmentId : null,
     {
-      ...appointmentLookups(unit),
+      ...(await appointmentLookups(unit)),
       update: async (id, fields) => {
         const { matchedCount } = await Appointment.updateOne({ _id: id, unitId: unit.unitId }, { $set: { ...fields, discount: fields.discount ?? null } })
         return matchedCount > 0
@@ -190,7 +194,7 @@ export async function updateWorkspaceAppointmentAction(
     appointmentInput(formData),
     isObjectIdOrHexString(appointmentId) ? appointmentId : null,
     {
-      ...appointmentLookups(unit),
+      ...(await appointmentLookups(unit)),
       update: async (id, fields) => {
         const workspaceUnitIds = await Unit.find({ workspaceId: unit.workspaceId, deactivatedAt: null }).distinct("_id")
         const { matchedCount } = await Appointment.updateOne(
@@ -287,7 +291,7 @@ async function convertBookingInUnit(
     input,
     { bookingId: isObjectIdOrHexString(bookingId) ? bookingId : null, unitId: unit.unitId },
     {
-      ...appointmentLookups(unit),
+      ...(await appointmentLookups(unit)),
       findBooking: async (id) => {
         const booking = await Booking.findOne({ _id: id, unitId: { $in: workspaceUnitIds } })
           .select({ appointmentId: 1 })

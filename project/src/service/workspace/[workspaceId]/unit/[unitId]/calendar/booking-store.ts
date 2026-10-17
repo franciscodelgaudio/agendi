@@ -97,8 +97,15 @@ export function serviceRules(service: {
 }
 
 // Buscas usadas por createBooking/updateBooking, restritas à unidade e ao workspace.
-export function bookingLookups(unit: { workspaceId: string; unitId: string }, unitIds: Types.ObjectId[]) {
+// true quando a unidade funciona dentro de um parceiro (tem regra de repasse): o quarto do
+// cliente é obrigatório, a não ser para cliente de fora.
+export async function isGuestRoomRequired(unitId: string | Types.ObjectId) {
+  return (await Unit.exists({ _id: unitId, revenueShare: { $ne: null } })) !== null
+}
+
+export async function bookingLookups(unit: { workspaceId: string; unitId: string }, unitIds: Types.ObjectId[]) {
   return {
+    guestRoomRequired: await isGuestRoomRequired(unit.unitId),
     findService: async (id: string) => {
       if (!isObjectIdOrHexString(id)) return null
       const service = await Service.findOne({ _id: id, unitId: unit.unitId })

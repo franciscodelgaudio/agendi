@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { DateTimeField } from "@/components/shared/date-time-field"
+import { GuestRoomField } from "@/components/workspace/[workspaceId]/shared/calendar/guest-room-field"
 import { ProductPicker, withServiceProducts } from "@/components/workspace/[workspaceId]/shared/stock/product-picker"
 import { currencyFormat, formatDuration } from "@/components/shared/service-format"
 import { TherapistLabel, TherapistSelectValue, type TherapistOption } from "@/components/workspace/[workspaceId]/shared/team/therapist-avatar"
@@ -35,7 +36,8 @@ type Row = { key: number; serviceId: string | null; therapistId: string | null; 
 
 export type AppointmentFormValues = {
   // Na visão do workspace, a unidade é escolhida no formulário; no calendário de uma
-  // unidade, vai num campo oculto para a action que lê a unidade do formulário.
+  // unidade, vai num campo oculto para a action que lê a unidade do formulário. Também diz
+  // se o quarto é obrigatório (unidade com parceiro).
   unitId?: string
   guestName: string
   room: string
@@ -65,6 +67,9 @@ export type AppointmentOptions = {
   }[]
   therapists: TherapistOption[]
   units?: { id: string; name: string }[]
+  // Unidades que funcionam dentro de um parceiro (com repasse): nelas o quarto é obrigatório,
+  // a não ser para cliente de fora.
+  partnerUnitIds: string[]
 }
 
 type Props = AppointmentOptions & {
@@ -94,6 +99,7 @@ export function AppointmentForm({
   services: allServices,
   therapists,
   units,
+  partnerUnitIds,
   mode,
   defaultValues,
   action,
@@ -185,17 +191,18 @@ export function AppointmentForm({
             required
           />
         </Field>
-        <Field>
-          <FieldLabel htmlFor="appointment-room">Quarto</FieldLabel>
-          <Input
-            id="appointment-room"
-            name="room"
-            placeholder="204"
-            defaultValue={defaultValues.room}
-            maxLength={20}
-            required
-          />
-        </Field>
+        <GuestRoomField
+          idPrefix="appointment"
+          partner={!!unitId && partnerUnitIds.includes(unitId)}
+          defaultRoom={defaultValues.room}
+          // Dados já salvos (edição, ou registro de um agendamento) trazem o hóspede; neles, quarto
+          // vazio em unidade com parceiro é cliente de fora.
+          defaultOutsideGuest={
+            defaultValues.guestName !== "" &&
+            defaultValues.room === "" &&
+            partnerUnitIds.includes(defaultValues.unitId ?? "")
+          }
+        />
         <DateTimeField idPrefix="appointment" name="performedAt" defaultValue={defaultValues.performedAt} />
 
         <FieldSeparator>Serviços</FieldSeparator>

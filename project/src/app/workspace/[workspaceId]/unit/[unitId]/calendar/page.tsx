@@ -29,7 +29,11 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
         localField: "_id",
         foreignField: "workspaceId",
         as: "unit",
-        pipeline: [{ $match: { _id: new Types.ObjectId(unitId) } }, { $project: { name: 1, treatmentRooms: 1 } }],
+        pipeline: [
+          { $match: { _id: new Types.ObjectId(unitId) } },
+          // partner: funciona dentro de um parceiro (tem repasse), então o quarto do cliente é obrigatório.
+          { $project: { name: 1, treatmentRooms: 1, partner: { $ne: [{ $ifNull: ["$revenueShare", null] }, null] } } },
+        ],
       },
     },
     {
@@ -76,6 +80,7 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
             in: { id: { $toString: "$$room._id" }, unitId, name: "$$room.name", beds: "$$room.beds" },
           },
         },
+        partnerUnitIds: { $cond: [{ $first: "$unit.partner" }, [unitId], []] },
         therapists: 1,
       },
     },

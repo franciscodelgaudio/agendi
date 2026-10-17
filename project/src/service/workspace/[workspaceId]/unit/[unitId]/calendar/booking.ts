@@ -63,6 +63,8 @@ type RoomInterval = { treatmentRoomId: string; startsAt: Date; endsAt: Date; exc
 type FindRoomBookings = (interval: RoomInterval) => Promise<readonly { startsAt: Date; endsAt: Date }[]>;
 
 type Lookups = {
+  // true quando a unidade funciona dentro de um parceiro: o quarto do cliente é obrigatório.
+  guestRoomRequired: boolean;
   // Devolvem null quando não existe: serviço da unidade e quem pode atender no workspace.
   // treatmentRoomIds vazio: o serviço pode usar qualquer espaço da unidade.
   findService: (
@@ -103,9 +105,23 @@ type Schedule = {
   color: string | null;
 };
 
+// Quarto do cliente: obrigatório quando a unidade funciona dentro de um parceiro, a não ser
+// para cliente de fora (outsideGuest), que não tem quarto e paga na hora. Em espaço próprio é
+// opcional. Quarto vazio numa unidade com parceiro = cliente de fora.
+function parseGuestRoom(room: string, outsideGuest: boolean, guestRoomRequired: boolean) {
+  if (outsideGuest) return { ok: true as const, room: "" };
+  const normalizedRoom = room.trim();
+  if (!normalizedRoom && guestRoomRequired) return { ok: false as const, error: "invalid_room" as const };
+  if (normalizedRoom.length > MAX_ROOM_LENGTH) return { ok: false as const, error: "room_too_long" as const };
+  return { ok: true as const, room: normalizedRoom };
+}
+
 // Valida espaço, hóspede, quarto, início, duração e cor do formulário.
-function parseSchedule(input: Record<string, unknown>): { ok: true; schedule: Schedule } | { ok: false; error: FieldsError } {
-  const { guestName, room, startsAt, durationMinutes, treatmentRoomId, color } = input;
+function parseSchedule(
+  input: Record<string, unknown>,
+  guestRoomRequired: boolean,
+): { ok: true; schedule: Schedule } | { ok: false; error: FieldsError } {
+  const { guestName, room, outsideGuest, startsAt, durationMinutes, treatmentRoomId, color } = input;
   if (
     typeof guestName !== "string" ||
     typeof room !== "string" ||
@@ -123,9 +139,8 @@ function parseSchedule(input: Record<string, unknown>): { ok: true; schedule: Sc
   if (!name) return { ok: false, error: "invalid_guest_name" };
   if (name.length > MAX_GUEST_NAME_LENGTH) return { ok: false, error: "guest_name_too_long" };
 
-  const normalizedRoom = room.trim();
-  if (!normalizedRoom) return { ok: false, error: "invalid_room" };
-  if (normalizedRoom.length > MAX_ROOM_LENGTH) return { ok: false, error: "room_too_long" };
+  const guestRoom = parseGuestRoom(room, outsideGuest === true, guestRoomRequired);
+  if (!guestRoom.ok) return guestRoom;
 
   const start = parsePerformedAt(startsAt.trim());
   if (!start) return { ok: false, error: "invalid_starts_at" };
@@ -142,7 +157,7 @@ function parseSchedule(input: Record<string, unknown>): { ok: true; schedule: Sc
     ok: true,
     schedule: {
       treatmentRoomId: normalizedRoomId,
-      guest: { name, room: normalizedRoom },
+      guest: { name, room: guestRoom.room },
       startsAt: start,
       endsAt: new Date(start.getTime() + Number(duration) * MINUTE_MS),
       durationMinutes: Number(duration),
@@ -180,7 +195,7 @@ async function checkAvailability(
 // conflito de horário do profissional e ocupação da sala, ignorando o próprio agendamento na edição.
 async function resolveBookingFields(
   input: unknown,
-  { findService, findTherapist, hasConflict, isBlocked, findTreatmentRoom, findRoomBookings, findProducts }: Lookups,
+  { guestRoomRequired, findService, findTherapist, hasConflict, isBlocked, findTreatmentRoom, findRoomBookings, findProducts }: Lookups,
   excludeId?: string,
 ): Promise<{ ok: true; fields: BookingFields } | { ok: false; error: FieldsError }> {
   const fields = (input ?? {}) as Record<string, unknown>;
@@ -188,7 +203,7 @@ async function resolveBookingFields(
   if ((therapistId != null && typeof therapistId !== "string") || typeof serviceId !== "string") {
     return { ok: false, error: "invalid_input" };
   }
-  const parsed = parseSchedule(fields);
+  const parsed = parseSchedule(fields, guestRoomRequired);
   if (!parsed.ok && parsed.error === "invalid_input") return parsed;
 
   const normalizedServiceId = serviceId.trim();
@@ -305,19 +320,20 @@ export async function correctRegisteredBooking(
   input: unknown,
   bookingId: string | null | undefined,
   {
+    guestRoomRequired,
     findBooking,
     findService,
     findTreatmentRoom,
     update,
     ...availability
-  }: Pick<Lookups, "findService" | "findTreatmentRoom" | "hasConflict" | "isBlocked" | "findRoomBookings"> & {
+  }: Pick<Lookups, "guestRoomRequired" | "findService" | "findTreatmentRoom" | "hasConflict" | "isBlocked" | "findRoomBookings"> & {
     findBooking: (bookingId: string) => Promise<RegisteredBooking | null>;
     update: (bookingId: string, fields: CorrectionFields, appointment: AppointmentSync) => Promise<boolean>;
   },
 ): Promise<BookingResult> {
   if (!bookingId) return { ok: false, error: "booking_not_found" };
 
-  const parsed = parseSchedule((input ?? {}) as Record<string, unknown>);
+  const parsed = parseSchedule((input ?? {}) as Record<string, unknown>, guestRoomRequired);
   if (!parsed.ok) return parsed;
   const { treatmentRoomId, guest, startsAt, endsAt, durationMinutes, color } = parsed.schedule;
 

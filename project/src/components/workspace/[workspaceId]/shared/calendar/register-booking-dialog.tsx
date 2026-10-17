@@ -78,7 +78,8 @@ export function RegisterBookingDialog({
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
           <dt className="text-muted-foreground">Hóspede</dt>
           <dd>
-            {booking.guest.name} · Quarto {booking.guest.room}
+            {booking.guest.name}
+            {booking.guest.room && ` · Quarto ${booking.guest.room}`}
           </dd>
           <dt className="text-muted-foreground">Serviço</dt>
           <dd>{booking.service.serviceName}</dd>
@@ -154,8 +155,9 @@ export function UndoRegisterDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Desfazer registro?</AlertDialogTitle>
           <AlertDialogDescription>
-            O atendimento de <strong>{booking.guest.name}</strong> (quarto {booking.guest.room}) será excluído, com
-            os valores e ajustes feitos nele. O agendamento continua no calendário e volta a ser editável.
+            O atendimento de <strong>{booking.guest.name}</strong>
+            {booking.guest.room && ` (quarto ${booking.guest.room})`} será excluído, com os valores e
+            ajustes feitos nele. O agendamento continua no calendário e volta a ser editável.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error && <FieldError>{error}</FieldError>}

@@ -392,3 +392,52 @@ describe("mergePatch", () => {
     expect(current).toEqual({ name: "Óleo" });
   });
 });
+
+// Quarto opcional: cliente de fora numa unidade com parceiro vai sem quarto e com a marcação,
+// como o formulário da tela manda.
+describe("cliente de fora na AgenIA", () => {
+  it("agendamento: sem quarto e com a marcação de cliente de fora", () => {
+    const input = parsed("createBooking", {
+      unitId: UNIT,
+      serviceId: ID_B,
+      treatmentRoomId: ID_A,
+      guestName: "Ana",
+      outsideGuest: true,
+      startsAt: "2026-09-30T14:00",
+      durationMinutes: 60,
+      summary: "x",
+    });
+    const entries = grouped(actionFormEntries("createBooking", input));
+    expect(entries.room).toEqual([""]);
+    expect(entries.outsideGuest).toEqual(["on"]);
+  });
+
+  it("atendimento: sem quarto e com a marcação de cliente de fora", () => {
+    const input = parsed("createAppointment", {
+      unitId: UNIT,
+      guestName: "Ana",
+      outsideGuest: true,
+      performedAt: "2026-09-30T14:00",
+      serviceIds: [ID_B],
+      therapistIds: [ID_A],
+      summary: "x",
+    });
+    const entries = grouped(actionFormEntries("createAppointment", input));
+    expect(entries.room).toEqual([""]);
+    expect(entries.outsideGuest).toEqual(["on"]);
+  });
+
+  it("sem a marcação, nenhuma entrada de cliente de fora", () => {
+    const input = parsed("createBooking", {
+      unitId: UNIT,
+      serviceId: ID_B,
+      treatmentRoomId: ID_A,
+      guestName: "Ana",
+      room: "101",
+      startsAt: "2026-09-30T14:00",
+      durationMinutes: 60,
+      summary: "x",
+    });
+    expect(grouped(actionFormEntries("createBooking", input)).outsideGuest).toBeUndefined();
+  });
+});

@@ -136,7 +136,9 @@ export function TodaySchedule({
                 <div className="grid min-w-0">
                   <span className="truncate font-medium">{booking.guest.name}</span>
                   <span className="truncate text-xs text-muted-foreground">
-                    {booking.unitName && `${booking.unitName} · `}Quarto {booking.guest.room} · {booking.serviceName}
+                    {booking.unitName && `${booking.unitName} · `}
+                    {booking.guest.room && `Quarto ${booking.guest.room} · `}
+                    {booking.serviceName}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">

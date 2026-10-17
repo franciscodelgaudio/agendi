@@ -64,6 +64,9 @@ export type AppointmentFields = {
 export type AppointmentData = AppointmentFields & { unitId: string };
 
 type Lookups = {
+  // true quando a unidade funciona dentro de um parceiro: o quarto do cliente é obrigatório
+  // (menos para cliente de fora, outsideGuest, que não tem quarto e paga na hora).
+  guestRoomRequired: boolean;
   // Devolvem só os que existem: serviços da unidade e quem pode atender no workspace.
   findServices: (
     ids: string[],
@@ -142,11 +145,12 @@ function allocateDiscount(prices: number[], discountCents: number) {
 // serviço pode vir no input; vazia (ou sem a lista), vale a do cadastro.
 async function resolveAppointmentFields(
   input: unknown,
-  { findServices, findTherapists, findProducts }: Lookups,
+  { guestRoomRequired, findServices, findTherapists, findProducts }: Lookups,
 ): Promise<{ ok: true; fields: AppointmentFields } | { ok: false; error: FieldsError }> {
   const {
     guestName,
     room,
+    outsideGuest,
     performedAt,
     serviceIds,
     therapistIds,
@@ -171,8 +175,9 @@ async function resolveAppointmentFields(
   if (!name) return { ok: false, error: "invalid_guest_name" };
   if (name.length > MAX_GUEST_NAME_LENGTH) return { ok: false, error: "guest_name_too_long" };
 
-  const normalizedRoom = room.trim();
-  if (!normalizedRoom) return { ok: false, error: "invalid_room" };
+  // Cliente de fora não tem quarto: o que vier no campo é descartado.
+  const normalizedRoom = outsideGuest === true ? "" : room.trim();
+  if (!normalizedRoom && guestRoomRequired && outsideGuest !== true) return { ok: false, error: "invalid_room" };
   if (normalizedRoom.length > MAX_ROOM_LENGTH) return { ok: false, error: "room_too_long" };
 
   const date = parsePerformedAt(performedAt.trim());

@@ -57,6 +57,8 @@ export function bookingAppointmentInput(booking: BookingForAppointment) {
   return {
     guestName: booking.guest.name,
     room: booking.guest.room,
+    // Agendamento sem quarto numa unidade com parceiro é de cliente de fora.
+    ...(!booking.guest.room && { outsideGuest: true }),
     performedAt: new Date(booking.startsAt.getTime() - BRT_OFFSET_HOURS * HOUR_MS).toISOString().slice(0, 16),
     serviceIds: [booking.service.serviceId],
     therapistIds: [booking.therapistId ?? ""],

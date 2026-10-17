@@ -93,7 +93,7 @@ export function ProductHistoryTable({ rows, query, pathname, cycleUses, now }: P
                   <>
                     <TableCell className="px-4">
                       <span className="font-medium">{row.guest?.name}</span>
-                      <span className="text-muted-foreground"> · Quarto {row.guest?.room}</span>
+                      {row.guest?.room && <span className="text-muted-foreground"> · Quarto {row.guest.room}</span>}
                     </TableCell>
                     <TableCell className="max-w-0 truncate px-4 text-muted-foreground @max-xl:hidden">
                       {row.services.join(", ")}

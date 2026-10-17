@@ -21,8 +21,11 @@ const validInput = {
 function makeDeps({
   booking = { appointmentId: null } as { appointmentId: string | null } | null,
   linked = true,
+  guestRoomRequired = true,
 } = {}) {
   return {
+    // true quando a unidade funciona dentro de um parceiro: o quarto do hóspede é obrigatório.
+    guestRoomRequired,
     // Devolve null quando o agendamento não existe (ou não é do workspace).
     findBooking: vi.fn().mockResolvedValue(booking),
     findServices: vi.fn(async (ids: string[]) =>
@@ -40,6 +43,15 @@ function makeDeps({
 }
 
 describe("convertBooking", () => {
+  it("unidade de espaço próprio: registra o agendamento sem quarto", async () => {
+    const deps = makeDeps({ guestRoomRequired: false });
+
+    const result = await convertBooking({ ...validInput, room: "" }, { bookingId: BOOKING_ID, unitId: UNIT_ID }, deps);
+
+    expect(result).toEqual({ ok: true, appointmentId: APPOINTMENT_ID });
+    expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "João Silva", room: "" });
+  });
+
   // Os produtos do agendamento vêm pré-preenchidos no formulário e são validados como no atendimento.
   it("leva os produtos do formulário para o atendimento", async () => {
     const deps = makeDeps();
@@ -210,5 +222,18 @@ describe("bookingAppointmentInput", () => {
       ],
       products: [],
     });
+  });
+
+  // Numa unidade com parceiro, agendamento sem quarto é de cliente de fora: o registro com um
+  // clique não pode exigir o quarto que ele não tem.
+  it("agendamento sem quarto vira atendimento de cliente de fora, também em unidade com parceiro", async () => {
+    const deps = makeDeps({ guestRoomRequired: true });
+    const input = bookingAppointmentInput({ ...booking, guest: { name: "João Silva", room: "" }, products: [] });
+
+    const result = await convertBooking(input, { bookingId: BOOKING_ID, unitId: UNIT_ID }, deps);
+
+    expect(input).toMatchObject({ room: "", outsideGuest: true });
+    expect(result).toEqual({ ok: true, appointmentId: APPOINTMENT_ID });
+    expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "João Silva", room: "" });
   });
 });

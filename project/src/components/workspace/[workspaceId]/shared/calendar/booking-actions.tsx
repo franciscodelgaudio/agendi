@@ -249,8 +249,9 @@ function DeleteBookingDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Excluir agendamento?</AlertDialogTitle>
           <AlertDialogDescription>
-            O agendamento de <strong>{booking.guest.name}</strong> (quarto {booking.guest.room}) será excluído
-            permanentemente. Essa ação não pode ser desfeita.
+            O agendamento de <strong>{booking.guest.name}</strong>
+            {booking.guest.room && ` (quarto ${booking.guest.room})`} será excluído permanentemente.
+            Essa ação não pode ser desfeita.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error && <FieldError>{error}</FieldError>}

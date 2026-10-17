@@ -55,7 +55,12 @@ export default async function AppointmentsPage({
   const [workspace] = await Workspace.aggregate<{
     actor: Actor
     therapists: TherapistOption[]
-    unit: { appointments: AppointmentPage<AppointmentRow>; total: number; services: ServiceOption[] } | null
+    unit: {
+      appointments: AppointmentPage<AppointmentRow>
+      total: number
+      services: ServiceOption[]
+      partner: boolean
+    } | null
   }>([
     ...access,
     {
@@ -102,6 +107,8 @@ export default async function AppointmentsPage({
               appointments: { $first: "$appointments" },
               services: 1,
               total: { $ifNull: [{ $first: "$total.n" }, 0] },
+              // Funciona dentro de um parceiro (tem repasse): o quarto do cliente é obrigatório.
+              partner: { $ne: [{ $ifNull: ["$revenueShare", null] }, null] },
             },
           },
         ],
@@ -118,7 +125,8 @@ export default async function AppointmentsPage({
     },
   ])
   if (!workspace?.unit) notFound()
-  const { appointments: result, total, services } = workspace.unit
+  const { appointments: result, total, services, partner } = workspace.unit
+  const partnerUnitIds = partner ? [unitId] : []
   const { therapists } = workspace
   const canManage = can(workspace.actor, "appointments.manage")
 
@@ -144,6 +152,7 @@ export default async function AppointmentsPage({
       unitId={unitId}
       services={services}
       therapists={therapists}
+      partnerUnitIds={partnerUnitIds}
       defaultPerformedAt={defaultPerformedAt}
     />
   )
@@ -194,7 +203,7 @@ export default async function AppointmentsPage({
             query={filters}
             pathname={pathname}
             workspaceId={workspaceId}
-            options={{ services, therapists }}
+            options={{ services, therapists, partnerUnitIds }}
             canManage={canManage}
           />
           <ListPagination

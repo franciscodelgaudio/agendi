@@ -9,6 +9,7 @@ import { BOOKING_COLORS } from "@/service/workspace/[workspaceId]/unit/[unitId]/
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { GuestRoomField } from "@/components/workspace/[workspaceId]/shared/calendar/guest-room-field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PopoverDescription, PopoverTitle } from "@/components/ui/popover"
 import { SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -52,6 +53,9 @@ export type BookingFormOptions = {
   }[]
   // Espaços de cada unidade; o formulário só oferece os da unidade escolhida.
   treatmentRooms: { id: string; unitId: string; name: string; beds: number }[]
+  // Unidades que funcionam dentro de um parceiro (com repasse): nelas o quarto é obrigatório,
+  // a não ser para cliente de fora.
+  partnerUnitIds: string[]
 }
 
 type Props = BookingFormOptions & {
@@ -86,7 +90,7 @@ const copy = {
   correct: {
     title: "Corrigir agendamento",
     description:
-      "Este agendamento já virou atendimento. Horário, hóspede e quarto são corrigidos nele também; serviço, profissional e produtos se alteram em Atendimentos.",
+      "Este agendamento já virou atendimento. Horário e dados do hóspede são corrigidos nele também; serviço, profissional e produtos se alteram em Atendimentos.",
     submit: "Salvar correção",
     pending: "Salvando...",
   },
@@ -164,6 +168,7 @@ export function BookingForm({
   therapists,
   services: allServices,
   treatmentRooms: allRooms,
+  partnerUnitIds,
   mode,
   variant = "sheet",
   defaultValues,
@@ -209,6 +214,8 @@ export function BookingForm({
     label: room.name,
     beds: room.beds,
   }))
+  // O campo de quarto acompanha a unidade escolhida.
+  const partner = !!unitId && partnerUnitIds.includes(unitId)
   // A opção automática mostra a cor que o profissional escolhido tem no calendário.
   const therapistIndex = therapists.findIndex((therapist) => therapist.id === therapistId)
   const colorOptions = [
@@ -319,17 +326,15 @@ export function BookingForm({
             required
           />
         </Field>
-        <Field>
-          <FieldLabel htmlFor="booking-room">Quarto</FieldLabel>
-          <Input
-            id="booking-room"
-            name="room"
-            placeholder="204"
-            defaultValue={defaultValues.room}
-            maxLength={20}
-            required
-          />
-        </Field>
+        <GuestRoomField
+          idPrefix="booking"
+          partner={partner}
+          defaultRoom={defaultValues.room}
+          // Agendamento salvo em unidade com parceiro e sem quarto é de cliente de fora.
+          defaultOutsideGuest={
+            mode !== "create" && defaultValues.room === "" && partnerUnitIds.includes(defaultValues.unitId ?? "")
+          }
+        />
         <DateTimeField idPrefix="booking" name="startsAt" defaultValue={defaultValues.startsAt} />
         <Field>
           <FieldLabel htmlFor="booking-service">Serviço</FieldLabel>

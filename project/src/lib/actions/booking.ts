@@ -20,13 +20,13 @@ import { Booking } from "@/models/Booking"
 import { Unit } from "@/models/Unit"
 
 const errorMessages: Record<BookingError | "workspace_not_found" | "unauthenticated", string> = {
-  invalid_input: "Preencha profissional, espaço, hóspede, quarto, início e duração.",
+  invalid_input: "Preencha profissional, espaço, cliente, início e duração.",
   invalid_therapist: "Escolha o profissional.",
   invalid_service: "Escolha o serviço.",
   invalid_treatment_room: "Escolha o espaço.",
   invalid_guest_name: "Informe o nome do hóspede.",
   guest_name_too_long: "O nome do hóspede pode ter no máximo 80 caracteres.",
-  invalid_room: "Informe o quarto.",
+  invalid_room: "Informe o quarto ou marque cliente de fora.",
   room_too_long: "O quarto pode ter no máximo 20 caracteres.",
   invalid_starts_at: "Informe uma data e hora válidas.",
   invalid_duration: "O agendamento precisa durar entre 5 minutos e 12 horas.",
@@ -54,7 +54,9 @@ function bookingInput(formData: FormData) {
   return {
     therapistId: formData.get("therapistId"),
     guestName: formData.get("guestName"),
-    room: formData.get("room"),
+    // O campo some do formulário quando o cliente é de fora.
+    room: formData.get("room") ?? "",
+    outsideGuest: formData.get("outsideGuest") === "on",
     startsAt: formData.get("startsAt"),
     durationMinutes: formData.get("durationMinutes"),
     serviceId: formData.get("serviceId"),
@@ -95,7 +97,7 @@ export async function createBookingAction(
   const unitIds = await Unit.find({ workspaceId: unit.workspaceId, deactivatedAt: null }).distinct("_id")
 
   const result = await createBooking(bookingInput(formData), unit.unitId, {
-    ...bookingLookups(unit, unitIds),
+    ...(await bookingLookups(unit, unitIds)),
     insert: async (data) => {
       const booking = await Booking.create({ ...data, createdBy: userId })
       return { id: booking._id.toString() }
@@ -121,7 +123,7 @@ export async function updateBookingAction(
   const unitIds = await Unit.find({ workspaceId: unit.workspaceId, deactivatedAt: null }).distinct("_id")
 
   const result = await updateBooking(bookingInput(formData), isObjectIdOrHexString(bookingId) ? bookingId : null, {
-    ...bookingLookups(unit, unitIds),
+    ...(await bookingLookups(unit, unitIds)),
     update: async (id, fields) => {
       // Agendamento que já virou atendimento não é mais editável.
       const { matchedCount } = await Booking.updateOne(
@@ -179,7 +181,7 @@ export async function correctBookingAction(
   const { appointmentId } = booking
 
   const result = await correctRegisteredBooking(bookingInput(formData), bookingId, {
-    ...bookingLookups(unit, unitIds),
+    ...(await bookingLookups(unit, unitIds)),
     findBooking: async () => {
       const appointment = await Appointment.findById(appointmentId).select({ items: 1 }).lean()
       if (!appointment) return null

@@ -38,8 +38,10 @@ const validInput = {
   therapistIds: [ANA_ID],
 };
 
-function makeDeps({ services = SERVICES, therapists = THERAPISTS } = {}) {
+function makeDeps({ services = SERVICES, therapists = THERAPISTS, guestRoomRequired = true } = {}) {
   return {
+    // true quando a unidade funciona dentro de um parceiro: o quarto do hóspede é obrigatório.
+    guestRoomRequired,
     // Devolvem só os que existem (serviços da unidade; profissionais do workspace).
     findServices: vi.fn(async (ids: string[]) => services.filter((s) => ids.includes(s.id))),
     findTherapists: vi.fn(async (ids: string[]) => therapists.filter((t) => ids.includes(t.id))),
@@ -304,8 +306,9 @@ describe("createAppointment", () => {
 });
 
 describe("updateAppointment", () => {
-  function makeUpdateDeps({ found = true, services = SERVICES, therapists = THERAPISTS } = {}) {
+  function makeUpdateDeps({ found = true, services = SERVICES, therapists = THERAPISTS, guestRoomRequired = true } = {}) {
     return {
+      guestRoomRequired,
       findServices: vi.fn(async (ids: string[]) => services.filter((s) => ids.includes(s.id))),
       findTherapists: vi.fn(async (ids: string[]) => therapists.filter((t) => ids.includes(t.id))),
       findProducts: vi.fn(async (ids: string[]) => PRODUCTS.filter((p) => ids.includes(p.id))),
@@ -695,4 +698,46 @@ describe("atendimento com serviço sem profissional", () => {
       expect(updateDeps.update).not.toHaveBeenCalled();
     },
   );
+});
+
+// O quarto só é obrigatório quando a unidade funciona dentro de um parceiro (hotel).
+describe("quarto do cliente no atendimento", () => {
+  it("unidade de espaço próprio: registra sem quarto, que fica vazio", async () => {
+    const deps = makeDeps({ guestRoomRequired: false });
+
+    const result = await createAppointment({ ...validInput, room: "" }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: true, appointmentId: APPOINTMENT_ID });
+    expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "João Silva", room: "" });
+  });
+
+  it("unidade dentro de parceiro: sem quarto retorna invalid_room sem salvar", async () => {
+    const deps = makeDeps({ guestRoomRequired: true });
+
+    const result = await createAppointment({ ...validInput, room: "  " }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "invalid_room" });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("na edição vale a mesma regra: espaço próprio aceita sem quarto", async () => {
+    const deps = { ...makeDeps({ guestRoomRequired: false }), update: vi.fn().mockResolvedValue(true) };
+
+    const result = await updateAppointment({ ...validInput, room: "" }, APPOINTMENT_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.update.mock.calls[0][1].guest).toEqual({ name: "João Silva", room: "" });
+  });
+});
+
+// Unidade dentro de parceiro também atende cliente de fora (sem quarto), que paga na hora.
+describe("cliente de fora no atendimento", () => {
+  it("unidade dentro de parceiro: cliente de fora registra sem quarto, descartando o que vier no campo", async () => {
+    const deps = makeDeps({ guestRoomRequired: true });
+
+    const result = await createAppointment({ ...validInput, room: "204", outsideGuest: true }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: true, appointmentId: APPOINTMENT_ID });
+    expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "João Silva", room: "" });
+  });
 });

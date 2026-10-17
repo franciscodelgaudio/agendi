@@ -57,6 +57,7 @@ export default async function UnitCalendarListPage({
       total: number
       services: BookingOptions["services"]
       treatmentRooms: BookingOptions["treatmentRooms"]
+      partner: boolean
     } | null
   }>([
     ...access,
@@ -129,6 +130,8 @@ export default async function UnitCalendarListPage({
                 },
               },
               total: { $ifNull: [{ $first: "$total.n" }, 0] },
+              // Funciona dentro de um parceiro (tem repasse): o quarto do cliente é obrigatório.
+              partner: { $ne: [{ $ifNull: ["$revenueShare", null] }, null] },
             },
           },
         ],
@@ -138,10 +141,10 @@ export default async function UnitCalendarListPage({
     { $project: { _id: 0, actor: 1, therapists: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   if (!workspace?.unit) notFound()
-  const { bookings: result, total, services, treatmentRooms } = workspace.unit
+  const { bookings: result, total, services, treatmentRooms, partner } = workspace.unit
   const { therapists } = workspace
   const canManage = can(workspace.actor, "bookings.manage")
-  const options = { services, therapists, treatmentRooms }
+  const options = { services, therapists, treatmentRooms, partnerUnitIds: partner ? [unitId] : [] }
 
   const base = `/workspace/${workspaceId}/unit/${unitId}/calendar`
   const pathname = `${base}/list`

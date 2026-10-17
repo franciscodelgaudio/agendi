@@ -256,7 +256,9 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
         {
           therapistId,
           guestName: guestName.slice(0, MAX_GUEST_NAME) || "Cliente",
-          room: guestRoom.slice(0, MAX_GUEST_ROOM) || "-",
+          room: guestRoom.slice(0, MAX_GUEST_ROOM),
+          // Sem quarto informado na conversa, o cliente é de fora.
+          outsideGuest: !guestRoom.trim(),
           startsAt: brtLocal(startsAt),
           durationMinutes: String(service.durationMinutes),
           serviceId,
@@ -266,7 +268,7 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
         },
         unitId,
         {
-          ...bookingLookups({ workspaceId, unitId }, unitIds),
+          ...(await bookingLookups({ workspaceId, unitId }, unitIds)),
           // Agendamento feito pela URA fica em nome de quem criou o workspace.
           insert: async (data) => {
             const booking = await Booking.create({ ...data, createdBy: workspace.userId })

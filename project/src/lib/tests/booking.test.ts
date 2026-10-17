@@ -52,8 +52,11 @@ function makeLookups({
   blocked = false,
   room = SINGLE as typeof SINGLE | null,
   roomBookings = [] as readonly RoomBooking[],
+  guestRoomRequired = true,
 } = {}) {
   return {
+    // true quando a unidade funciona dentro de um parceiro: o quarto do hóspede é obrigatório.
+    guestRoomRequired,
     // Devolvem null quando não existe (serviço da unidade; quem pode atender no workspace).
     findService: vi.fn(async (id: string) => (service?.id === id ? service : null)),
     findTherapist: vi.fn(async (id: string) => (therapist?.id === id ? therapist : null)),
@@ -918,5 +921,84 @@ describe("agenda do profissional travada", () => {
     expect(result).toEqual({ ok: false, error: "therapist_unavailable" });
     expect(deps.isBlocked).toHaveBeenCalledWith({ therapistId: ANA_ID, startsAt: at("15:00"), endsAt: at("16:00") });
     expect(deps.update).not.toHaveBeenCalled();
+  });
+});
+
+// O quarto só é obrigatório quando a unidade funciona dentro de um parceiro (hotel).
+describe("quarto do cliente", () => {
+  function makeDeps(guestRoomRequired: boolean) {
+    return { ...makeLookups({ guestRoomRequired }), insert: vi.fn().mockResolvedValue({ id: BOOKING_ID }) };
+  }
+
+  it("unidade de espaço próprio: agenda sem quarto, que fica vazio", async () => {
+    const deps = makeDeps(false);
+
+    const result = await createBooking({ ...validInput, room: "  " }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: true, bookingId: BOOKING_ID });
+    expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "João Silva", room: "" });
+  });
+
+  it("unidade de espaço próprio: o quarto informado é guardado", async () => {
+    const deps = makeDeps(false);
+
+    await createBooking(validInput, UNIT_ID, deps);
+
+    expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "João Silva", room: "204" });
+  });
+
+  it("unidade de espaço próprio: quarto com mais de 20 caracteres continua recusado", async () => {
+    const result = await createBooking({ ...validInput, room: "1".repeat(21) }, UNIT_ID, makeDeps(false));
+
+    expect(result).toEqual({ ok: false, error: "room_too_long" });
+  });
+
+  it("unidade dentro de parceiro: sem quarto retorna invalid_room sem salvar", async () => {
+    const deps = makeDeps(true);
+
+    const result = await createBooking({ ...validInput, room: "" }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "invalid_room" });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("na edição vale a mesma regra: espaço próprio aceita sem quarto", async () => {
+    const deps = { ...makeLookups({ guestRoomRequired: false }), update: vi.fn().mockResolvedValue(true) };
+
+    const result = await updateBooking({ ...validInput, room: "" }, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.update.mock.calls[0][1].guest).toEqual({ name: "João Silva", room: "" });
+  });
+});
+
+// Unidade dentro de parceiro também atende cliente de fora (sem quarto), que paga na hora:
+// marcado no formulário, dispensa o quarto. Quarto vazio numa unidade com parceiro é isso.
+describe("cliente de fora", () => {
+  function makeDeps() {
+    return { ...makeLookups({ guestRoomRequired: true }), insert: vi.fn().mockResolvedValue({ id: BOOKING_ID }) };
+  }
+
+  it("unidade dentro de parceiro: cliente de fora agenda sem quarto", async () => {
+    const deps = makeDeps();
+
+    const result = await createBooking({ ...validInput, room: "", outsideGuest: true }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: true, bookingId: BOOKING_ID });
+    expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "João Silva", room: "" });
+  });
+
+  it("cliente de fora não tem quarto: o que vier no campo é descartado", async () => {
+    const deps = makeDeps();
+
+    await createBooking({ ...validInput, room: "204", outsideGuest: true }, UNIT_ID, deps);
+
+    expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "João Silva", room: "" });
+  });
+
+  it("sem a marcação, continua exigindo o quarto", async () => {
+    const result = await createBooking({ ...validInput, room: "", outsideGuest: false }, UNIT_ID, makeDeps());
+
+    expect(result).toEqual({ ok: false, error: "invalid_room" });
   });
 });

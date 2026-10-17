@@ -38,7 +38,7 @@ export function CreateAppointmentSheet({ workspaceId, unitId, defaultPerformedAt
           key={formKey}
           {...options}
           mode="create"
-          defaultValues={{ guestName: "", room: "", performedAt: defaultPerformedAt }}
+          defaultValues={{ unitId, guestName: "", room: "", performedAt: defaultPerformedAt }}
           action={(prev, formData) =>
             unitId
               ? createAppointmentAction(workspaceId, unitId, prev, formData)

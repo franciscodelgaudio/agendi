@@ -114,7 +114,16 @@ type Draft = { values: BookingFormValues; key: number; fallbackAnchor: Element |
 // rascunho) e o botão de novo agendamento.
 const KEEPS_DRAFT = "data-keeps-draft"
 
-export function BookingCalendar({ workspaceId, canManage, unitId, units, therapists, services, treatmentRooms }: Props) {
+export function BookingCalendar({
+  workspaceId,
+  canManage,
+  unitId,
+  units,
+  therapists,
+  services,
+  treatmentRooms,
+  partnerUnitIds,
+}: Props) {
   const calendarRef = useRef<CalendarRef>(null)
   const [unit, setUnit] = useState(unitId ?? "")
   const [therapist, setTherapist] = useState("")
@@ -152,7 +161,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
   const colors = new Map(therapists.map((option, i) => [option.id, BOOKING_COLORS[i % BOOKING_COLORS.length].value]))
   // O proprietário sempre está entre os profissionais, então basta haver uma unidade.
   const canCreate = canManage && units.length > 0
-  const options = { units: unitId ? undefined : units, therapists, services, treatmentRooms }
+  const options = { units: unitId ? undefined : units, therapists, services, treatmentRooms, partnerUnitIds }
 
   // Cada busca recria os ids internos dos eventos, e ao soltar um arraste o FullCalendar grava
   // a cópia do evento feita no início dele. Uma busca que chegasse no meio deixaria as duas
@@ -214,7 +223,8 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
       }))
       return blockEvents.concat(bookings.map((booking) => ({
         id: booking.id,
-        title: `${booking.guest.name} · Quarto ${booking.guest.room}`,
+        // Sem quarto (cliente de fora ou espaço próprio), só o nome.
+        title: booking.guest.room ? `${booking.guest.name} · Quarto ${booking.guest.room}` : booking.guest.name,
         start: booking.startsAt,
         end: booking.endsAt,
         // A cor escolhida no agendamento vale mais que a do profissional.
@@ -520,7 +530,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
                     <div className="w-full truncate tabular-nums opacity-85">
                       {timeText}
                       <span className="@max-[8rem]:hidden"> · {booking.treatmentRoom.roomName}</span>
-                      <span className="@max-[12rem]:hidden"> · Quarto {booking.guest.room}</span>
+                      {booking.guest.room && <span className="@max-[12rem]:hidden"> · Quarto {booking.guest.room}</span>}
                     </div>
                     <div className="w-full truncate opacity-85 @max-[8rem]:hidden">
                       {booking.service.serviceName}
@@ -732,8 +742,9 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
             <AlertDialogHeader>
               <AlertDialogTitle>Excluir agendamento?</AlertDialogTitle>
               <AlertDialogDescription>
-                O agendamento de <strong>{sheet.booking.guest.name}</strong> (quarto {sheet.booking.guest.room}) será
-                excluído permanentemente. Essa ação não pode ser desfeita.
+                O agendamento de <strong>{sheet.booking.guest.name}</strong>
+                {sheet.booking.guest.room && ` (quarto ${sheet.booking.guest.room})`} será excluído permanentemente.
+                Essa ação não pode ser desfeita.
               </AlertDialogDescription>
             </AlertDialogHeader>
             {deleteError && <FieldError>{deleteError}</FieldError>}

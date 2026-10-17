@@ -45,8 +45,11 @@ describe("correctRegisteredBooking", () => {
     blocked = false,
     roomBookings = [] as { startsAt: Date; endsAt: Date }[],
     found = true,
+    guestRoomRequired = true,
   } = {}) {
     return {
+      // true quando a unidade funciona dentro de um parceiro: o quarto do hóspede é obrigatório.
+      guestRoomRequired,
       // null quando não existe (ou não é do workspace) ou ainda não virou atendimento.
       findBooking: vi.fn().mockResolvedValue(booking),
       // Serviço do agendamento, para os espaços permitidos; null se foi removido da unidade.
@@ -193,6 +196,16 @@ describe("correctRegisteredBooking", () => {
     expect(result).toEqual({ ok: false, error: "booking_not_found" });
   });
 
+  it("unidade de espaço próprio: corrige sem quarto, que fica vazio no agendamento e no atendimento", async () => {
+    const deps = makeDeps({ guestRoomRequired: false });
+
+    const result = await correctRegisteredBooking({ ...validInput, room: "" }, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.update.mock.calls[0][1].guest).toEqual({ name: "Maria Souza", room: "" });
+    expect(deps.update.mock.calls[0][2].guest).toEqual({ name: "Maria Souza", room: "" });
+  });
+
   it.each([
     [{ guestName: "  " }, "invalid_guest_name"],
     [{ guestName: "a".repeat(81) }, "guest_name_too_long"],
@@ -301,5 +314,27 @@ describe("rescheduleBooking de agendamento registrado", () => {
     expect(deps.hasConflict).not.toHaveBeenCalled();
     expect(deps.findRoomBookings).not.toHaveBeenCalled();
     expect(deps.update).not.toHaveBeenCalled();
+  });
+});
+
+// Unidade dentro de parceiro também atende cliente de fora (sem quarto), que paga na hora.
+describe("correção de agendamento de cliente de fora", () => {
+  it("unidade dentro de parceiro: corrige como cliente de fora, sem quarto no agendamento e no atendimento", async () => {
+    const deps = {
+      guestRoomRequired: true,
+      findBooking: vi.fn().mockResolvedValue({ therapistId: ANA_ID, serviceId: CANDLE_ID, durationMinutes: 60, serviceCount: 1 }),
+      findService: vi.fn(async (id: string) => ({ id, name: "Massagem Candle", requiresTherapist: true, treatmentRoomIds: [] })),
+      findTreatmentRoom: vi.fn(async (id: string) => ROOMS.find((room) => room.id === id) ?? null),
+      hasConflict: vi.fn().mockResolvedValue(false),
+      isBlocked: vi.fn().mockResolvedValue(false),
+      findRoomBookings: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue(true),
+    };
+
+    const result = await correctRegisteredBooking({ ...validInput, room: "", outsideGuest: true }, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.update.mock.calls[0][1].guest).toEqual({ name: "Maria Souza", room: "" });
+    expect(deps.update.mock.calls[0][2].guest).toEqual({ name: "Maria Souza", room: "" });
   });
 });

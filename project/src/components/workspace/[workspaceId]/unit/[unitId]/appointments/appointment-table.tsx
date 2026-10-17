@@ -188,17 +188,21 @@ export function AppointmentTable({ appointments, query, pathname, workspaceId, o
                   <TableCell className="px-4 @max-4xl:hidden">{unitNames.get(appointment.unitId) ?? "—"}</TableCell>
                 )}
                 <TableCell className="px-4">
-                  {/* O quarto fica escondido no tooltip para a linha caber em uma altura só. */}
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <span className="cursor-help font-medium underline decoration-muted-foreground/50 decoration-dotted underline-offset-4" />
-                      }
-                    >
-                      {appointment.guest.name}
-                    </TooltipTrigger>
-                    <TooltipContent>Quarto {appointment.guest.room}</TooltipContent>
-                  </Tooltip>
+                  {/* O quarto fica escondido no tooltip para a linha caber em uma altura só. Sem quarto, só o nome. */}
+                  {appointment.guest.room ? (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span className="cursor-help font-medium underline decoration-muted-foreground/50 decoration-dotted underline-offset-4" />
+                        }
+                      >
+                        {appointment.guest.name}
+                      </TooltipTrigger>
+                      <TooltipContent>Quarto {appointment.guest.room}</TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <span className="font-medium">{appointment.guest.name}</span>
+                  )}
                 </TableCell>
                 <TableCell className="px-4 @max-2xl:hidden">
                   <FirstWithMore
