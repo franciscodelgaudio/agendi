@@ -9,8 +9,8 @@ Termos do negócio e seu significado **dentro de cada contexto**. Quando um term
 | **Profissional** (massagista) | Pessoa cadastrada, com tipo de vínculo | Organização |
 | | Recurso com horários (quem atende) | Atendimento |
 | | Beneficiária de remuneração (quem recebe) | Remuneração |
-| **Serviço** | Tipo de serviço com duração e preço de tabela | Catálogo |
-| | Serviço previsto e serviço realizado, com valor cobrado | Atendimento |
+| **Serviço** | Tipo de serviço (da empresa) e a sua oferta em cada unidade, com duração e preço de tabela | Catálogo |
+| | Item previsto e item realizado de um atendimento, com valor cobrado | Atendimento |
 | | Receita da categoria "serviços" | Liquidação com Parceiro |
 | **Repasse** | ⚠️ Termo **abandonado** por ter dois sentidos. Use **Liquidação com Parceiro** (o parceiro paga a unidade) ou **Remuneração** (a unidade paga o profissional) | — |
 | **Estoque** | O total de todos os depósitos da empresa | Estoque |
@@ -27,15 +27,19 @@ Termos do negócio e seu significado **dentro de cada contexto**. Quando um term
 
 | Termo | Definição |
 |---|---|
-| Agenda da Empresa | Todas as reservas de horário da empresa em um dia; garante que profissional e sala não tenham horários sobrepostos |
-| Reserva | Ocupação de um intervalo por um profissional e uma sala para um atendimento |
-| Sala | Espaço físico de uma unidade onde o atendimento acontece |
-| Atendimento | Um serviço agendado para um cliente, com ciclo de vida (Agendado, Concluído, Cancelado, NoShow) |
-| Serviço Previsto | O que foi agendado: tipo, profissional, sala, horário e preço de tabela |
-| Serviço Realizado | O que de fato aconteceu; pode diferir do previsto |
-| Desconto | Redução do valor na conclusão, com motivo e quem concedeu |
-| Valor Cobrado | Preço de tabela menos desconto; nunca negativo |
-| Cliente Avulso | Cliente sem cadastro (nome, telefone, quarto) |
+| Agenda da Empresa | Todas as reservas de horário da empresa em um dia; garante que um profissional não tenha horários sobrepostos e que nenhuma sala passe da sua capacidade |
+| Reserva | Ocupação de um intervalo por um item do atendimento: o profissional (quando o serviço exige) e um lugar na sala |
+| Sala | Espaço de uma unidade onde o atendimento acontece (sala, área de hidromassagem etc.); tem uma capacidade |
+| Capacidade da Sala | Quantos atendimentos a sala comporta ao mesmo tempo (no mínimo 1). O lugar pode ser maca, cadeira, banheira; o modelo só conta quantos cabem |
+| Atendimento | Uma visita do cliente, com um ou mais serviços (itens) e ciclo de vida (Agendado, Concluído, Cancelado, NoShow) |
+| Item do Atendimento | Cada serviço de um atendimento, com o seu tipo, profissional (se o serviço exige), sala, horário e preço |
+| Serviço Previsto | Os itens que foram agendados: tipo, profissional, sala, horário e preço de tabela de cada um |
+| Serviço Realizado | Os itens que de fato aconteceram; podem diferir do previsto |
+| Serviço sem Profissional | Serviço cuja oferta não exige profissional (ex.: hidromassagem); a reserva ocupa só a sala e não gera remuneração |
+| Desconto | Redução do valor na conclusão, com motivo e quem concedeu; vale para o atendimento e é rateado entre os itens na proporção do preço de tabela |
+| Valor Cobrado | Preço de tabela menos desconto rateado, item a item; o do atendimento é a soma dos itens; nunca negativo |
+| Quarto | Quarto do hóspede no parceiro, informado no atendimento; obrigatório em unidade com acordo com parceiro, opcional nas demais |
+| Cliente Avulso | Cliente sem cadastro (nome, telefone) |
 | Cliente Recorrente | Cliente cadastrado no contexto Clientes |
 | No-show | O cliente não compareceu ao atendimento agendado |
 | Política de Cancelamento | Regras de cobrança e de remuneração para cancelamento tardio e no-show; congelada no agendamento |
@@ -50,8 +54,10 @@ Termos do negócio e seu significado **dentro de cada contexto**. Quando um term
 | Regra de Participação | Como se calcula a parte do parceiro: percentual fixo, faixas progressivas, faixas por patamar ou sem participação |
 | Faixas Progressivas | Cada parte da receita paga o percentual da faixa em que cai |
 | Faixas por Patamar | A faixa em que o total termina define o percentual aplicado sobre tudo |
-| Trecho | Parte de um período coberta por uma única versão do acordo; surge quando o acordo é revisado no meio do mês |
-| Liquidação do Período | Apuração mensal do que o parceiro deve à unidade |
+| Periodicidade | De quanto em quanto tempo o acordo é liquidado: semanal (segunda a domingo), quinzenal (dias 1–15 e 16–fim do mês) ou mensal. Os limites das faixas valem por período |
+| Período | Intervalo de datas de uma liquidação, definido pela periodicidade do acordo |
+| Trecho | Parte de um período coberta por uma única versão do acordo; surge quando o acordo é revisado no meio do período |
+| Liquidação do Período | Apuração do que o parceiro deve à unidade em cada período (semanal, quinzenal ou mensal) |
 | Previsão | Valor a receber calculado com o que existe até o momento, pela mesma lógica do fechamento |
 | Fechamento | Congela a apuração do período |
 | Recebimento | Valor efetivamente pago pelo parceiro; pode haver mais de um por liquidação |
@@ -134,14 +140,17 @@ Termos do negócio e seu significado **dentro de cada contexto**. Quando um term
 
 | Termo | Definição |
 |---|---|
-| Tipo de Serviço | Serviço oferecido (ex.: massagem relaxante), com duração padrão e preço |
+| Tipo de Serviço | Serviço que a empresa oferece (ex.: massagem relaxante): identidade comum e nome, usados por comissão, ficha técnica e relatórios |
+| Oferta do Serviço | Como uma unidade oferece um tipo de serviço: duração, salas permitidas, se exige profissional e preço com vigência. Cada unidade mantém a sua |
+| Exige Profissional | Indicação da oferta de que o serviço precisa de um profissional; quando não precisa, o atendimento ocupa só a sala |
 | Produto | Item vendável e/ou usado como insumo, com unidade base e embalagens |
-| Tabela de Preço | Preços com vigência: padrão e exceções por unidade |
+| Tabela de Preço | Preços de produto com vigência: padrão e exceções por unidade |
 
 ## Clientes
 
 | Termo | Definição |
 |---|---|
-| Cliente Recorrente | Cliente cadastrado, identificado pelo telefone dentro da empresa |
+| Cliente Recorrente | Cliente cadastrado, identificado pelo CPF dentro da empresa; pode ter vários telefones |
+| CPF | Identidade do cliente recorrente, única dentro da empresa. Dado pessoal comum pela LGPD (não sensível); removido na anonimização |
 | Consentimento | Autorização do cliente para uma finalidade (ex.: lembretes, promoções) |
 | Anonimização | Remoção dos dados pessoais do cliente, mantendo os registros sem identificá-lo |

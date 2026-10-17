@@ -214,8 +214,8 @@ fixoProRata = soma, para cada versão vigente no mês, de
 
 | Evento | Origem | Reação |
 |---|---|---|
-| AtendimentoConcluido | Atendimento | Comissão de serviço sobre `valorCobrado` ou `precoDeTabela` (conforme o plano) + contribuição para metas |
-| AtendimentoCancelado, NoShowRegistrado | Atendimento | Comissão sobre `baseDeRemuneracao`, se maior que zero |
+| AtendimentoConcluido | Atendimento | Para cada item **com profissional**: comissão de serviço sobre o `valorCobrado` ou o `precoDeTabela` do item (conforme o plano) + contribuição para metas. Origem = atendimento + item ([ADR-035](../adr/035-atendimento-com-varios-servicos.md)); item sem profissional não gera remuneração ([ADR-037](../adr/037-servico-sem-profissional.md)) |
+| AtendimentoCancelado, NoShowRegistrado | Atendimento | Para cada item com profissional: comissão sobre a `baseDeRemuneracao` do item, se maior que zero |
 | VendaRealizada | Vendas | Comissão de produto (se houver profissional responsável) + contribuição para metas |
 | CobrancaInadimplente | Cobrança | `reter`, se o plano for "só recebe quando pago" |
 | PagamentoRecebido, CobrancaRecuperada | Cobrança | `liberar` a linha retida |

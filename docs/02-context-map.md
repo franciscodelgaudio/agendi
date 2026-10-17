@@ -22,12 +22,13 @@
 | Upstream → Downstream | Padrão | O que trafega |
 |---|---|---|
 | Organização → todos | U/D · Published Language | IDs e eventos `UnidadeCriada`, `UnidadeRenomeada`, `UnidadeDesativada`, `UnidadeReativada`. Os demais guardam só o ID e uma cópia local do nome |
-| Catálogo → Atendimento, Vendas, Estoque | Customer/Supplier | Tipos de serviço, preço de tabela, produtos, unidade base e embalagens |
+| Catálogo → Atendimento, Vendas, Estoque | Customer/Supplier | Tipos de serviço, ofertas do serviço por unidade (duração, salas permitidas, exige profissional, preço), produtos, unidade base e embalagens |
+| Atendimento → Catálogo | Customer/Supplier (consulta) | Salas da unidade, para a oferta do serviço indicar as salas permitidas (só IDs; [ADR-039](adr/039-oferta-do-servico-por-unidade.md)) |
 | Clientes → Atendimento, Vendas | Customer/Supplier | Dados do cliente recorrente |
 | Atendimento → Cobrança, Remuneração, Estoque | Published Language | `AtendimentoConcluido`, `AtendimentoCancelado`, `NoShowRegistrado` (com consequências já calculadas) |
 | Vendas → Cobrança, Remuneração, Estoque | Published Language | `VendaRealizada`, `VendaDevolvida` |
 | Cobrança → Liquidação, Financeiro, Remuneração | Published Language | `ServicoCobrado`, `VendaCobrada`, `PagamentoRecebido`, `CobrancaInadimplente`, `CobrancaRecuperada`, `CobrancaEstornada` |
-| Liquidação → Cobrança | Published Language | `AcordoFirmado`, `AcordoEncerrado` (define a modalidade de cobrança) |
+| Liquidação → Cobrança, Atendimento | Published Language | `AcordoFirmado`, `AcordoEncerrado` (define a modalidade de cobrança; no Atendimento, torna o quarto obrigatório, [ADR-041](adr/041-quarto-obrigatorio-so-com-parceiro.md)) |
 | Liquidação, Remuneração, Estoque, Cobrança → Financeiro | Customer/Supplier | Lançamentos financeiros na carteira certa |
 | Financeiro → Remuneração | Published Language | `CarteiraCriada`, `CarteiraRecomposta` (cópia local para metas de carteira) |
 | Organização → Financeiro, Estoque | Published Language | `UnidadeCriada` gera a carteira própria e o depósito próprio da unidade |

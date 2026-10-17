@@ -1,6 +1,6 @@
 # ADR-033: Preços com padrão e exceções por unidade
 
-- **Status:** Aceita
+- **Status:** Substituída em parte por [ADR-039](039-oferta-do-servico-por-unidade.md) (para serviços; continua valendo para produtos)
 - **Data:** 2026-10
 
 ## Contexto

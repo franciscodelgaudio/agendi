@@ -1,6 +1,6 @@
 # ADR-016: Revisão do acordo com data de início escolhida pelo usuário
 
-- **Status:** Aceita
+- **Status:** Substituída em parte por [ADR-038](038-periodos-semanal-quinzenal-e-mensal.md) (as faixas olham o acumulado do período do acordo, não só do mês)
 - **Data:** 2026-10
 
 ## Contexto

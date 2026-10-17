@@ -43,17 +43,21 @@ O código é um **modelo anêmico guiado pelo banco**. Financeiro, Remuneração
 
 ## 2. Decisões tomadas após o diagnóstico
 
-O diagnóstico mostrou pontos em que o uso real diverge das premissas do modelo. As respostas do negócio:
+O diagnóstico mostrou pontos em que o uso real diverge das premissas do modelo. As respostas do negócio (17/10/2026):
 
-| # | Divergência | Decisão | Impacto no modelo |
-|---|---|---|---|
-| M1 | Um `Appointment` tem até 20 itens, com profissionais diferentes; o modelo previa um serviço por atendimento | **Um atendimento pode ter mais de um serviço** | `ServicoPrevisto`/`ServicoRealizado` viram listas de itens; cada item reserva seu profissional e sala. Revisar [Atendimento](contextos/atendimento.md) e os eventos |
-| M2 | Salas com `beds` de 1 a 10; a premissa A1 dizia "um atendimento por vez" | **Uma sala pode ter mais de um atendimento simultâneo.** O termo é genérico (pode ser maca, cadeira etc.): **Capacidade da Sala** | A1 é falsa. A invariante da agenda passa a ser "ocupação da sala ≤ capacidade". No código, `beds` → `capacity` (com migração) |
-| M3 | Serviço sem profissional (`Service.requiresTherapist = false`, ex.: hidromassagem) | **Manter como o código funciona hoje** | `profissionalId` opcional no item; a reserva ocupa só a sala |
-| M4 | O código só calcula por patamar; o modelo prevê progressivas e patamar | **O usuário escolhe progressivo ou patamar, com um exemplo numérico na tela** | Já previsto no modelo (tipos `FaixasProgressivas` e `FaixasPorPatamar`). Falta no código: o tipo progressivo, a escolha e o exemplo |
-| M5 | O produto tem período semanal e quinzenal na participação do parceiro; o modelo só mensal | **Manter semanal e quinzenal como no produto** | `Periodo` da Liquidação passa a ter `Semanal`, `Quinzenal` e `Mensal`. Revisar a premissa L4 (faixas olham o acumulado do período) |
+| # | Divergência | Decisão | Impacto no modelo | Registro |
+|---|---|---|---|---|
+| M1 | Um `Appointment` tem até 20 itens, com profissionais diferentes; o modelo previa um serviço por atendimento | **Um atendimento pode ter mais de um serviço** | `ServicoPrevisto`/`ServicoRealizado` viram listas de itens; cada item reserva seu profissional e sala; o desconto é do atendimento e é rateado entre os itens; os eventos levam a lista de itens | [ADR-035](adr/035-atendimento-com-varios-servicos.md), [Atendimento](contextos/atendimento.md) |
+| M2 | Salas com `beds` de 1 a 10; a premissa A1 dizia "um atendimento por vez" | **Uma sala pode ter mais de um atendimento simultâneo.** O termo é genérico (pode ser maca, cadeira etc.): **Capacidade da Sala** | A1 é falsa. A invariante da agenda passa a ser "ocupação da sala ≤ capacidade". No código, `beds` → `capacity` (com migração) | [ADR-036](adr/036-capacidade-da-sala.md), [Atendimento](contextos/atendimento.md) |
+| M3 | Serviço sem profissional (`Service.requiresTherapist = false`, ex.: hidromassagem) | **Manter como o código funciona hoje** | A oferta do serviço diz se exige profissional; `profissionalId` opcional no item; a reserva ocupa só a sala; sem remuneração | [ADR-037](adr/037-servico-sem-profissional.md) |
+| M4 | O código só calcula por patamar; o modelo prevê progressivas e patamar | **O usuário escolhe progressivo ou patamar, com um exemplo numérico na tela** | Já previsto no modelo (tipos `FaixasProgressivas` e `FaixasPorPatamar`). Falta no código: o tipo progressivo, a escolha e o exemplo | [Liquidação](contextos/liquidacao-parceiro.md#5-escolha-entre-faixas-progressivas-e-por-patamar-m4) (citado no ADR-038) |
+| M5 | O produto tem período semanal e quinzenal na participação do parceiro; o modelo só mensal | **Manter semanal e quinzenal como no produto** | `Periodo` da Liquidação deixa de ser (ano, mês) e passa a ter `Semanal`, `Quinzenal` e `Mensal`. A premissa L4 vale para o período escolhido. Novas premissas L5 e L6 | [ADR-038](adr/038-periodos-semanal-quinzenal-e-mensal.md), [Liquidação](contextos/liquidacao-parceiro.md) |
+| M6 | `Service` é cadastrado por unidade, com preço, duração, salas e `requiresTherapist` próprios; o modelo tinha tipo por empresa com preço padrão + exceção | **Cada unidade mantém a sua própria Oferta do Serviço** | `TipoDeServico` (empresa: identidade e nome) + `OfertaDoServico` (unidade: duração, salas permitidas, exige profissional, preço). Para serviços, substitui em parte o ADR-033; para produtos, ele continua | [ADR-039](adr/039-oferta-do-servico-por-unidade.md), [Catálogo](contextos/catalogo.md) |
+| M7 | O modelo identificava o cliente recorrente pelo telefone único | **A identidade é o CPF, único por empresa**; o cliente tem uma lista de telefones | CPF é dado pessoal comum (LGPD), não sensível. Nova premissa CL2 (cliente sem CPF) | [ADR-040](adr/040-cpf-como-identidade-do-cliente.md), [Clientes](contextos/clientes.md) |
+| M8 | `guest.room` é obrigatório em todo atendimento, inclusive no espaço próprio | **Quarto opcional no espaço próprio e obrigatório em unidade com parceiro** | O quarto passa a ser do atendimento. **Conflita** com o ADR-031 (cliente de fora sem quarto paga na hora): virou a pendência C3 | [ADR-041](adr/041-quarto-obrigatorio-so-com-parceiro.md), [Pendências](05-pendencias.md) |
+| M9 | Produtos contados em "unidade", sem ml ou g (D6) | **Migrar com unidade base "unidade"**; o gestor recadastra em ml ou g quando quiser | Nenhum no modelo (a unidade base é imutável, então mudar significa recadastrar). Só decisão de migração | [Catálogo](contextos/catalogo.md#migração) |
 
-> **A registrar:** M1, M2, M3 e M5 alteram o modelo e precisam de ADR, atualização do documento do contexto, do glossário e do diagrama, conforme [Como alterar este sistema](00-processo-de-modelagem.md#como-alterar-este-sistema).
+Todas as decisões foram registradas conforme [Como alterar este sistema](00-processo-de-modelagem.md#como-alterar-este-sistema): ADR, documento do contexto, glossário, pendências e a [etapa 18](00-processo-de-modelagem.md#etapa-18--comparação-com-o-código-e-decisões-do-diagnóstico) do processo. **Faltam os diagramas**: `atendimento-modelo`, `atendimento-estados`, `catalogo-clientes-modelo`, `liquidacao-modelo`, `fluxo-atendimento-concluido` e `context-map` ainda mostram o modelo anterior.
 
 ---
 
@@ -129,7 +133,7 @@ Situações: **existe**, **parcial**, **divergente**, **inexistente**.
 
 `Lead` é lead da própria Agendi (landing), não cliente do SPA.
 
-**Mudanças:** coleção de clientes com telefone único por empresa; `guest` → `ClienteDoAtendimento = Avulso | Recorrente`, quarto opcional. Sem telefone no histórico, não há como deduplicar: avulsos antigos ficam sem `clienteId`.
+**Mudanças:** coleção de clientes com **CPF único por empresa** e lista de telefones ([ADR-040](adr/040-cpf-como-identidade-do-cliente.md)); `guest` → `ClienteDoAtendimento = Avulso | Recorrente`; o quarto sai do cliente e vai para o atendimento, opcional no espaço próprio e obrigatório em unidade com parceiro ([ADR-041](adr/041-quarto-obrigatorio-so-com-parceiro.md); conflito C3). Sem CPF no histórico, não há como deduplicar: avulsos antigos ficam sem `clienteId`.
 
 ### 5.3 Atendimento (core)
 
@@ -234,15 +238,16 @@ Situações: **existe**, **parcial**, **divergente**, **inexistente**.
 | Conceito | Hoje | Situação |
 |---|---|---|
 | Tipo de serviço por empresa | `models/Service.ts:16` por unidade | divergente |
-| Tabela de preço (padrão + exceção, vigência) | `Service.priceCents` único | divergente |
+| Oferta do serviço por unidade (duração, salas, exige profissional, preço) | `Service` por unidade, com esses campos; `priceCents` único, sem vigência | parcial (alinhado a M6) |
+| Tabela de preço de produto (padrão + exceção, vigência) | — | inexistente |
 | Produto: unidade base, embalagens, vendável, insumo | só `name`, `costCents` (sobrescrito a cada compra) | parcial |
 | Desativar em vez de apagar | `deleteOne`/`deleteMany` | divergente |
 
-**Mudanças:** agrupar `services` por empresa (preço mais comum → padrão, diferenças → exceção por unidade) e remapear `serviceId` em atendimentos e agendamentos. Fundir por nome é arriscado: durações, salas e `requiresTherapist` podem diferir. Talvez seja preciso uma "oferta por unidade" no Atendimento.
+**Mudanças:** cada `Service` atual vira a **oferta** da sua unidade, com preço versionado ([ADR-039](adr/039-oferta-do-servico-por-unidade.md)); os tipos de serviço da empresa são criados agrupando nomes iguais (nomes diferentes viram tipos diferentes), e o `serviceId` em atendimentos e agendamentos é remapeado para tipo + oferta. Não é preciso fundir durações, salas nem `requiresTherapist`, porque cada unidade mantém os seus. Produtos migram com unidade base "unidade" (M9).
 
 ### 5.9 Cobrança
 
-Inexistente. `Checkout`, `/subscribe` e o webhook AbacatePay são a **assinatura SaaS da Agendi**, fora do domínio, e não devem ser reaproveitados como Cobrança (só como referência de padrão para o adaptador do gateway). A receita é reconhecida no registro do atendimento, que é editável. `guest.room` obrigatório impede distinguir `NaHora` de `ContaDoHospede`. Nada registra pagamento do cliente, então não há inadimplência nem retenção de comissão.
+Inexistente. `Checkout`, `/subscribe` e o webhook AbacatePay são a **assinatura SaaS da Agendi**, fora do domínio, e não devem ser reaproveitados como Cobrança (só como referência de padrão para o adaptador do gateway). A receita é reconhecida no registro do atendimento, que é editável. `guest.room` obrigatório impede distinguir `NaHora` de `ContaDoHospede` (com a decisão M8, o quarto continua obrigatório nas unidades com parceiro; veja o conflito C3). Nada registra pagamento do cliente, então não há inadimplência nem retenção de comissão.
 
 **Mudanças:** agregado `Cobranca` com índice único por origem; `ModalidadeDaUnidade` alimentada pelo acordo; registrar pagamento, inadimplência (exige rotina agendada, que o projeto não tem) e estorno; permissões novas; portas `GatewayDePagamento` e `SistemaDoParceiro` com adaptador manual primeiro. Migração do histórico: decidir o status (marcar como paga com meio "legado" evita inadimplência retroativa em massa).
 
@@ -328,7 +333,7 @@ Escopo decidido com o negócio: a unidade desativada some da operação; a desat
 
 ## 9. Pendências da migração
 
-Além das premissas de negócio em [Pendências](05-pendencias.md) (R2/R3, F1–F3, E1–E4, C2, V1, CL1):
+Além das premissas de negócio em [Pendências](05-pendencias.md) (R2/R3, L5/L6, F1–F3, E1–E4, C2, C3, V1, CL1/CL2, A2/A3):
 
 | # | Pergunta |
 |---|---|
@@ -337,7 +342,7 @@ Além das premissas de negócio em [Pendências](05-pendencias.md) (R2/R3, F1–
 | D3 | Bônus mensais fixos atuais: parte do fixo ou componente novo do plano? |
 | D4 | Limite mensal por grupo de despesa (orçamento) e despesas recorrentes/parceladas: entram no modelo ou ficam fora do domínio? |
 | D5 | Histórico: recalcular meses passados com as regras atuais ou adotar uma data de corte e congelar o passado? |
-| D6 | Cadastros: produtos contados em "unidade" (sem ml/g); serviços duplicados por unidade; carteiras compartilhadas sem percentual |
+| D6 | Cadastros: carteiras compartilhadas sem percentual. *(Respondido em parte: produtos migram em "unidade", M9; serviços por unidade viram ofertas da unidade, M6.)* |
 | D7 | Workspace = Empresa? Um workspace pode ter mais de um CNPJ? |
 | D8 | O ambiente local e o de CI rodam Mongo em replica set (necessário para transações e outbox)? |
 | D9 | Agendamentos passados nunca registrados: no-show, esquecimento ou cancelamento? Define o estado na migração |

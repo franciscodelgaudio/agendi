@@ -4,7 +4,7 @@
 |---|---|
 | **Classificação** | 🟢 Generic |
 | **Subdomínio** | Recebimentos |
-| **Situação** | ✅ Modelagem tática definida (com premissas a confirmar: C1, C2) |
+| **Situação** | ✅ Modelagem tática definida (com premissa a confirmar: C2; conflito em aberto: C3) |
 
 ## Propósito
 
@@ -28,6 +28,10 @@ A Cobrança recebe valores já calculados ([ADR-007](../adr/007-eventos-com-cons
 | **ContaDoHospede** | Unidade com acordo com parceiro **e** cliente com quarto informado | O valor é lançado na conta do quarto pelo sistema do hotel (PMS). O hotel recebe do hóspede e repassa na liquidação |
 
 A modalidade é decidida **por cobrança**, não só pela unidade: num SPA dentro de hotel, um cliente de fora (sem quarto) paga na hora ([ADR-031](../adr/031-modalidade-de-cobranca-por-cobranca.md)). Para isso, a Cobrança mantém uma cópia local de quais unidades têm acordo, atualizada pelos eventos da Liquidação.
+
+> **Conflito em aberto (C3).** Em 17/10/2026 o negócio decidiu que o quarto é **obrigatório** nos atendimentos de unidades com parceiro ([ADR-041](../adr/041-quarto-obrigatorio-so-com-parceiro.md)). Se valer sem exceção, todo atendimento dessas unidades chega com quarto e vira `ContaDoHospede`, e o caso "cliente de fora paga na hora" deixa de existir para atendimentos. Até o negócio responder a [C3](../05-pendencias.md), a regra desta seção continua valendo.
+
+O quarto vem no evento de origem (`AtendimentoConcluido` traz o quarto do atendimento; a venda traz o do cliente avulso). Um atendimento com vários serviços gera **uma cobrança pelo total** ([ADR-035](../adr/035-atendimento-com-varios-servicos.md)).
 
 ## 2. Invariantes
 
@@ -92,8 +96,8 @@ Se o hotel não tiver integração, existe um **adaptador manual**: a recepcioni
 
 | Evento | Origem | Reação |
 |---|---|---|
-| AtendimentoConcluido | Atendimento | Cobrança de `valorCobrado` |
-| AtendimentoCancelado, NoShowRegistrado | Atendimento | Cobrança de `valorACobrar`, se maior que zero |
+| AtendimentoConcluido | Atendimento | Cobrança de `valorCobrado` (total de todos os itens) |
+| AtendimentoCancelado, NoShowRegistrado | Atendimento | Cobrança de `valorACobrar` (total dos itens), se maior que zero |
 | VendaRealizada | Vendas | Cobrança de `valorTotal` |
 | VendaDevolvida | Vendas | Estorno parcial ou total |
 | AcordoFirmado, AcordoEncerrado | Liquidação | Atualiza `ModalidadeDaUnidade` |
@@ -131,7 +135,8 @@ Serviços de aplicação
 ## 7. Testes de domínio
 
 - Atendimento de R$ 180 no espaço próprio → cobrança `NaHora` de R$ 180.
-- Atendimento num SPA de hotel com quarto 304 → `ContaDoHospede`; sem quarto → `NaHora`.
+- Atendimento num SPA de hotel com quarto 304 → `ContaDoHospede`; sem quarto → `NaHora` (este segundo caso depende da resposta de C3).
+- Atendimento com dois serviços, de R$ 200 e R$ 100 → **uma** cobrança de R$ 300.
 - No-show com `valorACobrar` zero → nenhuma cobrança.
 - Pagamento de R$ 100 + R$ 80 numa cobrança de R$ 180 → *Paga*; um terceiro pagamento gera erro.
 - Pagamento na recepção numa cobrança `ContaDoHospede` gera erro.
@@ -141,4 +146,4 @@ Serviços de aplicação
 
 ## Pendências
 
-C1 e C2 em [Pendências](../05-pendencias.md).
+C2 e C3 em [Pendências](../05-pendencias.md). A C1 foi superada pela decisão do quarto ([ADR-041](../adr/041-quarto-obrigatorio-so-com-parceiro.md)), que gerou o conflito C3.

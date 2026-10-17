@@ -26,6 +26,7 @@ Este documento registra **como** chegamos ao modelo, na ordem em que as coisas a
 | [15](#etapa-15--modelagem-tática-do-financeiro) | Financeiro | Resultado, títulos e caixa separados |
 | [16](#etapa-16--modelagem-tática-do-estoque) | Estoque | Custo médio, ficha técnica no Estoque, variação por depósito |
 | [17](#etapa-17--vendas-e-contextos-genéricos) | Vendas e genéricos | Devolução compensatória, modalidade por cobrança, preços por unidade |
+| [18](#etapa-18--comparação-com-o-código-e-decisões-do-diagnóstico) | Comparação com o código | Atendimento com vários serviços, capacidade da sala, oferta por unidade, períodos da liquidação, CPF, quarto |
 | [—](#lições-do-processo) | Lições do processo | O que vale repetir nos próximos contextos |
 | [—](#base-teórica) | Base teórica | As fontes de cada técnica e como se relacionam com o DDD |
 | [—](#como-replicar-o-método) | Como replicar o método | Roteiro, padrões reutilizáveis e como alterar este sistema |
@@ -358,6 +359,38 @@ Com esta etapa, **todos os dez contextos têm modelagem tática definida**. O qu
 
 ---
 
+## Etapa 18 — Comparação com o código e decisões do diagnóstico
+
+**Situação.** Com o modelo completo, começamos o passo 7 do roteiro: comparar o modelo com o código em produção, contexto por contexto, e planejar a migração. O resultado está no [Diagnóstico para a migração](06-diagnostico-migracao.md). Seguindo o princípio da etapa 0 (negócio primeiro, código depois), as divergências não foram corrigidas automaticamente a favor do modelo: cada uma virou uma pergunta ao negócio, porque às vezes quem estava certo era o código.
+
+**O que o código mostrou.** Em vários pontos, o uso real era mais rico que as premissas do modelo:
+
+| # | O que o código faz | O que o modelo dizia | Resposta do negócio (17/10/2026) |
+|---|---|---|---|
+| M1 | Um atendimento tem até 20 itens, cada um com o seu profissional | Um serviço por atendimento | **Mais de um serviço por atendimento.** Previsto e realizado viram listas de itens; cada item reserva o seu profissional e a sua sala; o desconto é do atendimento e é rateado entre os itens ([ADR-035](adr/035-atendimento-com-varios-servicos.md)) |
+| M2 | Salas comportam de 1 a 10 atendimentos ao mesmo tempo | Premissa A1: um atendimento por vez | **A sala tem uma capacidade.** O negócio pediu um termo genérico ("maca" não serve: pode ser cadeira, banheira): **Capacidade da Sala**. A1 era falsa ([ADR-036](adr/036-capacidade-da-sala.md)) |
+| M3 | Serviço sem profissional (hidromassagem) | Todo atendimento tem profissional | **Manter como hoje.** A oferta diz se exige profissional; sem profissional, a reserva ocupa só a sala e não há remuneração ([ADR-037](adr/037-servico-sem-profissional.md)) |
+| M4 | Só faixas por patamar | Progressivas e por patamar | **O usuário escolhe**, com um exemplo numérico de cada na tela. O modelo já previa os dois tipos |
+| M5 | Participação do parceiro semanal, quinzenal ou mensal | Só mensal | **Manter os três.** O período deixa de ser (ano, mês), e as faixas olham o acumulado do período ([ADR-038](adr/038-periodos-semanal-quinzenal-e-mensal.md)) |
+| M6 | Serviço cadastrado por unidade, com preço, duração, salas e "exige profissional" próprios | Tipo por empresa com preço padrão + exceção por unidade | **Cada unidade mantém a sua Oferta do Serviço**; o Tipo de Serviço é a identidade comum da empresa ([ADR-039](adr/039-oferta-do-servico-por-unidade.md)) |
+| M7 | Não há cadastro de cliente | Cliente identificado pelo telefone | **A identidade é o CPF**, único por empresa; o cliente tem vários telefones ([ADR-040](adr/040-cpf-como-identidade-do-cliente.md)) |
+| M8 | Quarto obrigatório em todo atendimento | Quarto opcional | **Opcional no espaço próprio, obrigatório em unidade com parceiro** ([ADR-041](adr/041-quarto-obrigatorio-so-com-parceiro.md)) |
+| M9 | Produtos contados em "unidade" | Unidade base em ml, g ou unidade | **Migrar como "unidade"**; o gestor recadastra em ml ou g quando quiser |
+
+**Mudanças no modelo.**
+- **Atendimento:** itens no previsto, no realizado e nos eventos; nova invariante da agenda (ocupação da sala ≤ capacidade); `profissionalId` opcional; o quarto saiu do cliente e foi para o atendimento. Remuneração, Estoque e Cobrança passaram a tratar o evento item a item (a Cobrança continua com uma cobrança pelo total).
+- **Catálogo:** `TipoDeServico` ficou só com identidade e nome; nasceu o agregado `OfertaDoServico`. O ADR-033 passou a valer só para produtos.
+- **Liquidação com Parceiro:** periodicidade na versão do acordo e `Periodo` com início e fim. O ADR-016 foi substituído em parte: onde dizia "mês inteiro", vale "período do acordo".
+- **Clientes:** CPF como identidade, lista de telefones; o CPF é dado pessoal comum pela LGPD, não sensível.
+
+**Conflito encontrado.** A decisão do quarto (M8) não se concilia com o [ADR-031](adr/031-modalidade-de-cobranca-por-cobranca.md): se o quarto é obrigatório em unidade com parceiro, o cliente de fora, que pela regra da Cobrança paga na hora, não tem como ser registrado. Em vez de escolher uma saída sozinhos, registramos a decisão como tomada e abrimos a pendência **C3** com as opções para o negócio.
+
+**Novas perguntas.** A3 (reduzir a capacidade de uma sala com reservas futuras), L5 (revisão que muda a periodicidade), L6 (semana que atravessa a virada do mês no Financeiro) e CL2 (cliente sem CPF). A1, C1 e K1 foram para as resolvidas. Veja [Pendências](05-pendencias.md).
+
+**Lição.** A comparação com o código também valida o modelo. Aqui, o código tinha razão em vários pontos: o modelo tinha simplificado demais (um serviço por atendimento, uma pessoa por sala, só mês). O diagnóstico não serve só para achar falhas no código, mas também premissas erradas no modelo.
+
+---
+
 ## Lições do processo
 
 1. **Negócio primeiro, código depois.** As falhas aparecem na comparação.
@@ -400,7 +433,7 @@ Esta seção reúne as referências por trás de cada técnica usada nas etapas 
 | 10, 17 | Anti-Corruption Layer com portas e adaptadores | Evans, cap. 14 (ACL); Cockburn, *Hexagonal Architecture* | Isolar gateway e PMS do hotel para que conceitos externos não contaminem o modelo |
 | 12 | Documentação: C4, ADR, docs-as-code, draw.io | Brown, *C4 Model*; Nygard, *Documenting Architecture Decisions* | Registrar o modelo e, principalmente, o porquê das decisões |
 | 17 | Consentimento, anonimização, dado sensível | Lei 13.709/2018 (LGPD) | Restrição legal que molda o contexto Clientes |
-| Passo 7 (futuro) | Testes de caracterização; Strangler Fig | Feathers (2004); Fowler, *Strangler Fig Application* | Migrar o sistema existente sem reescrever tudo de uma vez |
+| 18 (passo 7) | Diagnóstico código × modelo; testes de caracterização; Strangler Fig | Fowler, *Anemic Domain Model*; Feathers (2004); Fowler, *Strangler Fig Application* | Validar o modelo contra o uso real e migrar o sistema existente sem reescrever tudo de uma vez |
 
 ### As fontes e como cada uma se relaciona com o DDD
 
@@ -481,7 +514,7 @@ Ferramenta de diagramas usada no formato `.drawio.svg`, que é imagem e fonte ed
 **Comitê de Pronunciamentos Contábeis — CPC 00 (Estrutura Conceitual) e CPC 16 (Estoques).**
 O CPC 00 fundamenta o **regime de competência** (receita e despesa no mês em que ocorrem, não no mês do pagamento); o CPC 16 admite o **custo médio ponderado** para avaliar estoques. *Neste projeto:* ADR-025, ADR-028 e ADR-032. Vale validar com o contador do cliente.
 
-#### Migração (passo 7, ainda não realizado)
+#### Migração (passo 7, em andamento: etapa 18)
 
 **Michael Feathers — *Working Effectively with Legacy Code* (Prentice Hall, 2004).**
 Testes de caracterização: registrar o comportamento atual antes de mudar o código.
@@ -531,7 +564,7 @@ Estes padrões apareceram mais de uma vez aqui e tendem a se repetir em outros s
 | **"O usuário decide" como parâmetro tipado** | Clientes diferentes querem regras diferentes | Base da comissão, revisão de acordo, venda sem saldo, rateio do fixo | [ADR-001](adr/001-problema-real-com-variacoes-explicitas.md) |
 | **Versões com data de início escolhida** | Regras que mudam no tempo | Acordos, planos, fichas, preços, carteiras | Fowler (*Temporal Property*); [ADR-016](adr/016-revisao-do-acordo-com-data-escolhida.md) |
 | **Snapshot da regra no fato** | O passado não pode mudar quando a regra muda | Atendimento, venda, linhas da folha, liquidação | [ADR-008](adr/008-snapshot-das-regras-no-momento-do-fato.md) |
-| **Padrão + exceções por unidade** | A mesma regra varia por local | Comissões, preços | [ADR-022](adr/022-condicoes-de-comissao-por-unidade.md), [ADR-033](adr/033-precos-com-padrao-e-excecao-por-unidade.md) |
+| **Padrão + exceções por unidade** | A mesma regra varia por local | Comissões, preços de produtos (serviços: oferta por unidade, [ADR-039](adr/039-oferta-do-servico-por-unidade.md)) | [ADR-022](adr/022-condicoes-de-comissao-por-unidade.md), [ADR-033](adr/033-precos-com-padrao-e-excecao-por-unidade.md) |
 | **Estrutura por empresa** para invariantes de agrupamento | "Cada X pertence a um único Y" | Carteiras, depósitos | [ADR-024](adr/024-estrutura-financeira-num-agregado.md), [ADR-030](adr/030-estrutura-de-estoque-espelha-a-financeira.md) |
 | **Definição × acompanhamento** | Uma regra estável medida continuamente | Meta / AcompanhamentoDaMeta | [ADR-020](adr/020-metas-com-acompanhamento-separado.md) |
 | **Previsão com o mesmo cálculo do fechamento** | É preciso ver o resultado antes do fim do período | Liquidação, lucro previsto | [ADR-012](adr/012-lucro-previsto-como-read-model.md) |

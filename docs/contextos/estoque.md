@@ -188,7 +188,7 @@ variacao       = consumoReal − consumoTeorico
 
 | Evento | Origem | Reação |
 |---|---|---|
-| AtendimentoConcluido | Atendimento | Consumo estimado de cada item da ficha técnica, no depósito da unidade |
+| AtendimentoConcluido | Atendimento | Para cada serviço do atendimento ([ADR-035](../adr/035-atendimento-com-varios-servicos.md)): consumo estimado de cada item da ficha técnica do `tipoServicoId`, no depósito da unidade |
 | VendaRealizada | Vendas | Saída por venda, conforme a política do depósito |
 | UnidadeCriada | Organização | Cria o depósito próprio da unidade |
 | ProdutoCadastrado / EmbalagemDefinida | Catálogo | Atualiza a cópia local de unidade base e embalagens |
