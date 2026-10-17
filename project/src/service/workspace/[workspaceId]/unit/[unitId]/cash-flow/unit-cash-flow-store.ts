@@ -97,8 +97,7 @@ export function monthStaffPay(
   month: string,
   today: string,
 ): MemberStaffPay[] {
-  const since = parseCashFlowQuery({}, unit.createdAt).date;
-  return staffPayByMember(monthRange(month), team, unit.id, appointments, unit.revenueShare, { today, since });
+  return staffPayByMember(monthRange(month), team, unit.id, appointments, unit.revenueShare, { today, ...recordDays(unit) });
 }
 
 // Cada registro com o que o caixa calculou para a pessoa no mês; appointments precisa cobrir os meses.
@@ -123,7 +122,16 @@ function payrollAdjustments(
 }
 
 // createdAt: início dos registros da unidade; salário de antes dele não entra no caixa.
-export type CashFlowUnit = { id: string; revenueShare: RevenueShare | null; createdAt: Date };
+// deactivatedAt: desativação da unidade; salário de depois dela também não.
+export type CashFlowUnit = { id: string; revenueShare: RevenueShare | null; createdAt: Date; deactivatedAt?: Date | null };
+
+// Dias com registros da unidade: do início até a desativação, se ela foi desativada.
+function recordDays({ createdAt, deactivatedAt }: CashFlowUnit) {
+  return {
+    since: parseCashFlowQuery({}, createdAt).date,
+    until: deactivatedAt ? parseCashFlowQuery({}, deactivatedAt).date : null,
+  };
+}
 
 // Líquido real da unidade nos dias do saldo da carteira (até hoje), com as mesmas regras do
 // caixa; team é a equipe do workspace.
@@ -141,7 +149,7 @@ export async function loadUnitNet(unit: CashFlowUnit, range: DayRange, today: st
   const { commissionRates, ...staffRates } = teamPayRates(team, unit.id);
   return applyPayrollPayments(
     applyExpenses(
-      applyStaffCosts(summarizeCashFlow([range], appointments, [], revenueShare, commissionRates), { ...staffRates, today, since: parseCashFlowQuery({}, unit.createdAt).date }),
+      applyStaffCosts(summarizeCashFlow([range], appointments, [], revenueShare, commissionRates), { ...staffRates, today, ...recordDays(unit) }),
       expenses,
     ),
     payrollAdjustments(unit, team, appointments, records, today),
@@ -167,7 +175,7 @@ export async function loadUnitCashFlow(workspaceId: string, unit: CashFlowUnit, 
     findPayrollRecords(unit.id, shown),
   ]);
   const { commissionRates, ...staffRates } = teamPayRates(team, unit.id);
-  const staffCosts = { ...staffRates, today, since: parseCashFlowQuery({}, unit.createdAt).date };
+  const staffCosts = { ...staffRates, today, ...recordDays(unit) };
   // A folha registrada troca o calculado de cada pessoa no mês trabalhado.
   const summary = applyPayrollPayments(
     applyExpenses(

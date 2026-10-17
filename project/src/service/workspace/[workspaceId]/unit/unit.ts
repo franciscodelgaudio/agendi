@@ -140,15 +140,34 @@ export async function updateUnit(
   return found ? { ok: true } : { ok: false, error: "unit_not_found" };
 }
 
-export type DeleteUnitResult = { ok: true } | { ok: false; error: "unit_not_found" };
+export type DeactivateUnitResult = { ok: true } | { ok: false; error: "unit_not_found" | "unit_has_pending_bookings" };
 
-// remove devolve false quando a unidade não existe (ou não é do workspace).
-export async function deleteUnit(
+// A unidade nunca é excluída: desativada, sai da operação e mantém o histórico.
+// hasPendingBookings: true quando há agendamento por vir que ainda não virou atendimento.
+// deactivate devolve false quando a unidade não existe, não é do workspace ou já está desativada.
+export async function deactivateUnit(
   unitId: string | null | undefined,
-  remove: (unitId: string) => Promise<boolean>,
-): Promise<DeleteUnitResult> {
+  { hasPendingBookings, deactivate }: {
+    hasPendingBookings: (unitId: string) => Promise<boolean>;
+    deactivate: (unitId: string) => Promise<boolean>;
+  },
+): Promise<DeactivateUnitResult> {
+  if (!unitId) return { ok: false, error: "unit_not_found" };
+  if (await hasPendingBookings(unitId)) return { ok: false, error: "unit_has_pending_bookings" };
+
+  const found = await deactivate(unitId);
+  return found ? { ok: true } : { ok: false, error: "unit_not_found" };
+}
+
+export type ReactivateUnitResult = { ok: true } | { ok: false; error: "unit_not_found" };
+
+// reactivate devolve false quando a unidade não existe, não é do workspace ou já está ativa.
+export async function reactivateUnit(
+  unitId: string | null | undefined,
+  reactivate: (unitId: string) => Promise<boolean>,
+): Promise<ReactivateUnitResult> {
   if (!unitId) return { ok: false, error: "unit_not_found" };
 
-  const found = await remove(unitId);
+  const found = await reactivate(unitId);
   return found ? { ok: true } : { ok: false, error: "unit_not_found" };
 }

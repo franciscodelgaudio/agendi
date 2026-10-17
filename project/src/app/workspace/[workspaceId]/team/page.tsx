@@ -36,7 +36,7 @@ export default async function TeamPage({ params, searchParams }: PageProps<"/wor
         localField: "_id",
         foreignField: "workspaceId",
         as: "units",
-        pipeline: [{ $project: { _id: 0, id: { $toString: "$_id" }, name: 1 } }],
+        pipeline: [{ $match: { deactivatedAt: null } }, { $project: { _id: 0, id: { $toString: "$_id" }, name: 1 } }],
       },
     },
     {

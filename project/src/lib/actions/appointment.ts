@@ -192,7 +192,7 @@ export async function updateWorkspaceAppointmentAction(
     {
       ...appointmentLookups(unit),
       update: async (id, fields) => {
-        const workspaceUnitIds = await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id")
+        const workspaceUnitIds = await Unit.find({ workspaceId: unit.workspaceId, deactivatedAt: null }).distinct("_id")
         const { matchedCount } = await Appointment.updateOne(
           { _id: id, unitId: { $in: workspaceUnitIds } },
           { $set: { ...fields, discount: fields.discount ?? null, unitId: unit.unitId } },
@@ -281,7 +281,7 @@ async function convertBookingInUnit(
   unit: { workspaceId: string; unitId: string },
   userId: string,
 ): Promise<AppointmentActionState> {
-  const workspaceUnitIds = await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id")
+  const workspaceUnitIds = await Unit.find({ workspaceId: unit.workspaceId, deactivatedAt: null }).distinct("_id")
 
   const result = await convertBooking(
     input,

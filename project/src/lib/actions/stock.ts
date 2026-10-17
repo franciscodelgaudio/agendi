@@ -51,7 +51,7 @@ function stockInput(formData: FormData) {
 }
 
 function unitsExist(workspaceId: string, unitIds: string[]) {
-  return Unit.countDocuments({ _id: { $in: unitIds }, workspaceId }).then((count) => count === unitIds.length)
+  return Unit.countDocuments({ _id: { $in: unitIds }, workspaceId, deactivatedAt: null }).then((count) => count === unitIds.length)
 }
 
 function toUnitDocs(units: StockUnit[]) {

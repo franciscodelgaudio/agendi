@@ -29,7 +29,15 @@ export async function GET(request: Request, { params }: RouteContext<"/api/works
 
   const [workspace] = await Workspace.aggregate<{ bookings: BookingRow[]; blocks: TherapistBlockRow[] }>([
     ...access,
-    { $lookup: { from: "units", localField: "_id", foreignField: "workspaceId", as: "units" } },
+    {
+      $lookup: {
+        from: "units",
+        localField: "_id",
+        foreignField: "workspaceId",
+        as: "units",
+        pipeline: [{ $match: { deactivatedAt: null } }, { $project: { _id: 1 } }],
+      },
+    },
     {
       $lookup: {
         from: "bookings",

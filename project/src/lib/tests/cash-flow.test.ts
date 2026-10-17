@@ -691,6 +691,33 @@ describe("applyStaffCosts", () => {
     expect(result.buckets[0].forecast.salaryCents).toBe(70_000);
   });
 
+  it("unidade desativada (until): salário só conta até o dia da desativação, no real e no previsto", () => {
+    const summary = summarizeCashFlow([{ from: "2026-09-01", to: "2026-09-30" }], [], [], null, {});
+
+    const result = applyStaffCosts(summary, { ...SALARY, today: "2026-09-30", until: "2026-09-10" });
+
+    // Dias 1 a 10, R$ 100 por dia.
+    expect(result.buckets[0].real.salaryCents).toBe(100_000);
+    expect(result.buckets[0].forecast.salaryCents).toBe(100_000);
+  });
+
+  it("unidade desativada (until) antes do intervalo: nenhum salário", () => {
+    const summary = summarizeCashFlow([RANGE], [], [], null, {});
+
+    const result = applyStaffCosts(summary, { ...SALARY, until: "2026-08-31" });
+
+    expect(result.total.real.salaryCents).toBe(0);
+    expect(result.total.forecast.salaryCents).toBe(0);
+  });
+
+  it("until nulo mantém o comportamento sem corte", () => {
+    const summary = summarizeCashFlow([RANGE], [], [], null, {});
+
+    const result = applyStaffCosts(summary, { ...SALARY, until: null });
+
+    expect(result.buckets[0].forecast.salaryCents).toBe(70_000);
+  });
+
   it("data de início no futuro: salário só no previsto a partir dela", () => {
     const summary = summarizeCashFlow([RANGE], [], [], null, {});
 
@@ -1353,6 +1380,15 @@ describe("staffPayByMember", () => {
       { memberId: "jane", real: pay(9_032, 0), forecast: pay(261_935, 0) },
       { memberId: "bia", real: pay(9_032, 0), forecast: pay(261_935, 0) },
     ]);
+  });
+
+  it("salário de depois da desativação da unidade (until) não conta", () => {
+    const team = [member("jane", null, false, [link({ salaryCents: 310_000 })])];
+
+    const result = staffPayByMember(OCTOBER, team, UNIT.toString(), [], null, { today: "2026-10-20", until: "2026-10-10" });
+
+    // R$ 3.100 por mês de 31 dias = R$ 100 por dia; só os dias 1 a 10.
+    expect(result).toEqual([{ memberId: "jane", real: pay(100_000, 0), forecast: pay(100_000, 0) }]);
   });
 
   it("comissão sobre os serviços conta só os atendimentos da própria pessoa no intervalo", () => {

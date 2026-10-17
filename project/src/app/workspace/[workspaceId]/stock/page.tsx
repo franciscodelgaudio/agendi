@@ -46,7 +46,7 @@ export default async function WorkspaceStockPage({ params, searchParams }: PageP
         localField: "_id",
         foreignField: "workspaceId",
         as: "units",
-        pipeline: [{ $sort: { name: 1, _id: 1 } }, { $project: { _id: 0, id: { $toString: "$_id" }, name: 1 } }],
+        pipeline: [{ $match: { deactivatedAt: null } }, { $sort: { name: 1, _id: 1 } }, { $project: { _id: 0, id: { $toString: "$_id" }, name: 1 } }],
       },
     },
     { $project: { _id: 0, id: { $toString: "$_id" }, actor: 1, units: 1 } },

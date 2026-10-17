@@ -74,11 +74,11 @@ function findBookingUnit(workspaceId: string, formData: FormData, userId: string
   return findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId, "bookings.manage")
 }
 
-// Unidades do workspace, se o usuário pode gerenciar agendamentos; senão o motivo.
+// Unidades ativas do workspace, se o usuário pode gerenciar agendamentos; senão o motivo.
 async function findManagedUnitIds(workspaceId: string, userId: string) {
   const managed = await findManagedWorkspace(workspaceId, userId, "bookings.manage")
   if (!managed.ok) return managed
-  return { ok: true as const, unitIds: await Unit.find({ workspaceId: managed.access.id }).distinct("_id") }
+  return { ok: true as const, unitIds: await Unit.find({ workspaceId: managed.access.id, deactivatedAt: null }).distinct("_id") }
 }
 
 // workspaceId vem via argumento e a unidade pelo formulário (campo unitId); a posse é conferida aqui.
@@ -92,7 +92,7 @@ export async function createBookingAction(
   const access = await findBookingUnit(workspaceId, formData, userId)
   if (!access.ok) return accessError(access.error)
   const { unit } = access
-  const unitIds = await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id")
+  const unitIds = await Unit.find({ workspaceId: unit.workspaceId, deactivatedAt: null }).distinct("_id")
 
   const result = await createBooking(bookingInput(formData), unit.unitId, {
     ...bookingLookups(unit, unitIds),
@@ -118,7 +118,7 @@ export async function updateBookingAction(
   const access = await findBookingUnit(workspaceId, formData, userId)
   if (!access.ok) return accessError(access.error)
   const { unit } = access
-  const unitIds = await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id")
+  const unitIds = await Unit.find({ workspaceId: unit.workspaceId, deactivatedAt: null }).distinct("_id")
 
   const result = await updateBooking(bookingInput(formData), isObjectIdOrHexString(bookingId) ? bookingId : null, {
     ...bookingLookups(unit, unitIds),
@@ -175,7 +175,7 @@ export async function correctBookingAction(
   const access = await findManagedUnit(workspaceId, booking.unitId.toString(), userId, "bookings.manage")
   if (!access.ok) return accessError(access.error)
   const { unit } = access
-  const unitIds = await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id")
+  const unitIds = await Unit.find({ workspaceId: unit.workspaceId, deactivatedAt: null }).distinct("_id")
   const { appointmentId } = booking
 
   const result = await correctRegisteredBooking(bookingInput(formData), bookingId, {
@@ -213,43 +213,30 @@ export async function rescheduleBookingAction(
   if (!managed.ok) return accessError(managed.error)
   const { unitIds } = managed
 
-  // Atendimento de onde o agendamento virou, se virou; a escrita confere que continua o mesmo.
-  let appointmentId: Types.ObjectId | null = null
-
   // A escrita ainda filtra pelas unidades do workspace.
   const result = await rescheduleBooking(times, isObjectIdOrHexString(bookingId) ? bookingId : null, {
     findBooking: async (id) => {
       const booking = await Booking.findOne({ _id: id, unitId: { $in: unitIds } })
-        .select({ therapistId: 1, unitId: 1, treatmentRoom: 1, startsAt: 1, endsAt: 1, appointmentId: 1 })
+        .select({ therapistId: 1, unitId: 1, treatmentRoom: 1, appointmentId: 1 })
         .lean()
       if (!booking) return null
-      const [room, appointment] = await Promise.all([
-        findUnitTreatmentRoom(booking.unitId, booking.treatmentRoom.roomId.toString()),
-        booking.appointmentId && Appointment.findById(booking.appointmentId).select({ items: 1 }).lean(),
-      ])
-      appointmentId = appointment ? booking.appointmentId ?? null : null
+      const room = await findUnitTreatmentRoom(booking.unitId, booking.treatmentRoom.roomId.toString())
       return {
         therapistId: booking.therapistId?.toString() ?? null,
         treatmentRoom: room && { roomId: room.id, beds: room.beds },
-        ...(appointment && {
-          registered: {
-            serviceCount: appointment.items.length,
-            durationMinutes: (booking.endsAt.getTime() - booking.startsAt.getTime()) / MINUTE_MS,
-          },
-        }),
+        registered: booking.appointmentId != null,
       }
     },
     hasConflict: conflictChecker(unitIds),
     isBlocked: blockChecker(workspaceId),
     findRoomBookings: roomBookingsFinder(unitIds),
-    update: async (id, fields, appointment) => {
+    // Agendamento que virou atendimento entre a leitura e a escrita não é alterado.
+    update: async (id, fields) => {
       const { matchedCount } = await Booking.updateOne(
-        { _id: id, unitId: { $in: unitIds }, appointmentId },
+        { _id: id, unitId: { $in: unitIds }, appointmentId: null },
         { $set: fields },
       )
-      if (matchedCount === 0) return false
-      if (appointmentId && appointment) await syncAppointment(appointmentId, appointment)
-      return true
+      return matchedCount > 0
     },
   })
 
@@ -263,9 +250,12 @@ export async function deleteBookingAction(workspaceId: string, bookingId: string
   if (!managed.ok) return accessError(managed.error)
   const { unitIds } = managed
 
+  // Agendamento que já virou atendimento não é excluído: o atendimento ficaria sem agendamento.
   const result = await deleteBooking(isObjectIdOrHexString(bookingId) ? bookingId : null, async (id) => {
-    const { deletedCount } = await Booking.deleteOne({ _id: id, unitId: { $in: unitIds } })
-    return deletedCount > 0
+    const { deletedCount } = await Booking.deleteOne({ _id: id, unitId: { $in: unitIds }, appointmentId: null })
+    if (deletedCount > 0) return true
+    const registered = await Booking.exists({ _id: id, unitId: { $in: unitIds }, appointmentId: { $ne: null } })
+    return registered ? "registered" : false
   })
 
   return { error: result.ok ? null : errorMessages[result.error] }

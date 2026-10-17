@@ -530,7 +530,7 @@ export async function transferProductAction(
   const input = { fromUnitId: formData.get("fromUnitId"), toUnitId: formData.get("toUnitId"), quantity: formData.get("quantity") }
   const result = await transferProduct(input, target.productId, async (id, { fromUnitId, toUnitId, quantity }) => {
     const { workspaceId: ownedWorkspaceId } = target.unit
-    const units = await Unit.countDocuments({ _id: { $in: [fromUnitId, toUnitId] }, workspaceId: ownedWorkspaceId })
+    const units = await Unit.countDocuments({ _id: { $in: [fromUnitId, toUnitId] }, workspaceId: ownedWorkspaceId, deactivatedAt: null })
     if (units < 2) return "invalid_units"
     const [from, to] = await Promise.all([findUnitHolder(fromUnitId), findUnitHolder(toUnitId)])
     if (from.holderId === to.holderId) return "same_stock"

@@ -174,7 +174,7 @@ const brtLocal = (date: Date) => toBrt(date).toISOString().slice(0, 16)
 
 export function uraWalkDeps(workspaceId: string): WalkDeps {
   const unitOf = (unitId: string) =>
-    isObjectIdOrHexString(unitId) ? Unit.findOne({ _id: unitId, workspaceId }).lean() : Promise.resolve(null)
+    isObjectIdOrHexString(unitId) ? Unit.findOne({ _id: unitId, workspaceId, deactivatedAt: null }).lean() : Promise.resolve(null)
 
   return {
     listServices: async (unitId) => {
@@ -196,7 +196,7 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
       if (!unit || !service) return []
       const { requiresTherapist, treatmentRoomIds } = serviceRules(service)
       const therapists = requiresTherapist ? await unitTherapists(workspaceId, unitId) : []
-      const unitIds = await Unit.find({ workspaceId }).distinct("_id")
+      const unitIds = await Unit.find({ workspaceId, deactivatedAt: null }).distinct("_id")
       const until = new Date(from.getTime() + (days + 1) * DAY_MS)
       const bookings = await Booking.find({
         startsAt: { $lt: until },
@@ -251,7 +251,7 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
         Workspace.findById(workspaceId).select({ userId: 1 }).lean(),
       ])
       if (!unit || !service || !workspace) return { ok: false }
-      const unitIds = await Unit.find({ workspaceId }).distinct("_id")
+      const unitIds = await Unit.find({ workspaceId, deactivatedAt: null }).distinct("_id")
       const result = await createBooking(
         {
           therapistId,

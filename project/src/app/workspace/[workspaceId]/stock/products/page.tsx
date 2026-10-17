@@ -61,7 +61,7 @@ export default async function StockProductsPage({
         localField: "_id",
         foreignField: "workspaceId",
         as: "units",
-        pipeline: [{ $project: { _id: 1 } }],
+        pipeline: [{ $match: { deactivatedAt: null } }, { $project: { _id: 1 } }],
       },
     },
     {

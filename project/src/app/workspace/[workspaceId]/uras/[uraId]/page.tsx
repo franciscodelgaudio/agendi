@@ -51,7 +51,7 @@ export default async function UraEditorPage({ params }: PageProps<"/workspace/[w
         localField: "_id",
         foreignField: "workspaceId",
         as: "units",
-        pipeline: [{ $sort: { name: 1 } }, { $project: { _id: 0, id: { $toString: "$_id" }, name: 1 } }],
+        pipeline: [{ $match: { deactivatedAt: null } }, { $sort: { name: 1 } }, { $project: { _id: 0, id: { $toString: "$_id" }, name: 1 } }],
       },
     },
     // Quem pode receber a conversa na transferência: administradores e quem usa as Conversas.

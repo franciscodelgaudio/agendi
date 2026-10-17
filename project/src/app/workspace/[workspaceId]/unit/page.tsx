@@ -34,6 +34,7 @@ export default async function UnitsPage({
       revenueShare: RevenueShare | null
       treatmentRooms: TreatmentRoomOption[]
       businessHours: BusinessHours
+      active: boolean
       createdAt: Date
       updatedAt: Date
     }[]

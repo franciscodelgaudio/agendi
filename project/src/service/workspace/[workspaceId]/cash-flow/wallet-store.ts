@@ -34,13 +34,18 @@ export async function loadWallets(workspaceId: string, today: string, unitId?: s
     Wallet.find({ workspaceId: workspace, ...(unitId && { "units.unitId": new Types.ObjectId(unitId) }) })
       .sort({ name: 1, _id: 1 })
       .lean(),
-    Unit.find({ workspaceId: workspace }).select({ name: 1, revenueShare: 1, createdAt: 1 }).lean(),
+    Unit.find({ workspaceId: workspace }).select({ name: 1, revenueShare: 1, createdAt: 1, deactivatedAt: 1 }).lean(),
     findTeamPayMembers(workspaceId),
   ]);
   const unitsById = new Map(
     units.map((unit) => [
       unit._id.toString(),
-      { name: unit.name, revenueShare: (unit.revenueShare ?? null) as RevenueShare | null, createdAt: unit.createdAt },
+      {
+        name: unit.name,
+        revenueShare: (unit.revenueShare ?? null) as RevenueShare | null,
+        createdAt: unit.createdAt,
+        deactivatedAt: unit.deactivatedAt ?? null,
+      },
     ]),
   );
 

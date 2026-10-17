@@ -36,7 +36,7 @@ function form(name: AgeniaActionName, input: Input) {
 }
 
 async function unitInWorkspace(workspaceId: string, unitId: string) {
-  return !!(await Unit.exists({ _id: unitId, workspaceId: new Types.ObjectId(workspaceId) }))
+  return !!(await Unit.exists({ _id: unitId, workspaceId: new Types.ObjectId(workspaceId), deactivatedAt: null }))
 }
 
 // Valores atuais no formato da ação, para a edição parcial não apagar o que a IA não mandou.

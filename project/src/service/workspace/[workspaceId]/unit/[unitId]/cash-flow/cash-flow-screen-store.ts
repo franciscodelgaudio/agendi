@@ -67,7 +67,7 @@ export async function loadCashFlowSummaryScreen(
   // Parte do workspace para garantir o acesso; a regra de repasse define quantos dias buscar.
   const [workspace] = await Workspace.aggregate<{
     id: string
-    unit: { name: string; revenueShare: RevenueShare | null; createdAt: Date } | null
+    unit: { name: string; revenueShare: RevenueShare | null; createdAt: Date; deactivatedAt: Date | null } | null
   }>([
     ...access,
     {
@@ -84,6 +84,7 @@ export async function loadCashFlowSummaryScreen(
               name: 1,
               revenueShare: { $ifNull: ["$revenueShare", null] },
               createdAt: 1,
+              deactivatedAt: { $ifNull: ["$deactivatedAt", null] },
             },
           },
         ],
@@ -92,13 +93,13 @@ export async function loadCashFlowSummaryScreen(
     { $project: { _id: 0, id: { $toString: "$_id" }, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   if (!workspace?.unit) return null
-  const { name, revenueShare, createdAt } = workspace.unit
+  const { name, revenueShare, createdAt, deactivatedAt } = workspace.unit
   const today = parseCashFlowQuery({}, now).date
   const buckets = cashFlowBuckets({ view: "year", date })
   const shown = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const costBuckets = cashFlowBuckets({ view: "month", date: costMonthDate(costMonthParam, shown, today) })
   const costMonth = { from: costBuckets[0].from, to: costBuckets.at(-1)!.to }
-  const unit = { id: unitId, revenueShare, createdAt }
+  const unit = { id: unitId, revenueShare, createdAt, deactivatedAt }
   const [
     {
       summary,
@@ -182,7 +183,7 @@ export async function loadExpensesScreen(
   const [workspace] = await Workspace.aggregate<{
     id: string
     actor: Actor
-    unit: { name: string; revenueShare: RevenueShare | null; createdAt: Date } | null
+    unit: { name: string; revenueShare: RevenueShare | null; createdAt: Date; deactivatedAt: Date | null } | null
   }>([
     ...access,
     {
@@ -193,7 +194,15 @@ export async function loadExpensesScreen(
         as: "unit",
         pipeline: [
           { $match: { _id: new Types.ObjectId(unitId) } },
-          { $project: { _id: 0, name: 1, revenueShare: { $ifNull: ["$revenueShare", null] }, createdAt: 1 } },
+          {
+            $project: {
+              _id: 0,
+              name: 1,
+              revenueShare: { $ifNull: ["$revenueShare", null] },
+              createdAt: 1,
+              deactivatedAt: { $ifNull: ["$deactivatedAt", null] },
+            },
+          },
         ],
       },
     },
@@ -205,7 +214,7 @@ export async function loadExpensesScreen(
   const buckets = cashFlowBuckets(query)
   const month = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const unitObjectId = new Types.ObjectId(unitId)
-  const unit = { id: unitId, revenueShare: workspace.unit.revenueShare, createdAt: workspace.unit.createdAt }
+  const unit = { id: unitId, ...workspace.unit }
   const [groupDocs, expenseDocs, icons, cashFlow, partnerSharePaid] = await Promise.all([
     ExpenseGroup.find({ unitId: unitObjectId })
       .sort({ name: 1 })
@@ -290,7 +299,7 @@ export async function loadExpenseGroupsScreen(
   const [workspace] = await Workspace.aggregate<{
     id: string
     actor: Actor
-    unit: { name: string; revenueShare: RevenueShare | null; createdAt: Date } | null
+    unit: { name: string; revenueShare: RevenueShare | null; createdAt: Date; deactivatedAt: Date | null } | null
   }>([
     ...access,
     {
@@ -301,7 +310,15 @@ export async function loadExpenseGroupsScreen(
         as: "unit",
         pipeline: [
           { $match: { _id: new Types.ObjectId(unitId) } },
-          { $project: { _id: 0, name: 1, revenueShare: { $ifNull: ["$revenueShare", null] }, createdAt: 1 } },
+          {
+            $project: {
+              _id: 0,
+              name: 1,
+              revenueShare: { $ifNull: ["$revenueShare", null] },
+              createdAt: 1,
+              deactivatedAt: { $ifNull: ["$deactivatedAt", null] },
+            },
+          },
         ],
       },
     },
@@ -313,7 +330,7 @@ export async function loadExpenseGroupsScreen(
   const buckets = cashFlowBuckets(query)
   const period = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const unitObjectId = new Types.ObjectId(unitId)
-  const unit = { id: unitId, revenueShare: workspace.unit.revenueShare, createdAt: workspace.unit.createdAt }
+  const unit = { id: unitId, ...workspace.unit }
   const year = query.date.slice(0, 4)
   const yearRange = { from: `${year}-01-01`, to: `${year}-12-31` }
   const yearMonths = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`)

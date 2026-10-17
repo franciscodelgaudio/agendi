@@ -1,8 +1,8 @@
 "use client"
 
 import { useActionState, useState, useTransition } from "react"
-import { EllipsisIcon, PencilIcon, Trash2Icon } from "lucide-react"
-import { deleteUnitAction, updateUnitAction, type UpdateUnitState } from "@/lib/actions/unit"
+import { ArchiveIcon, ArchiveRestoreIcon, EllipsisIcon, PencilIcon } from "lucide-react"
+import { deactivateUnitAction, reactivateUnitAction, updateUnitAction, type UpdateUnitState } from "@/lib/actions/unit"
 import type { BusinessHours } from "@/service/workspace/[workspaceId]/unit/[unitId]/business-hours"
 import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share"
 import type { TreatmentRoomOption } from "@/components/workspace/[workspaceId]/unit/treatment-room-fields"
@@ -16,6 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -42,13 +43,17 @@ type Unit = {
   revenueShare: RevenueShare | null
   treatmentRooms: TreatmentRoomOption[]
   businessHours: BusinessHours
+  active: boolean
 }
 
 export function UnitActions({ workspaceId, unit, team }: { workspaceId: string; unit: Unit; team: UnitTeamOptions }) {
   const [editOpen, setEditOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deactivateOpen, setDeactivateOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
   const [editKey, setEditKey] = useState(0)
+
+  // Desativada não aceita alteração: só reativar.
+  if (!unit.active) return <ReactivateUnitButton workspaceId={workspaceId} unit={unit} />
 
   return (
     <>
@@ -69,9 +74,9 @@ export function UnitActions({ workspaceId, unit, team }: { workspaceId: string; 
             Editar
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-            <Trash2Icon />
-            Excluir
+          <DropdownMenuItem variant="destructive" onClick={() => setDeactivateOpen(true)}>
+            <ArchiveIcon />
+            Desativar
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -88,11 +93,11 @@ export function UnitActions({ workspaceId, unit, team }: { workspaceId: string; 
         </SheetContent>
       </Sheet>
 
-      <DeleteUnitDialog
+      <DeactivateUnitDialog
         workspaceId={workspaceId}
         unit={unit}
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
+        open={deactivateOpen}
+        onOpenChange={setDeactivateOpen}
       />
     </>
   )
@@ -138,7 +143,7 @@ function EditUnitForm({
   )
 }
 
-function DeleteUnitDialog({
+function DeactivateUnitDialog({
   workspaceId,
   unit,
   open,
@@ -152,9 +157,9 @@ function DeleteUnitDialog({
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
-  function handleDelete() {
+  function handleDeactivate() {
     startTransition(async () => {
-      const result = await deleteUnitAction(workspaceId, unit.id)
+      const result = await deactivateUnitAction(workspaceId, unit.id)
       setError(result.error)
       if (!result.error) onOpenChange(false)
     })
@@ -170,19 +175,39 @@ function DeleteUnitDialog({
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Excluir unidade?</AlertDialogTitle>
+          <AlertDialogTitle>Desativar unidade?</AlertDialogTitle>
           <AlertDialogDescription>
-            A unidade <strong>{unit.name}</strong> será excluída permanentemente. Essa ação não pode ser desfeita.
+            A unidade <strong>{unit.name}</strong> sai da agenda e das demais telas do dia a dia. Nada é
+            apagado: atendimentos, despesas e folha continuam no caixa e nas carteiras, e você pode
+            reativá-la quando quiser.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error && <FieldError>{error}</FieldError>}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
-          <Button variant="destructive" onClick={handleDelete} loading={pending}>
-            {pending ? "Excluindo..." : "Excluir"}
+          <Button variant="destructive" onClick={handleDeactivate} loading={pending}>
+            {pending ? "Desativando..." : "Desativar"}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  )
+}
+
+function ReactivateUnitButton({ workspaceId, unit }: { workspaceId: string; unit: Unit }) {
+  const [pending, startTransition] = useTransition()
+
+  function handleReactivate() {
+    startTransition(async () => {
+      const result = await reactivateUnitAction(workspaceId, unit.id)
+      if (result.error) toast.error(result.error)
+    })
+  }
+
+  return (
+    <Button variant="outline" size="sm" onClick={handleReactivate} loading={pending}>
+      <ArchiveRestoreIcon />
+      {pending ? "Reativando..." : "Reativar"}
+    </Button>
   )
 }

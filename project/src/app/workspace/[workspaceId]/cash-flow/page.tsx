@@ -59,6 +59,7 @@ export default async function WorkspaceCashFlowPage({
               name: 1,
               revenueShare: { $ifNull: ["$revenueShare", null] },
               createdAt: 1,
+              deactivatedAt: { $ifNull: ["$deactivatedAt", null] },
             },
           },
         ],

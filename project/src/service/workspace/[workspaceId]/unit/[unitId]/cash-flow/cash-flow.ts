@@ -436,12 +436,14 @@ export function summarizeTherapists(
 // Cada salário (com os bônus) conta a partir da data de início; sem ela, conta sempre.
 export type StaffSalary = { monthlyCents: number; startDate: string | null };
 // since: início dos registros da unidade; salário de antes não conta (não há faturamento registrado).
+// until: dia em que a unidade foi desativada; salário de depois não conta.
 export type StaffCosts = {
   grossCommissionPercent: number;
   netCommissionPercent: number;
   salaries: StaffSalary[];
   today: string;
   since?: string | null;
+  until?: string | null;
 };
 export type StaffCashFlowAmounts = CashFlowAmounts & { salaryCents: number };
 export type StaffCashFlowBucket = DayRange & { real: StaffCashFlowAmounts; forecast: StaffCashFlowAmounts };
@@ -572,6 +574,11 @@ export function teamPayRates(team: TeamPayMember[], unitId: string): TeamPayRate
   return { commissionRates, grossCommissionPercent, netCommissionPercent, salaries };
 }
 
+// O dia, ou o da desativação da unidade (until) se vier antes.
+function upTo(day: string, until: string | null) {
+  return until && until < day ? until : day;
+}
+
 // Valores mensais (sem arredondar) dos dias do intervalo até `last`, cada um a partir da data de
 // início (e de since): cada dia vale 1/n do mês de n dias.
 function monthlyForDays({ from, to }: DayRange, salaries: StaffSalary[], since: string | null, last = to) {
@@ -597,7 +604,7 @@ export function staffPayByMember(
   unitId: string,
   appointments: DayTotal[],
   revenueShare: RevenueShare | null,
-  { today, since = null }: { today: string; since?: string | null },
+  { today, since = null, until = null }: { today: string; since?: string | null; until?: string | null },
 ): MemberStaffPay[] {
   const inRange = ({ date }: { date: string }) => date >= range.from && date <= range.to;
   const totals = new Map<string, number>();
@@ -629,8 +636,8 @@ export function staffPayByMember(
     const salaries = monthlyCents ? [{ monthlyCents, startDate: link.startDate ?? null }] : [];
     rows.push({
       memberId: member.memberId.toString(),
-      real: { salaryCents: Math.round(monthlyForDays(range, salaries, since, today)), commissionCents },
-      forecast: { salaryCents: Math.round(monthlyForDays(range, salaries, since)), commissionCents },
+      real: { salaryCents: Math.round(monthlyForDays(range, salaries, since, upTo(today, until))), commissionCents },
+      forecast: { salaryCents: Math.round(monthlyForDays(range, salaries, since, upTo(range.to, until))), commissionCents },
     });
   }
   return rows;
@@ -658,12 +665,12 @@ function withStaffCosts(
 // total soma os intervalos arredondados.
 export function applyStaffCosts(
   summary: CashFlowSummary,
-  { salaries, today, since = null, ...percents }: StaffCosts,
+  { salaries, today, since = null, until = null, ...percents }: StaffCosts,
 ): StaffCashFlowSummary {
   const buckets = summary.buckets.map((bucket) => ({
     ...bucket,
-    real: withStaffCosts(bucket.real, percents, monthlyForDays(bucket, salaries, since, today)),
-    forecast: withStaffCosts(bucket.forecast, percents, monthlyForDays(bucket, salaries, since)),
+    real: withStaffCosts(bucket.real, percents, monthlyForDays(bucket, salaries, since, upTo(today, until))),
+    forecast: withStaffCosts(bucket.forecast, percents, monthlyForDays(bucket, salaries, since, upTo(bucket.to, until))),
   }));
   const zero = { grossCents: 0, partnerShareCents: 0, commissionCents: 0, salaryCents: 0, netCents: 0 };
   const add = (a: StaffCashFlowAmounts, b: StaffCashFlowAmounts) => ({

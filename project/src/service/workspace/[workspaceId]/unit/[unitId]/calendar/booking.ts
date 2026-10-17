@@ -354,6 +354,7 @@ export async function correctRegisteredBooking(
 }
 
 // Arrastar ou redimensionar no calendário: só início e fim mudam, no formato do formulário.
+// Agendamento que já virou atendimento não se arrasta; a correção é pelo formulário.
 export async function rescheduleBooking(
   input: unknown,
   bookingId: string | null | undefined,
@@ -365,21 +366,16 @@ export async function rescheduleBooking(
     update,
   }: {
     // treatmentRoom null: a sala foi removida da unidade. therapistId null: serviço sem profissional.
-    // registered: já virou atendimento, com quantos serviços ele tem e a duração atual do agendamento.
+    // registered: já virou atendimento.
     findBooking: (bookingId: string) => Promise<{
       therapistId: string | null;
       treatmentRoom: { roomId: string; beds: number } | null;
-      registered?: { serviceCount: number; durationMinutes: number };
+      registered?: boolean;
     } | null>;
     hasConflict: Lookups["hasConflict"];
     isBlocked: Lookups["isBlocked"];
     findRoomBookings: FindRoomBookings;
-    // appointment: o que levar para o atendimento, só quando o agendamento já virou um.
-    update: (
-      bookingId: string,
-      times: { startsAt: Date; endsAt: Date },
-      appointment?: Omit<AppointmentSync, "guest">,
-    ) => Promise<boolean>;
+    update: (bookingId: string, times: { startsAt: Date; endsAt: Date }) => Promise<boolean>;
   },
 ): Promise<BookingResult> {
   if (!bookingId) return { ok: false, error: "booking_not_found" };
@@ -395,9 +391,7 @@ export async function rescheduleBooking(
 
   const booking = await findBooking(bookingId);
   if (!booking) return { ok: false, error: "booking_not_found" };
-  const { registered } = booking;
-  const durationChanged = registered && durationMinutes !== registered.durationMinutes;
-  if (durationChanged && registered.serviceCount > 1) return { ok: false, error: "duration_locked" };
+  if (booking.registered) return { ok: false, error: "booking_registered" };
   if (!booking.treatmentRoom) return { ok: false, error: "treatment_room_not_found" };
 
   const unavailable = await checkAvailability(
@@ -406,20 +400,19 @@ export async function rescheduleBooking(
   );
   if (unavailable) return { ok: false, error: unavailable };
 
-  const times = { startsAt: start, endsAt: end };
-  const found = registered
-    ? await update(bookingId, times, { performedAt: start, durationMinutes: durationChanged ? durationMinutes : null })
-    : await update(bookingId, times);
+  const found = await update(bookingId, { startsAt: start, endsAt: end });
   return found ? { ok: true } : { ok: false, error: "booking_not_found" };
 }
 
-// remove devolve false quando o agendamento não existe (ou não é do workspace).
+// remove devolve false quando o agendamento não existe (ou não é do workspace) e "registered"
+// quando ele já virou atendimento (e não foi excluído).
 export async function deleteBooking(
   bookingId: string | null | undefined,
-  remove: (bookingId: string) => Promise<boolean>,
+  remove: (bookingId: string) => Promise<boolean | "registered">,
 ): Promise<BookingResult> {
   if (!bookingId) return { ok: false, error: "booking_not_found" };
 
   const found = await remove(bookingId);
+  if (found === "registered") return { ok: false, error: "booking_registered" };
   return found ? { ok: true } : { ok: false, error: "booking_not_found" };
 }

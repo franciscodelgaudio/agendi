@@ -10,21 +10,22 @@ import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspac
 import type { TreatmentRoomInput } from "@/service/workspace/[workspaceId]/unit/[unitId]/treatment-room"
 import {
   createUnit,
-  deleteUnit,
+  deactivateUnit,
+  reactivateUnit,
   updateUnit,
   type CreateUnitError,
   type UpdateUnitError,
 } from "@/service/workspace/[workspaceId]/unit/unit"
-import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
-import { StockItem } from "@/models/StockItem"
-import { Stock } from "@/models/Stock"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
 import { Service } from "@/models/Service"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 
-const errorMessages: Record<CreateUnitError | UpdateUnitError | PlanUnitTeamError | "unauthenticated", string> = {
+const errorMessages: Record<
+  CreateUnitError | UpdateUnitError | PlanUnitTeamError | "unit_has_pending_bookings" | "unauthenticated",
+  string
+> = {
   invalid_input: "Informe o nome da unidade.",
   invalid_name: "Informe o nome da unidade.",
   name_too_long: "O nome pode ter no máximo 80 caracteres.",
@@ -47,6 +48,7 @@ const errorMessages: Record<CreateUnitError | UpdateUnitError | PlanUnitTeamErro
   invalid_opening_balance_date: "Informe o dia do saldo em caixa.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unit_not_found: "Unidade não encontrada ou sem permissão.",
+  unit_has_pending_bookings: "A unidade ainda tem agendamentos por vir. Remarque ou exclua os agendamentos antes de desativá-la.",
   forbidden: "Sem permissão para alterar a equipe.",
   invalid_team: "Escolha só usuários deste workspace.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
@@ -54,7 +56,7 @@ const errorMessages: Record<CreateUnitError | UpdateUnitError | PlanUnitTeamErro
 
 export type CreateUnitState = { error: string | null }
 export type UpdateUnitState = CreateUnitState
-export type DeleteUnitState = CreateUnitState
+export type DeactivateUnitState = CreateUnitState
 
 // Acesso ao workspace se o usuário puder gerenciar unidades; senão a mensagem de erro.
 async function findManagedAccess(
@@ -195,8 +197,9 @@ export async function updateUnitAction(
     async (id, { name, avatarUrl, revenueShare, treatmentRooms, businessHours }) => {
       // Campos null saem do documento em vez de ficarem gravados como null.
       const $unset = { ...(!avatarUrl && { avatarUrl: 1 }), ...(!revenueShare && { revenueShare: 1 }) }
+      // Unidade desativada não aceita alteração; só reativação.
       const { matchedCount } = await Unit.updateOne(
-        { _id: id, workspaceId: target.ownedId },
+        { _id: id, workspaceId: target.ownedId, deactivatedAt: null },
         {
           $set: {
             name,
@@ -217,7 +220,7 @@ export async function updateUnitAction(
     },
     async (id, keptRoomIds) => {
       // Unidade de outro workspace não é consultada; a escrita depois devolve unit_not_found.
-      if (!(await Unit.exists({ _id: id, workspaceId: target.ownedId }))) return false
+      if (!(await Unit.exists({ _id: id, workspaceId: target.ownedId, deactivatedAt: null }))) return false
       const inUse = await Booking.exists({
         unitId: id,
         endsAt: { $gt: new Date() },
@@ -233,30 +236,41 @@ export async function updateUnitAction(
   return { error: null }
 }
 
-export async function deleteUnitAction(workspaceId: string, unitId: string): Promise<DeleteUnitState> {
+// Nada é apagado: a unidade sai da operação e o histórico continua no caixa e nas carteiras.
+export async function deactivateUnitAction(workspaceId: string, unitId: string): Promise<DeactivateUnitState> {
   const target = await resolveUnitTarget(workspaceId, unitId)
   if ("error" in target) return target
 
-  const result = await deleteUnit(target.unitId, async (id) => {
-    const { deletedCount } = await Unit.deleteOne({ _id: id, workspaceId: target.ownedId })
-    if (deletedCount === 0) return false
-    const unitObjectId = new Types.ObjectId(id)
-    await Promise.all([
-      Service.deleteMany({ unitId: id }),
-      Appointment.deleteMany({ unitId: id }),
-      WorkspaceMember.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
-      Wallet.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
-      // O estoque próprio da unidade vai junto; o compartilhado continua com as outras.
-      StockItem.deleteMany({ holderId: unitObjectId }),
-      Stock.updateMany({ "units.unitId": unitObjectId }, { $pull: { units: { unitId: unitObjectId } } }),
-    ])
-    // Estoque compartilhado que ficou sem unidades não tem mais quem o use.
-    const orphaned = await Stock.find({ workspaceId: target.ownedId, units: { $size: 0 } }).select({ _id: 1 }).lean()
-    if (orphaned.length > 0) {
-      const ids = orphaned.map((stock) => stock._id)
-      await Promise.all([StockItem.deleteMany({ holderId: { $in: ids } }), Stock.deleteMany({ _id: { $in: ids } })])
-    }
-    return true
+  const result = await deactivateUnit(target.unitId, {
+    // Unidade de outro workspace não é consultada; a escrita depois devolve unit_not_found.
+    hasPendingBookings: async (id) =>
+      !!(await Unit.exists({ _id: id, workspaceId: target.ownedId })) &&
+      (await Booking.exists({ unitId: id, appointmentId: null, endsAt: { $gt: new Date() } })) !== null,
+    deactivate: async (id) => {
+      const { matchedCount } = await Unit.updateOne(
+        { _id: id, workspaceId: target.ownedId, deactivatedAt: null },
+        { $set: { deactivatedAt: new Date() } },
+      )
+      return matchedCount > 0
+    },
+  })
+
+  if (!result.ok) return { error: errorMessages[result.error] }
+
+  refresh()
+  return { error: null }
+}
+
+export async function reactivateUnitAction(workspaceId: string, unitId: string): Promise<DeactivateUnitState> {
+  const target = await resolveUnitTarget(workspaceId, unitId)
+  if ("error" in target) return target
+
+  const result = await reactivateUnit(target.unitId, async (id) => {
+    const { matchedCount } = await Unit.updateOne(
+      { _id: id, workspaceId: target.ownedId, deactivatedAt: { $ne: null } },
+      { $unset: { deactivatedAt: 1 } },
+    )
+    return matchedCount > 0
   })
 
   if (!result.ok) return { error: errorMessages[result.error] }

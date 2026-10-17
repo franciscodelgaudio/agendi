@@ -694,6 +694,13 @@ describe("deleteBooking", () => {
 
     expect(result).toEqual({ ok: false, error: "booking_not_found" });
   });
+
+  // remove devolve "registered" quando o agendamento já virou atendimento (e não foi excluído).
+  it("retorna booking_registered quando o agendamento já virou atendimento", async () => {
+    const result = await deleteBooking(BOOKING_ID, vi.fn().mockResolvedValue("registered"));
+
+    expect(result).toEqual({ ok: false, error: "booking_registered" });
+  });
 });
 
 // O profissional só é obrigatório quando o serviço exige (ex.: hidromassagem não tem quem atenda).

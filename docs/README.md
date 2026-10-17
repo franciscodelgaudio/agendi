@@ -12,6 +12,7 @@ Documentação viva da modelagem do sistema com Domain-Driven Design. Ela evolui
 | [Glossário](03-glossario.md) | Linguagem ubíqua por contexto |
 | [Event Storming](04-event-storming.md) | Fluxo principal em post-its e a legenda de cores |
 | [Pendências](05-pendencias.md) | Hotspots ainda em aberto |
+| [Diagnóstico para a migração](06-diagnostico-migracao.md) | Código atual × modelo, decisões e plano de migração |
 | [Fluxo: atendimento concluído](fluxos/atendimento-concluido.md) | Como um atendimento se propaga pelos contextos |
 | [Decisões (ADRs)](adr/README.md) | Registro das decisões de arquitetura e modelagem |
 
@@ -41,6 +42,7 @@ docs/
 ├── 03-glossario.md
 ├── 04-event-storming.md
 ├── 05-pendencias.md
+├── 06-diagnostico-migracao.md
 ├── contextos/          um documento por bounded context
 ├── fluxos/             fluxos entre contextos
 ├── adr/                decisões (Architecture Decision Records)

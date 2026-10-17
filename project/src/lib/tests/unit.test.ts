@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createUnit, deleteUnit, updateUnit } from "@/service/workspace/[workspaceId]/unit/unit";
+import { createUnit, deactivateUnit, reactivateUnit, updateUnit } from "@/service/workspace/[workspaceId]/unit/unit";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
@@ -285,72 +285,82 @@ describe("updateUnit", () => {
   });
 });
 
-describe("deleteUnit", () => {
-  it("exclui a unidade pelo id", async () => {
-    const remove = vi.fn().mockResolvedValue(true);
+// A unidade nunca é excluída: desativar preserva o histórico (atendimentos, despesas, folha).
+describe("deactivateUnit", () => {
+  function makeDeps({ pending = false, found = true } = {}) {
+    return {
+      // true quando a unidade tem agendamento por vir que ainda não virou atendimento.
+      hasPendingBookings: vi.fn().mockResolvedValue(pending),
+      // false quando a unidade não existe, não é do workspace ou já está desativada.
+      deactivate: vi.fn().mockResolvedValue(found),
+    };
+  }
 
-    const result = await deleteUnit(UNIT_ID, remove);
+  it("desativa a unidade pelo id", async () => {
+    const deps = makeDeps();
+
+    const result = await deactivateUnit(UNIT_ID, deps);
 
     expect(result).toEqual({ ok: true });
-    expect(remove).toHaveBeenCalledWith(UNIT_ID);
+    expect(deps.hasPendingBookings).toHaveBeenCalledWith(UNIT_ID);
+    expect(deps.deactivate).toHaveBeenCalledWith(UNIT_ID);
+  });
+
+  it("retorna unit_has_pending_bookings sem desativar quando há agendamentos por vir", async () => {
+    const deps = makeDeps({ pending: true });
+
+    const result = await deactivateUnit(UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "unit_has_pending_bookings" });
+    expect(deps.deactivate).not.toHaveBeenCalled();
   });
 
   it.each([undefined, null, ""])(
-    "retorna unit_not_found sem excluir quando não há unitId (%j)",
+    "retorna unit_not_found sem consultar nem desativar quando não há unitId (%j)",
     async (unitId) => {
-      const remove = vi.fn().mockResolvedValue(true);
+      const deps = makeDeps();
 
-      const result = await deleteUnit(unitId, remove);
+      const result = await deactivateUnit(unitId, deps);
 
       expect(result).toEqual({ ok: false, error: "unit_not_found" });
-      expect(remove).not.toHaveBeenCalled();
+      expect(deps.hasPendingBookings).not.toHaveBeenCalled();
+      expect(deps.deactivate).not.toHaveBeenCalled();
     },
   );
 
-  it("retorna unit_not_found quando a unidade não existe (ou não é do workspace)", async () => {
-    const result = await deleteUnit(UNIT_ID, vi.fn().mockResolvedValue(false));
+  it("retorna unit_not_found quando a unidade não existe, não é do workspace ou já está desativada", async () => {
+    const result = await deactivateUnit(UNIT_ID, makeDeps({ found: false }));
 
     expect(result).toEqual({ ok: false, error: "unit_not_found" });
   });
 });
 
-describe("createUnit com saldo inicial", () => {
-  it("salva o saldo em caixa informado na criação", async () => {
-    const insert = vi.fn().mockResolvedValue({ id: UNIT_ID });
+describe("reactivateUnit", () => {
+  it("reativa a unidade pelo id", async () => {
+    const reactivate = vi.fn().mockResolvedValue(true);
 
-    const result = await createUnit(
-      { name: "Spa Central", ...OWN, openingBalance: { amount: "2500.00", date: "2026-09-01" } },
-      WORKSPACE_ID,
-      insert,
-    );
+    const result = await reactivateUnit(UNIT_ID, reactivate);
 
-    expect(result).toEqual({ ok: true, unitId: UNIT_ID });
-    expect(insert).toHaveBeenCalledWith({
-      name: "Spa Central",
-      treatmentRooms: ROOMS,
-      businessHours: HOURS,
-      openingBalance: { amountCents: 250_000, date: "2026-09-01" },
-      workspaceId: WORKSPACE_ID,
-    });
+    expect(result).toEqual({ ok: true });
+    expect(reactivate).toHaveBeenCalledWith(UNIT_ID);
   });
 
-  it("sem valor, cria a unidade sem saldo inicial", async () => {
-    const insert = vi.fn().mockResolvedValue({ id: UNIT_ID });
+  it.each([undefined, null, ""])(
+    "retorna unit_not_found sem reativar quando não há unitId (%j)",
+    async (unitId) => {
+      const reactivate = vi.fn().mockResolvedValue(true);
 
-    await createUnit({ name: "Spa Central", ...OWN, openingBalance: { amount: "", date: "" } }, WORKSPACE_ID, insert);
+      const result = await reactivateUnit(unitId, reactivate);
 
-    expect(insert).toHaveBeenCalledWith({ name: "Spa Central", treatmentRooms: ROOMS, businessHours: HOURS, workspaceId: WORKSPACE_ID });
-  });
+      expect(result).toEqual({ ok: false, error: "unit_not_found" });
+      expect(reactivate).not.toHaveBeenCalled();
+    },
+  );
 
-  it.each([
-    ["valor inválido", { amount: "abc", date: "2026-09-01" }, "invalid_opening_balance"],
-    ["dia inválido", { amount: "100.00", date: "2026-02-30" }, "invalid_opening_balance_date"],
-  ])("retorna erro sem salvar quando o saldo tem %s", async (_label, openingBalance, error) => {
-    const insert = vi.fn();
+  // reactivate devolve false quando a unidade não existe, não é do workspace ou já está ativa.
+  it("retorna unit_not_found quando a unidade não existe, não é do workspace ou já está ativa", async () => {
+    const result = await reactivateUnit(UNIT_ID, vi.fn().mockResolvedValue(false));
 
-    const result = await createUnit({ name: "Spa Central", ...OWN, openingBalance }, WORKSPACE_ID, insert);
-
-    expect(result).toEqual({ ok: false, error });
-    expect(insert).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: false, error: "unit_not_found" });
   });
 });

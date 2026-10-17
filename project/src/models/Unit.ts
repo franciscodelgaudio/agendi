@@ -44,6 +44,8 @@ const unitSchema = new Schema(
     treatmentRooms: { type: [treatmentRoomSchema], default: [] },
     businessHours: { type: businessHoursSchema, required: true },
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true, index: true },
+    // Unidade desativada sai da operação e mantém o histórico; ausente quando está ativa.
+    deactivatedAt: { type: Date },
   },
   { collection: "units", timestamps: true },
 );

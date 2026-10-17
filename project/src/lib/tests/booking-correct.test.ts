@@ -271,15 +271,15 @@ describe("correctRegisteredBooking", () => {
   });
 });
 
-// Arrastar ou redimensionar um agendamento que já virou atendimento.
+// Arrastar ou redimensionar um agendamento que já virou atendimento: recusado, como na tela.
+// A correção de um atendimento registrado é só pelo formulário (correctRegisteredBooking).
 describe("rescheduleBooking de agendamento registrado", () => {
-  // O agendamento salvo vai das 14:30 às 15:30 (60 minutos).
-  function makeDeps(registered: { serviceCount: number; durationMinutes: number }) {
+  function makeDeps() {
     return {
       findBooking: vi.fn().mockResolvedValue({
         therapistId: ANA_ID,
         treatmentRoom: { roomId: SINGLE_ID, beds: 1 },
-        registered,
+        registered: true,
       }),
       hasConflict: vi.fn().mockResolvedValue(false),
       isBlocked: vi.fn().mockResolvedValue(false),
@@ -288,65 +288,18 @@ describe("rescheduleBooking de agendamento registrado", () => {
     };
   }
 
-  it("move e redimensiona, levando horário e nova duração para o atendimento", async () => {
-    const deps = makeDeps({ serviceCount: 1, durationMinutes: 60 });
+  it.each([
+    ["move e redimensiona", { startsAt: "2026-09-24T15:00", endsAt: "2026-09-24T16:30" }],
+    ["só move", { startsAt: "2026-09-24T15:00", endsAt: "2026-09-24T16:00" }],
+  ])("%s: retorna booking_registered sem checar a agenda nem salvar", async (_label, times) => {
+    const deps = makeDeps();
 
-    const result = await rescheduleBooking(
-      { startsAt: "2026-09-24T15:00", endsAt: "2026-09-24T16:30" },
-      BOOKING_ID,
-      deps,
-    );
+    const result = await rescheduleBooking(times, BOOKING_ID, deps);
 
-    expect(result).toEqual({ ok: true });
-    expect(deps.update).toHaveBeenCalledWith(
-      BOOKING_ID,
-      { startsAt: at("15:00"), endsAt: at("16:30") },
-      { performedAt: at("15:00"), durationMinutes: 90 },
-    );
-  });
-
-  it("só move: não mexe na duração do atendimento", async () => {
-    const deps = makeDeps({ serviceCount: 1, durationMinutes: 60 });
-
-    await rescheduleBooking({ startsAt: "2026-09-24T15:00", endsAt: "2026-09-24T16:00" }, BOOKING_ID, deps);
-
-    expect(deps.update).toHaveBeenCalledWith(
-      BOOKING_ID,
-      { startsAt: at("15:00"), endsAt: at("16:00") },
-      { performedAt: at("15:00"), durationMinutes: null },
-    );
-  });
-
-  it("com vários serviços no atendimento, retorna duration_locked sem checar nem salvar ao redimensionar", async () => {
-    const deps = makeDeps({ serviceCount: 2, durationMinutes: 60 });
-
-    const result = await rescheduleBooking(
-      { startsAt: "2026-09-24T15:00", endsAt: "2026-09-24T16:30" },
-      BOOKING_ID,
-      deps,
-    );
-
-    expect(result).toEqual({ ok: false, error: "duration_locked" });
+    expect(result).toEqual({ ok: false, error: "booking_registered" });
     expect(deps.isBlocked).not.toHaveBeenCalled();
     expect(deps.hasConflict).not.toHaveBeenCalled();
     expect(deps.findRoomBookings).not.toHaveBeenCalled();
     expect(deps.update).not.toHaveBeenCalled();
-  });
-
-  it("com vários serviços no atendimento, move mantendo a duração", async () => {
-    const deps = makeDeps({ serviceCount: 2, durationMinutes: 60 });
-
-    const result = await rescheduleBooking(
-      { startsAt: "2026-09-24T15:00", endsAt: "2026-09-24T16:00" },
-      BOOKING_ID,
-      deps,
-    );
-
-    expect(result).toEqual({ ok: true });
-    expect(deps.update).toHaveBeenCalledWith(
-      BOOKING_ID,
-      { startsAt: at("15:00"), endsAt: at("16:00") },
-      { performedAt: at("15:00"), durationMinutes: null },
-    );
   });
 });

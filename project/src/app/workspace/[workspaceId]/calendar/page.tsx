@@ -24,7 +24,7 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
         localField: "_id",
         foreignField: "workspaceId",
         as: "units",
-        pipeline: [{ $sort: { name: 1, _id: 1 } }, { $project: { name: 1, treatmentRooms: 1 } }],
+        pipeline: [{ $match: { deactivatedAt: null } }, { $sort: { name: 1, _id: 1 } }, { $project: { name: 1, treatmentRooms: 1 } }],
       },
     },
     {

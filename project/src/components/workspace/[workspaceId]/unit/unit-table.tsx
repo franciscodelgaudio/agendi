@@ -5,6 +5,7 @@ import type { UnitTeamOptions } from "@/components/workspace/[workspaceId]/unit/
 import { CodeCell, CodeHead } from "@/components/shared/record-code"
 import { SortableHead } from "@/components/shared/sortable-head"
 import { Avatar, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { InitialFallback } from "@/components/shared/initial-fallback"
 import {
   Table,
@@ -18,7 +19,7 @@ import type { UnitListQuery } from "@/service/workspace/[workspaceId]/unit/unit-
 import type { BusinessHours } from "@/service/workspace/[workspaceId]/unit/[unitId]/business-hours"
 import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share"
 import type { TreatmentRoomOption } from "@/components/workspace/[workspaceId]/unit/treatment-room-fields"
-import { dateTimeFormat } from "@/service/_shared/utils"
+import { cn, dateTimeFormat } from "@/service/_shared/utils"
 
 type Props = {
   units: {
@@ -28,13 +29,14 @@ type Props = {
     revenueShare: RevenueShare | null
     treatmentRooms: TreatmentRoomOption[]
     businessHours: BusinessHours
+    active: boolean
     createdAt: Date
     updatedAt: Date
   }[]
   query: UnitListQuery
   pathname: string
   workspaceId: string
-  // Sem permissão, a coluna de ações (editar/excluir) não aparece.
+  // Sem permissão, a coluna de ações (editar/desativar) não aparece.
   canManage: boolean
   team: UnitTeamOptions
 }
@@ -84,7 +86,7 @@ export function UnitTable({ units, query, pathname, workspaceId, canManage, team
             units.map((unit) => (
               <TableRow key={unit.id} data-tour="unit-row">
                 <CodeCell id={unit.id} className="@max-2xl:hidden" />
-                <TableCell className="relative max-w-0 cursor-pointer px-4">
+                <TableCell className={cn("relative max-w-0 px-4", unit.active && "cursor-pointer")}>
                   <div className="flex items-center gap-3">
                     <Avatar className="size-8 rounded-lg after:rounded-lg">
                       {unit.avatarUrl && (
@@ -93,12 +95,18 @@ export function UnitTable({ units, query, pathname, workspaceId, canManage, team
                       <InitialFallback name={unit.name} className="rounded-lg" />
                     </Avatar>
                     {/* O ::after estica o link sobre a célula; relative no <tr> é ignorado pelo Safari do iOS. */}
-                    <Link
-                      href={`${pathname}/${unit.id}`}
-                      className="truncate font-medium after:absolute after:inset-0 hover:underline"
-                    >
-                      {unit.name}
-                    </Link>
+                    {unit.active ? (
+                      <Link
+                        href={`${pathname}/${unit.id}`}
+                        className="truncate font-medium after:absolute after:inset-0 hover:underline"
+                      >
+                        {unit.name}
+                      </Link>
+                    ) : (
+                      // Desativada: sai da operação, então não abre a página da unidade.
+                      <span className="truncate font-medium text-muted-foreground">{unit.name}</span>
+                    )}
+                    {!unit.active && <Badge variant="outline" className="shrink-0">Desativada</Badge>}
                   </div>
                 </TableCell>
                 <TableCell className="px-4 text-muted-foreground @max-xl:hidden">{dateTimeFormat.format(unit.createdAt)}</TableCell>

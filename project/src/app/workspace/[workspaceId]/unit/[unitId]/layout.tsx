@@ -47,7 +47,7 @@ async function UnitHeader({ workspaceId, unitId }: { workspaceId: string; unitId
         foreignField: "workspaceId",
         as: "unit",
         pipeline: [
-          { $match: { _id: new Types.ObjectId(unitId) } },
+          { $match: { _id: new Types.ObjectId(unitId), deactivatedAt: null } },
           {
             $lookup: {
               from: "services",

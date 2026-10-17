@@ -5,7 +5,7 @@ import { Unit } from "@/models/Unit"
 
 // Para server actions: ids do workspace e da unidade se a unidade for do workspace e o
 // usuário tiver a permissão pedida nele; senão o motivo (sem acesso, sem permissão ou
-// unidade inválida).
+// unidade inválida). Unidade desativada não aceita alteração: conta como não encontrada.
 export async function findManagedUnit(
   workspaceId: string,
   unitId: string,
@@ -13,5 +13,5 @@ export async function findManagedUnit(
   permission: Permission,
 ): Promise<UnitAccessResult> {
   const access = await findWorkspaceAccess(workspaceId, userId)
-  return checkUnitAccess(access, unitId, permission, async (id, unit) => !!(await Unit.exists({ _id: unit, workspaceId: id })))
+  return checkUnitAccess(access, unitId, permission, async (id, unit) => !!(await Unit.exists({ _id: unit, workspaceId: id, deactivatedAt: null })))
 }

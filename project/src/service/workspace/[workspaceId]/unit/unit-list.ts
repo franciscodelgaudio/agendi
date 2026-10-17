@@ -52,6 +52,8 @@ export function unitListPipeline({ q, sort, dir }: UnitListQuery) {
           },
         },
         businessHours: 1,
+        // Desativada quando tem data de desativação; sem o campo, está ativa.
+        active: { $eq: [{ $ifNull: ["$deactivatedAt", null] }, null] },
         createdAt: 1,
         updatedAt: 1,
       },

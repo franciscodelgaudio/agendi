@@ -61,7 +61,7 @@ export async function updateUnitMemberAction(
     { actor: access?.actor ?? null },
     {
       findMember: async () => {
-        if (!filter || !(await Unit.exists({ _id: unitObjectId, workspaceId: filter.workspaceId }))) return null
+        if (!filter || !(await Unit.exists({ _id: unitObjectId, workspaceId: filter.workspaceId, deactivatedAt: null }))) return null
         const member = await WorkspaceMember.findOne(filter).select({ _id: 1 }).lean()
         return member && { id: member._id.toString() }
       },

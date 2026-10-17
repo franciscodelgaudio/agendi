@@ -103,6 +103,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         foreignField: "workspaceId",
         as: "units",
         pipeline: [
+          { $match: { deactivatedAt: null } },
           { $sort: { name: 1, _id: 1 } },
           {
             $project: {

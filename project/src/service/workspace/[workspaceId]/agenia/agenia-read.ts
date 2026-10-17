@@ -63,7 +63,7 @@ export async function loadWorkspaceContext(
   const wid = oid(workspaceId)
   const [workspace, units, members, roles, channels, uras, me, memories] = await Promise.all([
     Workspace.findById(wid).select({ name: 1 }).lean(),
-    Unit.find({ workspaceId: wid }).select({ name: 1, businessHours: 1, treatmentRooms: 1 }).sort({ name: 1 }).lean(),
+    Unit.find({ workspaceId: wid, deactivatedAt: null }).select({ name: 1, businessHours: 1, treatmentRooms: 1 }).sort({ name: 1 }).lean(),
     WorkspaceMember.find({ workspaceId: wid }).select({ email: 1, admin: 1, roleId: 1, userId: 1, units: 1 }).lean(),
     Role.find({ workspaceId: wid }).select({ name: 1, permissions: 1 }).sort({ name: 1 }).lean(),
     MessagingChannel.find({ workspaceId: wid }).select({ name: 1, platform: 1 }).lean(),
@@ -369,14 +369,19 @@ export function buildReadTools(workspaceId: string) {
         date: day.optional().describe("Um dia do período; padrão hoje."),
       }),
       execute: async ({ unitId, view, date }) => {
-        const unit = await Unit.findOne({ _id: unitId, workspaceId: wid }).select({ revenueShare: 1, createdAt: 1 }).lean()
+        const unit = await Unit.findOne({ _id: unitId, workspaceId: wid }).select({ revenueShare: 1, createdAt: 1, deactivatedAt: 1 }).lean()
         if (!unit) return noUnit
         const today = brtToday()
         const buckets = cashFlowBuckets({ view, date: date ?? today })
         const [data, [wallet]] = await Promise.all([
           loadUnitCashFlow(
             workspaceId,
-            { id: unitId, revenueShare: (unit.revenueShare ?? null) as RevenueShare | null, createdAt: unit.createdAt },
+            {
+              id: unitId,
+              revenueShare: (unit.revenueShare ?? null) as RevenueShare | null,
+              createdAt: unit.createdAt,
+              deactivatedAt: unit.deactivatedAt ?? null,
+            },
             buckets,
             today,
           ),
