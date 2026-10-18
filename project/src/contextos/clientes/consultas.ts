@@ -41,3 +41,19 @@ export async function listarClientes(empresaId: string, busca = ""): Promise<Cli
     criadoEm: cliente.createdAt,
   }));
 }
+
+// Cliente da empresa pelo id, para o agendamento e o atendimento copiarem o nome; null se não
+// existe nela.
+export async function buscarClientePorId(empresaId: string, clienteId: string): Promise<{ id: string; nome: string } | null> {
+  if (!Types.ObjectId.isValid(clienteId)) return null;
+  const cliente = await Customer.findOne({ _id: clienteId, workspaceId: new Types.ObjectId(empresaId) })
+    .select({ name: 1 })
+    .lean();
+  return cliente && { id: cliente._id.toString(), nome: cliente.name };
+}
+
+// Seletor de cliente recorrente nos formulários: poucos por vez, por trecho do nome ou começo do CPF.
+export async function buscarClientesParaEscolha(empresaId: string, busca: string) {
+  const clientes = await listarClientes(empresaId, busca);
+  return clientes.slice(0, 20).map(({ id, nome, cpf }) => ({ id, nome, cpf }));
+}

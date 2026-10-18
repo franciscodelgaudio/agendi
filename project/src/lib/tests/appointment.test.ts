@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import { createAppointment, deleteAppointment, updateAppointment } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
+// Cliente recorrente cadastrado em Clientes (ADR-040).
+const CUSTOMER_ID = "64b7f0c2a1b2c3d4e5f60790";
+const MARIA = { id: CUSTOMER_ID, name: "Maria Souza" };
 const APPOINTMENT_ID = "64b7f0c2a1b2c3d4e5f60740";
 const CANDLE_ID = "64b7f0c2a1b2c3d4e5f60731";
 const RELAX_ID = "64b7f0c2a1b2c3d4e5f60732";
@@ -38,10 +41,17 @@ const validInput = {
   therapistIds: [ANA_ID],
 };
 
-function makeDeps({ services = SERVICES, therapists = THERAPISTS, guestRoomRequired = true } = {}) {
+function makeDeps({
+  services = SERVICES,
+  therapists = THERAPISTS,
+  guestRoomRequired = true,
+  customer = MARIA as typeof MARIA | null,
+} = {}) {
   return {
     // true quando a unidade funciona dentro de um parceiro: o quarto do hóspede é obrigatório.
     guestRoomRequired,
+    // Cliente recorrente da empresa; null quando não existe nela.
+    findCustomer: vi.fn(async (id: string) => (customer?.id === id ? customer : null)),
     // Devolvem só os que existem (serviços da unidade; profissionais do workspace).
     findServices: vi.fn(async (ids: string[]) => services.filter((s) => ids.includes(s.id))),
     findTherapists: vi.fn(async (ids: string[]) => therapists.filter((t) => ids.includes(t.id))),
@@ -309,6 +319,7 @@ describe("updateAppointment", () => {
   function makeUpdateDeps({ found = true, services = SERVICES, therapists = THERAPISTS, guestRoomRequired = true } = {}) {
     return {
       guestRoomRequired,
+      findCustomer: vi.fn(async (id: string) => (id === CUSTOMER_ID ? MARIA : null)),
       findServices: vi.fn(async (ids: string[]) => services.filter((s) => ids.includes(s.id))),
       findTherapists: vi.fn(async (ids: string[]) => therapists.filter((t) => ids.includes(t.id))),
       findProducts: vi.fn(async (ids: string[]) => PRODUCTS.filter((p) => ids.includes(p.id))),
@@ -739,5 +750,34 @@ describe("cliente de fora no atendimento", () => {
 
     expect(result).toEqual({ ok: true, appointmentId: APPOINTMENT_ID });
     expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "João Silva", room: "" });
+  });
+});
+
+describe("cliente recorrente no atendimento", () => {
+  it("guarda o id do cliente e o nome do cadastro, mesmo sem nome digitado", async () => {
+    const deps = makeDeps();
+
+    const result = await createAppointment({ ...validInput, customerId: CUSTOMER_ID, guestName: "" }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: true, appointmentId: APPOINTMENT_ID });
+    expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "Maria Souza", room: "204", customerId: CUSTOMER_ID });
+  });
+
+  it("cliente que não é da empresa: customer_not_found sem salvar", async () => {
+    const deps = makeDeps({ customer: null });
+
+    const result = await createAppointment({ ...validInput, customerId: CUSTOMER_ID }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "customer_not_found" });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("sem customerId, cliente avulso, sem consultar o cadastro", async () => {
+    const deps = makeDeps();
+
+    await createAppointment(validInput, UNIT_ID, deps);
+
+    expect(deps.findCustomer).not.toHaveBeenCalled();
+    expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "João Silva", room: "204" });
   });
 });

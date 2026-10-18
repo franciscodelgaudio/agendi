@@ -12,6 +12,7 @@ import {
   parseAppointmentListQuery,
   type AppointmentPage,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-list"
+import { PAGE_GUEST_CUSTOMER_ID } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
 import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
 import { ACTIVE_SERVICE } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service-list"
 import { Workspace } from "@/models/Workspace"
@@ -86,7 +87,7 @@ export default async function AppointmentsPage({
               localField: "_id",
               foreignField: "unitId",
               as: "appointments",
-              pipeline: appointmentSearchPipeline(query),
+              pipeline: [...appointmentSearchPipeline(query), PAGE_GUEST_CUSTOMER_ID],
             },
           },
           {

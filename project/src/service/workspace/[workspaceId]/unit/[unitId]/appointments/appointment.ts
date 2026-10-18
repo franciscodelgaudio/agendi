@@ -30,6 +30,7 @@ export type CreateAppointmentError =
   | "invalid_discount"
   | "discount_reason_too_long"
   | "discount_exceeds_total"
+  | "customer_not_found"
   | "unit_not_found"
   | ProductSelectionError;
 
@@ -52,10 +53,34 @@ export type AppointmentDiscount =
   | { type: "percent"; percent: number; cents: number; reason: string }
   | { type: "amount"; cents: number; reason: string };
 
+// Cliente do atendimento: avulso (só o nome) ou recorrente (customerId, com o nome do cadastro).
+// room vazio quando não há quarto.
+export type Guest = { name: string; room: string; customerId?: string };
+
+// Cliente recorrente da empresa (contexto Clientes); null quando não existe nela.
+export type FindCustomer = (id: string) => Promise<{ id: string; name: string } | null>;
+
+// customerId vazio ou ausente = cliente avulso.
+export function parseCustomerId(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+// O recorrente leva o id e o nome do cadastro, que vale mais que o digitado.
+export async function resolveGuest(
+  guest: { name: string; room: string },
+  customerId: string | null,
+  findCustomer: FindCustomer,
+): Promise<{ ok: true; guest: Guest } | { ok: false; error: "customer_not_found" }> {
+  if (!customerId) return { ok: true, guest };
+  const customer = await findCustomer(customerId);
+  if (!customer) return { ok: false, error: "customer_not_found" };
+  return { ok: true, guest: { name: customer.name, room: guest.room, customerId: customer.id } };
+}
+
 // Dados editáveis de um atendimento (tudo menos a unidade). Sem desconto, discount fica ausente.
 export type AppointmentFields = {
   performedAt: Date;
-  guest: { name: string; room: string };
+  guest: Guest;
   items: AppointmentItem[];
   products: SelectedProduct[];
   discount?: AppointmentDiscount;
@@ -67,6 +92,7 @@ type Lookups = {
   // true quando a unidade funciona dentro de um parceiro: o quarto do cliente é obrigatório
   // (menos para cliente de fora, outsideGuest, que não tem quarto e paga na hora).
   guestRoomRequired: boolean;
+  findCustomer: FindCustomer;
   // Devolvem só os que existem: serviços da unidade e quem pode atender no workspace.
   findServices: (
     ids: string[],
@@ -145,12 +171,13 @@ function allocateDiscount(prices: number[], discountCents: number) {
 // serviço pode vir no input; vazia (ou sem a lista), vale a do cadastro.
 async function resolveAppointmentFields(
   input: unknown,
-  { guestRoomRequired, findServices, findTherapists, findProducts }: Lookups,
+  { guestRoomRequired, findCustomer, findServices, findTherapists, findProducts }: Lookups,
 ): Promise<{ ok: true; fields: AppointmentFields } | { ok: false; error: FieldsError }> {
   const {
     guestName,
     room,
     outsideGuest,
+    customerId,
     performedAt,
     serviceIds,
     therapistIds,
@@ -171,9 +198,11 @@ async function resolveAppointmentFields(
     return { ok: false, error: "invalid_input" };
   }
 
+  // Cliente recorrente: o nome vem do cadastro, então o digitado não é validado.
+  const recurringId = parseCustomerId(customerId);
   const name = guestName.trim();
-  if (!name) return { ok: false, error: "invalid_guest_name" };
-  if (name.length > MAX_GUEST_NAME_LENGTH) return { ok: false, error: "guest_name_too_long" };
+  if (!recurringId && !name) return { ok: false, error: "invalid_guest_name" };
+  if (!recurringId && name.length > MAX_GUEST_NAME_LENGTH) return { ok: false, error: "guest_name_too_long" };
 
   // Cliente de fora não tem quarto: o que vier no campo é descartado.
   const normalizedRoom = outsideGuest === true ? "" : room.trim();
@@ -236,7 +265,10 @@ async function resolveAppointmentFields(
       therapistName: therapistId === null ? null : therapistsById.get(therapistId)!.name,
     };
   });
-  const fields: AppointmentFields = { performedAt: date, guest: { name, room: normalizedRoom }, items, products: selection.products };
+  const guest = await resolveGuest({ name, room: normalizedRoom }, recurringId, findCustomer);
+  if (!guest.ok) return guest;
+
+  const fields: AppointmentFields = { performedAt: date, guest: guest.guest, items, products: selection.products };
 
   const discount = parsedDiscount.discount;
   if (discount) {

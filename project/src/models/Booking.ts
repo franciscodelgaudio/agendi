@@ -23,6 +23,9 @@ const bookingSchema = new Schema(
       name: { type: String, required: true, trim: true },
       // Vazio quando o cliente não tem quarto: espaço próprio ou cliente de fora numa unidade com parceiro.
       room: { type: String, default: "", trim: true },
+      // Cliente recorrente (contexto Clientes); ausente quando o cliente é avulso. O nome acima é
+      // a cópia do cadastro no momento.
+      customerId: { type: Schema.Types.ObjectId, ref: "Customer" },
     },
     startsAt: { type: Date, required: true },
     endsAt: { type: Date, required: true },

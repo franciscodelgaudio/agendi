@@ -37,6 +37,7 @@ export function CorrectBookingForm({
           unitId: booking.unitId,
           therapistId: booking.therapistId,
           guestName: booking.guest.name,
+          customerId: booking.guest.customerId ?? null,
           room: booking.guest.room,
           startsAt: booking.startsAt,
           durationMinutes: booking.durationMinutes,

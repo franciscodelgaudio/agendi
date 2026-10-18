@@ -7,6 +7,7 @@ import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import {
   BOOKING_PAGE_SIZE,
   bookingSearchPipeline,
+  PAGE_GUEST_CUSTOMER_ID,
   parseBookingListQuery,
   type BookingPage,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
@@ -76,7 +77,7 @@ export default async function UnitCalendarListPage({
               localField: "_id",
               foreignField: "unitId",
               as: "bookings",
-              pipeline: bookingSearchPipeline(query),
+              pipeline: [...bookingSearchPipeline(query), PAGE_GUEST_CUSTOMER_ID],
             },
           },
           {

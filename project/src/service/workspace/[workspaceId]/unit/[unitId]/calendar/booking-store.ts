@@ -1,4 +1,5 @@
 import { isObjectIdOrHexString, Types } from "mongoose"
+import { buscarClientePorId } from "@/contextos/clientes/consultas"
 import { findUnitProducts } from "@/service/workspace/[workspaceId]/stock/products/product-lookup"
 import { findWorkspaceTherapists } from "@/service/workspace/[workspaceId]/team/therapist-lookup"
 import { Booking } from "@/models/Booking"
@@ -103,9 +104,18 @@ export async function isGuestRoomRequired(unitId: string | Types.ObjectId) {
   return (await Unit.exists({ _id: unitId, revenueShare: { $ne: null } })) !== null
 }
 
+// Cliente recorrente da empresa, no formato que o agendamento e o atendimento esperam.
+export function customerFinder(workspaceId: string) {
+  return async (id: string) => {
+    const cliente = await buscarClientePorId(workspaceId, id)
+    return cliente && { id: cliente.id, name: cliente.nome }
+  }
+}
+
 export async function bookingLookups(unit: { workspaceId: string; unitId: string }, unitIds: Types.ObjectId[]) {
   return {
     guestRoomRequired: await isGuestRoomRequired(unit.unitId),
+    findCustomer: customerFinder(unit.workspaceId),
     findService: async (id: string) => {
       if (!isObjectIdOrHexString(id)) return null
       const service = await Service.findOne({ _id: id, unitId: unit.unitId })

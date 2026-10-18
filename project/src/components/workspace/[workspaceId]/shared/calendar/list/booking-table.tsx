@@ -1,5 +1,6 @@
 import { BedDoubleIcon, MapPinIcon, CheckIcon, ClockIcon, SettingsIcon, LeafIcon, UserIcon } from "lucide-react"
 import { cn } from "cn"
+import { RegisteredCustomerIcon } from "@/components/workspace/[workspaceId]/customers/registered-customer-icon"
 import type { BookingListQuery, BookingRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
 import { BookingActions } from "@/components/workspace/[workspaceId]/shared/calendar/booking-actions"
 import type { BookingFormOptions } from "@/components/workspace/[workspaceId]/shared/calendar/booking-form"
@@ -120,20 +121,23 @@ export function BookingTable({ bookings, query, pathname, workspaceId, options, 
                   {unitNames && <TableCell className="px-4 @max-4xl:hidden">{unitNames.get(booking.unitId) ?? "—"}</TableCell>}
                   <TableCell className="px-4">
                     {/* O quarto fica escondido no tooltip para a linha caber em uma altura só. Sem quarto, só o nome. */}
-                    {booking.guest.room ? (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <span className="cursor-help font-medium underline decoration-muted-foreground/50 decoration-dotted underline-offset-4" />
-                          }
-                        >
-                          {booking.guest.name}
-                        </TooltipTrigger>
-                        <TooltipContent>Quarto {booking.guest.room}</TooltipContent>
-                      </Tooltip>
-                    ) : (
-                      <span className="font-medium">{booking.guest.name}</span>
-                    )}
+                    <span className="flex items-center gap-1.5">
+                      {booking.guest.room ? (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <span className="cursor-help font-medium underline decoration-muted-foreground/50 decoration-dotted underline-offset-4" />
+                            }
+                          >
+                            {booking.guest.name}
+                          </TooltipTrigger>
+                          <TooltipContent>Quarto {booking.guest.room}</TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span className="font-medium">{booking.guest.name}</span>
+                      )}
+                      {booking.guest.customerId && <RegisteredCustomerIcon />}
+                    </span>
                   </TableCell>
                   <TableCell className="px-4 @max-2xl:hidden">
                     {booking.therapistId ? (

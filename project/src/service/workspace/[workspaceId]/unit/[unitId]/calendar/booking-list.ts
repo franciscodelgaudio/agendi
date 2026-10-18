@@ -18,7 +18,9 @@ export type BookingRow = {
   // null: serviço sem profissional.
   therapistId: string | null;
   therapistName: string | null;
-  guest: { name: string; room: string };
+  // customerId: cliente recorrente (cadastrado em Clientes); null/ausente no avulso.
+  // Só vem como string com GUEST_CUSTOMER_ID/PAGE_GUEST_CUSTOMER_ID no fim da pipeline.
+  guest: { name: string; room: string; customerId?: string | null };
   startsAt: string;
   endsAt: string;
   durationMinutes: number;
@@ -77,6 +79,32 @@ const BOOKING_PROJECT: PipelineStage.Project = {
     appointmentId: { $ifNull: [{ $toString: "$appointmentId" }, null] },
     // Cor escolhida para o calendário; null usa a cor do profissional.
     color: { $ifNull: ["$color", null] },
+  },
+};
+
+// As projeções trazem guest inteiro, com o customerId do cliente recorrente como ObjectId, que
+// não passa para os componentes do cliente. Estas etapas, no fim da pipeline, trocam por string
+// (null no cliente avulso). Valem para agendamentos e atendimentos.
+// Linha a linha (pipeline do calendário):
+export const GUEST_CUSTOMER_ID: PipelineStage.Set = {
+  $set: { "guest.customerId": { $toString: "$guest.customerId" } },
+};
+
+// Num documento de página ({ rows, ... }), como os de bookingSearchPipeline e appointmentSearchPipeline:
+export const PAGE_GUEST_CUSTOMER_ID: PipelineStage.Set = {
+  $set: {
+    rows: {
+      $map: {
+        input: "$rows",
+        as: "row",
+        in: {
+          $mergeObjects: [
+            "$$row",
+            { guest: { $mergeObjects: ["$$row.guest", { customerId: { $toString: "$$row.guest.customerId" } }] } },
+          ],
+        },
+      },
+    },
   },
 };
 

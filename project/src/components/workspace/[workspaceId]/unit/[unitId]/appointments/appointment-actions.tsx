@@ -34,7 +34,8 @@ type Appointment = {
   id: string
   unitId: string
   performedAt: Date
-  guest: { name: string; room: string }
+  // customerId: cliente recorrente; null/ausente no avulso.
+  guest: { name: string; room: string; customerId?: string | null }
   items: { serviceId: string; therapistId: string | null; durationMinutes: number }[]
   productIds: string[]
   discount: { type: "percent" | "amount"; percent?: number; cents: number; reason: string } | null
@@ -91,6 +92,7 @@ export function AppointmentActions({ workspaceId, appointment, ...options }: Pro
             defaultValues={{
               unitId: appointment.unitId,
               guestName: appointment.guest.name,
+              customerId: appointment.guest.customerId ?? null,
               room: appointment.guest.room,
               performedAt: toFormDateTime(appointment.performedAt),
               items: appointment.items.map(({ serviceId, therapistId, durationMinutes }) => ({

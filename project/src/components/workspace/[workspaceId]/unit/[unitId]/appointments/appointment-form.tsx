@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { DateTimeField } from "@/components/shared/date-time-field"
+import { CustomerField } from "@/components/workspace/[workspaceId]/shared/calendar/customer-field"
 import { GuestRoomField } from "@/components/workspace/[workspaceId]/shared/calendar/guest-room-field"
 import { ProductPicker, withServiceProducts } from "@/components/workspace/[workspaceId]/shared/stock/product-picker"
 import { currencyFormat, formatDuration } from "@/components/shared/service-format"
@@ -39,7 +40,9 @@ export type AppointmentFormValues = {
   // unidade, vai num campo oculto para a action que lê a unidade do formulário. Também diz
   // se o quarto é obrigatório (unidade com parceiro).
   unitId?: string
+  // Com customerId (cliente recorrente), guestName é o nome do cadastro.
   guestName: string
+  customerId?: string | null
   room: string
   // "2026-09-24T14:30", no horário de Brasília.
   performedAt: string
@@ -85,7 +88,7 @@ type Props = AppointmentOptions & {
 const copy = {
   create: {
     title: "Registrar atendimento",
-    description: "Informe o hóspede e os serviços prestados. O valor vem do cadastro do serviço.",
+    description: "Informe o cliente e os serviços prestados. O valor vem do cadastro do serviço.",
     submit: "Registrar",
     pending: "Registrando...",
   },
@@ -185,18 +188,12 @@ export function AppointmentForm({
             </Select>
           </Field>
         )}
-        <Field>
-          <FieldLabel htmlFor="appointment-guest-name">Hóspede</FieldLabel>
-          <Input
-            id="appointment-guest-name"
-            name="guestName"
-            placeholder="João Silva"
-            defaultValue={defaultValues.guestName}
-            maxLength={80}
-            autoFocus
-            required
-          />
-        </Field>
+        <CustomerField
+          idPrefix="appointment"
+          defaultGuestName={defaultValues.guestName}
+          defaultCustomerId={defaultValues.customerId ?? null}
+          autoFocus
+        />
         <GuestRoomField
           idPrefix="appointment"
           partner={!!unitId && partnerUnitIds.includes(unitId)}

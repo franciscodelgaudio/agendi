@@ -137,6 +137,7 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
                 unitId: booking.unitId,
                 therapistId: booking.therapistId,
                 guestName: booking.guest.name,
+                customerId: booking.guest.customerId ?? null,
                 room: booking.guest.room,
                 startsAt: booking.startsAt,
                 durationMinutes: booking.durationMinutes,
@@ -164,6 +165,7 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
               defaultValues={{
                 unitId: registering.unitId,
                 guestName: registering.guest.name,
+                customerId: registering.guest.customerId ?? null,
                 room: registering.guest.room,
                 performedAt: registering.startsAt,
                 items: [

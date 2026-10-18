@@ -27,6 +27,7 @@ const errorMessages: Record<BookingError | "workspace_not_found" | "unauthentica
   invalid_guest_name: "Informe o nome do hóspede.",
   guest_name_too_long: "O nome do hóspede pode ter no máximo 80 caracteres.",
   invalid_room: "Informe o quarto ou marque cliente de fora.",
+  customer_not_found: "Cliente não encontrado. Escolha um cliente cadastrado neste workspace.",
   room_too_long: "O quarto pode ter no máximo 20 caracteres.",
   invalid_starts_at: "Informe uma data e hora válidas.",
   invalid_duration: "O agendamento precisa durar entre 5 minutos e 12 horas.",
@@ -57,6 +58,8 @@ function bookingInput(formData: FormData) {
     // O campo some do formulário quando o cliente é de fora.
     room: formData.get("room") ?? "",
     outsideGuest: formData.get("outsideGuest") === "on",
+    // Cliente recorrente escolhido no formulário; vazio = avulso.
+    customerId: formData.get("customerId"),
     startsAt: formData.get("startsAt"),
     durationMinutes: formData.get("durationMinutes"),
     serviceId: formData.get("serviceId"),

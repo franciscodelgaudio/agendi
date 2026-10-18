@@ -1,5 +1,6 @@
 import { BanknoteIcon, BedDoubleIcon, MapPinIcon, ClockIcon, SettingsIcon, LeafIcon, UserIcon } from "lucide-react"
 import { cn } from "cn"
+import { RegisteredCustomerIcon } from "@/components/workspace/[workspaceId]/customers/registered-customer-icon"
 import { AppointmentActions } from "@/components/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-actions"
 import type { AppointmentOptions } from "@/components/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-form"
 import { CodeCell, CodeHead } from "@/components/shared/record-code"
@@ -21,7 +22,8 @@ export type AppointmentRow = {
   id: string
   unitId: string
   performedAt: Date
-  guest: { name: string; room: string }
+  // customerId: cliente recorrente (string vinda de PAGE_GUEST_CUSTOMER_ID); null no avulso.
+  guest: { name: string; room: string; customerId?: string | null }
   items: {
     serviceId: string
     serviceName: string
@@ -189,20 +191,23 @@ export function AppointmentTable({ appointments, query, pathname, workspaceId, o
                 )}
                 <TableCell className="px-4">
                   {/* O quarto fica escondido no tooltip para a linha caber em uma altura só. Sem quarto, só o nome. */}
-                  {appointment.guest.room ? (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <span className="cursor-help font-medium underline decoration-muted-foreground/50 decoration-dotted underline-offset-4" />
-                        }
-                      >
-                        {appointment.guest.name}
-                      </TooltipTrigger>
-                      <TooltipContent>Quarto {appointment.guest.room}</TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    <span className="font-medium">{appointment.guest.name}</span>
-                  )}
+                  <span className="flex items-center gap-1.5">
+                    {appointment.guest.room ? (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span className="cursor-help font-medium underline decoration-muted-foreground/50 decoration-dotted underline-offset-4" />
+                          }
+                        >
+                          {appointment.guest.name}
+                        </TooltipTrigger>
+                        <TooltipContent>Quarto {appointment.guest.room}</TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <span className="font-medium">{appointment.guest.name}</span>
+                    )}
+                    {appointment.guest.customerId && <RegisteredCustomerIcon />}
+                  </span>
                 </TableCell>
                 <TableCell className="px-4 @max-2xl:hidden">
                   <FirstWithMore

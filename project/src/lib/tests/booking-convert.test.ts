@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import { bookingAppointmentInput, convertBooking } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/booking-convert";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
+// Cliente recorrente cadastrado em Clientes (ADR-040).
+const CUSTOMER_ID = "64b7f0c2a1b2c3d4e5f60790";
+const MARIA = { id: CUSTOMER_ID, name: "Maria Souza" };
 const BOOKING_ID = "64b7f0c2a1b2c3d4e5f60740";
 const APPOINTMENT_ID = "64b7f0c2a1b2c3d4e5f60760";
 const CANDLE_ID = "64b7f0c2a1b2c3d4e5f60731";
@@ -26,6 +29,8 @@ function makeDeps({
   return {
     // true quando a unidade funciona dentro de um parceiro: o quarto do hóspede é obrigatório.
     guestRoomRequired,
+    // Cliente recorrente da empresa; null quando não existe nela.
+    findCustomer: vi.fn(async (id: string) => (id === CUSTOMER_ID ? MARIA : null)),
     // Devolve null quando o agendamento não existe (ou não é do workspace).
     findBooking: vi.fn().mockResolvedValue(booking),
     findServices: vi.fn(async (ids: string[]) =>
@@ -235,5 +240,21 @@ describe("bookingAppointmentInput", () => {
     expect(input).toMatchObject({ room: "", outsideGuest: true });
     expect(result).toEqual({ ok: true, appointmentId: APPOINTMENT_ID });
     expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "João Silva", room: "" });
+  });
+
+  // O registro com um clique mantém o cliente recorrente do agendamento.
+  it("agendamento de cliente recorrente vira atendimento do mesmo cliente", async () => {
+    const deps = makeDeps();
+    const input = bookingAppointmentInput({
+      ...booking,
+      guest: { name: "Maria Souza", room: "204", customerId: CUSTOMER_ID },
+      products: [],
+    });
+
+    const result = await convertBooking(input, { bookingId: BOOKING_ID, unitId: UNIT_ID }, deps);
+
+    expect(input).toMatchObject({ customerId: CUSTOMER_ID });
+    expect(result).toEqual({ ok: true, appointmentId: APPOINTMENT_ID });
+    expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "Maria Souza", room: "204", customerId: CUSTOMER_ID });
   });
 });

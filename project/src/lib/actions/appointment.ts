@@ -7,7 +7,7 @@ import { findWorkspaceTherapists, objectIds } from "@/service/workspace/[workspa
 import { findUnitProducts } from "@/service/workspace/[workspaceId]/stock/products/product-lookup"
 import { forbiddenMessage, type UnitAccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
 import { findManagedUnit } from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-access"
-import { isGuestRoomRequired } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-store"
+import { customerFinder, isGuestRoomRequired } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-store"
 import {
   createAppointment,
   deleteAppointment,
@@ -33,6 +33,7 @@ const errorMessages: Record<
   invalid_guest_name: "Informe o nome do hóspede.",
   guest_name_too_long: "O nome do hóspede pode ter no máximo 80 caracteres.",
   invalid_room: "Informe o quarto ou marque cliente de fora.",
+  customer_not_found: "Cliente não encontrado. Escolha um cliente cadastrado neste workspace.",
   room_too_long: "O quarto pode ter no máximo 20 caracteres.",
   invalid_performed_at: "Informe uma data e hora válidas.",
   no_items: "Adicione pelo menos um serviço.",
@@ -71,6 +72,8 @@ function appointmentInput(formData: FormData) {
     // O campo some do formulário quando o cliente é de fora.
     room: formData.get("room") ?? "",
     outsideGuest: formData.get("outsideGuest") === "on",
+    // Cliente recorrente escolhido no formulário; vazio = avulso.
+    customerId: formData.get("customerId"),
     performedAt: formData.get("performedAt"),
     serviceIds: formData.getAll("serviceId"),
     therapistIds: formData.getAll("therapistId"),
@@ -88,6 +91,7 @@ function appointmentInput(formData: FormData) {
 async function appointmentLookups(unit: { workspaceId: string; unitId: string }) {
   return {
     guestRoomRequired: await isGuestRoomRequired(unit.unitId),
+    findCustomer: customerFinder(unit.workspaceId),
     findServices: async (ids: string[]) => {
       const services = await Service.find({ _id: { $in: objectIds(ids) }, unitId: unit.unitId })
         .select({ name: 1, priceCents: 1, durationMinutes: 1, requiresTherapist: 1 })
@@ -269,7 +273,11 @@ export async function registerBookingAction(workspaceId: string, bookingId: stri
   if (!access.ok) return accessError(access.error)
 
   const input = bookingAppointmentInput({
-    guest: { name: booking.guest?.name ?? "", room: booking.guest?.room ?? "" },
+    guest: {
+      name: booking.guest?.name ?? "",
+      room: booking.guest?.room ?? "",
+      customerId: booking.guest?.customerId?.toString() ?? null,
+    },
     startsAt: booking.startsAt,
     endsAt: booking.endsAt,
     service: { serviceId: booking.service.serviceId.toString() },

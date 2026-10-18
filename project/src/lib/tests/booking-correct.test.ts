@@ -8,6 +8,9 @@ import {
 // hóspede, quarto, espaço e cor. Serviço, profissional e produtos ficam com o atendimento.
 
 const BOOKING_ID = "64b7f0c2a1b2c3d4e5f60740";
+// Cliente recorrente cadastrado em Clientes (ADR-040).
+const CUSTOMER_ID = "64b7f0c2a1b2c3d4e5f60790";
+const MARIA = { id: CUSTOMER_ID, name: "Maria Souza" };
 const CANDLE_ID = "64b7f0c2a1b2c3d4e5f60731";
 const ANA_ID = "64b7f0c2a1b2c3d4e5f60751";
 const BIA_ID = "64b7f0c2a1b2c3d4e5f60752";
@@ -50,6 +53,8 @@ describe("correctRegisteredBooking", () => {
     return {
       // true quando a unidade funciona dentro de um parceiro: o quarto do hóspede é obrigatório.
       guestRoomRequired,
+      // Cliente recorrente da empresa; null quando não existe nela.
+      findCustomer: vi.fn(async (id: string) => (id === CUSTOMER_ID ? MARIA : null)),
       // null quando não existe (ou não é do workspace) ou ainda não virou atendimento.
       findBooking: vi.fn().mockResolvedValue(booking),
       // Serviço do agendamento, para os espaços permitidos; null se foi removido da unidade.
@@ -322,6 +327,7 @@ describe("correção de agendamento de cliente de fora", () => {
   it("unidade dentro de parceiro: corrige como cliente de fora, sem quarto no agendamento e no atendimento", async () => {
     const deps = {
       guestRoomRequired: true,
+      findCustomer: vi.fn(async () => null),
       findBooking: vi.fn().mockResolvedValue({ therapistId: ANA_ID, serviceId: CANDLE_ID, durationMinutes: 60, serviceCount: 1 }),
       findService: vi.fn(async (id: string) => ({ id, name: "Massagem Candle", requiresTherapist: true, treatmentRoomIds: [] })),
       findTreatmentRoom: vi.fn(async (id: string) => ROOMS.find((room) => room.id === id) ?? null),
@@ -336,5 +342,27 @@ describe("correção de agendamento de cliente de fora", () => {
     expect(result).toEqual({ ok: true });
     expect(deps.update.mock.calls[0][1].guest).toEqual({ name: "Maria Souza", room: "" });
     expect(deps.update.mock.calls[0][2].guest).toEqual({ name: "Maria Souza", room: "" });
+  });
+});
+
+describe("correção com cliente recorrente", () => {
+  it("leva o id e o nome do cadastro para o agendamento e para o atendimento", async () => {
+    const deps = {
+      guestRoomRequired: true,
+      findCustomer: vi.fn(async (id: string) => (id === CUSTOMER_ID ? MARIA : null)),
+      findBooking: vi.fn().mockResolvedValue({ therapistId: ANA_ID, serviceId: CANDLE_ID, durationMinutes: 60, serviceCount: 1 }),
+      findService: vi.fn(async (id: string) => ({ id, name: "Massagem Candle", requiresTherapist: true, treatmentRoomIds: [] })),
+      findTreatmentRoom: vi.fn(async (id: string) => ROOMS.find((room) => room.id === id) ?? null),
+      hasConflict: vi.fn().mockResolvedValue(false),
+      isBlocked: vi.fn().mockResolvedValue(false),
+      findRoomBookings: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue(true),
+    };
+
+    const result = await correctRegisteredBooking({ ...validInput, customerId: CUSTOMER_ID }, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.update.mock.calls[0][1].guest).toEqual({ name: "Maria Souza", room: "310", customerId: CUSTOMER_ID });
+    expect(deps.update.mock.calls[0][2].guest).toEqual({ name: "Maria Souza", room: "310", customerId: CUSTOMER_ID });
   });
 });

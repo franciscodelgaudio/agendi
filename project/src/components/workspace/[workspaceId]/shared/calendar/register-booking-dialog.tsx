@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { FieldError } from "@/components/ui/field"
 import { formatDuration } from "@/components/shared/service-format"
+import { RegisteredCustomerIcon } from "@/components/workspace/[workspaceId]/customers/registered-customer-icon"
 
 // A data do agendamento é um horário de Brasília "de parede", então é formatada em UTC.
 const dateFormat = new Intl.DateTimeFormat("pt-BR", {
@@ -76,10 +77,13 @@ export function RegisterBookingDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">Hóspede</dt>
-          <dd>
-            {booking.guest.name}
-            {booking.guest.room && ` · Quarto ${booking.guest.room}`}
+          <dt className="text-muted-foreground">Cliente</dt>
+          <dd className="flex items-center gap-1.5">
+            <span>
+              {booking.guest.name}
+              {booking.guest.room && ` · Quarto ${booking.guest.room}`}
+            </span>
+            {booking.guest.customerId && <RegisteredCustomerIcon />}
           </dd>
           <dt className="text-muted-foreground">Serviço</dt>
           <dd>{booking.service.serviceName}</dd>

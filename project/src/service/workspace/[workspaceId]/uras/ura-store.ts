@@ -271,6 +271,8 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
         unitId,
         {
           ...(await bookingLookups({ workspaceId, unitId }, unitIds)),
+          // A URA ainda não identifica cliente recorrente: o agendamento dela é sempre avulso.
+          findCustomer: async () => null,
           // Agendamento feito pela URA fica em nome de quem criou o workspace.
           insert: async (data) => {
             const booking = await Booking.create({ ...data, createdBy: workspace.userId })

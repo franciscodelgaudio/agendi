@@ -4,8 +4,10 @@ import { refresh } from "next/cache"
 import { isObjectIdOrHexString } from "mongoose"
 import { getSessionUserId } from "@/service/(auth)/session"
 import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
-import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
+import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { findManagedWorkspace, findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 import { atualizarCliente, cadastrarCliente, type ErroDoCadastro } from "./aplicacao/cadastro"
+import { buscarClientesParaEscolha } from "./consultas"
 import { clientesNoBanco, cpfDuplicadoNoBanco } from "./infraestrutura/clientes-no-banco"
 
 // Quem gerencia agendamentos gerencia os clientes (decisão da fase 3.3).
@@ -92,4 +94,13 @@ export async function atualizarClienteAction(
 
   refresh()
   return { error: null }
+}
+
+// Busca do seletor de cliente recorrente, para quem agenda ou registra atendimentos.
+export async function buscarClientesAction(workspaceId: string, busca: string) {
+  const userId = await getSessionUserId()
+  if (!userId) return []
+  const access = await findWorkspaceAccess(workspaceId, userId)
+  if (!access || !(can(access.actor, "bookings.manage") || can(access.actor, "appointments.manage"))) return []
+  return buscarClientesParaEscolha(access.id, typeof busca === "string" ? busca : "")
 }

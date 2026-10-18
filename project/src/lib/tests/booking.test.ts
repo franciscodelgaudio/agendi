@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import { createBooking, deleteBooking, rescheduleBooking, updateBooking } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
+// Cliente recorrente cadastrado em Clientes (ADR-040).
+const CUSTOMER_ID = "64b7f0c2a1b2c3d4e5f60790";
+const MARIA = { id: CUSTOMER_ID, name: "Maria Souza" };
 const BOOKING_ID = "64b7f0c2a1b2c3d4e5f60740";
 const CANDLE_ID = "64b7f0c2a1b2c3d4e5f60731";
 const ANA_ID = "64b7f0c2a1b2c3d4e5f60751";
@@ -53,10 +56,13 @@ function makeLookups({
   room = SINGLE as typeof SINGLE | null,
   roomBookings = [] as readonly RoomBooking[],
   guestRoomRequired = true,
+  customer = MARIA as typeof MARIA | null,
 } = {}) {
   return {
     // true quando a unidade funciona dentro de um parceiro: o quarto do hóspede é obrigatório.
     guestRoomRequired,
+    // Cliente recorrente da empresa; null quando não existe nela.
+    findCustomer: vi.fn(async (id: string) => (customer?.id === id ? customer : null)),
     // Devolvem null quando não existe (serviço da unidade; quem pode atender no workspace).
     findService: vi.fn(async (id: string) => (service?.id === id ? service : null)),
     findTherapist: vi.fn(async (id: string) => (therapist?.id === id ? therapist : null)),
@@ -1000,5 +1006,59 @@ describe("cliente de fora", () => {
     const result = await createBooking({ ...validInput, room: "", outsideGuest: false }, UNIT_ID, makeDeps());
 
     expect(result).toEqual({ ok: false, error: "invalid_room" });
+  });
+});
+
+// O cliente pode ser avulso (só o nome digitado) ou recorrente (cadastrado em Clientes). O
+// recorrente leva o id e o nome do cadastro, que vale mais que o digitado.
+describe("cliente recorrente", () => {
+  function makeDeps(options?: Parameters<typeof makeLookups>[0]) {
+    return { ...makeLookups(options), insert: vi.fn().mockResolvedValue({ id: BOOKING_ID }) };
+  }
+
+  it("guarda o id do cliente e o nome do cadastro, ignorando o nome digitado", async () => {
+    const deps = makeDeps();
+
+    const result = await createBooking({ ...validInput, customerId: CUSTOMER_ID, guestName: "Maria S." }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: true, bookingId: BOOKING_ID });
+    expect(deps.findCustomer).toHaveBeenCalledWith(CUSTOMER_ID);
+    expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "Maria Souza", room: "204", customerId: CUSTOMER_ID });
+  });
+
+  it("com cliente recorrente, o nome digitado pode vir vazio", async () => {
+    const deps = makeDeps();
+
+    const result = await createBooking({ ...validInput, customerId: CUSTOMER_ID, guestName: "" }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: true, bookingId: BOOKING_ID });
+    expect(deps.insert.mock.calls[0][0].guest.name).toBe("Maria Souza");
+  });
+
+  it("cliente que não é da empresa: customer_not_found sem salvar", async () => {
+    const deps = makeDeps({ customer: null });
+
+    const result = await createBooking({ ...validInput, customerId: CUSTOMER_ID }, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "customer_not_found" });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, ""])("customerId %j: cliente avulso, sem consultar o cadastro", async (customerId) => {
+    const deps = makeDeps();
+
+    await createBooking({ ...validInput, customerId }, UNIT_ID, deps);
+
+    expect(deps.findCustomer).not.toHaveBeenCalled();
+    expect(deps.insert.mock.calls[0][0].guest).toEqual({ name: "João Silva", room: "204" });
+  });
+
+  it("na edição vale o mesmo: o cliente recorrente leva o id e o nome do cadastro", async () => {
+    const deps = { ...makeLookups(), update: vi.fn().mockResolvedValue(true) };
+
+    const result = await updateBooking({ ...validInput, customerId: CUSTOMER_ID }, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.update.mock.calls[0][1].guest).toEqual({ name: "Maria Souza", room: "204", customerId: CUSTOMER_ID });
   });
 });

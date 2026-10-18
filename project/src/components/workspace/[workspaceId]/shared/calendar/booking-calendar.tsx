@@ -14,7 +14,7 @@ import interactionPlugin from "@fullcalendar/react/interaction"
 import ptBrLocale from "@fullcalendar/react/locales/pt-br"
 import "@fullcalendar/react/skeleton.css"
 import "@fullcalendar/react/themes/monarch/theme.css"
-import { CheckIcon, LockIcon, PlusIcon, XIcon } from "lucide-react"
+import { CheckIcon, ContactIcon, LockIcon, PlusIcon, XIcon } from "lucide-react"
 import { toast } from "sonner"
 import { convertBookingAction } from "@/lib/actions/appointment"
 import {
@@ -256,6 +256,7 @@ export function BookingCalendar({
         unitId: unit || (units.length === 1 ? units[0].id : null),
         therapistId: therapist || null,
         guestName: "",
+        customerId: null,
         room: "",
         startsAt,
         durationMinutes,
@@ -497,6 +498,9 @@ export function BookingCalendar({
               const guestName = (
                 <span className="flex min-w-0 items-center gap-1 font-semibold">
                   {booking.appointmentId && <CheckIcon className="size-3 shrink-0" aria-label="Atendido" />}
+                  {booking.guest.customerId && (
+                    <ContactIcon className="size-3 shrink-0 opacity-85" aria-label="Cliente cadastrado" />
+                  )}
                   <span className="truncate">{booking.guest.name}</span>
                 </span>
               )
@@ -574,6 +578,7 @@ export function BookingCalendar({
                   unitId: booking.unitId,
                   therapistId: booking.therapistId,
                   guestName: booking.guest.name,
+                  customerId: booking.guest.customerId ?? null,
                   room: booking.guest.room,
                   startsAt: booking.startsAt,
                   durationMinutes: booking.durationMinutes,
@@ -682,6 +687,7 @@ export function BookingCalendar({
               defaultValues={{
                 unitId: sheet.booking.unitId,
                 guestName: sheet.booking.guest.name,
+                customerId: sheet.booking.guest.customerId ?? null,
                 room: sheet.booking.guest.room,
                 performedAt: sheet.booking.startsAt,
                 items: [

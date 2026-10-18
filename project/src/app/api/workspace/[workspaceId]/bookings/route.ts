@@ -1,5 +1,6 @@
 import {
   bookingListPipeline,
+  GUEST_CUSTOMER_ID,
   parseBookingRange,
   therapistBlockListPipeline,
   type BookingRow,
@@ -44,7 +45,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/works
         localField: "units._id",
         foreignField: "unitId",
         as: "bookings",
-        pipeline: bookingListPipeline(query),
+        pipeline: [...bookingListPipeline(query), GUEST_CUSTOMER_ID],
       },
     },
     {

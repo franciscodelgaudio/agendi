@@ -9,6 +9,7 @@ import { BOOKING_COLORS } from "@/service/workspace/[workspaceId]/unit/[unitId]/
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { CustomerField } from "@/components/workspace/[workspaceId]/shared/calendar/customer-field"
 import { GuestRoomField } from "@/components/workspace/[workspaceId]/shared/calendar/guest-room-field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PopoverDescription, PopoverTitle } from "@/components/ui/popover"
@@ -21,7 +22,9 @@ import { TherapistLabel, TherapistSelectValue, type TherapistOption } from "@/co
 export type BookingFormValues = {
   unitId: string | null
   therapistId: string | null
+  // Com customerId (cliente recorrente), guestName é o nome do cadastro.
   guestName: string
+  customerId: string | null
   room: string
   // "2026-09-24T14:30", no horário de Brasília.
   startsAt: string
@@ -79,7 +82,7 @@ type Props = BookingFormOptions & {
 const copy = {
   create: {
     title: "Novo agendamento",
-    description: "Escolha o profissional, a unidade, o serviço, o hóspede e o horário.",
+    description: "Escolha o profissional, a unidade, o serviço, o cliente e o horário.",
     submit: "Agendar",
     pending: "Agendando...",
   },
@@ -92,7 +95,7 @@ const copy = {
   correct: {
     title: "Corrigir agendamento",
     description:
-      "Este agendamento já virou atendimento. Horário e dados do hóspede são corrigidos nele também; serviço, profissional e produtos se alteram em Atendimentos.",
+      "Este agendamento já virou atendimento. Horário e dados do cliente são corrigidos nele também; serviço, profissional e produtos se alteram em Atendimentos.",
     submit: "Salvar correção",
     pending: "Salvando...",
   },
@@ -124,6 +127,7 @@ function submittedValues(formData: FormData): BookingFormValues {
     unitId: text("unitId") || null,
     therapistId: text("therapistId") || null,
     guestName: text("guestName").trim(),
+    customerId: text("customerId") || null,
     room: text("room").trim(),
     startsAt: text("startsAt"),
     durationMinutes: Number(text("durationMinutes")),
@@ -150,7 +154,7 @@ export function withSavedValues(
     unitId: values.unitId ?? booking.unitId,
     therapistId: therapist?.id ?? null,
     therapistName: therapist?.name ?? null,
-    guest: { name: values.guestName, room: values.room },
+    guest: { name: values.guestName, room: values.room, customerId: values.customerId },
     startsAt: values.startsAt,
     endsAt: endsAt.toISOString().slice(0, 16),
     durationMinutes: values.durationMinutes,
@@ -320,17 +324,11 @@ export function BookingForm({
             </SelectContent>
           </Select>
         </Field>
-        <Field>
-          <FieldLabel htmlFor="booking-guest-name">Hóspede</FieldLabel>
-          <Input
-            id="booking-guest-name"
-            name="guestName"
-            placeholder="João Silva"
-            defaultValue={defaultValues.guestName}
-            maxLength={80}
-            required
-          />
-        </Field>
+        <CustomerField
+          idPrefix="booking"
+          defaultGuestName={defaultValues.guestName}
+          defaultCustomerId={defaultValues.customerId}
+        />
         <GuestRoomField
           idPrefix="booking"
           partner={partner}
