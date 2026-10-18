@@ -30,7 +30,12 @@ describe("visiblePages", () => {
 
 describe("WORKSPACE_PAGES", () => {
   it("tem o estoque de todas as unidades depois da equipe, em /stock", () => {
-    expect(WORKSPACE_PAGES).toEqual(["home", "units", "calendar", "cash_flow", "team", "stock", "users"]);
+    expect(WORKSPACE_PAGES).toEqual(["home", "units", "calendar", "customers", "cash_flow", "team", "stock", "users"]);
     expect(WORKSPACE_PAGE_PATHS.stock).toBe("/stock");
+  });
+
+  it("tem os clientes logo depois da agenda, em /customers", () => {
+    expect(WORKSPACE_PAGES.indexOf("customers")).toBe(WORKSPACE_PAGES.indexOf("calendar") + 1);
+    expect(WORKSPACE_PAGE_PATHS.customers).toBe("/customers");
   });
 });

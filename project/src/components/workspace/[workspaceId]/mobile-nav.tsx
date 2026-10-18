@@ -2,7 +2,7 @@
 
 import Link from "@/components/shared/link"
 import { usePathname } from "next/navigation"
-import { CalendarIcon, HomeIcon, MenuIcon, MessagesSquareIcon, WalletIcon, type LucideIcon } from "lucide-react"
+import { CalendarIcon, ContactIcon, HomeIcon, MenuIcon, MessagesSquareIcon, WalletIcon, type LucideIcon } from "lucide-react"
 import { useSidebar } from "@/components/ui/sidebar"
 import { isNavItemActive } from "@/components/workspace/[workspaceId]/@sidebar/nav-main"
 import { WORKSPACE_PAGE_PATHS, type WorkspacePage } from "@/service/workspace/[workspaceId]/page-access"
@@ -22,6 +22,7 @@ export function MobileNav({ workspaceId, pages, actor }: { workspaceId: string; 
   const tabs = [
     ...item("home", "Início", HomeIcon),
     ...item("calendar", "Agenda", CalendarIcon),
+    ...item("customers", "Clientes", ContactIcon),
     ...(can(actor, "inbox.use") ? [{ title: "Conversas", href: `${base}/inbox`, icon: MessagesSquareIcon }] : []),
     ...item("cash_flow", "Caixa", WalletIcon),
   ]

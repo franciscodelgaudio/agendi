@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import {
   MapPinIcon,
   CalendarIcon,
+  ContactIcon,
   CoinsIcon,
   HomeIcon,
   LifeBuoyIcon,
@@ -52,6 +53,7 @@ export function NavMain({ workspaceId, pages, actor }: { workspaceId: string; pa
       items: [
         ...item("units", "Unidades", MapPinIcon),
         ...item("calendar", "Agenda", CalendarIcon),
+        ...item("customers", "Clientes", ContactIcon),
         ...item("cash_flow", "Caixa", WalletIcon),
         ...item("team", "Equipe", UsersRoundIcon),
         ...item("stock", "Estoque", ArchiveIcon),

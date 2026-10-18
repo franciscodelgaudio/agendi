@@ -6,8 +6,8 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   // Fronteiras dos bounded contexts (docs/06-diagnostico-migracao.md): um contexto só é usado
-  // pela API pública (index.ts). A raiz de composição (contextos/barramento.ts) importa por
-  // caminho relativo.
+  // pela API pública: index.ts (sem infraestrutura), acoes.ts (server actions) e consultas.ts
+  // (leituras no servidor). A raiz de composição (contextos/barramento.ts) importa por caminho relativo.
   {
     files: ["src/**/*.{ts,tsx}"],
     rules: {
@@ -16,8 +16,8 @@ const eslintConfig = defineConfig([
         {
           patterns: [
             {
-              group: ["@/contextos/*/**"],
-              message: "Importe só a API pública do contexto (@/contextos/<contexto>).",
+              group: ["@/contextos/*/**", "!@/contextos/*/acoes", "!@/contextos/*/consultas"],
+              message: "Importe só a API pública do contexto: @/contextos/<contexto>, /acoes ou /consultas.",
             },
           ],
         },
@@ -33,8 +33,8 @@ const eslintConfig = defineConfig([
         {
           patterns: [
             {
-              group: ["@/contextos/*/**"],
-              message: "Importe só a API pública do contexto (@/contextos/<contexto>).",
+              group: ["@/contextos/*/**", "!@/contextos/*/acoes", "!@/contextos/*/consultas"],
+              message: "Importe só a API pública do contexto: @/contextos/<contexto>, /acoes ou /consultas.",
             },
             {
               group: ["mongoose", "mongodb", "next", "next/*", "react", "@/models/*", "@/lib/*", "@/service/*"],
