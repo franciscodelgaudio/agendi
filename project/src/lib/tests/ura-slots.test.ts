@@ -3,8 +3,8 @@ import { availableSlots } from "@/service/workspace/[workspaceId]/uras/ura-slots
 
 const ANA = { id: "therapist-ana", name: "Ana" };
 const BIA = { id: "therapist-bia", name: "Bia" };
-const SALA_1 = { id: "room-1", name: "Sala 1", beds: 1 };
-const SALA_2 = { id: "room-2", name: "Sala 2", beds: 1 };
+const SALA_1 = { id: "room-1", name: "Sala 1", capacity: 1 };
+const SALA_2 = { id: "room-2", name: "Sala 2", capacity: 1 };
 
 // Segunda, 28/09/2026, 09:00 em Brasília.
 const FROM = new Date("2026-09-28T12:00:00.000Z");
@@ -41,7 +41,7 @@ describe("availableSlots", () => {
     });
 
     expect(slots).toEqual([
-      // 10:00 e 10:30 ficam de fora: a única maca da Sala 1 está ocupada até 11:00.
+      // 10:00 e 10:30 ficam de fora: a Sala 1 (capacidade 1) está ocupada até 11:00.
       // 11:30 não cabe: terminaria depois do fechamento.
       slot("2026-09-28T14:00:00.000Z"),
       slot("2026-09-29T12:00:00.000Z"),
@@ -52,7 +52,7 @@ describe("availableSlots", () => {
     ]);
   });
 
-  it("escolhe o primeiro profissional livre e a primeira sala com maca livre", () => {
+  it("escolhe o primeiro profissional livre e a primeira sala com lugar livre", () => {
     const slots = availableSlots({
       from: FROM,
       days: 1,
@@ -70,8 +70,8 @@ describe("availableSlots", () => {
     ]);
   });
 
-  it("usa outra maca da mesma sala quando ela tem mais de uma", () => {
-    const sala = { ...SALA_1, beds: 2 };
+  it("usa outro lugar da mesma sala quando a capacidade é maior que 1", () => {
+    const sala = { ...SALA_1, capacity: 2 };
     const slots = availableSlots({
       from: FROM,
       days: 1,

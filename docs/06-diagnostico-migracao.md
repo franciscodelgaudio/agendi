@@ -365,4 +365,5 @@ Além das premissas de negócio em [Pendências](05-pendencias.md) (R2/R3, L5/L6
 ### Fase 4: andamento
 
 - **4.1 Nome de unidade único na empresa (feito):** cadastrar ou renomear com o nome de outra unidade é recusado (`name_in_use`), sem diferenciar maiúsculas e contando as desativadas. A checagem é só no código: o índice único no banco depende de conferir antes se há nomes repetidos em produção.
-- **Próximas, dependem de decisão do negócio:** salas e horário saem da Unidade para o Atendimento (`beds` → `capacity`, ADR-036); agregado Profissional separado do login (hoje os atendimentos apontam para o usuário).
+- **4.2 Capacidade da sala (feito):** `treatmentRooms[].beds` virou `capacity` no código e nas telas (ADR-036). **Deploy:** rodar `npm run migrate:room-capacity` ANTES de publicar esta versão (copia `beds` para `capacity` e mantém `beds`); a remoção de `beds` fica para um passo posterior. Tirar salas e horário da Unidade para uma coleção do Atendimento fica para a fase do Atendimento.
+- **Próxima, depende de decisão do negócio:** agregado Profissional separado do login (hoje agendamentos, atendimentos, comissão e folha apontam para o usuário).

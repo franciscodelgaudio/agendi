@@ -225,7 +225,7 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
         requiresTherapist,
         // Só os espaços permitidos ao serviço; sem nenhum definido, todos.
         rooms: unit.treatmentRooms
-          .map((room) => ({ id: room._id.toString(), name: room.name, beds: room.beds }))
+          .map((room) => ({ id: room._id.toString(), name: room.name, capacity: room.capacity }))
           .filter((room) => !treatmentRoomIds.length || treatmentRoomIds.includes(room.id)),
         bookings: bookings.map((booking) => ({
           therapistId: booking.therapistId?.toString() ?? null,

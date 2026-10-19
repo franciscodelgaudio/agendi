@@ -18,8 +18,8 @@ const OIL_ID = "64b7f0c2a1b2c3d4e5f60761";
 const OTHER_SERVICE_ID = "64b7f0c2a1b2c3d4e5f60739";
 const SINGLE_ID = "64b7f0c2a1b2c3d4e5f60781";
 const COUPLE_ID = "64b7f0c2a1b2c3d4e5f60782";
-const SINGLE = { id: SINGLE_ID, name: "Sala Single", beds: 1 };
-const COUPLE = { id: COUPLE_ID, name: "Sala Casal", beds: 2 };
+const SINGLE = { id: SINGLE_ID, name: "Sala Single", capacity: 1 };
+const COUPLE = { id: COUPLE_ID, name: "Sala Casal", capacity: 2 };
 const ROOMS = [SINGLE, COUPLE];
 
 // Horário de 24/09/2026 em Brasília ("14:30") como Date em UTC.
@@ -296,7 +296,7 @@ describe("rescheduleBooking de agendamento registrado", () => {
     return {
       findBooking: vi.fn().mockResolvedValue({
         therapistId: ANA_ID,
-        treatmentRoom: { roomId: SINGLE_ID, beds: 1 },
+        treatmentRoom: { roomId: SINGLE_ID, capacity: 1 },
         registered: true,
       }),
       hasConflict: vi.fn().mockResolvedValue(false),

@@ -42,7 +42,7 @@ const errorMessages: Record<
   invalid_treatment_room_name: "Informe o nome de cada espaço.",
   treatment_room_name_too_long: "O nome do espaço pode ter no máximo 40 caracteres.",
   duplicate_treatment_room_name: "Cada espaço precisa de um nome diferente.",
-  invalid_treatment_room_beds: "Cada espaço precisa comportar de 1 a 10 atendimentos ao mesmo tempo.",
+  invalid_treatment_room_capacity: "Cada espaço precisa comportar de 1 a 10 atendimentos ao mesmo tempo.",
   invalid_business_hours: "Informe o horário de funcionamento.",
   invalid_business_hours_order: "O horário de fechamento deve ser depois da abertura.",
   treatment_room_in_use: "Um espaço removido ainda tem agendamentos. Mova ou exclua os agendamentos antes.",
@@ -114,7 +114,7 @@ function unitNameInUse(workspaceId: string) {
 
 // Sala nova ganha id aqui; a que já existia mantém o seu, e com ele os agendamentos.
 function toTreatmentRoomDocs(rooms: TreatmentRoomInput[]) {
-  return rooms.map(({ id, name, beds }) => ({ _id: new Types.ObjectId(id ?? undefined), name, beds }))
+  return rooms.map(({ id, name, capacity }) => ({ _id: new Types.ObjectId(id ?? undefined), name, capacity }))
 }
 
 // A ordem dos campos no FormData forma as faixas (um limite para cada, menos a última) e as salas.
@@ -131,7 +131,7 @@ function unitInput(formData: FormData) {
     treatmentRooms: {
       ids: formData.getAll("treatmentRoomId"),
       names: formData.getAll("treatmentRoomName"),
-      beds: formData.getAll("treatmentRoomBeds"),
+      capacity: formData.getAll("treatmentRoomCapacity"),
     },
     businessHours: { opensAt: formData.get("opensAt"), closesAt: formData.get("closesAt") },
     openingBalance: { amount: formData.get("openingBalance"), date: formData.get("openingBalanceDate") },

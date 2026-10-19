@@ -89,7 +89,7 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
                       id: { $toString: "$$room._id" },
                       unitId: { $toString: "$$this._id" },
                       name: "$$room.name",
-                      beds: "$$room.beds",
+                      capacity: "$$room.capacity",
                     },
                   },
                 },

@@ -48,7 +48,7 @@ export function availableSlots({
   businessHours: BusinessHours;
   therapists: readonly { id: string; name: string }[];
   requiresTherapist?: boolean;
-  rooms: readonly { id: string; name: string; beds: number }[];
+  rooms: readonly { id: string; name: string; capacity: number }[];
   bookings: readonly Busy[];
   stepMinutes?: number;
   leadMinutes?: number;
@@ -76,7 +76,7 @@ export function availableSlots({
       const therapist = requiresTherapist ? therapists.find((t) => !busy.some((b) => b.therapistId === t.id)) : null;
       if (therapist === undefined) continue;
       const interval = { startsAt: new Date(start), endsAt: new Date(end) };
-      const room = rooms.find((r) => peakOccupancy(busy.filter((b) => b.roomId === r.id), interval) < r.beds);
+      const room = rooms.find((r) => peakOccupancy(busy.filter((b) => b.roomId === r.id), interval) < r.capacity);
       if (!room) continue;
 
       slots.push({

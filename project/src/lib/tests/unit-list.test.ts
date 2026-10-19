@@ -56,7 +56,7 @@ describe("unitListPipeline", () => {
         $map: {
           input: "$treatmentRooms",
           as: "room",
-          in: { id: { $toString: "$$room._id" }, name: "$$room.name", beds: "$$room.beds" },
+          in: { id: { $toString: "$$room._id" }, name: "$$room.name", capacity: "$$room.capacity" },
         },
       },
       businessHours: 1,

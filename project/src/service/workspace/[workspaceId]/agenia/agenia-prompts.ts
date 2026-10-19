@@ -6,7 +6,7 @@ export type WorkspaceContext = {
   user: { name: string; role: string }
   today: string
   page: string | null
-  units: { id: string; name: string; opensAt: string; closesAt: string; rooms: { id: string; name: string; beds: number }[] }[]
+  units: { id: string; name: string; opensAt: string; closesAt: string; rooms: { id: string; name: string; capacity: number }[] }[]
   // role: "administrador", o nome da role ou "sem função".
   team: { userId: string | null; memberId: string | null; name: string; role: string; unitIds: string[] }[]
   // Roles criadas pelo administrador; attends = realiza atendimentos.
@@ -53,7 +53,7 @@ export function workspaceSection(ctx: WorkspaceContext) {
       ctx.units,
       (u) =>
         `- ${u.name} (id=${u.id}), funciona ${u.opensAt}–${u.closesAt}; espaços: ${
-          u.rooms.map((r) => `${r.name} (id=${r.id}, ${r.beds} por vez)`).join(", ") || "nenhum"
+          u.rooms.map((r) => `${r.name} (id=${r.id}, ${r.capacity} por vez)`).join(", ") || "nenhum"
         }`,
     ),
     list(

@@ -1,11 +1,11 @@
-// Espaços da unidade (salas, hidromassagem...): beds é quantos atendimentos o espaço comporta ao mesmo tempo.
+// Espaços da unidade (salas, hidromassagem...): capacity é quantos atendimentos o espaço comporta ao mesmo tempo.
 
 const MAX_ROOMS = 20;
 const MAX_NAME_LENGTH = 40;
 const MAX_BEDS = 10;
 
 // id null = sala nova, ainda sem id.
-export type TreatmentRoomInput = { id: string | null; name: string; beds: number };
+export type TreatmentRoomInput = { id: string | null; name: string; capacity: number };
 
 export type TreatmentRoomError =
   | "invalid_input"
@@ -14,7 +14,7 @@ export type TreatmentRoomError =
   | "invalid_treatment_room_name"
   | "treatment_room_name_too_long"
   | "duplicate_treatment_room_name"
-  | "invalid_treatment_room_beds";
+  | "invalid_treatment_room_capacity";
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -24,9 +24,9 @@ function isStringArray(value: unknown): value is string[] {
 export function parseTreatmentRooms(
   input: unknown,
 ): { ok: true; value: TreatmentRoomInput[] } | { ok: false; error: TreatmentRoomError } {
-  const { ids, names, beds } = (input ?? {}) as Record<string, unknown>;
-  if (!isStringArray(ids) || !isStringArray(names) || !isStringArray(beds)) return { ok: false, error: "invalid_input" };
-  if (ids.length !== names.length || beds.length !== names.length) return { ok: false, error: "invalid_input" };
+  const { ids, names, capacity } = (input ?? {}) as Record<string, unknown>;
+  if (!isStringArray(ids) || !isStringArray(names) || !isStringArray(capacity)) return { ok: false, error: "invalid_input" };
+  if (ids.length !== names.length || capacity.length !== names.length) return { ok: false, error: "invalid_input" };
 
   const normalizedIds = ids.map((id) => id.trim());
   const existingIds = normalizedIds.filter(Boolean);
@@ -47,11 +47,11 @@ export function parseTreatmentRooms(
     if (seenNames.has(key)) return { ok: false, error: "duplicate_treatment_room_name" };
     seenNames.add(key);
 
-    const count = beds[i].trim();
+    const count = capacity[i].trim();
     if (!/^\d+$/.test(count) || Number(count) < 1 || Number(count) > MAX_BEDS) {
-      return { ok: false, error: "invalid_treatment_room_beds" };
+      return { ok: false, error: "invalid_treatment_room_capacity" };
     }
-    rooms.push({ id: normalizedIds[i] || null, name, beds: Number(count) });
+    rooms.push({ id: normalizedIds[i] || null, name, capacity: Number(count) });
   }
 
   return { ok: true, value: rooms };

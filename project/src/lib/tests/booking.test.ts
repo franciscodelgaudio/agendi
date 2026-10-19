@@ -22,13 +22,13 @@ const PRODUCTS = [
 // Salas da unidade: a single atende um por vez; a casal, dois ao mesmo tempo.
 const SINGLE_ID = "64b7f0c2a1b2c3d4e5f60781";
 const COUPLE_ID = "64b7f0c2a1b2c3d4e5f60782";
-const SINGLE = { id: SINGLE_ID, name: "Sala Single", beds: 1 };
-const COUPLE = { id: COUPLE_ID, name: "Sala Casal", beds: 2 };
+const SINGLE = { id: SINGLE_ID, name: "Sala Single", capacity: 1 };
+const COUPLE = { id: COUPLE_ID, name: "Sala Casal", capacity: 2 };
 // Hidromassagem: serviço sem profissional que só pode usar o espaço da banheira (2 pessoas).
 const HYDRO_ID = "64b7f0c2a1b2c3d4e5f60733";
 const TUB_ID = "64b7f0c2a1b2c3d4e5f60783";
 const HYDRO = { id: HYDRO_ID, name: "Hidromassagem", requiresTherapist: false, treatmentRoomIds: [TUB_ID] };
-const TUB = { id: TUB_ID, name: "Banheira", beds: 2 };
+const TUB = { id: TUB_ID, name: "Banheira", capacity: 2 };
 
 // Como chega do FormData: início no horário de Brasília e duração em minutos (texto).
 const validInput = {
@@ -275,7 +275,7 @@ describe("createBooking", () => {
     expect(deps.insert).not.toHaveBeenCalled();
   });
 
-  // Sala ocupada: todas as macas já têm atendimento em algum momento do intervalo.
+  // Sala ocupada: a capacidade inteira já está ocupada em algum momento do intervalo.
   it.each([
     ["sala single com outro agendamento no mesmo horário", SINGLE, [["14:30", "15:30"]]],
     ["sala single com agendamento começando no meio", SINGLE, [["15:00", "16:00"]]],
@@ -536,10 +536,10 @@ describe("updateBooking", () => {
 describe("rescheduleBooking", () => {
   const validTimes = { startsAt: "2026-09-24T15:00", endsAt: "2026-09-24T16:30" };
 
-  type FoundBooking = { therapistId: string; treatmentRoom: { roomId: string; beds: number } | null };
+  type FoundBooking = { therapistId: string; treatmentRoom: { roomId: string; capacity: number } | null };
 
   function makeDeps({
-    booking = { therapistId: ANA_ID, treatmentRoom: { roomId: SINGLE_ID, beds: 1 } } as FoundBooking | null,
+    booking = { therapistId: ANA_ID, treatmentRoom: { roomId: SINGLE_ID, capacity: 1 } } as FoundBooking | null,
     busy = false,
     blocked = false,
     roomBookings = [] as RoomBooking[],
@@ -649,9 +649,9 @@ describe("rescheduleBooking", () => {
     expect(deps.update).not.toHaveBeenCalled();
   });
 
-  it("move para o horário em que a sala casal ainda tem maca livre", async () => {
+  it("move para o horário em que a sala casal ainda tem lugar livre", async () => {
     const deps = makeDeps({
-      booking: { therapistId: ANA_ID, treatmentRoom: { roomId: COUPLE_ID, beds: 2 } },
+      booking: { therapistId: ANA_ID, treatmentRoom: { roomId: COUPLE_ID, capacity: 2 } },
       roomBookings: [{ startsAt: at("15:00"), endsAt: at("16:30") }],
     });
 
@@ -809,7 +809,7 @@ describe("agendamento de serviço sem profissional", () => {
 
   it("ao arrastar no calendário, não checa conflito de profissional quando o agendamento não tem", async () => {
     const deps = {
-      findBooking: vi.fn().mockResolvedValue({ therapistId: null, treatmentRoom: { roomId: TUB_ID, beds: 2 } }),
+      findBooking: vi.fn().mockResolvedValue({ therapistId: null, treatmentRoom: { roomId: TUB_ID, capacity: 2 } }),
       hasConflict: vi.fn().mockResolvedValue(true),
       isBlocked: vi.fn().mockResolvedValue(true),
       findRoomBookings: vi.fn().mockResolvedValue([]),
@@ -915,7 +915,7 @@ describe("agenda do profissional travada", () => {
 
   it("retorna therapist_unavailable sem salvar ao arrastar para um horário travado", async () => {
     const deps = {
-      findBooking: vi.fn().mockResolvedValue({ therapistId: ANA_ID, treatmentRoom: { roomId: SINGLE_ID, beds: 1 } }),
+      findBooking: vi.fn().mockResolvedValue({ therapistId: ANA_ID, treatmentRoom: { roomId: SINGLE_ID, capacity: 1 } }),
       hasConflict: vi.fn().mockResolvedValue(false),
       isBlocked: vi.fn().mockResolvedValue(true),
       findRoomBookings: vi.fn().mockResolvedValue([]),

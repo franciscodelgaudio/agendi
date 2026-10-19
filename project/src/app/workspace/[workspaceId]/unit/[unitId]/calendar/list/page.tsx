@@ -129,7 +129,7 @@ export default async function UnitCalendarListPage({
                     id: { $toString: "$$room._id" },
                     unitId: { $toString: "$_id" },
                     name: "$$room.name",
-                    beds: "$$room.beds",
+                    capacity: "$$room.capacity",
                   },
                 },
               },

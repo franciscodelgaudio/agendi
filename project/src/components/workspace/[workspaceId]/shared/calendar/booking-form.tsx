@@ -57,7 +57,7 @@ export type BookingFormOptions = {
     active: boolean
   }[]
   // Espaços de cada unidade; o formulário só oferece os da unidade escolhida.
-  treatmentRooms: { id: string; unitId: string; name: string; beds: number }[]
+  treatmentRooms: { id: string; unitId: string; name: string; capacity: number }[]
   // Unidades que funcionam dentro de um parceiro (com repasse): nelas o quarto é obrigatório,
   // a não ser para cliente de fora.
   partnerUnitIds: string[]
@@ -165,8 +165,8 @@ export function withSavedValues(
   }
 }
 
-export function capacityLabel(beds: number) {
-  return `${beds} por vez`
+export function capacityLabel(capacity: number) {
+  return `${capacity} por vez`
 }
 
 export function BookingForm({
@@ -221,7 +221,7 @@ export function BookingForm({
   const roomItems = allowedRooms(allRooms, unitId, service).map((room) => ({
     value: room.id,
     label: room.name,
-    beds: room.beds,
+    capacity: room.capacity,
   }))
   // O campo de quarto acompanha a unidade escolhida.
   const partner = !!unitId && partnerUnitIds.includes(unitId)
@@ -318,7 +318,7 @@ export function BookingForm({
               {roomItems.map((item) => (
                 <SelectItem key={item.value} value={item.value}>
                   {item.label}
-                  <span className="text-muted-foreground">{capacityLabel(item.beds)}</span>
+                  <span className="text-muted-foreground">{capacityLabel(item.capacity)}</span>
                 </SelectItem>
               ))}
             </SelectContent>

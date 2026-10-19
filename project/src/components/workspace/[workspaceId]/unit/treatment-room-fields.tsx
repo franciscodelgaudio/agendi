@@ -9,14 +9,14 @@ import { Input } from "@/components/ui/input"
 
 const MAX_ROOMS = 20
 
-export type TreatmentRoomOption = { id: string; name: string; beds: number }
+export type TreatmentRoomOption = { id: string; name: string; capacity: number }
 
 // id vazio = espaço novo.
-type Row = { key: number; id: string; name: string; beds: string }
+type Row = { key: number; id: string; name: string; capacity: string }
 
 function toRows(rooms: TreatmentRoomOption[] | undefined): Row[] {
-  if (!rooms?.length) return [{ key: 0, id: "", name: "", beds: "1" }]
-  return rooms.map((room, key) => ({ key, id: room.id, name: room.name, beds: String(room.beds) }))
+  if (!rooms?.length) return [{ key: 0, id: "", name: "", capacity: "1" }]
+  return rooms.map((room, key) => ({ key, id: room.id, name: room.name, capacity: String(room.capacity) }))
 }
 
 // Espaços da unidade (salas, hidromassagem, sauna...), com quantos atendimentos cada um comporta ao mesmo tempo.
@@ -46,7 +46,7 @@ export function TreatmentRoomFields({ idPrefix, defaultValue }: { idPrefix: stri
               required
             />
             <Input
-              name="treatmentRoomBeds"
+              name="treatmentRoomCapacity"
               type="number"
               inputMode="numeric"
               min={1}
@@ -55,8 +55,8 @@ export function TreatmentRoomFields({ idPrefix, defaultValue }: { idPrefix: stri
               aria-label={`Capacidade do espaço ${index + 1}`}
               title="Atendimentos ao mesmo tempo"
               className="w-20 shrink-0"
-              value={row.beds}
-              onChange={(e) => updateRow(row.key, { beds: e.target.value })}
+              value={row.capacity}
+              onChange={(e) => updateRow(row.key, { capacity: e.target.value })}
               required
             />
             <span className="shrink-0 text-sm text-muted-foreground">por vez</span>
@@ -82,7 +82,7 @@ export function TreatmentRoomFields({ idPrefix, defaultValue }: { idPrefix: stri
             onClick={() =>
               setRows((current) => [
                 ...current,
-                { key: Math.max(...current.map((r) => r.key)) + 1, id: "", name: "", beds: "1" },
+                { key: Math.max(...current.map((r) => r.key)) + 1, id: "", name: "", capacity: "1" },
               ])
             }
           >

@@ -80,7 +80,7 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
           $map: {
             input: { $ifNull: [{ $first: "$unit.treatmentRooms" }, []] },
             as: "room",
-            in: { id: { $toString: "$$room._id" }, unitId, name: "$$room.name", beds: "$$room.beds" },
+            in: { id: { $toString: "$$room._id" }, unitId, name: "$$room.name", capacity: "$$room.capacity" },
           },
         },
         partnerUnitIds: { $cond: [{ $first: "$unit.partner" }, [unitId], []] },

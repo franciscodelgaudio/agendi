@@ -229,7 +229,7 @@ export async function rescheduleBookingAction(
       const room = await findUnitTreatmentRoom(booking.unitId, booking.treatmentRoom.roomId.toString())
       return {
         therapistId: booking.therapistId?.toString() ?? null,
-        treatmentRoom: room && { roomId: room.id, beds: room.beds },
+        treatmentRoom: room && { roomId: room.id, capacity: room.capacity },
         registered: booking.appointmentId != null,
       }
     },

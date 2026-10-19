@@ -17,7 +17,8 @@
     "capture:landing": "tsx scripts/capture-landing-screens.ts",
     "migrate:owners": "tsx scripts/migrate-owners-to-admins.ts",
     "migrate:wallets": "tsx scripts/migrate-unit-balances-to-wallets.ts",
-    "migrate:expense-group-owners": "tsx scripts/migrate-expense-group-owner-index.ts"
+    "migrate:expense-group-owners": "tsx scripts/migrate-expense-group-owner-index.ts",
+    "migrate:room-capacity": "tsx scripts/migrate-room-capacity.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.85",

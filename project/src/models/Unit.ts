@@ -20,10 +20,11 @@ const revenueShareSchema = new Schema(
   { _id: false },
 );
 
-// Sala de atendimento; cada maca comporta um atendimento por vez. O _id liga os agendamentos à sala.
+// Sala de atendimento; capacity é quantos atendimentos ela comporta ao mesmo tempo (macas,
+// cadeiras etc., ADR-036). O _id liga os agendamentos à sala.
 const treatmentRoomSchema = new Schema({
   name: { type: String, required: true, trim: true },
-  beds: { type: Number, required: true, min: 1, max: 10 },
+  capacity: { type: Number, required: true, min: 1, max: 10 },
 });
 
 // Horário de funcionamento, igual para todos os dias; "24:00" fecha à meia-noite.

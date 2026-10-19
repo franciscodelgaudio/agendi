@@ -86,7 +86,7 @@ type Lookups = {
   // true quando a agenda do profissional está travada em algum momento do intervalo.
   isBlocked: (interval: BlockInterval) => Promise<boolean>;
   // Sala da unidade; null quando não existe nela.
-  findTreatmentRoom: (id: string) => Promise<{ id: string; name: string; beds: number } | null>;
+  findTreatmentRoom: (id: string) => Promise<{ id: string; name: string; capacity: number } | null>;
   // Outros agendamentos da sala que se sobrepõem ao intervalo.
   findRoomBookings: FindRoomBookings;
   findProducts: FindProducts;
@@ -101,9 +101,9 @@ function isDurationValid(minutes: number) {
   return minutes >= MIN_DURATION_MINUTES && minutes <= MAX_DURATION_MINUTES;
 }
 
-// true quando o espaço já está lotado (capacidade = beds) em algum momento do intervalo.
-async function isRoomFull(interval: RoomInterval, beds: number, findRoomBookings: FindRoomBookings) {
-  return peakOccupancy(await findRoomBookings(interval), interval) >= beds;
+// true quando o espaço já está lotado (capacidade = capacity) em algum momento do intervalo.
+async function isRoomFull(interval: RoomInterval, capacity: number, findRoomBookings: FindRoomBookings) {
+  return peakOccupancy(await findRoomBookings(interval), interval) >= capacity;
 }
 
 type Schedule = {
@@ -190,7 +190,7 @@ async function checkAvailability(
     startsAt,
     endsAt,
     excludeId,
-  }: { therapistId: string | null; room: { roomId: string; beds: number }; startsAt: Date; endsAt: Date; excludeId?: string },
+  }: { therapistId: string | null; room: { roomId: string; capacity: number }; startsAt: Date; endsAt: Date; excludeId?: string },
   { hasConflict, isBlocked, findRoomBookings }: Pick<Lookups, "hasConflict" | "isBlocked" | "findRoomBookings">,
 ): Promise<"therapist_unavailable" | "therapist_busy" | "room_full" | null> {
   if (therapistId) {
@@ -202,7 +202,7 @@ async function checkAvailability(
 
   const roomInterval: RoomInterval = { treatmentRoomId: room.roomId, startsAt, endsAt };
   if (excludeId) roomInterval.excludeId = excludeId;
-  if (await isRoomFull(roomInterval, room.beds, findRoomBookings)) return "room_full";
+  if (await isRoomFull(roomInterval, room.capacity, findRoomBookings)) return "room_full";
   return null;
 }
 
@@ -266,7 +266,7 @@ async function resolveBookingFields(
   const unavailable = await checkAvailability(
     {
       therapistId: therapist?.id ?? null,
-      room: { roomId: normalizedRoomId, beds: treatmentRoom.beds },
+      room: { roomId: normalizedRoomId, capacity: treatmentRoom.capacity },
       startsAt: start,
       endsAt: end,
       excludeId,
@@ -386,7 +386,7 @@ export async function correctRegisteredBooking(
   const unavailable = await checkAvailability(
     {
       therapistId: booking.therapistId,
-      room: { roomId: treatmentRoomId, beds: treatmentRoom.beds },
+      room: { roomId: treatmentRoomId, capacity: treatmentRoom.capacity },
       startsAt,
       endsAt,
       excludeId: bookingId,
@@ -419,7 +419,7 @@ export async function rescheduleBooking(
     // registered: já virou atendimento.
     findBooking: (bookingId: string) => Promise<{
       therapistId: string | null;
-      treatmentRoom: { roomId: string; beds: number } | null;
+      treatmentRoom: { roomId: string; capacity: number } | null;
       registered?: boolean;
     } | null>;
     hasConflict: Lookups["hasConflict"];

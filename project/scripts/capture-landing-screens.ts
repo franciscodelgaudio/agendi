@@ -185,7 +185,7 @@ type UnitSeed = {
   key: "centro" | "jardins"
   name: string
   hours: { opensAt: string; closesAt: string }
-  rooms: { name: string; beds: number; categories: Category[] }[]
+  rooms: { name: string; capacity: number; categories: Category[] }[]
   revenueShare?: { period: "monthly"; tiers: { upToCents: number | null; percent: number }[] }
   // Movimento relativo (1 = agenda cheia) e dias abertos (0 = domingo).
   load: number
@@ -197,9 +197,9 @@ const UNITS: UnitSeed[] = [
     name: "Studio Aurora Centro",
     hours: { opensAt: "09:00", closesAt: "20:00" },
     rooms: [
-      { name: "Salão", beds: 3, categories: ["hair"] },
-      { name: "Cabine estética", beds: 2, categories: ["aesthetics", "brows"] },
-      { name: "Sala de massagem", beds: 2, categories: ["massage"] },
+      { name: "Salão", capacity: 3, categories: ["hair"] },
+      { name: "Cabine estética", capacity: 2, categories: ["aesthetics", "brows"] },
+      { name: "Sala de massagem", capacity: 2, categories: ["massage"] },
     ],
     load: 0.78,
     closedDays: [0],
@@ -209,8 +209,8 @@ const UNITS: UnitSeed[] = [
     name: "Studio Aurora Jardins",
     hours: { opensAt: "10:00", closesAt: "19:00" },
     rooms: [
-      { name: "Sala Lótus", beds: 2, categories: ["massage"] },
-      { name: "Sala Jasmim", beds: 1, categories: ["aesthetics", "brows", "massage"] },
+      { name: "Sala Lótus", capacity: 2, categories: ["massage"] },
+      { name: "Sala Jasmim", capacity: 1, categories: ["aesthetics", "brows", "massage"] },
     ],
     // Funciona dentro de um clube parceiro, que fica com parte do faturamento do mês.
     revenueShare: {
@@ -282,12 +282,12 @@ async function seed(db: Db, now: Date): Promise<SeedResult> {
   for (const unitSeed of UNITS) {
     const unitId = new ObjectId()
     unitIds[unitSeed.key] = unitId.toString()
-    const rooms = unitSeed.rooms.map((room) => ({ _id: new ObjectId(), name: room.name, beds: room.beds, categories: room.categories }))
+    const rooms = unitSeed.rooms.map((room) => ({ _id: new ObjectId(), name: room.name, capacity: room.capacity, categories: room.categories }))
     await db.collection("units").insertOne({
       _id: unitId,
       name: unitSeed.name,
       ...(unitSeed.revenueShare ? { revenueShare: unitSeed.revenueShare } : {}),
-      treatmentRooms: rooms.map(({ _id, name, beds }) => ({ _id, name, beds })),
+      treatmentRooms: rooms.map(({ _id, name, capacity }) => ({ _id, name, capacity })),
       businessHours: unitSeed.hours,
       openingBalance: { amountCents: unitSeed.key === "centro" ? 1_850_000 : 640_000, date: yearStart },
       workspaceId,
@@ -358,8 +358,8 @@ async function seed(db: Db, now: Date): Promise<SeedResult> {
       const inCalendar = day >= weekMonday
       // Ocupação das salas por fatia de 15 min.
       const roomUse = new Map<string, number>()
-      const roomFree = (roomId: string, start: number, end: number, beds: number) => {
-        for (let t = start; t < end; t += 15) if ((roomUse.get(`${roomId}:${t}`) ?? 0) >= beds) return false
+      const roomFree = (roomId: string, start: number, end: number, capacity: number) => {
+        for (let t = start; t < end; t += 15) if ((roomUse.get(`${roomId}:${t}`) ?? 0) >= capacity) return false
         return true
       }
       const occupyRoom = (roomId: string, start: number, end: number) => {
@@ -384,7 +384,7 @@ async function seed(db: Db, now: Date): Promise<SeedResult> {
           const minutes = items.reduce((sum, s) => sum + s.seed.minutes, 0)
           const end = t + minutes
           if (end > closes) break
-          const room = rooms.find((r) => r.categories.includes(service.seed.category) && roomFree(r._id.toString(), t, end, r.beds))
+          const room = rooms.find((r) => r.categories.includes(service.seed.category) && roomFree(r._id.toString(), t, end, r.capacity))
           if (!room) {
             t += 30
             continue

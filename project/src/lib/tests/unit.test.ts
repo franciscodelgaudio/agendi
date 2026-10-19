@@ -9,8 +9,8 @@ const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const SHARE_INPUT = { period: "monthly", limits: [], percents: ["15"] };
 const SHARE = { period: "monthly", tiers: [{ upToCents: null, percent: 15 }] };
 // Salas de atendimento como chegam do formulário (id vazio = sala nova) e como são salvas.
-const ROOMS_INPUT = { ids: [""], names: ["Sala Single"], beds: ["1"] };
-const ROOMS = [{ id: null, name: "Sala Single", beds: 1 }];
+const ROOMS_INPUT = { ids: [""], names: ["Sala Single"], capacity: ["1"] };
+const ROOMS = [{ id: null, name: "Sala Single", capacity: 1 }];
 // Horário de funcionamento; chega do formulário do mesmo jeito que é salvo.
 const HOURS = { opensAt: "08:00", closesAt: "22:00" };
 const PARTNER = { ownership: "partner", revenueShare: SHARE_INPUT, treatmentRooms: ROOMS_INPUT, businessHours: HOURS };
@@ -108,8 +108,8 @@ describe("createUnit", () => {
     ["parceiro com período inválido", { name: "Spa Central", ...PARTNER, revenueShare: { ...SHARE_INPUT, period: "yearly" } }, "invalid_period"],
     ["parceiro com percentual inválido", { name: "Spa Central", ...PARTNER, revenueShare: { ...SHARE_INPUT, percents: ["101"] } }, "invalid_tier_percent"],
     ["salas ausentes", { name: "Spa Central", ownership: "own" }, "invalid_input"],
-    ["nenhuma sala", { name: "Spa Central", ...OWN, treatmentRooms: { ids: [], names: [], beds: [] } }, "no_treatment_rooms"],
-    ["sala sem maca", { name: "Spa Central", ...OWN, treatmentRooms: { ...ROOMS_INPUT, beds: ["0"] } }, "invalid_treatment_room_beds"],
+    ["nenhuma sala", { name: "Spa Central", ...OWN, treatmentRooms: { ids: [], names: [], capacity: [] } }, "no_treatment_rooms"],
+    ["sala com capacidade zero", { name: "Spa Central", ...OWN, treatmentRooms: { ...ROOMS_INPUT, capacity: ["0"] } }, "invalid_treatment_room_capacity"],
     ["horário ausente", { name: "Spa Central", ownership: "own", treatmentRooms: ROOMS_INPUT }, "invalid_input"],
     ["horário inválido", { name: "Spa Central", ...OWN, businessHours: { opensAt: "8h", closesAt: "22:00" } }, "invalid_business_hours"],
     ["fechamento antes da abertura", { name: "Spa Central", ...OWN, businessHours: { opensAt: "22:00", closesAt: "08:00" } }, "invalid_business_hours_order"],
@@ -189,7 +189,7 @@ describe("updateUnit", () => {
     const SINGLE_ID = "64b7f0c2a1b2c3d4e5f60781";
 
     await updateUnit(
-      { name: "Spa Central", ...OWN, treatmentRooms: { ids: [SINGLE_ID, ""], names: ["Sala Single", "Sala Casal"], beds: ["1", "2"] } },
+      { name: "Spa Central", ...OWN, treatmentRooms: { ids: [SINGLE_ID, ""], names: ["Sala Single", "Sala Casal"], capacity: ["1", "2"] } },
       UNIT_ID,
       update,
       makeRoomCheck(),
@@ -201,8 +201,8 @@ describe("updateUnit", () => {
       avatarUrl: null,
       revenueShare: null,
       treatmentRooms: [
-        { id: SINGLE_ID, name: "Sala Single", beds: 1 },
-        { id: null, name: "Sala Casal", beds: 2 },
+        { id: SINGLE_ID, name: "Sala Single", capacity: 1 },
+        { id: null, name: "Sala Casal", capacity: 2 },
       ],
       businessHours: HOURS,
     });
@@ -231,7 +231,7 @@ describe("updateUnit", () => {
     ["tipo de unidade ausente", { name: "Spa Central" }, "invalid_ownership"],
     ["parceiro com limite inválido", { name: "Spa Central", ...PARTNER, revenueShare: { ...SHARE_INPUT, limits: ["0"], percents: ["30", "35"] } }, "invalid_tier_limit"],
     ["salas ausentes", { name: "Spa Central", ownership: "own" }, "invalid_input"],
-    ["sala com nome repetido", { name: "Spa Central", ...OWN, treatmentRooms: { ids: ["", ""], names: ["Sala 1", "Sala 1"], beds: ["1", "2"] } }, "duplicate_treatment_room_name"],
+    ["sala com nome repetido", { name: "Spa Central", ...OWN, treatmentRooms: { ids: ["", ""], names: ["Sala 1", "Sala 1"], capacity: ["1", "2"] } }, "duplicate_treatment_room_name"],
     ["fechamento igual à abertura", { name: "Spa Central", ...OWN, businessHours: { opensAt: "10:00", closesAt: "10:00" } }, "invalid_business_hours_order"],
   ])("retorna erro sem salvar quando %s", async (_label, input, error) => {
     const update = makeUpdate();
@@ -248,7 +248,7 @@ describe("updateUnit", () => {
     const SINGLE_ID = "64b7f0c2a1b2c3d4e5f60781";
 
     await updateUnit(
-      { name: "Spa Central", ...OWN, treatmentRooms: { ids: [SINGLE_ID, ""], names: ["Sala Single", "Sala Casal"], beds: ["1", "2"] } },
+      { name: "Spa Central", ...OWN, treatmentRooms: { ids: [SINGLE_ID, ""], names: ["Sala Single", "Sala Casal"], capacity: ["1", "2"] } },
       UNIT_ID,
       makeUpdate(),
       roomCheck,

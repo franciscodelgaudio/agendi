@@ -90,7 +90,7 @@ export async function loadWorkspaceContext(
       name: u.name,
       opensAt: u.businessHours.opensAt,
       closesAt: u.businessHours.closesAt,
-      rooms: u.treatmentRooms.map((r) => ({ id: r._id.toString(), name: r.name, beds: r.beds })),
+      rooms: u.treatmentRooms.map((r) => ({ id: r._id.toString(), name: r.name, capacity: r.capacity })),
     })),
     team: members.map((m) => ({
       userId: m.userId?.toString() ?? null,

@@ -79,7 +79,7 @@ export async function findUnitTreatmentRoom(unitId: string | Types.ObjectId, roo
     .select({ "treatmentRooms.$": 1 })
     .lean()
   const room = unit?.treatmentRooms[0]
-  return room ? { id: room._id.toString(), name: room.name, beds: room.beds } : null
+  return room ? { id: room._id.toString(), name: room.name, capacity: room.capacity } : null
 }
 
 // Serviços cadastrados antes desses campos não os têm: exigem profissional e aceitam qualquer espaço.

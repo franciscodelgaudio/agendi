@@ -140,7 +140,7 @@ export default async function CalendarListPage({
                       id: { $toString: "$$room._id" },
                       unitId: { $toString: "$$this._id" },
                       name: "$$room.name",
-                      beds: "$$room.beds",
+                      capacity: "$$room.capacity",
                     },
                   },
                 },
