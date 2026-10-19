@@ -50,6 +50,7 @@ const errorMessages: Record<
   invalid_opening_balance_date: "Informe o dia do saldo em caixa.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unit_not_found: "Unidade não encontrada ou sem permissão.",
+  name_in_use: "Já existe uma unidade com este nome.",
   unit_has_pending_bookings: "A unidade ainda tem agendamentos por vir. Remarque ou exclua os agendamentos antes de desativá-la.",
   forbidden: "Sem permissão para alterar a equipe.",
   invalid_team: "Escolha só usuários deste workspace.",
@@ -98,6 +99,17 @@ async function applyTeam(workspaceId: string, unitId: string, { link, unlink }: 
       }),
     unlink.length && WorkspaceMember.updateMany(ids(unlink), { $pull: { units: { unitId: unitObjectId } } }),
   ])
+}
+
+// Outra unidade da empresa com o mesmo nome, sem diferenciar maiúsculas (como nas funções);
+// as desativadas contam, porque podem ser reativadas.
+function unitNameInUse(workspaceId: string) {
+  return async (name: string, exceptUnitId?: string) =>
+    (await Unit.exists({
+      workspaceId: new Types.ObjectId(workspaceId),
+      name,
+      ...(exceptUnitId && { _id: { $ne: new Types.ObjectId(exceptUnitId) } }),
+    }).collation({ locale: "pt", strength: 2 })) !== null
 }
 
 // Sala nova ganha id aqui; a que já existia mantém o seu, e com ele os agendamentos.
@@ -155,6 +167,7 @@ export async function createUnitAction(
       if (team) await applyTeam(data.workspaceId, id, team)
       return { id }
     },
+    unitNameInUse(access.id),
   )
 
   if (!result.ok) return { error: errorMessages[result.error] }
@@ -225,6 +238,7 @@ export async function updateUnitAction(
       })
       return inUse !== null
     },
+    unitNameInUse(target.ownedId),
   )
 
   if (!result.ok) return { error: errorMessages[result.error] }

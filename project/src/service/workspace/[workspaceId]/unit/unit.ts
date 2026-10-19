@@ -15,6 +15,7 @@ export type CreateUnitError =
   | TreatmentRoomError
   | BusinessHoursError
   | OpeningBalanceError
+  | "name_in_use"
   | "workspace_not_found";
 
 export type CreateUnitResult =
@@ -31,7 +32,11 @@ export function isHttpUrl(value: string) {
 }
 
 // O saldo inicial só é informado na criação; depois ele é editado no Caixa.
-type UnitInputError = Exclude<CreateUnitError, "workspace_not_found" | Exclude<OpeningBalanceError, "invalid_input">>;
+type UnitInputError = Exclude<CreateUnitError, "workspace_not_found" | "name_in_use" | Exclude<OpeningBalanceError, "invalid_input">>;
+
+// true quando outra unidade da empresa (fora exceptUnitId) já usa o nome. O nome é único na
+// empresa, contando as desativadas, que podem ser reativadas.
+export type NameInUse = (name: string, exceptUnitId?: string) => Promise<boolean>;
 
 // revenueShare é null quando a unidade funciona em espaço próprio.
 type UnitInput = {
@@ -95,6 +100,7 @@ export async function createUnit(
     openingBalance?: OpeningBalance;
     workspaceId: string;
   }) => Promise<{ id: string }>,
+  nameInUse: NameInUse,
 ): Promise<CreateUnitResult> {
   if (!workspaceId) return { ok: false, error: "workspace_not_found" };
 
@@ -102,6 +108,7 @@ export async function createUnit(
   if (!parsed.ok) return parsed;
   const balance = parseOpeningBalance((input as Record<string, unknown>).openingBalance);
   if (!balance.ok) return balance;
+  if (await nameInUse(parsed.name)) return { ok: false, error: "name_in_use" };
 
   const unit = await insert({
     name: parsed.name,
@@ -115,7 +122,7 @@ export async function createUnit(
   return { ok: true, unitId: unit.id };
 }
 
-export type UpdateUnitError = UnitInputError | "treatment_room_in_use" | "unit_not_found";
+export type UpdateUnitError = UnitInputError | "name_in_use" | "treatment_room_in_use" | "unit_not_found";
 
 export type UpdateUnitResult = { ok: true } | { ok: false; error: UpdateUnitError };
 
@@ -126,6 +133,7 @@ export async function updateUnit(
   unitId: string | null | undefined,
   update: (unitId: string, data: UnitInput) => Promise<boolean>,
   hasBookingsInRemovedRooms: (unitId: string, keptRoomIds: string[]) => Promise<boolean>,
+  nameInUse: NameInUse,
 ): Promise<UpdateUnitResult> {
   if (!unitId) return { ok: false, error: "unit_not_found" };
 
@@ -133,6 +141,7 @@ export async function updateUnit(
   if (!parsed.ok) return parsed;
 
   const { name, avatarUrl, revenueShare, treatmentRooms, businessHours } = parsed;
+  if (await nameInUse(name, unitId)) return { ok: false, error: "name_in_use" };
   const keptRoomIds = treatmentRooms.flatMap((room) => (room.id ? [room.id] : []));
   if (await hasBookingsInRemovedRooms(unitId, keptRoomIds)) return { ok: false, error: "treatment_room_in_use" };
 

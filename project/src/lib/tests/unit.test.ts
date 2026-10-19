@@ -16,6 +16,11 @@ const HOURS = { opensAt: "08:00", closesAt: "22:00" };
 const PARTNER = { ownership: "partner", revenueShare: SHARE_INPUT, treatmentRooms: ROOMS_INPUT, businessHours: HOURS };
 const OWN = { ownership: "own", treatmentRooms: ROOMS_INPUT, businessHours: HOURS };
 
+// Nome livre na empresa: nenhuma outra unidade usa o nome.
+function nameFree() {
+  return vi.fn().mockResolvedValue(false);
+}
+
 describe("createUnit", () => {
   function makeInsert() {
     return vi.fn().mockResolvedValue({ id: UNIT_ID });
@@ -24,7 +29,7 @@ describe("createUnit", () => {
   it("cria a unidade no workspace e retorna o id", async () => {
     const insert = makeInsert();
 
-    const result = await createUnit({ name: "Spa Central", ...OWN }, WORKSPACE_ID, insert);
+    const result = await createUnit({ name: "Spa Central", ...OWN }, WORKSPACE_ID, insert, nameFree());
 
     expect(result).toEqual({ ok: true, unitId: UNIT_ID });
     expect(insert).toHaveBeenCalledWith({ name: "Spa Central", treatmentRooms: ROOMS, businessHours: HOURS, workspaceId: WORKSPACE_ID });
@@ -37,6 +42,7 @@ describe("createUnit", () => {
       { name: "  Spa Central  ", avatarUrl: "  https://example.com/a.png  ", ...OWN },
       WORKSPACE_ID,
       insert,
+      nameFree(),
     );
 
     expect(insert).toHaveBeenCalledWith({
@@ -55,7 +61,7 @@ describe("createUnit", () => {
   ])("ignora a avatarUrl quando %s", async (_label, avatarUrl) => {
     const insert = makeInsert();
 
-    const result = await createUnit({ name: "Spa Central", avatarUrl, ...OWN }, WORKSPACE_ID, insert);
+    const result = await createUnit({ name: "Spa Central", avatarUrl, ...OWN }, WORKSPACE_ID, insert, nameFree());
 
     expect(result).toEqual({ ok: true, unitId: UNIT_ID });
     expect(insert).toHaveBeenCalledWith({ name: "Spa Central", treatmentRooms: ROOMS, businessHours: HOURS, workspaceId: WORKSPACE_ID });
@@ -64,7 +70,7 @@ describe("createUnit", () => {
   it("unidade dentro de estabelecimento parceiro salva a regra de repasse", async () => {
     const insert = makeInsert();
 
-    const result = await createUnit({ name: "Spa Resort", ...PARTNER }, WORKSPACE_ID, insert);
+    const result = await createUnit({ name: "Spa Resort", ...PARTNER }, WORKSPACE_ID, insert, nameFree());
 
     expect(result).toEqual({ ok: true, unitId: UNIT_ID });
     expect(insert).toHaveBeenCalledWith({ name: "Spa Resort", revenueShare: SHARE, treatmentRooms: ROOMS, businessHours: HOURS, workspaceId: WORKSPACE_ID });
@@ -73,7 +79,7 @@ describe("createUnit", () => {
   it("unidade em espaço próprio ignora regra de repasse enviada", async () => {
     const insert = makeInsert();
 
-    await createUnit({ name: "Spa Centro", ...OWN, revenueShare: SHARE_INPUT }, WORKSPACE_ID, insert);
+    await createUnit({ name: "Spa Centro", ...OWN, revenueShare: SHARE_INPUT }, WORKSPACE_ID, insert, nameFree());
 
     expect(insert).toHaveBeenCalledWith({ name: "Spa Centro", treatmentRooms: ROOMS, businessHours: HOURS, workspaceId: WORKSPACE_ID });
   });
@@ -81,7 +87,7 @@ describe("createUnit", () => {
   it("aceita nome com exatamente 80 caracteres", async () => {
     const insert = makeInsert();
 
-    const result = await createUnit({ name: "a".repeat(80), ...OWN }, WORKSPACE_ID, insert);
+    const result = await createUnit({ name: "a".repeat(80), ...OWN }, WORKSPACE_ID, insert, nameFree());
 
     expect(result).toEqual({ ok: true, unitId: UNIT_ID });
   });
@@ -110,7 +116,7 @@ describe("createUnit", () => {
   ])("retorna erro sem salvar quando %s", async (_label, input, error) => {
     const insert = makeInsert();
 
-    const result = await createUnit(input, WORKSPACE_ID, insert);
+    const result = await createUnit(input, WORKSPACE_ID, insert, nameFree());
 
     expect(result).toEqual({ ok: false, error });
     expect(insert).not.toHaveBeenCalled();
@@ -121,7 +127,7 @@ describe("createUnit", () => {
     async (workspaceId) => {
       const insert = makeInsert();
 
-      const result = await createUnit({ name: "Spa Central", ...OWN }, workspaceId, insert);
+      const result = await createUnit({ name: "Spa Central", ...OWN }, workspaceId, insert, nameFree());
 
       expect(result).toEqual({ ok: false, error: "workspace_not_found" });
       expect(insert).not.toHaveBeenCalled();
@@ -147,6 +153,7 @@ describe("updateUnit", () => {
       UNIT_ID,
       update,
       makeRoomCheck(),
+      nameFree(),
     );
 
     expect(result).toEqual({ ok: true });
@@ -162,7 +169,7 @@ describe("updateUnit", () => {
   it("salva a regra de repasse quando a unidade é de estabelecimento parceiro", async () => {
     const update = makeUpdate();
 
-    const result = await updateUnit({ name: "Spa Resort", ...PARTNER }, UNIT_ID, update, makeRoomCheck());
+    const result = await updateUnit({ name: "Spa Resort", ...PARTNER }, UNIT_ID, update, makeRoomCheck(), nameFree());
 
     expect(result).toEqual({ ok: true });
     expect(update).toHaveBeenCalledWith(UNIT_ID, { name: "Spa Resort", avatarUrl: null, revenueShare: SHARE, treatmentRooms: ROOMS, businessHours: HOURS });
@@ -171,7 +178,7 @@ describe("updateUnit", () => {
   it("remove a regra de repasse (revenueShare null) quando a unidade passa a ser própria", async () => {
     const update = makeUpdate();
 
-    await updateUnit({ name: "Spa Centro", ...OWN, revenueShare: SHARE_INPUT }, UNIT_ID, update, makeRoomCheck());
+    await updateUnit({ name: "Spa Centro", ...OWN, revenueShare: SHARE_INPUT }, UNIT_ID, update, makeRoomCheck(), nameFree());
 
     expect(update).toHaveBeenCalledWith(UNIT_ID, { name: "Spa Centro", avatarUrl: null, revenueShare: null, treatmentRooms: ROOMS, businessHours: HOURS });
   });
@@ -186,6 +193,7 @@ describe("updateUnit", () => {
       UNIT_ID,
       update,
       makeRoomCheck(),
+      nameFree(),
     );
 
     expect(update).toHaveBeenCalledWith(UNIT_ID, {
@@ -207,7 +215,7 @@ describe("updateUnit", () => {
   ])("remove o avatar (avatarUrl null) quando %s", async (_label, avatarUrl) => {
     const update = makeUpdate();
 
-    const result = await updateUnit({ name: "Spa Central", avatarUrl, ...OWN }, UNIT_ID, update, makeRoomCheck());
+    const result = await updateUnit({ name: "Spa Central", avatarUrl, ...OWN }, UNIT_ID, update, makeRoomCheck(), nameFree());
 
     expect(result).toEqual({ ok: true });
     expect(update).toHaveBeenCalledWith(UNIT_ID, { name: "Spa Central", avatarUrl: null, revenueShare: null, treatmentRooms: ROOMS, businessHours: HOURS });
@@ -228,7 +236,7 @@ describe("updateUnit", () => {
   ])("retorna erro sem salvar quando %s", async (_label, input, error) => {
     const update = makeUpdate();
 
-    const result = await updateUnit(input, UNIT_ID, update, makeRoomCheck());
+    const result = await updateUnit(input, UNIT_ID, update, makeRoomCheck(), nameFree());
 
     expect(result).toEqual({ ok: false, error });
     expect(update).not.toHaveBeenCalled();
@@ -244,6 +252,7 @@ describe("updateUnit", () => {
       UNIT_ID,
       makeUpdate(),
       roomCheck,
+      nameFree(),
     );
 
     expect(roomCheck).toHaveBeenCalledWith(UNIT_ID, [SINGLE_ID]);
@@ -252,7 +261,7 @@ describe("updateUnit", () => {
   it("retorna treatment_room_in_use sem salvar quando uma sala removida tem agendamento por terminar", async () => {
     const update = makeUpdate();
 
-    const result = await updateUnit({ name: "Spa Central", ...OWN }, UNIT_ID, update, makeRoomCheck(true));
+    const result = await updateUnit({ name: "Spa Central", ...OWN }, UNIT_ID, update, makeRoomCheck(true), nameFree());
 
     expect(result).toEqual({ ok: false, error: "treatment_room_in_use" });
     expect(update).not.toHaveBeenCalled();
@@ -261,7 +270,7 @@ describe("updateUnit", () => {
   it("não confere agendamentos quando o input é inválido", async () => {
     const roomCheck = makeRoomCheck();
 
-    await updateUnit({ name: "   ", ...OWN }, UNIT_ID, makeUpdate(), roomCheck);
+    await updateUnit({ name: "   ", ...OWN }, UNIT_ID, makeUpdate(), roomCheck, nameFree());
 
     expect(roomCheck).not.toHaveBeenCalled();
   });
@@ -271,7 +280,7 @@ describe("updateUnit", () => {
     async (unitId) => {
       const update = makeUpdate();
 
-      const result = await updateUnit({ name: "Spa Central", ...OWN }, unitId, update, makeRoomCheck());
+      const result = await updateUnit({ name: "Spa Central", ...OWN }, unitId, update, makeRoomCheck(), nameFree());
 
       expect(result).toEqual({ ok: false, error: "unit_not_found" });
       expect(update).not.toHaveBeenCalled();
@@ -279,7 +288,7 @@ describe("updateUnit", () => {
   );
 
   it("retorna unit_not_found quando a unidade não existe (ou não é do workspace)", async () => {
-    const result = await updateUnit({ name: "Spa Central", ...OWN }, UNIT_ID, makeUpdate(false), makeRoomCheck());
+    const result = await updateUnit({ name: "Spa Central", ...OWN }, UNIT_ID, makeUpdate(false), makeRoomCheck(), nameFree());
 
     expect(result).toEqual({ ok: false, error: "unit_not_found" });
   });
@@ -362,5 +371,49 @@ describe("reactivateUnit", () => {
     const result = await reactivateUnit(UNIT_ID, vi.fn().mockResolvedValue(false));
 
     expect(result).toEqual({ ok: false, error: "unit_not_found" });
+  });
+});
+
+// O nome da unidade é único na empresa (sem diferenciar maiúsculas), contando as desativadas,
+// que podem ser reativadas. nameInUse(nome, unidadeIgnorada?): true quando outra unidade usa o nome.
+describe("nome único na empresa", () => {
+  it("cadastro com o nome de outra unidade: name_in_use sem salvar", async () => {
+    const insert = vi.fn().mockResolvedValue({ id: UNIT_ID });
+    const nameInUse = vi.fn().mockResolvedValue(true);
+
+    const result = await createUnit({ name: "  Spa Central ", ...OWN }, WORKSPACE_ID, insert, nameInUse);
+
+    expect(result).toEqual({ ok: false, error: "name_in_use" });
+    expect(nameInUse).toHaveBeenCalledWith("Spa Central");
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("cadastro com nome livre confere o nome já normalizado", async () => {
+    const nameInUse = nameFree();
+
+    const result = await createUnit({ name: " Spa Norte ", ...OWN }, WORKSPACE_ID, vi.fn().mockResolvedValue({ id: UNIT_ID }), nameInUse);
+
+    expect(result).toEqual({ ok: true, unitId: UNIT_ID });
+    expect(nameInUse).toHaveBeenCalledWith("Spa Norte");
+  });
+
+  it("renomear para o nome de outra unidade: name_in_use sem salvar, ignorando a própria unidade", async () => {
+    const update = vi.fn().mockResolvedValue(true);
+    const nameInUse = vi.fn().mockResolvedValue(true);
+
+    const result = await updateUnit({ name: "Spa Central", ...OWN }, UNIT_ID, update, vi.fn().mockResolvedValue(false), nameInUse);
+
+    expect(result).toEqual({ ok: false, error: "name_in_use" });
+    expect(nameInUse).toHaveBeenCalledWith("Spa Central", UNIT_ID);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("nome inválido: erro sem consultar se está em uso", async () => {
+    const nameInUse = nameFree();
+
+    const result = await createUnit({ name: "   ", ...OWN }, WORKSPACE_ID, vi.fn(), nameInUse);
+
+    expect(result).toEqual({ ok: false, error: "invalid_name" });
+    expect(nameInUse).not.toHaveBeenCalled();
   });
 });
