@@ -34,6 +34,7 @@ export type BookingError =
   | "invalid_duration"
   | "invalid_color"
   | "service_not_found"
+  | "service_inactive"
   | "therapist_not_found"
   | "therapist_busy"
   | "therapist_unavailable"
@@ -74,10 +75,11 @@ type Lookups = {
   guestRoomRequired: boolean;
   findCustomer: FindCustomer;
   // Devolvem null quando não existe: serviço da unidade e quem pode atender no workspace.
-  // treatmentRoomIds vazio: o serviço pode usar qualquer espaço da unidade.
+  // treatmentRoomIds vazio: o serviço pode usar qualquer espaço da unidade. deactivated: o serviço
+  // foi desativado (ausente = ativo).
   findService: (
     id: string,
-  ) => Promise<{ id: string; name: string; requiresTherapist: boolean; treatmentRoomIds: string[] } | null>;
+  ) => Promise<{ id: string; name: string; requiresTherapist: boolean; treatmentRoomIds: string[]; deactivated?: boolean } | null>;
   findTherapist: (id: string) => Promise<{ id: string; name: string } | null>;
   // true quando o profissional já tem outro agendamento que se sobrepõe ao intervalo.
   hasConflict: (interval: Interval) => Promise<boolean>;
@@ -243,6 +245,9 @@ async function resolveBookingFields(
     resolveProducts(productIds, findProducts),
   ]);
   if (!service) return { ok: false, error: "service_not_found" };
+  // Sem excludeId é um agendamento novo: serviço desativado não é mais oferecido. A edição
+  // continua aceitando o serviço que o agendamento já tem.
+  if (service.deactivated && !excludeId) return { ok: false, error: "service_inactive" };
 
   // Serviço sem profissional descarta o que vier no formulário.
   let therapist: { id: string; name: string } | null = null;

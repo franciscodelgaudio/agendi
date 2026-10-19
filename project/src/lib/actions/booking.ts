@@ -33,6 +33,7 @@ const errorMessages: Record<BookingError | "workspace_not_found" | "unauthentica
   invalid_duration: "O agendamento precisa durar entre 5 minutos e 12 horas.",
   invalid_color: "Escolha uma cor da lista.",
   service_not_found: "O serviço escolhido não é desta unidade. Recarregue a página.",
+  service_inactive: "Este serviço está desativado. Escolha outro.",
   therapist_not_found: "O profissional escolhido não pode atender neste workspace. Recarregue a página.",
   therapist_busy: "O profissional já tem um agendamento nesse horário.",
   therapist_unavailable: "O profissional está indisponível nesse horário (agenda travada).",

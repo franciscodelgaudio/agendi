@@ -88,12 +88,14 @@ export function serviceRules(service: {
   name: string
   requiresTherapist?: boolean | null
   treatmentRoomIds?: Types.ObjectId[] | null
+  deactivatedAt?: Date | null
 }) {
   return {
     id: service._id.toString(),
     name: service.name,
     requiresTherapist: service.requiresTherapist ?? true,
     treatmentRoomIds: (service.treatmentRoomIds ?? []).map((id) => id.toString()),
+    ...(service.deactivatedAt && { deactivated: true }),
   }
 }
 
@@ -119,7 +121,7 @@ export async function bookingLookups(unit: { workspaceId: string; unitId: string
     findService: async (id: string) => {
       if (!isObjectIdOrHexString(id)) return null
       const service = await Service.findOne({ _id: id, unitId: unit.unitId })
-        .select({ name: 1, requiresTherapist: 1, treatmentRoomIds: 1 })
+        .select({ name: 1, requiresTherapist: 1, treatmentRoomIds: 1, deactivatedAt: 1 })
         .lean()
       return service && serviceRules(service)
     },

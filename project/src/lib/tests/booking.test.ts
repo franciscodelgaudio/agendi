@@ -1062,3 +1062,26 @@ describe("cliente recorrente", () => {
     expect(deps.update.mock.calls[0][1].guest).toEqual({ name: "Maria Souza", room: "204", customerId: CUSTOMER_ID });
   });
 });
+
+// Serviço desativado (fase 3.2) não é oferecido para agendamentos novos; a edição de um
+// agendamento antigo continua aceitando o serviço que ele já tem.
+describe("serviço desativado", () => {
+  const DESATIVADO = { ...CANDLE, deactivated: true };
+
+  it("agendamento novo com serviço desativado: service_inactive sem salvar", async () => {
+    const deps = { ...makeLookups({ service: DESATIVADO }), insert: vi.fn().mockResolvedValue({ id: BOOKING_ID }) };
+
+    const result = await createBooking(validInput, UNIT_ID, deps);
+
+    expect(result).toEqual({ ok: false, error: "service_inactive" });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("a edição aceita o serviço desativado", async () => {
+    const deps = { ...makeLookups({ service: DESATIVADO }), update: vi.fn().mockResolvedValue(true) };
+
+    const result = await updateBooking(validInput, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+  });
+});
