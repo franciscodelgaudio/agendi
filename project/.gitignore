@@ -43,3 +43,10 @@ next-env.d.ts
 
 # references
 /public/s4ilor
+
+# claude design sync (build workspace + bundle)
+/.ds-sync/
+/ds-bundle/
+/.design-sync/.cache/
+/.design-sync/learnings/
+/.design-sync/node_modules

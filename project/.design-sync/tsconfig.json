@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/components/shared/link": ["./shims/link.tsx"],
+      "@/*": ["../src/*"]
+    }
+  }
+}
