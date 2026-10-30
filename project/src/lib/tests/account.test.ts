@@ -53,12 +53,10 @@ describe("updateProfile", () => {
 });
 
 describe("deleteAccount", () => {
-  // adminIn: workspaces em que o usuário é administrador ativo.
-  // activeAdmins: administradores ativos de cada workspace, contando o próprio usuário.
-  function makeDeps(adminIn: { id: string; name: string }[] = [], activeAdmins: Record<string, number> = {}) {
+  function makeDeps(adminIn: { id: string; name: string }[] = [], admins: Record<string, number> = {}) {
     return {
       listAdminWorkspaces: vi.fn().mockResolvedValue(adminIn),
-      countActiveAdmins: vi.fn(async (workspaceId: string) => activeAdmins[workspaceId] ?? 1),
+      countAdmins: vi.fn(async (workspaceId: string) => admins[workspaceId] ?? 1),
       deleteUser: vi.fn().mockResolvedValue(undefined),
     };
   }
@@ -73,14 +71,14 @@ describe("deleteAccount", () => {
     expect(deps.deleteUser).toHaveBeenCalledWith(USER_ID);
   });
 
-  it("apaga a conta quando todo workspace que ele administra tem outro administrador ativo", async () => {
+  it("apaga a conta quando todo workspace que ele administra tem outro administrador", async () => {
     const deps = makeDeps([SPA, STUDIO], { [SPA.id]: 2, [STUDIO.id]: 3 });
 
     const result = await deleteAccount(USER_ID, deps);
 
     expect(result).toEqual({ ok: true });
-    expect(deps.countActiveAdmins).toHaveBeenCalledWith(SPA.id);
-    expect(deps.countActiveAdmins).toHaveBeenCalledWith(STUDIO.id);
+    expect(deps.countAdmins).toHaveBeenCalledWith(SPA.id);
+    expect(deps.countAdmins).toHaveBeenCalledWith(STUDIO.id);
     expect(deps.deleteUser).toHaveBeenCalledWith(USER_ID);
   });
 

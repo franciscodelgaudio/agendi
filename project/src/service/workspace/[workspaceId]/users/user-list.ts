@@ -2,14 +2,14 @@ import { first, type SearchParams, type SortDir } from "@/service/workspace/[wor
 
 export const USER_PAGE_SIZE = 20;
 const SORT_FIELDS = ["name", "email"] as const;
-// Filtro de função: "admin" ou o id de uma role.
+// Filtro de função: o id de uma role (o administrador também é uma role).
 const ROLE_ID_PATTERN = /^[0-9a-f]{24}$/i;
 // active: membro que aceitou; pending/expired: convite ainda sem conta.
 const STATUSES = ["active", "pending", "expired"] as const;
 
 export type UserSortField = (typeof SORT_FIELDS)[number];
 export type UserStatus = (typeof STATUSES)[number];
-// role/status vazios = todos; role é "admin" ou o id de uma role.
+// role/status vazios = todos; role é o id de uma role.
 export type UserListQuery = {
   q: string;
   sort: UserSortField;
@@ -24,10 +24,8 @@ export type UserListItem = {
   name: string | null;
   email: string;
   image: string | null;
-  admin: boolean;
-  // null para administradores e para membros que ainda não têm role.
-  roleId: string | null;
-  roleName: string | null;
+  roleId: string;
+  roleName: string;
   status: UserStatus;
 };
 
@@ -40,7 +38,7 @@ export function parseUserListQuery(params: SearchParams): UserListQuery {
     q: first(params.q)?.trim() ?? "",
     sort: SORT_FIELDS.includes(sort as UserSortField) ? (sort as UserSortField) : "name",
     dir: first(params.dir) === "desc" ? "desc" : "asc",
-    role: role === "admin" || ROLE_ID_PATTERN.test(role ?? "") ? role! : "",
+    role: ROLE_ID_PATTERN.test(role ?? "") ? role! : "",
     status: STATUSES.includes(status as UserStatus) ? (status as UserStatus) : "",
     page: page && /^[1-9]\d*$/.test(page) ? Number(page) : 1,
   };
@@ -58,7 +56,7 @@ export function userListPage(people: UserListItem[], { q, sort, dir, role, statu
   const filtered = people
     .filter(
       (person) =>
-        (!role || (role === "admin" ? person.admin : person.roleId === role)) &&
+        (!role || person.roleId === role) &&
         (!status || person.status === status) &&
         (!term || normalize(person.name ?? "").includes(term) || normalize(person.email).includes(term)),
     )

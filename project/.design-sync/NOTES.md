@@ -68,3 +68,23 @@ Sync do design system (`src/components/ui`, shadcn estilo `base-vega` sobre `@ba
 
 - `[TOKENS_MISSING] --available-height, --anchor-width, --available-width, --transform-origin, --tw`:
   variáveis definidas em runtime pelo Base UI (posicionamento de popups) e internas do Tailwind. Esperado.
+- `[RENDER_THIN] Toaster ... rendered height is 0px`: os toasts do sonner são `position: fixed`, então a raiz
+  mede 0px; a captura mostra os toasts normalmente. Benigno.
+- `[EXPORT_COLLISION]` de `sonner` (Toaster), `recharts` (Tooltip, Label) e `./.design-sync/globals.ts`
+  (AreaChart, BarChart...): esperados — o DS vence nos dois primeiros e o `globals.ts` aponta para o mesmo recharts.
+
+## Re-sync risks
+
+- **Build lento**: com `globals.ts` (lucide + recharts) o `package-build.mjs` passa de 10 min (análise de tipos).
+  Rode em segundo plano.
+- **Notas visuais dependem do `extraEntries`**: mudar `extraEntries`/`globals.ts` muda a resolução de imports das
+  prévias e zera todas as notas — conte com reavaliar as 29 folhas.
+- **Lista fechada de famílias**: `componentSrcMap` + `docsMap` enumeram as 29 famílias. Um arquivo novo em
+  `src/components/ui/` não aparece até ser adicionado nos dois (as subpeças entram no bundle sozinhas).
+- **Colisões lucide × recharts** estão fixadas à mão em `.design-sync/globals.ts`; ao atualizar um dos dois
+  pacotes, rode a checagem de interseção de exports de novo (nomes novos em comum ficam `undefined`).
+- **Shim do Link** (`.design-sync/shims/link.tsx`) substitui `@/components/shared/link`; se o `PaginationLink`
+  passar a importar outra coisa do Next, o bundle volta a quebrar com `process is not defined`.
+- **Fontes**: Geist vem do pacote npm `geist` 1.8.2, não do `next/font`; se o app trocar de fonte, troque aqui.
+- **Prévias com dados fixos**: Calendar/Popover usam outubro de 2026 e `today` fixo — de propósito.
+- **Viewports**: Select/Combobox em 800px (tamanho desktop); Sidebar compensa o padding de 24px da captura.

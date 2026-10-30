@@ -3,12 +3,12 @@ import { connectOnUse } from "@/service/_shared/database/mongoose";
 import { UNIT_PAGES, WORKSPACE_PAGES } from "@/service/workspace/[workspaceId]/page-access";
 import { PERMISSIONS } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
 
-// Função criada pelo administrador do workspace, com o que ela pode fazer e as páginas que
-// ela vê. O administrador é fixo e não tem documento aqui.
+
 const roleSchema = new Schema(
   {
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
     name: { type: String, required: true, trim: true },
+    admin: { type: Boolean, default: false },
     permissions: { type: [{ type: String, enum: PERMISSIONS }], default: [] },
     pages: {
       workspace: { type: [{ type: String, enum: WORKSPACE_PAGES }], default: [] },

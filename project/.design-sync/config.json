@@ -73,9 +73,9 @@
     "Spinner": "src/components/ui/spinner.tsx"
   },
   "extraEntries": [
-    "lucide-react",
     "sonner",
-    "recharts"
+    "recharts",
+    "./.design-sync/globals.ts"
   ],
   "overrides": {
     "AlertDialog": {
@@ -128,6 +128,22 @@
     },
     "ChartContainer": {
       "cardMode": "column"
+    },
+    "Pagination": {
+      "cardMode": "column"
+    },
+    "FileDropzone": {
+      "cardMode": "column"
+    },
+    "InputGroup": {
+      "cardMode": "column"
+    },
+    "Textarea": {
+      "cardMode": "column"
+    },
+    "Card": {
+      "cardMode": "column"
     }
-  }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
 }

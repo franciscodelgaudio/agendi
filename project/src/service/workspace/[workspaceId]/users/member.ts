@@ -2,7 +2,6 @@ import { createHash, randomBytes } from "node:crypto";
 import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MAX_NAME_LENGTH = 80;
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function hashInviteToken(token: string) {
@@ -17,13 +16,16 @@ function checkActor(actor: Actor | null): ActorError | null {
   return can(actor, "users.manage") ? null : "forbidden";
 }
 
-// "admin" ou o id de uma role do workspace (roleExists confirma); null quando inválido.
-async function parseRole(value: unknown, roleExists: (roleId: string) => Promise<boolean>) {
-  if (value === "admin") return { admin: true, roleId: null };
-  if (typeof value !== "string" || !value || !(await roleExists(value))) return null;
-  return { admin: false, roleId: value };
+// admin: é a role fixa de administrador do workspace.
+type FoundRole = { id: string; admin: boolean };
+
+// Role do workspace escolhida no formulário; null quando inválida ou de outro workspace.
+async function parseRole(value: unknown, findRole: (roleId: string) => Promise<FoundRole | null>) {
+  if (typeof value !== "string" || !value) return null;
+  return findRole(value);
 }
 
+// admin: o membro está hoje na role de administrador; userId null = convite pendente.
 type FoundMember = { id: string; userId: string | null; admin: boolean };
 
 // Só um administrador mexe em administradores (inclusive para promover alguém); e sempre
@@ -54,12 +56,12 @@ export type InviteMemberResult =
 type InviteMemberDeps = {
   // true se o email já é de um membro ou de um convite pendente.
   isAlreadyInWorkspace: (email: string) => Promise<boolean>;
-  roleExists: (roleId: string) => Promise<boolean>;
+  // Só roles do workspace.
+  findRole: (roleId: string) => Promise<FoundRole | null>;
   createInvite: (data: {
     workspaceId: string;
     email: string;
-    admin: boolean;
-    roleId: string | null;
+    roleId: string;
     tokenHash: string;
     expiresAt: Date;
   }) => Promise<{ id: string }>;
@@ -76,14 +78,14 @@ export async function inviteMember(
   const actorError = checkActor(ctx.actor);
   if (actorError) return { ok: false, error: actorError };
 
-  const { email, role } = (input ?? {}) as Record<string, unknown>;
+  const { email, roleId } = (input ?? {}) as Record<string, unknown>;
   if (typeof email !== "string") return { ok: false, error: "invalid_input" };
 
   const normalizedEmail = email.trim().toLowerCase();
   if (!EMAIL_PATTERN.test(normalizedEmail)) return { ok: false, error: "invalid_email" };
-  const parsedRole = await parseRole(role, deps.roleExists);
-  if (!parsedRole) return { ok: false, error: "invalid_role" };
-  if (parsedRole.admin && !ctx.actor!.admin) return { ok: false, error: "forbidden" };
+  const role = await parseRole(roleId, deps.findRole);
+  if (!role) return { ok: false, error: "invalid_role" };
+  if (role.admin && !ctx.actor!.admin) return { ok: false, error: "forbidden" };
 
   if (await deps.isAlreadyInWorkspace(normalizedEmail)) return { ok: false, error: "already_member" };
 
@@ -92,7 +94,7 @@ export async function inviteMember(
   const invite = await deps.createInvite({
     workspaceId: ctx.workspaceId,
     email: normalizedEmail,
-    ...parsedRole,
+    roleId: role.id,
     tokenHash: hashInviteToken(token),
     expiresAt: new Date(deps.now().getTime() + INVITE_TTL_MS),
   });
@@ -141,27 +143,20 @@ export async function acceptInvite(
   return { ok: true, workspaceId: invite.workspaceId };
 }
 
-export type UpdateMemberError =
-  | ActorError
-  | "member_not_found"
-  | "invalid_input"
-  | "invalid_role"
-  | "invalid_name"
-  | "name_too_long"
-  | "last_admin";
+export type UpdateMemberError = ActorError | "member_not_found" | "invalid_input" | "invalid_role" | "last_admin";
 
 export type UpdateMemberResult = { ok: true } | { ok: false; error: UpdateMemberError };
 
 type UpdateMemberDeps = {
-  // null quando o membro não existe (ou não é do workspace); userId null = convite pendente.
+  // null quando o membro não existe (ou não é do workspace).
   findMember: (memberId: string) => Promise<FoundMember | null>;
-  roleExists: (roleId: string) => Promise<boolean>;
+  findRole: (roleId: string) => Promise<FoundRole | null>;
   // Administradores que já aceitaram o convite.
   countActiveAdmins: () => Promise<number>;
-  // name só vem quando há conta vinculada; ele é da conta, não do workspace.
-  update: (memberId: string, data: { admin: boolean; roleId: string | null; name?: string }) => Promise<void>;
+  update: (memberId: string, data: { roleId: string }) => Promise<void>;
 };
 
+// Só troca a role: o nome é da conta, e só o próprio usuário o edita.
 export async function updateMember(
   input: unknown,
   memberId: string | null | undefined,
@@ -173,26 +168,15 @@ export async function updateMember(
   if (!memberId) return { ok: false, error: "member_not_found" };
 
   if (input == null || typeof input !== "object") return { ok: false, error: "invalid_input" };
-  const { name, role } = input as Record<string, unknown>;
-  const parsedRole = await parseRole(role, deps.roleExists);
-  if (!parsedRole) return { ok: false, error: "invalid_role" };
+  const role = await parseRole((input as Record<string, unknown>).roleId, deps.findRole);
+  if (!role) return { ok: false, error: "invalid_role" };
 
   const member = await deps.findMember(memberId);
   if (!member) return { ok: false, error: "member_not_found" };
-  const adminError = await checkAdminChange(member, parsedRole.admin, ctx.actor!, deps.countActiveAdmins);
+  const adminError = await checkAdminChange(member, role.admin, ctx.actor!, deps.countActiveAdmins);
   if (adminError) return { ok: false, error: adminError };
 
-  if (!member.userId) {
-    await deps.update(memberId, parsedRole);
-    return { ok: true };
-  }
-
-  if (typeof name !== "string") return { ok: false, error: "invalid_input" };
-  const normalizedName = name.trim();
-  if (!normalizedName) return { ok: false, error: "invalid_name" };
-  if (normalizedName.length > MAX_NAME_LENGTH) return { ok: false, error: "name_too_long" };
-
-  await deps.update(memberId, { name: normalizedName, ...parsedRole });
+  await deps.update(memberId, { roleId: role.id });
   return { ok: true };
 }
 

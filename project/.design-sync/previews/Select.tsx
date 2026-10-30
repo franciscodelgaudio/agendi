@@ -2,6 +2,9 @@ import {
   Field,
   FieldDescription,
   FieldLabel,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
   Select,
   SelectContent,
   SelectGroup,
@@ -11,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "agendi"
+import { SearchIcon } from "lucide-react"
 
 const services = [
   { value: "corte-feminino", label: "Corte feminino" },
@@ -57,19 +61,28 @@ export const Open = () => (
   </Field>
 )
 
+// Barra de filtros de uma lista de agendamentos: busca + status.
 export const StatusFilter = () => (
-  <Select items={statusItems} defaultValue="pending">
-    <SelectTrigger className="w-44" aria-label="Filtrar por status">
-      <SelectValue />
-    </SelectTrigger>
-    <SelectContent>
-      {statusItems.map((item) => (
-        <SelectItem key={item.value} value={item.value}>
-          {item.label}
-        </SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
+  <div className="flex w-full max-w-xl items-center gap-2">
+    <InputGroup className="flex-1">
+      <InputGroupAddon>
+        <SearchIcon />
+      </InputGroupAddon>
+      <InputGroupInput placeholder="Buscar por cliente ou serviço" />
+    </InputGroup>
+    <Select items={statusItems} defaultValue="pending">
+      <SelectTrigger className="w-44" aria-label="Filtrar por status">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {statusItems.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  </div>
 )
 
 export const Sizes = () => (

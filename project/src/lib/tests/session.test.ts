@@ -26,11 +26,11 @@ describe("workspaceAccessStages", () => {
             { $match: { userId } },
             { $limit: 1 },
             { $lookup: { from: "roles", localField: "roleId", foreignField: "_id", as: "role" } },
-            { $project: { _id: 0, admin: 1, role: { $first: "$role" } } },
+            { $project: { _id: 0, role: { $first: "$role" } } },
           ],
         },
       },
-      // Administrador pode tudo; os demais, o que a role libera; sem role, sem acesso.
+      // Quem está na role de administrador pode tudo; os demais, o que a role libera; sem role, sem acesso.
       {
         $set: {
           actor: {
@@ -39,7 +39,7 @@ describe("workspaceAccessStages", () => {
               in: {
                 $switch: {
                   branches: [
-                    { case: { $eq: ["$$member.admin", true] }, then: { admin: true } },
+                    { case: { $eq: ["$$member.role.admin", true] }, then: { admin: true } },
                     {
                       case: { $ne: [{ $ifNull: ["$$member.role", null] }, null] },
                       then: {
