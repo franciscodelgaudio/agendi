@@ -30,5 +30,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", ".ds-sync", "ds-bundle", ".design-sync"]
+  "exclude": ["node_modules"]
 }
