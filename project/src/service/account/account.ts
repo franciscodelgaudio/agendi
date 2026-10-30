@@ -1,10 +1,23 @@
-const MAX_NAME_LENGTH = 80;
+import { z } from "zod";
+import { issueCode } from "@/service/_shared/validation";
+
+export const MAX_NAME_LENGTH = 80;
+
+const profileSchema = z.object(
+  {
+    name: z
+      .string({ error: "invalid_input" })
+      .trim()
+      .min(1, { error: "invalid_name" })
+      .max(MAX_NAME_LENGTH, { error: "name_too_long" }),
+  },
+  { error: "invalid_input" },
+);
 
 export type UpdateProfileError = "unauthenticated" | "invalid_input" | "invalid_name" | "name_too_long";
 
 export type UpdateProfileResult = { ok: true } | { ok: false; error: UpdateProfileError };
 
-// O nome é da conta: muda em todos os workspaces da pessoa.
 export async function updateProfile(
   input: unknown,
   userId: string | null,
@@ -12,37 +25,30 @@ export async function updateProfile(
 ): Promise<UpdateProfileResult> {
   if (!userId) return { ok: false, error: "unauthenticated" };
 
-  const { name } = (input ?? {}) as Record<string, unknown>;
-  if (typeof name !== "string") return { ok: false, error: "invalid_input" };
-  const normalizedName = name.trim();
-  if (!normalizedName) return { ok: false, error: "invalid_name" };
-  if (normalizedName.length > MAX_NAME_LENGTH) return { ok: false, error: "name_too_long" };
+  const parsed = profileSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: issueCode<UpdateProfileError>(parsed.error) };
 
-  await deps.update(userId, { name: normalizedName });
+  await deps.update(userId, { name: parsed.data.name });
   return { ok: true };
 }
 
 export type DeleteAccountResult =
   | { ok: true }
   | { ok: false; error: "unauthenticated" }
-  // workspaces: nomes dos workspaces que ficariam sem administrador.
   | { ok: false; error: "last_admin"; workspaces: string[] };
 
-type DeleteAccountDeps = {
-  // Workspaces em que o usuário é administrador ativo.
-  listAdminWorkspaces: (userId: string) => Promise<{ id: string; name: string }[]>;
-  // Administradores que já aceitaram o convite, contando o próprio usuário.
-  countActiveAdmins: (workspaceId: string) => Promise<number>;
-  // Apaga a conta e os vínculos dela com os workspaces.
-  deleteUser: (userId: string) => Promise<void>;
-};
-
-// Nenhum workspace pode ficar sem administrador: quem é o único precisa passar o cargo antes.
-export async function deleteAccount(userId: string | null, deps: DeleteAccountDeps): Promise<DeleteAccountResult> {
+export async function deleteAccount(
+  userId: string | null,
+  deps: {
+    listAdminWorkspaces: (userId: string) => Promise<{ id: string; name: string }[]>;
+    countAdmins: (workspaceId: string) => Promise<number>;
+    deleteUser: (userId: string) => Promise<void>;
+  },
+): Promise<DeleteAccountResult> {
   if (!userId) return { ok: false, error: "unauthenticated" };
 
   const adminIn = await deps.listAdminWorkspaces(userId);
-  const counts = await Promise.all(adminIn.map((workspace) => deps.countActiveAdmins(workspace.id)));
+  const counts = await Promise.all(adminIn.map((workspace) => deps.countAdmins(workspace.id)));
   const soleAdminOf = adminIn.filter((_, i) => counts[i] <= 1).map((workspace) => workspace.name);
   if (soleAdminOf.length > 0) return { ok: false, error: "last_admin", workspaces: soleAdminOf };
 

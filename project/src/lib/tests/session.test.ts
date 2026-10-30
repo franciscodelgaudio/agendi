@@ -22,31 +22,30 @@ describe("workspaceAccessStages", () => {
           localField: "_id",
           foreignField: "workspaceId",
           as: "membership",
-          pipeline: [
-            { $match: { userId } },
-            { $limit: 1 },
-            { $lookup: { from: "roles", localField: "roleId", foreignField: "_id", as: "role" } },
-            { $project: { _id: 0, role: { $first: "$role" } } },
-          ],
+          pipeline: [{ $match: { userId } }, { $limit: 1 }, { $project: { _id: 0, roleId: 1 } }],
         },
       },
-      // Quem está na role de administrador pode tudo; os demais, o que a role libera; sem role, sem acesso.
       {
         $set: {
           actor: {
             $let: {
-              vars: { member: { $first: "$membership" } },
+              vars: {
+                role: {
+                  $first: {
+                    $filter: {
+                      input: { $ifNull: ["$roles", []] },
+                      cond: { $eq: ["$$this._id", { $first: "$membership.roleId" }] },
+                    },
+                  },
+                },
+              },
               in: {
                 $switch: {
                   branches: [
-                    { case: { $eq: ["$$member.role.admin", true] }, then: { admin: true } },
+                    { case: { $eq: ["$$role.admin", true] }, then: { admin: true } },
                     {
-                      case: { $ne: [{ $ifNull: ["$$member.role", null] }, null] },
-                      then: {
-                        admin: false,
-                        permissions: "$$member.role.permissions",
-                        pages: "$$member.role.pages",
-                      },
+                      case: { $ne: [{ $ifNull: ["$$role", null] }, null] },
+                      then: { admin: false, permissions: "$$role.permissions", pages: "$$role.pages" },
                     },
                   ],
                   default: null,

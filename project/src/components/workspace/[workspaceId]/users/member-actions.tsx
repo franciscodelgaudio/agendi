@@ -2,7 +2,13 @@
 
 import { useActionState, useState, useTransition } from "react"
 import { EllipsisIcon, PencilIcon, UserMinusIcon } from "lucide-react"
-import { removeMemberAction, updateMemberAction, type MemberFormState } from "@/lib/actions/member"
+import {
+  cancelInviteAction,
+  removeMemberAction,
+  updateInviteAction,
+  updateMemberAction,
+  type MemberFormState,
+} from "@/lib/actions/member"
 
 import {
   AlertDialog,
@@ -22,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { FieldDescription, FieldError, FieldGroup } from "@/components/ui/field"
-import { MemberNameField, RoleField, type RoleChoices } from "@/components/workspace/[workspaceId]/users/member-fields"
+import { RoleField, type RoleChoices } from "@/components/workspace/[workspaceId]/users/member-fields"
 import {
   Sheet,
   SheetContent,
@@ -32,9 +38,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 
-// pending = convite ainda não aceito (sem conta vinculada, então sem nome para editar).
-// role: "admin", o id da role ou null (ainda sem role).
-type Member = { id: string; email: string; name: string | null; role: string | null; pending: boolean }
+type Member = { id: string; email: string; name: string | null; roleId: string; pending: boolean }
 
 export function MemberActions({
   workspaceId,
@@ -47,7 +51,6 @@ export function MemberActions({
 }) {
   const [editOpen, setEditOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
-  // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
   const [editKey, setEditKey] = useState(0)
   const label = member.name ?? member.email
 
@@ -110,7 +113,8 @@ function EditMemberForm({
 }) {
   const [state, formAction, pending] = useActionState(
     async (prev: MemberFormState, formData: FormData) => {
-      const next = await updateMemberAction(workspaceId, member.id, prev, formData)
+      const update = member.pending ? updateInviteAction : updateMemberAction
+      const next = await update(workspaceId, member.id, prev, formData)
       if (!next.error) onDone()
       return next
     },
@@ -120,25 +124,14 @@ function EditMemberForm({
   return (
     <form action={formAction} className="flex min-h-0 flex-1 flex-col">
       <SheetHeader>
-        <SheetTitle>Editar usuário</SheetTitle>
-        <SheetDescription>{member.email}</SheetDescription>
+        <SheetTitle>{member.pending ? "Editar convite" : "Editar usuário"}</SheetTitle>
+        <SheetDescription>{member.name ?? member.email}</SheetDescription>
       </SheetHeader>
-      {/* Só os campos rolam; título e botões ficam fixos. */}
       <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
         {state.error && <FieldError>{state.error}</FieldError>}
-        {member.pending ? (
-          <FieldDescription>
-            O convite ainda não foi aceito. O nome poderá ser editado depois que a pessoa entrar.
-          </FieldDescription>
-        ) : (
-          <MemberNameField idPrefix={`edit-member-${member.id}`} defaultValue={member.name ?? ""} />
-        )}
-        <RoleField idPrefix={`edit-member-${member.id}`} choices={choices} defaultValue={member.role} />
+        <RoleField idPrefix={`edit-member-${member.id}`} choices={choices} defaultValue={member.roleId} />
         {!member.pending && (
-          <FieldDescription>
-            O nome é da conta da pessoa: a alteração vale em todos os workspaces dela. Para trocar o email,
-            remova e convide de novo.
-          </FieldDescription>
+          <FieldDescription>O nome e o email são da conta da pessoa e só ela pode alterá-los.</FieldDescription>
         )}
       </FieldGroup>
       <SheetFooter>
@@ -166,7 +159,8 @@ function RemoveMemberDialog({
 
   function handleRemove() {
     startTransition(async () => {
-      const result = await removeMemberAction(workspaceId, member.id)
+      const remove = member.pending ? cancelInviteAction : removeMemberAction
+      const result = await remove(workspaceId, member.id)
       setError(result.error)
       if (!result.error) onOpenChange(false)
     })

@@ -20,7 +20,6 @@ import {
 
 export function InviteMemberSheet({ workspaceId, choices }: { workspaceId: string; choices: RoleChoices }) {
   const [open, setOpen] = useState(false)
-  // Muda a cada abertura para remontar o formulário vazio e sem erro antigo.
   const [formKey, setFormKey] = useState(0)
 
   return (
@@ -68,7 +67,6 @@ function InviteMemberForm({
           A pessoa recebe um email com um link para entrar no workspace. O convite vale por 7 dias.
         </SheetDescription>
       </SheetHeader>
-      {/* Só os campos rolam; título e botões ficam fixos. */}
       <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
         {state.error && <FieldError>{state.error}</FieldError>}
         <Field>

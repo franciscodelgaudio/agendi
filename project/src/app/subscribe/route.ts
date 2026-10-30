@@ -3,7 +3,7 @@ import { auth } from "@/auth"
 import { createPlanCharge } from "@/service/subscribe/abacatepay"
 import { startCheckout } from "@/service/subscribe/billing"
 import { Checkout } from "@/models/Checkout"
-import { WorkspaceMember } from "@/models/WorkspaceMember"
+import { isWorkspaceAdmin } from "@/service/workspace/[workspaceId]/users/member-store"
 
 // "Assinar agora" da landing e da tela de planos: /subscribe?plan=[&workspace=].
 // Sem sessão, o proxy manda para o login com callbackUrl e o usuário volta para cá.
@@ -20,10 +20,7 @@ export async function GET(request: Request) {
     },
     { userId, email: user?.email ?? "", name: user?.name ?? "" },
     {
-      // Qualquer administrador do workspace paga o plano dele.
-      ownsWorkspace: async (workspaceId, adminId) =>
-        Types.ObjectId.isValid(workspaceId) &&
-        !!(await WorkspaceMember.exists({ workspaceId, userId: adminId, admin: true })),
+      ownsWorkspace: isWorkspaceAdmin,
       insertCheckout: async (data) => {
         const checkout = await Checkout.create(data)
         return { id: checkout._id.toString() }

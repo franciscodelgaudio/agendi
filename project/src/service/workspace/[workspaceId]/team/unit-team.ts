@@ -58,7 +58,7 @@ export function teamCandidatesLookup(as = "team"): PipelineStage.Lookup {
             id: { $toString: "$_id" },
             roleName: 1,
             name: { $ifNull: ["$user.name", { $ifNull: ["$user.email", "$email"] }] },
-            image: { $ifNull: ["$user.image", null] },
+            image: { $ifNull: ["$user.avatarUrl", null] },
             pending: { $eq: [{ $ifNull: ["$userId", null] }, null] },
             unitIds: { $map: { input: { $ifNull: ["$units", []] }, in: { $toString: "$$this.unitId" } } },
           },

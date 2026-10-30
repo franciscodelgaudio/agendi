@@ -1,35 +1,45 @@
 import Link from "@/components/shared/link"
-import { hashInviteToken } from "@/service/workspace/[workspaceId]/users/member"
+import { hashInviteToken } from "@/service/workspace/[workspaceId]/users/invite"
 import { requireUser } from "@/service/(auth)/session"
-import { WorkspaceMember } from "@/models/WorkspaceMember"
+import { Invite } from "@/models/Invite"
 import { AcceptInviteButton } from "@/components/invite/[token]/accept-invite-button"
-import { memberRoleNameStages } from "@/service/workspace/[workspaceId]/team/unit-team"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 
-// Sem sessão, o proxy manda para /login?callbackUrl=/invite/<token>, e o
-// cadastro repassa o callbackUrl, então a pessoa volta aqui depois de entrar.
-// A página só mostra o convite; aceitar é uma action (GET não altera dados).
 export default async function InvitePage({ params }: PageProps<"/invite/[token]">) {
   const { token } = await params
   const user = await requireUser()
 
-  const [invite] = await WorkspaceMember.aggregate<{
+  const [invite] = await Invite.aggregate<{
     email: string
     roleName: string | null
     expiresAt: Date
     workspaceName: string | null
   }>([
-    { $match: { tokenHash: hashInviteToken(token), userId: null } },
-    ...memberRoleNameStages(),
+    { $match: { tokenHash: hashInviteToken(token) } },
     { $lookup: { from: "workspaces", localField: "workspaceId", foreignField: "_id", as: "workspace" } },
+    { $set: { workspace: { $first: "$workspace" } } },
     {
       $project: {
         _id: 0,
         email: 1,
-        roleName: 1,
         expiresAt: 1,
-        workspaceName: { $ifNull: [{ $first: "$workspace.name" }, null] },
+        workspaceName: { $ifNull: ["$workspace.name", null] },
+        roleName: {
+          $ifNull: [
+            {
+              $first: {
+                $map: {
+                  input: {
+                    $filter: { input: { $ifNull: ["$workspace.roles", []] }, cond: { $eq: ["$$this._id", "$roleId"] } },
+                  },
+                  in: "$$this.name",
+                },
+              },
+            },
+            null,
+          ],
+        },
       },
     },
   ])

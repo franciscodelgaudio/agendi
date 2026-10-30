@@ -1,179 +1,52 @@
-import { createHash, randomBytes } from "node:crypto";
-import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
+import { issueCode } from "@/service/_shared/validation";
+import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
+import {
+  checkActor,
+  roleInputSchema,
+  type ActorError,
+  type FoundRole,
+} from "@/service/workspace/[workspaceId]/users/member-input";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+type FoundMember = { id: string; admin: boolean };
 
-export function hashInviteToken(token: string) {
-  return createHash("sha256").update(token).digest("hex");
-}
-
-type ActorError = "workspace_not_found" | "forbidden";
-
-// Sem acesso = 404; com acesso sem permissão = forbidden.
-function checkActor(actor: Actor | null): ActorError | null {
-  if (!actor) return "workspace_not_found";
-  return can(actor, "users.manage") ? null : "forbidden";
-}
-
-// admin: é a role fixa de administrador do workspace.
-type FoundRole = { id: string; admin: boolean };
-
-// Role do workspace escolhida no formulário; null quando inválida ou de outro workspace.
-async function parseRole(value: unknown, findRole: (roleId: string) => Promise<FoundRole | null>) {
-  if (typeof value !== "string" || !value) return null;
-  return findRole(value);
-}
-
-// admin: o membro está hoje na role de administrador; userId null = convite pendente.
-type FoundMember = { id: string; userId: string | null; admin: boolean };
-
-// Só um administrador mexe em administradores (inclusive para promover alguém); e sempre
-// sobra ao menos um administrador que já aceitou o convite.
 async function checkAdminChange(
   member: FoundMember,
-  admin: boolean,
+  toAdmin: boolean,
   actor: Actor,
-  countActiveAdmins: () => Promise<number>,
+  countAdmins: () => Promise<number>,
 ): Promise<"forbidden" | "last_admin" | null> {
-  if ((member.admin || admin) && !actor.admin) return "forbidden";
-  if (member.admin && !admin && member.userId && (await countActiveAdmins()) <= 1) return "last_admin";
+  if ((member.admin || toAdmin) && !actor.admin) return "forbidden";
+  if (member.admin && !toAdmin && (await countAdmins()) <= 1) return "last_admin";
   return null;
-}
-
-export type InviteMemberError =
-  | ActorError
-  | "invalid_input"
-  | "invalid_email"
-  | "invalid_role"
-  | "already_member"
-  | "email_failed";
-
-export type InviteMemberResult =
-  | { ok: true; memberId: string }
-  | { ok: false; error: InviteMemberError };
-
-type InviteMemberDeps = {
-  // true se o email já é de um membro ou de um convite pendente.
-  isAlreadyInWorkspace: (email: string) => Promise<boolean>;
-  // Só roles do workspace.
-  findRole: (roleId: string) => Promise<FoundRole | null>;
-  createInvite: (data: {
-    workspaceId: string;
-    email: string;
-    roleId: string;
-    tokenHash: string;
-    expiresAt: Date;
-  }) => Promise<{ id: string }>;
-  deleteInvite: (inviteId: string) => Promise<void>;
-  sendInvite: (data: { email: string; token: string }) => Promise<void>;
-  now: () => Date;
-};
-
-export async function inviteMember(
-  input: unknown,
-  ctx: { workspaceId: string; actor: Actor | null },
-  deps: InviteMemberDeps,
-): Promise<InviteMemberResult> {
-  const actorError = checkActor(ctx.actor);
-  if (actorError) return { ok: false, error: actorError };
-
-  const { email, roleId } = (input ?? {}) as Record<string, unknown>;
-  if (typeof email !== "string") return { ok: false, error: "invalid_input" };
-
-  const normalizedEmail = email.trim().toLowerCase();
-  if (!EMAIL_PATTERN.test(normalizedEmail)) return { ok: false, error: "invalid_email" };
-  const role = await parseRole(roleId, deps.findRole);
-  if (!role) return { ok: false, error: "invalid_role" };
-  if (role.admin && !ctx.actor!.admin) return { ok: false, error: "forbidden" };
-
-  if (await deps.isAlreadyInWorkspace(normalizedEmail)) return { ok: false, error: "already_member" };
-
-  // Só o hash vai para o banco; o token em si só existe no link do email.
-  const token = randomBytes(32).toString("base64url");
-  const invite = await deps.createInvite({
-    workspaceId: ctx.workspaceId,
-    email: normalizedEmail,
-    roleId: role.id,
-    tokenHash: hashInviteToken(token),
-    expiresAt: new Date(deps.now().getTime() + INVITE_TTL_MS),
-  });
-
-  try {
-    await deps.sendInvite({ email: normalizedEmail, token });
-  } catch {
-    await deps.deleteInvite(invite.id);
-    return { ok: false, error: "email_failed" };
-  }
-
-  return { ok: true, memberId: invite.id };
-}
-
-export type AcceptInviteError = "unauthenticated" | "invalid_invite" | "invite_expired" | "email_mismatch";
-
-export type AcceptInviteResult =
-  | { ok: true; workspaceId: string }
-  | { ok: false; error: AcceptInviteError };
-
-type AcceptInviteDeps = {
-  // Só convites pendentes (ainda não aceitos).
-  findInviteByTokenHash: (
-    tokenHash: string,
-  ) => Promise<{ id: string; workspaceId: string; email: string; expiresAt: Date } | null>;
-  markAccepted: (inviteId: string, userId: string) => Promise<void>;
-  now: () => Date;
-};
-
-// O token prova posse do email (o cadastro com senha não verifica email), e o
-// email do usuário logado precisa ser o do convite.
-export async function acceptInvite(
-  token: unknown,
-  user: { id: string; email: string } | null,
-  deps: AcceptInviteDeps,
-): Promise<AcceptInviteResult> {
-  if (!user) return { ok: false, error: "unauthenticated" };
-  if (typeof token !== "string" || !token) return { ok: false, error: "invalid_invite" };
-
-  const invite = await deps.findInviteByTokenHash(hashInviteToken(token));
-  if (!invite) return { ok: false, error: "invalid_invite" };
-  if (invite.expiresAt <= deps.now()) return { ok: false, error: "invite_expired" };
-  if (invite.email !== user.email.trim().toLowerCase()) return { ok: false, error: "email_mismatch" };
-
-  await deps.markAccepted(invite.id, user.id);
-  return { ok: true, workspaceId: invite.workspaceId };
 }
 
 export type UpdateMemberError = ActorError | "member_not_found" | "invalid_input" | "invalid_role" | "last_admin";
 
 export type UpdateMemberResult = { ok: true } | { ok: false; error: UpdateMemberError };
 
-type UpdateMemberDeps = {
-  // null quando o membro não existe (ou não é do workspace).
-  findMember: (memberId: string) => Promise<FoundMember | null>;
-  findRole: (roleId: string) => Promise<FoundRole | null>;
-  // Administradores que já aceitaram o convite.
-  countActiveAdmins: () => Promise<number>;
-  update: (memberId: string, data: { roleId: string }) => Promise<void>;
-};
-
-// Só troca a role: o nome é da conta, e só o próprio usuário o edita.
 export async function updateMember(
   input: unknown,
   memberId: string | null | undefined,
   ctx: { actor: Actor | null },
-  deps: UpdateMemberDeps,
+  deps: {
+    findMember: (memberId: string) => Promise<FoundMember | null>;
+    findRole: (roleId: string) => Promise<FoundRole | null>;
+    countAdmins: () => Promise<number>;
+    update: (memberId: string, data: { roleId: string }) => Promise<void>;
+  },
 ): Promise<UpdateMemberResult> {
   const actorError = checkActor(ctx.actor);
   if (actorError) return { ok: false, error: actorError };
   if (!memberId) return { ok: false, error: "member_not_found" };
 
-  if (input == null || typeof input !== "object") return { ok: false, error: "invalid_input" };
-  const role = await parseRole((input as Record<string, unknown>).roleId, deps.findRole);
+  const parsed = roleInputSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: issueCode<UpdateMemberError>(parsed.error) };
+  const role = await deps.findRole(parsed.data.roleId);
   if (!role) return { ok: false, error: "invalid_role" };
 
   const member = await deps.findMember(memberId);
   if (!member) return { ok: false, error: "member_not_found" };
-  const adminError = await checkAdminChange(member, role.admin, ctx.actor!, deps.countActiveAdmins);
+  const adminError = await checkAdminChange(member, role.admin, ctx.actor!, deps.countAdmins);
   if (adminError) return { ok: false, error: adminError };
 
   await deps.update(memberId, { roleId: role.id });
@@ -188,9 +61,8 @@ export async function removeMember(
   memberId: string | null | undefined,
   ctx: { actor: Actor | null },
   deps: {
-    // null quando o membro não existe (ou não é do workspace).
     findMember: (memberId: string) => Promise<FoundMember | null>;
-    countActiveAdmins: () => Promise<number>;
+    countAdmins: () => Promise<number>;
     remove: (memberId: string) => Promise<void>;
   },
 ): Promise<RemoveMemberResult> {
@@ -200,8 +72,7 @@ export async function removeMember(
 
   const member = await deps.findMember(memberId);
   if (!member) return { ok: false, error: "member_not_found" };
-  // Remover vale como deixar de ser administrador.
-  const adminError = await checkAdminChange(member, false, ctx.actor!, deps.countActiveAdmins);
+  const adminError = await checkAdminChange(member, false, ctx.actor!, deps.countAdmins);
   if (adminError) return { ok: false, error: adminError };
 
   await deps.remove(memberId);

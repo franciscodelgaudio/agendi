@@ -79,7 +79,7 @@ export default async function UnitTeamPage({
               commissionBase: { $ifNull: ["$link.commissionBase", { $cond: ["$attends", "services", "gross"] }] },
               email: { $ifNull: ["$user.email", "$email"] },
               name: { $ifNull: ["$user.name", null] },
-              image: { $ifNull: ["$user.image", null] },
+              image: { $ifNull: ["$user.avatarUrl", null] },
               pending: { $eq: [{ $ifNull: ["$userId", null] }, null] },
               commissionPercent: { $ifNull: ["$link.commissionPercent", null] },
               salaryCents: { $ifNull: ["$link.salaryCents", null] },

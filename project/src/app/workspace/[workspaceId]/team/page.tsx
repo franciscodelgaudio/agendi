@@ -63,7 +63,7 @@ export default async function TeamPage({ params, searchParams }: PageProps<"/wor
               commissionBase: { $ifNull: ["$units.commissionBase", { $cond: ["$attends", "services", "gross"] }] },
               email: { $ifNull: ["$user.email", "$email"] },
               name: { $ifNull: ["$user.name", null] },
-              image: { $ifNull: ["$user.image", null] },
+              image: { $ifNull: ["$user.avatarUrl", null] },
               pending: { $eq: [{ $ifNull: ["$userId", null] }, null] },
               commissionPercent: { $ifNull: ["$units.commissionPercent", null] },
               salaryCents: { $ifNull: ["$units.salaryCents", null] },

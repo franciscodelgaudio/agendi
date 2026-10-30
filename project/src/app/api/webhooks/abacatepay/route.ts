@@ -2,6 +2,7 @@ import { Types } from "mongoose"
 import { abacatePayEnv } from "@/service/subscribe/abacatepay"
 import { isAuthorizedAbacateWebhook } from "@/service/api/webhooks/abacatepay/abacatepay-webhook"
 import { handleAbacateEvent } from "@/service/subscribe/billing"
+import { ADMIN_ROLE } from "@/service/workspace/[workspaceId]/users/member-store"
 import { Checkout } from "@/models/Checkout"
 import { User } from "@/models/User"
 import { Workspace } from "@/models/Workspace"
@@ -69,17 +70,13 @@ export async function POST(request: Request) {
       setSubscription: async (workspaceId, subscription) => {
         await Workspace.updateOne({ _id: workspaceId }, { $set: { subscription } })
       },
-      // Quem paga é o primeiro membro, sempre administrador.
       createWorkspace: async (data) => {
-        const user = await User.findById(data.userId).select({ email: 1 }).lean()
-        if (!user?.email) throw new Error(`Usuário ${data.userId} sem email`)
-        const workspace = await Workspace.create(data)
+        if (!(await User.exists({ _id: data.userId }))) throw new Error(`Usuário ${data.userId} não existe`)
+        const workspace = await Workspace.create({ ...data, roles: [ADMIN_ROLE] })
         await WorkspaceMember.create({
           workspaceId: workspace._id,
-          email: user.email,
-          admin: true,
           userId: data.userId,
-          acceptedAt: new Date(),
+          roleId: workspace.roles[0]._id,
         })
         return { id: workspace._id.toString() }
       },

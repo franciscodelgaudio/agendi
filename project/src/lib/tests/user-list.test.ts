@@ -1,28 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { parseUserListQuery, USER_PAGE_SIZE, userListPage, type UserListItem } from "@/service/workspace/[workspaceId]/users/user-list";
+import { Types } from "mongoose";
+import {
+  parseUserListQuery,
+  USER_LIST_COLLATION,
+  USER_PAGE_SIZE,
+  userListPipeline,
+} from "@/service/workspace/[workspaceId]/users/user-list";
 
 const BASE = { q: "", sort: "name", dir: "asc", role: "", status: "", page: 1 } as const;
-// Roles do workspace: o filtro de função usa o id da role (o administrador também é uma role).
+const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const ADMIN_ROLE = "64b7f0c2a1b2c3d4e5f60730";
 const THERAPIST_ROLE = "64b7f0c2a1b2c3d4e5f60731";
-const RECEPTION_ROLE = "64b7f0c2a1b2c3d4e5f60732";
-const therapist = { roleId: THERAPIST_ROLE, roleName: "Terapeuta" };
-const reception = { roleId: RECEPTION_ROLE, roleName: "Recepção" };
-const admin = { roleId: ADMIN_ROLE, roleName: "Administrador" };
-
-function person(overrides: Partial<UserListItem> & { id: string }): UserListItem {
-  return { name: null, email: `${overrides.id}@x.com`, image: null, ...reception, status: "active", ...overrides };
-}
-
-const CARLA = person({ id: "carla", name: "Carla Dona", email: "carla@x.com", ...admin });
-const ANA = person({ id: "ana", name: "Ana Souza", email: "ana@x.com", ...therapist });
-const BRUNO = person({ id: "bruno", name: "bruno lima", email: "bruno@spa.com", ...admin });
-// Convite sem conta: sem nome, ordena e busca pelo email.
-const INVITE = person({ id: "invite", email: "davi@x.com", ...therapist, status: "pending" });
-const EXPIRED = person({ id: "expired", email: "eva@x.com", ...reception, status: "expired" });
-const PEOPLE = [CARLA, ANA, BRUNO, INVITE, EXPIRED];
-
-const ids = (rows: UserListItem[]) => rows.map((row) => row.id);
+const NOW = new Date("2026-10-29T12:00:00.000Z");
 
 describe("parseUserListQuery", () => {
   it("sem parâmetros, não tem busca nem filtros e ordena por nome crescente na página 1", () => {
@@ -68,89 +57,146 @@ describe("parseUserListQuery", () => {
   });
 });
 
-describe("userListPage", () => {
+describe("userListPipeline", () => {
+  const workspaceId = new Types.ObjectId(WORKSPACE_ID);
+
+  const MEMBERS = [
+    { $match: { workspaceId } },
+    { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
+    { $set: { user: { $first: "$user" } } },
+    {
+      $project: {
+        _id: 0,
+        id: { $toString: "$_id" },
+        roleId: { $toString: "$roleId" },
+        email: "$user.email",
+        name: { $ifNull: ["$user.name", null] },
+        image: { $ifNull: ["$user.avatarUrl", null] },
+        status: { $literal: "active" },
+      },
+    },
+    {
+      $unionWith: {
+        coll: "invites",
+        pipeline: [
+          { $match: { workspaceId } },
+          {
+            $project: {
+              _id: 0,
+              id: { $toString: "$_id" },
+              roleId: { $toString: "$roleId" },
+              email: 1,
+              name: { $literal: null },
+              image: { $literal: null },
+              status: { $cond: [{ $lte: ["$expiresAt", NOW] }, "expired", "pending"] },
+            },
+          },
+        ],
+      },
+    },
+  ];
+
+  const SORT_BY_NAME = { $set: { sortKey: { $ifNull: ["$name", "$email"] } } };
+
+  const paged = (skip: number) => [
+    {
+      $facet: {
+        rows: [{ $skip: skip }, { $limit: USER_PAGE_SIZE }, { $unset: "sortKey" }],
+        total: [{ $count: "n" }],
+      },
+    },
+    { $project: { rows: 1, total: { $ifNull: [{ $first: "$total.n" }, 0] } } },
+  ];
+
+  function searchRegex(q: string) {
+    const stages = userListPipeline(WORKSPACE_ID, { ...BASE, q }, NOW);
+    const match = stages.find((stage) => "$match" in stage && "$or" in (stage.$match as object)) as {
+      $match: { $or: { name?: { $regex: string; $options: string }; email?: { $regex: string; $options: string } }[] };
+    };
+    const { $regex, $options } = match.$match.$or[0].name!;
+    return new RegExp($regex, $options);
+  }
+
   it("mostra 20 usuários por página", () => {
     expect(USER_PAGE_SIZE).toBe(20);
   });
 
-  it("sem busca nem filtros, devolve todos ordenados pelo nome (ou email, sem nome), sem diferenciar maiúsculas", () => {
-    expect(userListPage(PEOPLE, BASE)).toEqual({
-      rows: [ANA, BRUNO, CARLA, INVITE, EXPIRED],
-      total: 5,
-    });
+  it("ordena sem diferenciar maiúsculas nem acentos", () => {
+    expect(USER_LIST_COLLATION).toEqual({ locale: "pt", strength: 1 });
   });
 
-  it("ordena por nome decrescente", () => {
-    expect(ids(userListPage(PEOPLE, { ...BASE, dir: "desc" }).rows)).toEqual([
-      "expired",
-      "invite",
-      "carla",
-      "bruno",
-      "ana",
+  it("sem busca nem filtros, junta membros e convites do workspace, ordena pelo nome (ou email) e pagina no banco", () => {
+    expect(userListPipeline(WORKSPACE_ID, BASE, NOW)).toEqual([
+      ...MEMBERS,
+      SORT_BY_NAME,
+      { $sort: { sortKey: 1, id: 1 } },
+      ...paged(0),
     ]);
   });
 
-  it("ordena por email", () => {
-    expect(ids(userListPage(PEOPLE, { ...BASE, sort: "email" }).rows)).toEqual([
-      "ana",
-      "bruno",
-      "carla",
-      "invite",
-      "expired",
+  it("ordena por email decrescente", () => {
+    expect(userListPipeline(WORKSPACE_ID, { ...BASE, sort: "email", dir: "desc" }, NOW)).toEqual([
+      ...MEMBERS,
+      { $set: { sortKey: "$email" } },
+      { $sort: { sortKey: -1, id: 1 } },
+      ...paged(0),
     ]);
   });
 
-  it("busca no nome ou no email sem diferenciar maiúsculas", () => {
-    expect(ids(userListPage(PEOPLE, { ...BASE, q: "BRUNO" }).rows)).toEqual(["bruno"]);
-    expect(ids(userListPage(PEOPLE, { ...BASE, q: "spa.com" }).rows)).toEqual(["bruno"]);
-    expect(ids(userListPage(PEOPLE, { ...BASE, q: "davi" }).rows)).toEqual(["invite"]);
+  it("filtra pela role e pelo status num $match depois de juntar membros e convites", () => {
+    expect(userListPipeline(WORKSPACE_ID, { ...BASE, role: ADMIN_ROLE, status: "pending" }, NOW)).toEqual([
+      ...MEMBERS,
+      { $match: { roleId: ADMIN_ROLE, status: "pending" } },
+      SORT_BY_NAME,
+      { $sort: { sortKey: 1, id: 1 } },
+      ...paged(0),
+    ]);
   });
 
-  it("busca sem diferenciar acentos", () => {
-    const joao = person({ id: "joao", name: "João Araújo" });
-    expect(ids(userListPage([joao, ANA], { ...BASE, q: "joao araujo" }).rows)).toEqual(["joao"]);
+  it("busca no nome ou no email", () => {
+    const stages = userListPipeline(WORKSPACE_ID, { ...BASE, q: "ana" }, NOW);
+    const regex = { $regex: expect.any(String), $options: "i" };
+
+    expect(stages).toEqual([
+      ...MEMBERS,
+      { $match: { $or: [{ name: regex }, { email: regex }] } },
+      SORT_BY_NAME,
+      { $sort: { sortKey: 1, id: 1 } },
+      ...paged(0),
+    ]);
   });
 
-  it("filtra pela role, inclusive a de administrador", () => {
-    expect(ids(userListPage(PEOPLE, { ...BASE, role: THERAPIST_ROLE }).rows)).toEqual(["ana", "invite"]);
-    expect(ids(userListPage(PEOPLE, { ...BASE, role: ADMIN_ROLE }).rows)).toEqual(["bruno", "carla"]);
-  });
+  it("combina busca e filtros no mesmo $match", () => {
+    const stages = userListPipeline(WORKSPACE_ID, { ...BASE, q: "ana", role: THERAPIST_ROLE, status: "active" }, NOW);
 
-  it("filtra por status", () => {
-    expect(ids(userListPage(PEOPLE, { ...BASE, status: "active" }).rows)).toEqual(["ana", "bruno", "carla"]);
-    expect(ids(userListPage(PEOPLE, { ...BASE, status: "pending" }).rows)).toEqual(["invite"]);
-    expect(ids(userListPage(PEOPLE, { ...BASE, status: "expired" }).rows)).toEqual(["expired"]);
-  });
-
-  it("combina busca e filtros; o total conta só os que passaram", () => {
-    expect(userListPage(PEOPLE, { ...BASE, q: "x.com", role: THERAPIST_ROLE, status: "active" })).toEqual({
-      rows: [ANA],
-      total: 1,
+    expect(stages[MEMBERS.length]).toEqual({
+      $match: {
+        roleId: THERAPIST_ROLE,
+        status: "active",
+        $or: [{ name: expect.any(Object) }, { email: expect.any(Object) }],
+      },
     });
   });
 
-  it("sem resultado, devolve lista vazia e total 0", () => {
-    expect(userListPage(PEOPLE, { ...BASE, q: "ninguém" })).toEqual({ rows: [], total: 0 });
+  it.each([
+    ["joao araujo", "João Araújo"],
+    ["JOÃO", "joao"],
+    ["conceicao", "Conceição"],
+    ["muñoz", "Munoz"],
+    ["ana", "Mariana Souza"],
+  ])("a busca %s encontra %s, sem diferenciar maiúsculas nem acentos", (q, value) => {
+    expect(searchRegex(q).test(value)).toBe(true);
   });
 
-  it("pagina depois de filtrar e ordenar; o total é o de todas as páginas", () => {
-    const many = Array.from({ length: 45 }, (_, i) =>
-      person({ id: `u${String(i).padStart(2, "0")}`, name: `Usuário ${String(i).padStart(2, "0")}` }),
-    );
-    const page1 = userListPage(many, BASE);
-    const page3 = userListPage(many, { ...BASE, page: 3 });
-    expect(page1.total).toBe(45);
-    expect(ids(page1.rows)).toEqual(ids(many.slice(0, 20)));
-    expect(page3).toEqual({ rows: many.slice(40), total: 45 });
+  it.each([
+    ["ana", "Bruno"],
+    ["a.b", "axb"],
+    ["(", "Ana"],
+  ])("a busca %s não encontra %s (caracteres especiais são literais)", (q, value) => {
+    expect(searchRegex(q).test(value)).toBe(false);
   });
 
-  it("página além da última devolve lista vazia com o total", () => {
-    expect(userListPage(PEOPLE, { ...BASE, page: 2 })).toEqual({ rows: [], total: 5 });
-  });
-
-  it("não altera a lista recebida", () => {
-    const input = [...PEOPLE];
-    userListPage(input, { ...BASE, dir: "desc" });
-    expect(input).toEqual(PEOPLE);
+  it("pula as páginas anteriores depois de filtrar e ordenar", () => {
+    expect(userListPipeline(WORKSPACE_ID, { ...BASE, page: 3 }, NOW).slice(-2)).toEqual(paged(40));
   });
 });

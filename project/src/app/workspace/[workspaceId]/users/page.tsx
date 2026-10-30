@@ -1,15 +1,22 @@
 import { notFound, redirect } from "next/navigation"
 import { MailIcon, SettingsIcon, ShieldIcon, UserIcon } from "lucide-react"
-import { ADMIN_ROLE_NAME, can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
-import { memberRoleNameStages, rolesLookup, type RoleOption } from "@/service/workspace/[workspaceId]/team/unit-team"
-import { parseUserListQuery, USER_PAGE_SIZE, userListPage, type UserListItem } from "@/service/workspace/[workspaceId]/users/user-list"
+import {
+  parseUserListQuery,
+  USER_LIST_COLLATION,
+  USER_PAGE_SIZE,
+  userListPipeline,
+  type UserListPage,
+} from "@/service/workspace/[workspaceId]/users/user-list"
 import { Workspace } from "@/models/Workspace"
+import { WorkspaceMember } from "@/models/WorkspaceMember"
 import { InviteMemberSheet } from "@/components/workspace/[workspaceId]/users/invite-member-sheet"
 import { ListPagination } from "@/components/shared/list-pagination"
 import { ListSearch } from "@/components/shared/list-search"
 import { MemberActions } from "@/components/workspace/[workspaceId]/users/member-actions"
+import type { RoleOption } from "@/components/workspace/[workspaceId]/users/member-fields"
 import { CodeCell, CodeHead } from "@/components/shared/record-code"
 import { SortableHead } from "@/components/shared/sortable-head"
 import { UserRoleFilter, UserStatusFilter } from "@/components/workspace/[workspaceId]/users/user-filters"
@@ -26,13 +33,6 @@ import {
 } from "@/components/ui/table"
 
 type Person = { id: string; name: string | null; email: string; image: string | null }
-type Member = Person & {
-  admin: boolean
-  roleId: string | null
-  roleName: string | null
-  pending: boolean
-  expiresAt: Date | null
-}
 
 export default async function UsersPage({ params, searchParams }: PageProps<"/workspace/[workspaceId]/users">) {
   const { workspaceId } = await params
@@ -42,59 +42,33 @@ export default async function UsersPage({ params, searchParams }: PageProps<"/wo
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access) notFound()
 
-  // Layout e página renderizam em paralelo, então o acesso é verificado aqui também.
-  const [workspace] = await Workspace.aggregate<{ actor: Actor; roles: RoleOption[]; members: Member[] }>([
+  const [workspace] = await Workspace.aggregate<{ actor: Actor; roles: RoleOption[] }>([
     ...access,
-    rolesLookup(),
     {
-      $lookup: {
-        from: "workspace_members",
-        localField: "_id",
-        foreignField: "workspaceId",
-        as: "members",
-        pipeline: [
-          { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
-          { $set: { user: { $first: "$user" } } },
-          ...memberRoleNameStages(),
-          // Aceitos primeiro, depois convites; cada grupo por ordem de criação.
-          { $sort: { acceptedAt: -1, createdAt: 1 } },
-          {
-            $project: {
-              _id: 0,
-              id: { $toString: "$_id" },
-              admin: { $eq: ["$admin", true] },
-              roleId: { $ifNull: [{ $toString: "$roleId" }, null] },
-              roleName: 1,
-              email: { $ifNull: ["$user.email", "$email"] },
-              name: { $ifNull: ["$user.name", null] },
-              image: { $ifNull: ["$user.image", null] },
-              pending: { $eq: [{ $ifNull: ["$userId", null] }, null] },
-              expiresAt: { $ifNull: ["$expiresAt", null] },
-            },
+      $project: {
+        _id: 0,
+        actor: 1,
+        roles: {
+          $map: {
+            input: { $sortArray: { input: "$roles", sortBy: { name: 1 } } },
+            in: { id: { $toString: "$$this._id" }, name: "$$this.name", admin: { $eq: ["$$this.admin", true] } },
           },
-        ],
+        },
       },
     },
-    { $project: { _id: 0, actor: 1, roles: 1, members: 1 } },
   ])
   if (!workspace) notFound()
-  const { actor } = workspace
+  const { actor, roles } = workspace
   const canManage = can(actor, "users.manage")
-  // Só administradores atribuem a função de administrador e mexem em administradores.
-  const choices = { roles: workspace.roles, allowAdmin: actor.admin }
-  const now = new Date()
+  const choices = { roles, allowAdmin: actor.admin }
+  const rolesById = new Map(roles.map((role) => [role.id, role]))
 
-  // Busca, filtros e paginação são feitos aqui (poucos por workspace).
-  const people: UserListItem[] = workspace.members.map(({ pending, expiresAt, ...member }) => ({
-    ...member,
-    status: !pending ? ("active" as const) : expiresAt && expiresAt <= now ? ("expired" as const) : ("pending" as const),
-  }))
-  const result = userListPage(people, query)
+  const [result] = await WorkspaceMember.aggregate<UserListPage>(userListPipeline(workspaceId, query, new Date()), {
+    collation: USER_LIST_COLLATION,
+  })
 
   const pathname = `/workspace/${workspaceId}/users`
-  // Filtros mudam sem levar a página junto, então a lista volta para a primeira.
   const { page, ...filters } = query
-  // Página além da última (ex.: depois de remover o último usuário dela) vai para a última.
   const pages = Math.ceil(result.total / USER_PAGE_SIZE)
   if (pages > 0 && page > pages) {
     const params = new URLSearchParams(
@@ -108,7 +82,7 @@ export default async function UsersPage({ params, searchParams }: PageProps<"/wo
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
           <ListSearch query={filters} placeholder="Buscar nome ou email..." />
-          <UserRoleFilter query={filters} roles={workspace.roles} />
+          <UserRoleFilter query={filters} roles={roles} />
           <UserStatusFilter query={filters} />
         </div>
         {canManage && <InviteMemberSheet workspaceId={workspaceId} choices={choices} />}
@@ -139,39 +113,35 @@ export default async function UsersPage({ params, searchParams }: PageProps<"/wo
                 </TableCell>
               </TableRow>
             ) : (
-              result.rows.map((person) => (
-                <PersonRow
-                  key={person.id}
-                  person={person}
-                  canManage={canManage}
-                  actions={
-                    (actor.admin || !person.admin) && (
-                      <MemberActions
-                        workspaceId={workspaceId}
-                        member={{
-                          ...person,
-                          role: person.admin ? "admin" : person.roleId,
-                          pending: person.status !== "active",
-                        }}
-                        choices={choices}
-                      />
-                    )
-                  }
-                >
-                  <div className="flex items-center gap-1.5">
-                    {person.admin ? (
-                      <Badge>{ADMIN_ROLE_NAME}</Badge>
-                    ) : (
-                      <Badge variant={person.roleName ? "secondary" : "outline"}>{person.roleName ?? "Sem função"}</Badge>
-                    )}
-                    {person.status !== "active" && (
-                      <Badge variant="outline">
-                        {person.status === "expired" ? "Convite expirado" : "Convite pendente"}
-                      </Badge>
-                    )}
-                  </div>
-                </PersonRow>
-              ))
+              result.rows.map((person) => {
+                const role = rolesById.get(person.roleId)
+                const admin = !!role?.admin
+                return (
+                  <PersonRow
+                    key={person.id}
+                    person={person}
+                    canManage={canManage}
+                    actions={
+                      (actor.admin || !admin) && (
+                        <MemberActions
+                          workspaceId={workspaceId}
+                          member={{ ...person, pending: person.status !== "active" }}
+                          choices={choices}
+                        />
+                      )
+                    }
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant={admin ? "default" : "secondary"}>{role?.name ?? "Sem função"}</Badge>
+                      {person.status !== "active" && (
+                        <Badge variant="outline">
+                          {person.status === "expired" ? "Convite expirado" : "Convite pendente"}
+                        </Badge>
+                      )}
+                    </div>
+                  </PersonRow>
+                )
+              })
             )}
           </TableBody>
         </Table>
