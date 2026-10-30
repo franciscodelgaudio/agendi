@@ -73,6 +73,61 @@
     "Spinner": "src/components/ui/spinner.tsx"
   },
   "extraEntries": [
-    "lucide-react"
-  ]
+    "lucide-react",
+    "sonner",
+    "recharts"
+  ],
+  "overrides": {
+    "AlertDialog": {
+      "cardMode": "single",
+      "viewport": "720x480",
+      "primaryStory": "DeleteConfirmation"
+    },
+    "Sheet": {
+      "cardMode": "single",
+      "viewport": "900x600",
+      "primaryStory": "CreateService"
+    },
+    "DropdownMenu": {
+      "cardMode": "single",
+      "viewport": "640x480",
+      "primaryStory": "ActionsMenu"
+    },
+    "Popover": {
+      "cardMode": "single",
+      "viewport": "640x420",
+      "primaryStory": "BookingDetails"
+    },
+    "Tooltip": {
+      "cardMode": "single",
+      "viewport": "480x240",
+      "primaryStory": "IconButton"
+    },
+    "Select": {
+      "cardMode": "single",
+      "viewport": "800x480",
+      "primaryStory": "Open"
+    },
+    "Combobox": {
+      "cardMode": "single",
+      "viewport": "800x480",
+      "primaryStory": "Open"
+    },
+    "Toaster": {
+      "cardMode": "single",
+      "viewport": "640x360",
+      "primaryStory": "Variants"
+    },
+    "Sidebar": {
+      "cardMode": "single",
+      "viewport": "1000x640",
+      "primaryStory": "AppShell"
+    },
+    "Table": {
+      "cardMode": "column"
+    },
+    "ChartContainer": {
+      "cardMode": "column"
+    }
+  }
 }

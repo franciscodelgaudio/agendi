@@ -2,12 +2,13 @@ import { describe, it, expect } from "vitest";
 import { parseUserListQuery, USER_PAGE_SIZE, userListPage, type UserListItem } from "@/service/workspace/[workspaceId]/users/user-list";
 
 const BASE = { q: "", sort: "name", dir: "asc", role: "", status: "", page: 1 } as const;
-// Roles do workspace: o filtro de função usa "admin" ou o id da role.
+// Roles do workspace: o filtro de função usa o id da role (o administrador também é uma role).
+const ADMIN_ROLE = "64b7f0c2a1b2c3d4e5f60730";
 const THERAPIST_ROLE = "64b7f0c2a1b2c3d4e5f60731";
 const RECEPTION_ROLE = "64b7f0c2a1b2c3d4e5f60732";
-const therapist = { admin: false, roleId: THERAPIST_ROLE, roleName: "Terapeuta" };
-const reception = { admin: false, roleId: RECEPTION_ROLE, roleName: "Recepção" };
-const admin = { admin: true, roleId: null, roleName: null };
+const therapist = { roleId: THERAPIST_ROLE, roleName: "Terapeuta" };
+const reception = { roleId: RECEPTION_ROLE, roleName: "Recepção" };
+const admin = { roleId: ADMIN_ROLE, roleName: "Administrador" };
 
 function person(overrides: Partial<UserListItem> & { id: string }): UserListItem {
   return { name: null, email: `${overrides.id}@x.com`, image: null, ...reception, status: "active", ...overrides };
@@ -30,15 +31,15 @@ describe("parseUserListQuery", () => {
 
   it("lê busca, ordenação, direção, filtros e página válidos", () => {
     expect(
-      parseUserListQuery({ q: "ana", sort: "email", dir: "desc", role: "admin", status: "pending", page: "3" }),
-    ).toEqual({ q: "ana", sort: "email", dir: "desc", role: "admin", status: "pending", page: 3 });
+      parseUserListQuery({ q: "ana", sort: "email", dir: "desc", role: THERAPIST_ROLE, status: "pending", page: "3" }),
+    ).toEqual({ q: "ana", sort: "email", dir: "desc", role: THERAPIST_ROLE, status: "pending", page: 3 });
   });
 
-  it.each(["admin", THERAPIST_ROLE])("aceita a função %s (administrador ou id de role)", (role) => {
+  it.each([ADMIN_ROLE, THERAPIST_ROLE])("aceita a função %s (id de role)", (role) => {
     expect(parseUserListQuery({ role }).role).toBe(role);
   });
 
-  it.each(["owner", "massage_therapist", "receptionist", "64b7f0c2a1b2c3d4e5f6073"])("ignora a função %s", (role) => {
+  it.each(["admin", "owner", "massage_therapist", "receptionist", "64b7f0c2a1b2c3d4e5f6073"])("ignora a função %s", (role) => {
     expect(parseUserListQuery({ role }).role).toBe("");
   });
 
@@ -51,8 +52,8 @@ describe("parseUserListQuery", () => {
   });
 
   it("usa o primeiro valor quando o parâmetro vem repetido", () => {
-    expect(parseUserListQuery({ q: ["ana", "bruno"], role: ["admin", THERAPIST_ROLE] })).toEqual(
-      expect.objectContaining({ q: "ana", role: "admin" }),
+    expect(parseUserListQuery({ q: ["ana", "bruno"], role: [ADMIN_ROLE, THERAPIST_ROLE] })).toEqual(
+      expect.objectContaining({ q: "ana", role: ADMIN_ROLE }),
     );
   });
 
@@ -110,16 +111,9 @@ describe("userListPage", () => {
     expect(ids(userListPage([joao, ANA], { ...BASE, q: "joao araujo" }).rows)).toEqual(["joao"]);
   });
 
-  it("filtra pela role ou pelos administradores", () => {
+  it("filtra pela role, inclusive a de administrador", () => {
     expect(ids(userListPage(PEOPLE, { ...BASE, role: THERAPIST_ROLE }).rows)).toEqual(["ana", "invite"]);
-    expect(ids(userListPage(PEOPLE, { ...BASE, role: "admin" }).rows)).toEqual(["bruno", "carla"]);
-  });
-
-  it("membro sem role não aparece no filtro de nenhuma role nem no de administradores", () => {
-    const noRole = person({ id: "norole", admin: false, roleId: null, roleName: null });
-
-    expect(ids(userListPage([noRole, ANA], { ...BASE, role: THERAPIST_ROLE }).rows)).toEqual(["ana"]);
-    expect(ids(userListPage([noRole, CARLA], { ...BASE, role: "admin" }).rows)).toEqual(["carla"]);
+    expect(ids(userListPage(PEOPLE, { ...BASE, role: ADMIN_ROLE }).rows)).toEqual(["bruno", "carla"]);
   });
 
   it("filtra por status", () => {
