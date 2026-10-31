@@ -46,8 +46,6 @@ const unitPage = (page: UnitPage) => (access: TourAccess) => access.pages.unit.i
 const managesUnits = (access: TourAccess) => can(access.actor, "units.manage") && access.pages.workspace.includes("units")
 const managesUnitPage = (page: UnitPage, permission: Permission) => (access: TourAccess) =>
   can(access.actor, permission) && access.pages.unit.includes(page)
-const managesWorkspacePage = (page: WorkspacePage, permission: Permission) => (access: TourAccess) =>
-  can(access.actor, permission) && access.pages.workspace.includes(page)
 
 // Passos que levam até uma unidade, repetidos nos tutoriais que mostram as abas dela.
 const openUnit: TourStep[] = [
@@ -115,29 +113,26 @@ const start: Tour = {
       mission: 1,
       target: "unit-tabs",
       title: "O painel da unidade",
-      body: "Pelas abas você chega à visão geral, à agenda e aos atendimentos desta unidade.",
+      body: "Pelas abas você chega à visão geral, à agenda, aos atendimentos e aos serviços desta unidade.",
     },
     {
-      id: "nav-services",
+      id: "unit-tab-services",
       mission: 1,
-      target: "nav-services",
+      target: "unit-tab-services",
       action: "click",
-      href: "/services",
-      sidebar: true,
-      side: "right",
       title: "Serviços",
-      body: "Sem serviços não dá para agendar. Os serviços valem para todas as unidades. Clique em Serviços.",
-      show: workspacePage("services"),
+      body: "Sem serviços não dá para agendar. Cada unidade tem os seus serviços e preços. Clique em Serviços.",
+      show: unitPage("services"),
     },
     {
       id: "create-service",
       mission: 1,
       target: "create-service",
       action: "click",
-      skipIf: { target: "service-row", to: "back-to-units" },
+      skipIf: { target: "service-row", to: "unit-tab-calendar" },
       title: "Cadastre um serviço",
       body: "Clique em Cadastrar serviço.",
-      show: managesWorkspacePage("services", "services.manage"),
+      show: managesUnitPage("services", "services.manage"),
     },
     {
       id: "create-service-form",
@@ -148,10 +143,8 @@ const start: Tour = {
       side: "left",
       title: "Dados do serviço",
       body: "Informe o nome, a duração e o preço. Depois clique em Cadastrar.",
-      show: managesWorkspacePage("services", "services.manage"),
+      show: managesUnitPage("services", "services.manage"),
     },
-    { ...openUnit[0], id: "back-to-units", mission: 2 },
-    { ...openUnit[1], id: "back-to-unit-row", mission: 2 },
     {
       id: "unit-tab-calendar",
       mission: 2,

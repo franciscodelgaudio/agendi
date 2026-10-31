@@ -23,7 +23,7 @@ const ATTENDANT = actorWith("appointments.manage");
 const SERVICE = { id: SERVICE_ID, name: "Massagem Candle", durationMinutes: 60, priceCents: 18_000 };
 const CUSTOMER = { id: CUSTOMER_ID, name: "João Silva" };
 const ANA = { id: ANA_ID, name: "Ana" };
-const STATION = { id: STATION_ID, name: "Sala 1", active: true };
+const STATION = { id: STATION_ID, name: "Sala 1" };
 
 const VALID = {
   serviceId: SERVICE_ID,
@@ -141,7 +141,6 @@ describe("createAppointment", () => {
     ["customer_not_found", { customer: null }],
     ["member_not_found", { member: null }],
     ["station_not_found", { station: null }],
-    ["station_inactive", { station: { ...STATION, active: false } }],
     ["member_busy", { busy: true }],
     ["station_busy", { stationAppointments: [{ startsAt: at("15:00"), endsAt: at("16:00") }] }],
   ] as const)("retorna %s sem salvar", async (error, options) => {
@@ -243,10 +242,10 @@ describe("updateAppointment", () => {
 
 describe("rescheduleAppointment", () => {
   const times = { startsAt: "2026-09-24T15:00", endsAt: "2026-09-24T16:30" };
-  type Found = { status: string; workspaceMemberId: string; station: { id: string; active: boolean } | null };
+  type Found = { status: string; workspaceMemberId: string; station: { id: string } | null };
 
   function makeDeps({
-    found = { status: "scheduled", workspaceMemberId: ANA_ID, station: { id: STATION_ID, active: true } } as Found | null,
+    found = { status: "scheduled", workspaceMemberId: ANA_ID, station: { id: STATION_ID } } as Found | null,
     busy = false,
     stationAppointments = [] as readonly { startsAt: Date; endsAt: Date }[],
     updated = true,
@@ -286,9 +285,8 @@ describe("rescheduleAppointment", () => {
   });
 
   it.each([
-    ["appointment_not_scheduled", { found: { status: "done", workspaceMemberId: ANA_ID, station: { id: STATION_ID, active: true } } }],
+    ["appointment_not_scheduled", { found: { status: "done", workspaceMemberId: ANA_ID, station: { id: STATION_ID } } }],
     ["station_not_found", { found: { status: "scheduled", workspaceMemberId: ANA_ID, station: null } }],
-    ["station_inactive", { found: { status: "scheduled", workspaceMemberId: ANA_ID, station: { id: STATION_ID, active: false } } }],
     ["member_busy", { busy: true }],
     ["station_busy", { stationAppointments: [{ startsAt: at("16:00"), endsAt: at("17:00") }] }],
     ["appointment_not_found", { found: null }],

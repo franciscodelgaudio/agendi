@@ -51,7 +51,6 @@ const workspacePageLabels: Record<WorkspacePage, string> = {
   units: "Unidades",
   calendar: "Agenda",
   customers: "Clientes",
-  services: "Serviços",
   cash_flow: "Caixa",
   stock: "Estoque",
   users: "Usuários",
@@ -61,6 +60,7 @@ const unitPageLabels: Record<UnitPage, string> = {
   overview: "Visão geral",
   calendar: "Agenda",
   appointments: "Atendimentos",
+  services: "Serviços",
 }
 
 const TOTAL = ACTIONS.length + WORKSPACE_PAGES.length + UNIT_PAGES.length

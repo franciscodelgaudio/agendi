@@ -73,11 +73,11 @@ function ServiceFields({ idPrefix, service }: { idPrefix: string; service?: Serv
   )
 }
 
-export function CreateServiceSheet({ workspaceId }: { workspaceId: string }) {
+export function CreateServiceSheet({ workspaceId, unitId }: { workspaceId: string; unitId: string }) {
   const [open, setOpen] = useState(false)
   const [state, formAction, pending] = useActionState(
     async (prev: ServiceActionState, formData: FormData) => {
-      const next = await createServiceAction(workspaceId, prev, formData)
+      const next = await createServiceAction(workspaceId, unitId, prev, formData)
       if (!next.error) setOpen(false)
       return next
     },
@@ -94,7 +94,7 @@ export function CreateServiceSheet({ workspaceId }: { workspaceId: string }) {
         <form action={formAction} className="flex min-h-0 flex-1 flex-col">
           <SheetHeader>
             <SheetTitle>Cadastrar serviço</SheetTitle>
-            <SheetDescription>O serviço vale para todas as unidades do workspace.</SheetDescription>
+            <SheetDescription>O serviço fica disponível só nesta unidade, com o preço dela.</SheetDescription>
           </SheetHeader>
           <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
             {state.error && <FieldError>{state.error}</FieldError>}

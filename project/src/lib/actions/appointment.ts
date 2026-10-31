@@ -50,7 +50,6 @@ const errorMessages: Record<Exclude<AppointmentError, "forbidden"> | "unauthenti
   customer_not_found: "O cliente escolhido não existe mais. Recarregue a página.",
   member_not_found: "A profissional escolhida não atende nesta unidade. Recarregue a página.",
   station_not_found: "A estação escolhida não é desta unidade. Recarregue a página.",
-  station_inactive: "A estação escolhida está desativada.",
   member_busy: "A profissional já tem um agendamento nesse horário.",
   station_busy: "A estação já tem um agendamento nesse horário.",
   appointment_not_found: "Agendamento não encontrado ou sem permissão.",
@@ -183,7 +182,7 @@ export async function rescheduleAppointmentAction(
       return {
         status: current.status,
         workspaceMemberId: current.workspaceMemberId.toString(),
-        station: station && { id: station.id, active: station.active },
+        station: station && { id: station.id },
       }
     },
     hasConflict: conflictChecker(session.workspaceId),

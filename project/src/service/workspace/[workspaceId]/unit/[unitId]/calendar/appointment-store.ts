@@ -62,14 +62,14 @@ export async function findUnitStation(unitId: string | Types.ObjectId, stationId
   if (!isObjectIdOrHexString(stationId)) return null
   const unit = await Unit.findOne({ _id: unitId, "stations._id": stationId }).select({ "stations.$": 1 }).lean()
   const station = unit?.stations[0]
-  return station ? { id: station._id.toString(), name: station.name, active: station.active } : null
+  return station ? { id: station._id.toString(), name: station.name } : null
 }
 
 export function appointmentLookups(unit: { workspaceId: string; unitId: string }) {
   return {
     findService: async (id: string) => {
       if (!isObjectIdOrHexString(id)) return null
-      const service = await Service.findOne({ _id: id, workspaceId: unit.workspaceId })
+      const service = await Service.findOne({ _id: id, workspaceId: unit.workspaceId, unitId: unit.unitId })
         .select({ name: 1, durationMinutes: 1, priceCents: 1 })
         .lean()
       return service && { id: service._id.toString(), name: service.name, durationMinutes: service.durationMinutes }

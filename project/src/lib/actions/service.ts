@@ -14,14 +14,18 @@ import {
 } from "@/service/workspace/[workspaceId]/services/service"
 import { Appointment } from "@/models/Appointment"
 import { Service } from "@/models/Service"
+import { Unit } from "@/models/Unit"
 
-const errorMessages: Record<Exclude<UpdateServiceError | DeleteServiceError, "forbidden"> | "unauthenticated", string> = {
+type ServiceError = UpdateServiceError | DeleteServiceError | "unit_not_found"
+
+const errorMessages: Record<Exclude<ServiceError, "forbidden"> | "unauthenticated", string> = {
   invalid_input: "Preencha nome, duração e preço.",
   invalid_name: "Informe o nome do serviço.",
   name_too_long: "O nome pode ter no máximo 80 caracteres.",
   invalid_duration: "Informe a duração em minutos, de 5 a 720.",
   invalid_price: "Informe um preço válido, como 180,00.",
   service_not_found: "Serviço não encontrado neste workspace.",
+  unit_not_found: "Unidade não encontrada neste workspace.",
   service_in_use: "Este serviço ainda tem agendamentos por fazer. Conclua, cancele ou troque o serviço deles antes.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
@@ -29,7 +33,7 @@ const errorMessages: Record<Exclude<UpdateServiceError | DeleteServiceError, "fo
 
 export type ServiceActionState = { error: string | null }
 
-function messageOf(error: UpdateServiceError | DeleteServiceError | "unauthenticated") {
+function messageOf(error: ServiceError | "unauthenticated") {
   return error === "forbidden" ? forbiddenMessage("services.manage") : errorMessages[error]
 }
 
@@ -51,13 +55,16 @@ function serviceInput(formData: FormData) {
 
 export async function createServiceAction(
   workspaceId: string,
+  unitId: string,
   _prev: ServiceActionState,
   formData: FormData,
 ): Promise<ServiceActionState> {
   const session = await sessionAccess(workspaceId)
   if (!session) return { error: messageOf("unauthenticated") }
+  const validUnit = isObjectIdOrHexString(unitId) && !!(await Unit.exists({ _id: unitId, workspaceId: session.workspaceId }))
+  if (session.actor && !validUnit) return { error: messageOf("unit_not_found") }
 
-  const result = await createService(serviceInput(formData), session, {
+  const result = await createService(serviceInput(formData), { ...session, unitId }, {
     insert: async (data) => {
       const service = await Service.create(data)
       return { id: service._id.toString() }

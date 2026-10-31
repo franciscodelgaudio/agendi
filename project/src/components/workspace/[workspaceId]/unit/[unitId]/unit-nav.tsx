@@ -16,6 +16,7 @@ export function UnitNav({ workspaceId, unitId, pages }: { workspaceId: string; u
     overview: { title: "Visão geral", icon: LayoutDashboardIcon },
     calendar: { title: "Agenda", icon: CalendarIcon },
     appointments: { title: "Atendimentos", icon: CircleCheckIcon },
+    services: { title: "Serviços", icon: LeafIcon },
   }
   const items = pages.map((page) => ({ ...tabs[page], href: `${base}${UNIT_PAGE_PATHS[page]}`, tour: `unit-tab-${page}` }))
 
@@ -46,8 +47,8 @@ export function UnitNav({ workspaceId, unitId, pages }: { workspaceId: string; u
   )
 }
 
-export function ServicesSetupNotice({ workspaceId, canManage }: { workspaceId: string; canManage: boolean }) {
-  const href = `/workspace/${workspaceId}/services`
+export function ServicesSetupNotice({ workspaceId, unitId, canManage }: { workspaceId: string; unitId: string; canManage: boolean }) {
+  const href = `/workspace/${workspaceId}/unit/${unitId}${UNIT_PAGE_PATHS.services}`
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
@@ -59,7 +60,7 @@ export function ServicesSetupNotice({ workspaceId, canManage }: { workspaceId: s
           {canManage ? "Comece cadastrando os serviços" : "Nenhum serviço cadastrado"}
         </span>
         <span className="text-sm text-muted-foreground">
-          Os agendamentos dependem dos serviços do workspace, com duração e preço.
+          Os agendamentos dependem dos serviços desta unidade, com duração e preço.
         </span>
       </div>
       {canManage && (

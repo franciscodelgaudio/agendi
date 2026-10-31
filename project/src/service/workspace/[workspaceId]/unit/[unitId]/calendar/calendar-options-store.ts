@@ -7,8 +7,8 @@ import { Workspace } from "@/models/Workspace"
 
 export type CalendarOptionsData = {
   units: { id: string; name: string }[]
-  services: { id: string; name: string; durationMinutes: number; priceCents: number }[]
-  stations: { id: string; unitId: string; name: string; active: boolean }[]
+  services: { id: string; unitId: string; name: string; durationMinutes: number; priceCents: number }[]
+  stations: { id: string; unitId: string; name: string }[]
   therapists: { id: string; name: string; image: string | null; unitIds?: string[] }[]
 }
 
@@ -19,7 +19,10 @@ export async function loadCalendarOptions(workspaceId: string, unitId?: string):
       .select({ name: 1, stations: 1 })
       .sort({ name: 1, _id: 1 })
       .lean(),
-    Service.find({ workspaceId: workspace }).select({ name: 1, durationMinutes: 1, priceCents: 1 }).sort({ name: 1, _id: 1 }).lean(),
+    Service.find({ workspaceId: workspace, ...(unitId && { unitId: new Types.ObjectId(unitId) }) })
+      .select({ unitId: 1, name: 1, durationMinutes: 1, priceCents: 1 })
+      .sort({ name: 1, _id: 1 })
+      .lean(),
     Workspace.aggregate<{ therapists: CalendarOptionsData["therapists"] }>([
       { $match: { _id: workspace } },
       ...therapistOptionsStages(unitId),
@@ -30,6 +33,7 @@ export async function loadCalendarOptions(workspaceId: string, unitId?: string):
     units: units.map((unit) => ({ id: unit._id.toString(), name: unit.name })),
     services: services.map((service) => ({
       id: service._id.toString(),
+      unitId: service.unitId.toString(),
       name: service.name,
       durationMinutes: service.durationMinutes,
       priceCents: service.priceCents,
@@ -39,7 +43,6 @@ export async function loadCalendarOptions(workspaceId: string, unitId?: string):
         id: station._id.toString(),
         unitId: unit._id.toString(),
         name: station.name,
-        active: station.active,
       })),
     ),
     therapists: therapistDoc?.therapists ?? [],

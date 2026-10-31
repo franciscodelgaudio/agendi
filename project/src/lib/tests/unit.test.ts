@@ -11,8 +11,8 @@ const BIA_MEMBER_ID = "64b7f0c2a1b2c3d4e5f60792";
 
 const MANAGER = actorWith("units.manage");
 
-const STATIONS_INPUT = { ids: [""], names: ["Sala Single"], active: ["true"] };
-const STATIONS = [{ id: null, name: "Sala Single", active: true }];
+const STATIONS_INPUT = { ids: [""], names: ["Sala Single"] };
+const STATIONS = [{ id: null, name: "Sala Single" }];
 const HOURS = { opensAt: "08:00", closesAt: "22:00" };
 const BASE = {
   name: "Spa Central",
@@ -132,8 +132,8 @@ describe("createUnit", () => {
     ["imageUrl que não é URL", { ...BASE, imageUrl: "logo.png" }, "invalid_image_url"],
     ["imageUrl sem http(s)", { ...BASE, imageUrl: "javascript:alert(1)" }, "invalid_image_url"],
     ["estações ausentes", { ...BASE, stations: undefined }, "invalid_input"],
-    ["nenhuma estação", { ...BASE, stations: { ids: [], names: [], active: [] } }, "no_stations"],
-    ["estação com nome repetido", { ...BASE, stations: { ids: ["", ""], names: ["A", "a"], active: ["true", "true"] } }, "duplicate_station_name"],
+    ["nenhuma estação", { ...BASE, stations: { ids: [], names: [] } }, "no_stations"],
+    ["estação com nome repetido", { ...BASE, stations: { ids: ["", ""], names: ["A", "a"] } }, "duplicate_station_name"],
     ["horário ausente", { ...BASE, businessHours: undefined }, "invalid_input"],
     ["horário inválido", { ...BASE, businessHours: { opensAt: "8h", closesAt: "22:00" } }, "invalid_business_hours"],
     ["fechamento antes da abertura", { ...BASE, businessHours: { opensAt: "22:00", closesAt: "08:00" } }, "invalid_business_hours_order"],
@@ -211,19 +211,19 @@ describe("updateUnit", () => {
     expect(deps.update).toHaveBeenCalledWith(UNIT_ID, SAVED);
   });
 
-  it("passa as estações existentes com o id e as novas com id null, ativas ou não", async () => {
+  it("passa as estações existentes com o id e as novas com id null", async () => {
     const deps = makeDeps();
 
     await updateUnit(
-      { ...BASE, stations: { ids: [SINGLE_ID, ""], names: ["Sala Single", "Sala Casal"], active: ["false", "true"] } },
+      { ...BASE, stations: { ids: [SINGLE_ID, ""], names: ["Sala Single", "Sala Casal"] } },
       UNIT_ID,
       ctx,
       deps,
     );
 
     expect(deps.update.mock.calls[0][1].stations).toEqual([
-      { id: SINGLE_ID, name: "Sala Single", active: false },
-      { id: null, name: "Sala Casal", active: true },
+      { id: SINGLE_ID, name: "Sala Single" },
+      { id: null, name: "Sala Casal" },
     ]);
   });
 
@@ -231,7 +231,7 @@ describe("updateUnit", () => {
     const deps = makeDeps();
 
     await updateUnit(
-      { ...BASE, stations: { ids: [SINGLE_ID, ""], names: ["Sala Single", "Sala Casal"], active: ["true", "true"] } },
+      { ...BASE, stations: { ids: [SINGLE_ID, ""], names: ["Sala Single", "Sala Casal"] } },
       UNIT_ID,
       ctx,
       deps,
@@ -262,7 +262,7 @@ describe("updateUnit", () => {
     ["input nulo", null, "invalid_input"],
     ["nome só com espaços", { ...BASE, name: "   " }, "invalid_name"],
     ["imageUrl sem http(s)", { ...BASE, imageUrl: "javascript:alert(1)" }, "invalid_image_url"],
-    ["nenhuma estação", { ...BASE, stations: { ids: [], names: [], active: [] } }, "no_stations"],
+    ["nenhuma estação", { ...BASE, stations: { ids: [], names: [] } }, "no_stations"],
     ["fechamento igual à abertura", { ...BASE, businessHours: { opensAt: "10:00", closesAt: "10:00" } }, "invalid_business_hours_order"],
   ])("retorna erro sem conferir agendamentos nem salvar quando %s", async (_label, input, error) => {
     const deps = makeDeps();

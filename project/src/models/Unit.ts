@@ -3,7 +3,6 @@ import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 const stationSchema = new Schema({
   name: { type: String, required: true, trim: true },
-  active: { type: Boolean, default: true },
 });
 
 const businessHoursSchema = new Schema(

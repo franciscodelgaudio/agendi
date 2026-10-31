@@ -4,19 +4,17 @@ import { useState } from "react"
 import { PlusIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import { FieldSeparator } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 
 const MAX_STATIONS = 20
 
-export type StationOption = { id: string; name: string; active: boolean }
+export type StationOption = { id: string; name: string }
 
-type Row = { key: number; id: string; name: string; active: boolean }
+type Row = { key: number; id: string; name: string }
 
 function toRows(stations: StationOption[] | undefined): Row[] {
-  if (!stations?.length) return [{ key: 0, id: "", name: "", active: true }]
+  if (!stations?.length) return [{ key: 0, id: "", name: "" }]
   return stations.map((station, key) => ({ key, ...station }))
 }
 
@@ -34,7 +32,6 @@ export function StationFields({ idPrefix, defaultValue }: { idPrefix: string; de
         {rows.map((row, index) => (
           <div key={row.key} className="flex items-center gap-2 p-3">
             <input type="hidden" name="stationId" value={row.id} />
-            <input type="hidden" name="stationActive" value={String(row.active)} />
             <Input
               id={`${idPrefix}-station-${row.key}`}
               name="stationName"
@@ -45,10 +42,6 @@ export function StationFields({ idPrefix, defaultValue }: { idPrefix: string; de
               maxLength={40}
               required
             />
-            <Label className="shrink-0 gap-2 text-sm font-normal text-muted-foreground">
-              <Checkbox checked={row.active} onCheckedChange={(checked) => updateRow(row.key, { active: checked })} />
-              Ativa
-            </Label>
             {rows.length > 1 && (
               <Button
                 type="button"
@@ -71,7 +64,7 @@ export function StationFields({ idPrefix, defaultValue }: { idPrefix: string; de
             onClick={() =>
               setRows((current) => [
                 ...current,
-                { key: Math.max(...current.map((r) => r.key)) + 1, id: "", name: "", active: true },
+                { key: Math.max(...current.map((r) => r.key)) + 1, id: "", name: "" },
               ])
             }
           >

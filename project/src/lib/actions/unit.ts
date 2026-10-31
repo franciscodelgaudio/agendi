@@ -24,6 +24,7 @@ import {
 import { insertWallet } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
 import { Appointment } from "@/models/Appointment"
 import { Inventory } from "@/models/Inventory"
+import { Service } from "@/models/Service"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
@@ -43,7 +44,7 @@ const errorMessages: Record<Exclude<UnitError, "forbidden"> | "unauthenticated",
   duplicate_station_name: "Cada estação precisa de um nome diferente.",
   invalid_business_hours: "Informe o horário de funcionamento.",
   invalid_business_hours_order: "O horário de fechamento deve ser depois da abertura.",
-  station_in_use: "Uma estação removida ainda tem agendamentos. Desative-a ou mova os agendamentos antes.",
+  station_in_use: "Uma estação removida ainda tem agendamentos. Mova ou cancele os agendamentos antes.",
   invalid_opening_balance: "Informe um saldo inicial de até R$ 1.000.000,00.",
   invalid_opening_balance_date: "Informe o dia do saldo inicial.",
   invalid_wallet: "Escolha a carteira da unidade.",
@@ -64,7 +65,7 @@ function messageOf(error: UnitError | "unauthenticated") {
 }
 
 function toStationDocs(stations: StationInput[]) {
-  return stations.map(({ id, name, active }) => ({ _id: new Types.ObjectId(id ?? undefined), name, active }))
+  return stations.map(({ id, name }) => ({ _id: new Types.ObjectId(id ?? undefined), name }))
 }
 
 function toObjectIds(ids: string[]) {
@@ -78,7 +79,6 @@ function unitInput(formData: FormData) {
     stations: {
       ids: formData.getAll("stationId"),
       names: formData.getAll("stationName"),
-      active: formData.getAll("stationActive"),
     },
     businessHours: { opensAt: formData.get("opensAt"), closesAt: formData.get("closesAt") },
     workspaceMemberIds: formData.getAll("workspaceMemberId"),
@@ -245,7 +245,7 @@ export async function deleteUnitAction(workspaceId: string, unitId: string): Pro
     remove: async (id) => {
       const { deletedCount } = await Unit.deleteOne(filter!)
       if (deletedCount === 0) return false
-      await Appointment.deleteMany({ unitId: id })
+      await Promise.all([Appointment.deleteMany({ unitId: id }), Service.deleteMany({ unitId: id })])
       return true
     },
   })

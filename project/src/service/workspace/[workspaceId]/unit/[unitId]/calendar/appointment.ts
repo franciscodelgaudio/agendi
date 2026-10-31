@@ -32,7 +32,7 @@ type Lookups = AvailabilityLookups & {
   findService: (id: string) => Promise<{ id: string; name: string; durationMinutes: number } | null>;
   findCustomer: (id: string) => Promise<{ id: string } | null>;
   findMember: (id: string) => Promise<{ id: string } | null>;
-  findStation: (id: string) => Promise<{ id: string; active: boolean } | null>;
+  findStation: (id: string) => Promise<{ id: string } | null>;
 };
 
 type AvailabilityError = "member_busy" | "station_busy";
@@ -50,7 +50,6 @@ export type AppointmentFieldsError =
   | "customer_not_found"
   | "member_not_found"
   | "station_not_found"
-  | "station_inactive"
   | AvailabilityError;
 
 export type AppointmentFields = {
@@ -114,9 +113,7 @@ async function resolveFields(
   if (!foundService) return { ok: false, error: "service_not_found" };
   if (!(await lookups.findCustomer(customer))) return { ok: false, error: "customer_not_found" };
   if (!(await lookups.findMember(member))) return { ok: false, error: "member_not_found" };
-  const foundStation = await lookups.findStation(station);
-  if (!foundStation) return { ok: false, error: "station_not_found" };
-  if (!foundStation.active) return { ok: false, error: "station_inactive" };
+  if (!(await lookups.findStation(station))) return { ok: false, error: "station_not_found" };
 
   const minutes = customDuration ?? foundService.durationMinutes;
   const end = new Date(start.getTime() + minutes * MINUTE_MS);
@@ -212,8 +209,7 @@ export type RescheduleAppointmentError =
   | "invalid_duration"
   | "appointment_not_found"
   | "appointment_not_scheduled"
-  | "station_not_found"
-  | "station_inactive";
+  | "station_not_found";
 
 export async function rescheduleAppointment(
   input: unknown,
@@ -227,7 +223,7 @@ export async function rescheduleAppointment(
     findAppointment: (id: string) => Promise<{
       status: string;
       workspaceMemberId: string;
-      station: { id: string; active: boolean } | null;
+      station: { id: string } | null;
     } | null>;
     update: (id: string, times: { startsAt: Date; endsAt: Date; durationMinutes: number }) => Promise<boolean>;
   },
@@ -248,7 +244,6 @@ export async function rescheduleAppointment(
   if (!found) return { ok: false, error: "appointment_not_found" };
   if (found.status !== "scheduled") return { ok: false, error: "appointment_not_scheduled" };
   if (!found.station) return { ok: false, error: "station_not_found" };
-  if (!found.station.active) return { ok: false, error: "station_inactive" };
 
   const unavailable = await checkAvailability(
     { workspaceMemberId: found.workspaceMemberId, stationId: found.station.id, startsAt: start, endsAt: end, excludeId: appointmentId },

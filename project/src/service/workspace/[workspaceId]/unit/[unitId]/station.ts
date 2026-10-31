@@ -5,7 +5,7 @@ const MAX_STATIONS = 20;
 const MAX_NAME_LENGTH = 40;
 const OBJECT_ID = /^[0-9a-f]{24}$/i;
 
-export type StationInput = { id: string | null; name: string; active: boolean };
+export type StationInput = { id: string | null; name: string };
 
 export type StationError =
   | "invalid_input"
@@ -22,20 +22,15 @@ const stationsSchema = z
     {
       ids: textList.transform((ids) => ids.map((id) => id.trim())),
       names: textList,
-      active: z.array(z.enum(["true", "false"], { error: "invalid_input" }), { error: "invalid_input" }),
     },
     { error: "invalid_input" },
   )
-  .refine(({ ids, names, active }) => ids.length === names.length && active.length === names.length, {
-    error: "invalid_input",
-  })
+  .refine(({ ids, names }) => ids.length === names.length, { error: "invalid_input" })
   .refine(({ ids }) => {
     const existing = ids.filter(Boolean);
     return existing.every((id) => OBJECT_ID.test(id)) && new Set(existing).size === existing.length;
   }, { error: "invalid_input" })
-  .transform(({ ids, names, active }) =>
-    names.map((name, i) => ({ id: ids[i] || null, name: name.trim(), active: active[i] === "true" })),
-  )
+  .transform(({ ids, names }) => names.map((name, i) => ({ id: ids[i] || null, name: name.trim() })))
   .pipe(
     z
       .array(
@@ -45,7 +40,6 @@ const stationsSchema = z
             .string()
             .min(1, { error: "invalid_station_name" })
             .max(MAX_NAME_LENGTH, { error: "station_name_too_long" }),
-          active: z.boolean(),
         }),
       )
       .min(1, { error: "no_stations" })

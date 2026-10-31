@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { UNIT_PAGES, WORKSPACE_PAGE_PATHS, WORKSPACE_PAGES, visiblePages } from "@/service/workspace/[workspaceId]/page-access";
+import { UNIT_PAGE_PATHS, UNIT_PAGES, WORKSPACE_PAGE_PATHS, WORKSPACE_PAGES, visiblePages } from "@/service/workspace/[workspaceId]/page-access";
 
 const ALL = { workspace: [...WORKSPACE_PAGES], unit: [...UNIT_PAGES] };
 
@@ -33,17 +33,17 @@ describe("visiblePages", () => {
 });
 
 describe("WORKSPACE_PAGES", () => {
-  it("tem clientes e serviços do workspace, as carteiras em /cash-flow e os inventários em /stock", () => {
-    expect(WORKSPACE_PAGES).toEqual(["home", "units", "calendar", "customers", "services", "cash_flow", "stock", "users"]);
+  it("tem clientes do workspace, as carteiras em /cash-flow e os inventários em /stock", () => {
+    expect(WORKSPACE_PAGES).toEqual(["home", "units", "calendar", "customers", "cash_flow", "stock", "users"]);
     expect(WORKSPACE_PAGE_PATHS.customers).toBe("/customers");
-    expect(WORKSPACE_PAGE_PATHS.services).toBe("/services");
     expect(WORKSPACE_PAGE_PATHS.cash_flow).toBe("/cash-flow");
     expect(WORKSPACE_PAGE_PATHS.stock).toBe("/stock");
   });
 });
 
 describe("UNIT_PAGES", () => {
-  it("a unidade não tem mais abas de caixa, estoque nem serviços", () => {
-    expect(UNIT_PAGES).toEqual(["overview", "calendar", "appointments"]);
+  it("a unidade tem a aba de serviços em /services e não tem abas de caixa nem estoque", () => {
+    expect(UNIT_PAGES).toEqual(["overview", "calendar", "appointments", "services"]);
+    expect(UNIT_PAGE_PATHS.services).toBe("/services");
   });
 });

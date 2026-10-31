@@ -54,7 +54,7 @@ describe("unitListPipeline", () => {
         $map: {
           input: "$stations",
           as: "station",
-          in: { id: { $toString: "$$station._id" }, name: "$$station.name", active: "$$station.active" },
+          in: { id: { $toString: "$$station._id" }, name: "$$station.name" },
         },
       },
       workspaceMemberIds: {

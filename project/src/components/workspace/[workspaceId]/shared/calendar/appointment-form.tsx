@@ -29,8 +29,8 @@ export type AppointmentFormValues = {
 export type AppointmentFormOptions = {
   units?: { id: string; name: string }[]
   therapists: TherapistOption[]
-  services: { id: string; name: string; durationMinutes: number; priceCents: number }[]
-  stations: { id: string; unitId: string; name: string; active: boolean }[]
+  services: { id: string; unitId: string; name: string; durationMinutes: number; priceCents: number }[]
+  stations: { id: string; unitId: string; name: string }[]
 }
 
 type Props = AppointmentFormOptions & {
@@ -54,7 +54,7 @@ const copy = {
 }
 
 function unitStations(stations: AppointmentFormOptions["stations"], unitId: string | null) {
-  return stations.filter((station) => station.unitId === unitId && station.active)
+  return stations.filter((station) => station.unitId === unitId)
 }
 
 function onlyStationId(stations: AppointmentFormOptions["stations"], unitId: string | null) {
@@ -92,7 +92,9 @@ export function AppointmentForm({
 
   const Title = variant === "popover" ? PopoverTitle : SheetTitle
   const Description = variant === "popover" ? PopoverDescription : SheetDescription
-  const serviceItems = services.map((service) => ({ value: service.id, label: service.name }))
+  const serviceItems = services
+    .filter((service) => service.unitId === unitId)
+    .map((service) => ({ value: service.id, label: service.name }))
   const stationItems = unitStations(stations, unitId).map((station) => ({ value: station.id, label: station.name }))
   const unitTherapists = therapists.filter((therapist) => !unitId || !therapist.unitIds || therapist.unitIds.includes(unitId))
   const therapistIndex = therapists.findIndex((therapist) => therapist.id === memberId)
@@ -124,6 +126,7 @@ export function AppointmentForm({
               onValueChange={(value) => {
                 const next = value as string | null
                 setUnitId(next)
+                setServiceId(null)
                 setStationId(onlyStationId(stations, next))
                 setMemberId(null)
               }}
@@ -156,10 +159,11 @@ export function AppointmentForm({
               const chosen = services.find((option) => option.id === next)
               if (chosen) setDuration(String(chosen.durationMinutes))
             }}
+            disabled={!unitId}
             required
           >
             <SelectTrigger id="appointment-service" className="w-full">
-              <SelectValue placeholder="Escolha o serviço" />
+              <SelectValue placeholder={unitId ? "Escolha o serviço" : "Escolha a unidade primeiro"} />
             </SelectTrigger>
             <SelectContent>
               {serviceItems.map((item) => (

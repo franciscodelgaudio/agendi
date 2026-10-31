@@ -1,4 +1,5 @@
-import { redirect } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
+import { isObjectIdOrHexString } from "mongoose"
 import { BanknoteIcon, ClockIcon, LeafIcon } from "lucide-react"
 import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
@@ -17,15 +18,19 @@ import { CreateServiceSheet, ServiceActions } from "@/components/workspace/[work
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Service } from "@/models/Service"
 
-export default async function ServicesPage({ params, searchParams }: PageProps<"/workspace/[workspaceId]/services">) {
-  const { workspaceId } = await params
+export default async function UnitServicesPage({
+  params,
+  searchParams,
+}: PageProps<"/workspace/[workspaceId]/unit/[unitId]/services">) {
+  const { workspaceId, unitId } = await params
   const query = parseServiceListQuery(await searchParams)
   const user = await requireUser()
-  const { actor } = await requirePage(workspaceId, user.id, { workspace: "services" })
+  const { actor } = await requirePage(workspaceId, user.id, { unit: "services", unitId })
+  if (!isObjectIdOrHexString(unitId)) notFound()
   const canManage = can(actor, "services.manage")
 
-  const [result] = await Service.aggregate<ServiceListPage>(serviceListPipeline(workspaceId, query))
-  const pathname = `/workspace/${workspaceId}/services`
+  const [result] = await Service.aggregate<ServiceListPage>(serviceListPipeline(workspaceId, unitId, query))
+  const pathname = `/workspace/${workspaceId}/unit/${unitId}/services`
   const listQuery = { q: query.q, sort: query.sort, dir: query.dir }
   const pages = Math.ceil(result.total / SERVICE_PAGE_SIZE)
   if (pages > 0 && query.page > pages) {
@@ -33,10 +38,10 @@ export default async function ServicesPage({ params, searchParams }: PageProps<"
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4">
+    <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-2xl font-semibold tracking-tight">Serviços</h2>
-        {canManage && <CreateServiceSheet workspaceId={workspaceId} />}
+        <h3 className="text-lg font-semibold tracking-tight">Serviços</h3>
+        {canManage && <CreateServiceSheet workspaceId={workspaceId} unitId={unitId} />}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <ListSearch query={listQuery} placeholder="Buscar serviço..." />
