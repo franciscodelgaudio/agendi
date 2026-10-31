@@ -11,8 +11,8 @@ const serviceSchema = new Schema(
     productIds: { type: [{ type: Schema.Types.ObjectId, ref: "Product" }], default: [] },
     // false: serviço sem profissional (ex.: hidromassagem), que não gera comissão.
     requiresTherapist: { type: Boolean, default: true },
-    // Espaços da unidade (treatmentRooms) em que o serviço pode ser feito; vazio aceita qualquer um.
-    treatmentRoomIds: { type: [Schema.Types.ObjectId], default: [] },
+    // Estações da unidade em que o serviço pode ser feito; vazio aceita qualquer uma.
+    stationIds: { type: [Schema.Types.ObjectId], default: [] },
     unitId: { type: Schema.Types.ObjectId, ref: "Unit", required: true, index: true },
   },
   { collection: "services", timestamps: true },

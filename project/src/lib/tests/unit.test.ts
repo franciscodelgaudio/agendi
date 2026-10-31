@@ -10,10 +10,8 @@ const BIA_MEMBER_ID = "64b7f0c2a1b2c3d4e5f60792";
 
 const MANAGER = actorWith("units.manage");
 
-// Estações como chegam do formulário (id vazio = estação nova) e como são salvas.
 const STATIONS_INPUT = { ids: [""], names: ["Sala Single"], active: ["true"] };
 const STATIONS = [{ id: null, name: "Sala Single", active: true }];
-// Horário de funcionamento; chega do formulário do mesmo jeito que é salvo.
 const HOURS = { opensAt: "08:00", closesAt: "22:00" };
 const BASE = { name: "Spa Central", stations: STATIONS_INPUT, businessHours: HOURS, workspaceMemberIds: [] };
 const SAVED = {
@@ -27,7 +25,6 @@ const SAVED = {
 describe("createUnit", () => {
   function makeDeps(membersExist = true) {
     return {
-      // true quando todos os ids são membros do workspace.
       membersExist: vi.fn().mockResolvedValue(membersExist),
       insert: vi.fn().mockResolvedValue({ id: UNIT_ID }),
     };
@@ -194,7 +191,6 @@ describe("updateUnit", () => {
   function makeDeps({ found = true, inUse = false, membersExist = true } = {}) {
     return {
       membersExist: vi.fn().mockResolvedValue(membersExist),
-      // true quando alguma estação que sai da unidade ainda tem agendamento por terminar.
       hasBookingsInRemovedStations: vi.fn().mockResolvedValue(inUse),
       update: vi.fn().mockResolvedValue(found),
     };
@@ -227,7 +223,6 @@ describe("updateUnit", () => {
     expect(deps.update).toHaveBeenCalledWith(UNIT_ID, SAVED);
   });
 
-  // Estação com id é mantida (e seus agendamentos continuam nela); sem id é criada.
   it("passa as estações existentes com o id e as novas com id null, ativas ou não", async () => {
     const deps = makeDeps();
 

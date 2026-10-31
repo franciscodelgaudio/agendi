@@ -107,7 +107,7 @@ export default async function AppointmentsPage({
         ],
       },
     },
-    ...therapistOptionsStages(),
+    ...therapistOptionsStages(unitId),
     {
       $project: {
         _id: 0,

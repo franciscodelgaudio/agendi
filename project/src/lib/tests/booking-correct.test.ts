@@ -268,7 +268,6 @@ describe("correctRegisteredBooking", () => {
     expect(deps.update).not.toHaveBeenCalled();
   });
 
-  // O atendimento já aconteceu: a correção vale mesmo numa estação desativada depois.
   it("corrige mesmo quando a estação escolhida está desativada", async () => {
     const deps = makeDeps();
 

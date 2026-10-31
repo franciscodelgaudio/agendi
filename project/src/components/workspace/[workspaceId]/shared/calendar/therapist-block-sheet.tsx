@@ -45,8 +45,7 @@ export function TherapistBlockForm({ workspaceId, therapists, defaultTherapistId
       <SheetHeader>
         <SheetTitle>Travar agenda</SheetTitle>
         <SheetDescription>
-          O profissional fica indisponível no período, em todas as unidades: não dá para agendar com ele nem a URA
-          oferece esses horários.
+          O profissional fica indisponível no período, em todas as unidades: não dá para agendar com ele.
         </SheetDescription>
       </SheetHeader>
       {/* Só os campos rolam; título e botões ficam fixos. */}

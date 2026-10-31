@@ -21,6 +21,7 @@ type UploadOptions = {
 type Props = UploadOptions & {
   id: string
   label: string
+  name?: string
 }
 
 export function imageFileError(file: File) {
@@ -78,7 +79,7 @@ export type ImageUpload = {
 }
 
 // Envia a imagem ao escolher/arrastar/colar o arquivo e guarda a URL pública no campo avatarUrl do formulário.
-export function ImageUploadField({ id, label, ...options }: Props) {
+export function ImageUploadField({ id, label, name = "avatarUrl", ...options }: Props) {
   const { url, setUrl, shown, error, uploading, upload } = useImageUpload(options)
 
   return (
@@ -136,7 +137,7 @@ export function ImageUploadField({ id, label, ...options }: Props) {
           </>
         )}
       </FileDropzone>
-      <input type="hidden" name="avatarUrl" value={url} />
+      <input type="hidden" name={name} value={url} />
       {error && <FieldError>{error}</FieldError>}
     </Field>
   )

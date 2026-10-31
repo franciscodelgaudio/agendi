@@ -20,7 +20,7 @@ export const PLANS: readonly Plan[] = [
   { id: "anual", name: "Anual", maxUsers: 15, price: 107880, monthlyPrice: 8990, periodDays: 365 },
 ]
 
-// Robô, URA, WhatsApp e Instagram vêm em todos os planos e são cobrados à parte pelo uso.
+// Robô, WhatsApp e Instagram vêm em todos os planos e são cobrados à parte pelo uso.
 // Média estimada por atendimento: template de utilidade da Meta (~R$ 0,06 com impostos)
 // + ~8 trocas no GPT-5.6 Luna (~R$ 0,07), arredondada para cima.
 export const AVG_COST_PER_SERVICE_CENTS = 15

@@ -32,7 +32,6 @@ const permissionLabels: Record<Action, string> = {
   "users.manage": "Convidar, editar e remover usuários",
   "inbox.use": "Usar as Conversas",
   "channels.manage": "Gerenciar canais",
-  "uras.manage": "Gerenciar URAs",
   "workspace.manage": "Editar o workspace (nome e imagem)",
 }
 
@@ -43,7 +42,7 @@ const actionGroups: { name: string; actions: Action[] }[] = [
   { name: "Unidades", actions: ["units.manage"] },
   { name: "Caixa", actions: ["cash_flow.manage"] },
   { name: "Estoque", actions: ["stock.manage", "stock.transfer"] },
-  { name: "Conversas", actions: ["inbox.use", "channels.manage", "uras.manage"] },
+  { name: "Conversas", actions: ["inbox.use", "channels.manage"] },
   { name: "Usuários", actions: ["users.manage"] },
   { name: "Workspace", actions: ["workspace.manage"] },
 ]

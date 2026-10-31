@@ -1,6 +1,6 @@
 import { ClockIcon, BanknoteIcon, SettingsIcon, LeafIcon } from "lucide-react"
 import { ServiceActions } from "@/components/workspace/[workspaceId]/unit/[unitId]/services/service-actions"
-import type { ServiceFieldValues, ServiceRoomOption } from "@/components/workspace/[workspaceId]/unit/[unitId]/services/service-fields"
+import type { ServiceFieldValues, ServiceStationOption } from "@/components/workspace/[workspaceId]/unit/[unitId]/services/service-fields"
 import { CodeCell, CodeHead } from "@/components/shared/record-code"
 import { SortableHead } from "@/components/shared/sortable-head"
 import {
@@ -16,7 +16,7 @@ import { currencyFormat, formatDuration } from "@/components/shared/service-form
 
 type Props = {
   services: (ServiceFieldValues & { id: string })[]
-  treatmentRooms: ServiceRoomOption[]
+  stations: ServiceStationOption[]
   query: ServiceListQuery
   pathname: string
   workspaceId: string
@@ -25,7 +25,7 @@ type Props = {
   canManage: boolean
 }
 
-export function ServiceTable({ services, treatmentRooms, query, pathname, workspaceId, unitId, canManage }: Props) {
+export function ServiceTable({ services, stations, query, pathname, workspaceId, unitId, canManage }: Props) {
   return (
     <div className="border">
       <Table>
@@ -68,7 +68,7 @@ export function ServiceTable({ services, treatmentRooms, query, pathname, worksp
                 <TableCell className="px-4 text-muted-foreground @max-md:hidden">{formatDuration(service.durationMinutes)}</TableCell>
                 {canManage && (
                   <TableCell className="px-4 text-right">
-                    <ServiceActions workspaceId={workspaceId} unitId={unitId} service={service} treatmentRooms={treatmentRooms} />
+                    <ServiceActions workspaceId={workspaceId} unitId={unitId} service={service} stations={stations} />
                   </TableCell>
                 )}
               </TableRow>

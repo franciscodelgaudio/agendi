@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { AmountInput } from "@/components/shared/amount-input"
 import { ProductPicker } from "@/components/workspace/[workspaceId]/shared/stock/product-picker"
 
-// Serviços cadastrados antes de requiresTherapist/treatmentRoomIds não os têm: exigem profissional e
+// Serviços cadastrados antes de requiresTherapist/stationIds não os têm: exigem profissional e
 // aceitam qualquer espaço.
 export type ServiceFieldValues = {
   name: string
@@ -15,23 +15,23 @@ export type ServiceFieldValues = {
   durationMinutes: number
   productIds: string[]
   requiresTherapist?: boolean
-  treatmentRoomIds?: string[]
+  stationIds?: string[]
 }
 
 // Espaços da unidade, para limitar onde o serviço pode ser feito.
-export type ServiceRoomOption = { id: string; name: string }
+export type ServiceStationOption = { id: string; name: string }
 
 type Props = {
   idPrefix: string
-  treatmentRooms: ServiceRoomOption[]
+  stations: ServiceStationOption[]
   defaultValues?: ServiceFieldValues
 }
 
 // Os produtos padrão são buscados na unidade da URL.
-export function ServiceFields({ idPrefix, treatmentRooms, defaultValues }: Props) {
+export function ServiceFields({ idPrefix, stations, defaultValues }: Props) {
   const [productIds, setProductIds] = useState(defaultValues?.productIds ?? [])
   const [requiresTherapist, setRequiresTherapist] = useState(defaultValues?.requiresTherapist ?? true)
-  const [roomIds, setRoomIds] = useState(defaultValues?.treatmentRoomIds ?? [])
+  const [roomIds, setRoomIds] = useState(defaultValues?.stationIds ?? [])
 
   return (
     <>
@@ -89,15 +89,15 @@ export function ServiceFields({ idPrefix, treatmentRooms, defaultValues }: Props
           Desmarque em serviços como hidromassagem: o agendamento não pede profissional e não gera comissão.
         </FieldDescription>
       </Field>
-      {treatmentRooms.length > 1 && (
+      {stations.length > 1 && (
         <FieldSet>
-          <FieldLegend variant="label">Espaços (opcional)</FieldLegend>
+          <FieldLegend variant="label">Estações (opcional)</FieldLegend>
           <div className="flex flex-col gap-2">
-            {treatmentRooms.map((room) => (
+            {stations.map((room) => (
               <Field key={room.id} orientation="horizontal">
                 <Checkbox
                   id={`${idPrefix}-room-${room.id}`}
-                  name="treatmentRoomId"
+                  name="stationId"
                   value={room.id}
                   checked={roomIds.includes(room.id)}
                   onCheckedChange={(next) =>
@@ -112,7 +112,7 @@ export function ServiceFields({ idPrefix, treatmentRooms, defaultValues }: Props
               </Field>
             ))}
           </div>
-          <FieldDescription>Nenhum marcado: o serviço pode ser feito em qualquer espaço.</FieldDescription>
+          <FieldDescription>Nenhuma marcada: o serviço pode ser feito em qualquer estação.</FieldDescription>
         </FieldSet>
       )}
       <Field>

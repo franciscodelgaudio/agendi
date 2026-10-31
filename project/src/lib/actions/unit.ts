@@ -4,9 +4,8 @@ import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { getSessionUserId } from "@/service/(auth)/session"
 import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
-import { type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
-import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
-import type { TreatmentRoomInput } from "@/service/workspace/[workspaceId]/unit/[unitId]/treatment-room"
+import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
+import type { StationInput } from "@/service/workspace/[workspaceId]/unit/[unitId]/station"
 import {
   createUnit,
   deleteUnit,
@@ -20,27 +19,23 @@ import { StockItem } from "@/models/StockItem"
 import { Stock } from "@/models/Stock"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
+import { WorkspaceMember } from "@/models/WorkspaceMember"
 import { Service } from "@/models/Service"
 
-const errorMessages: Record<CreateUnitError | UpdateUnitError | "unauthenticated", string> = {
-  invalid_input: "Informe o nome da unidade.",
+const errorMessages: Record<Exclude<CreateUnitError | UpdateUnitError, "forbidden"> | "unauthenticated", string> = {
+  invalid_input: "Preencha todos os campos da unidade.",
   invalid_name: "Informe o nome da unidade.",
   name_too_long: "O nome pode ter no máximo 80 caracteres.",
-  invalid_avatar_url: "Informe uma URL válida começando com http:// ou https://.",
-  invalid_ownership: "Informe onde a unidade funciona.",
-  invalid_period: "Escolha o período do faturamento.",
-  too_many_tiers: "Cadastre no máximo 10 faixas.",
-  invalid_tier_limit: "Os limites das faixas devem ser valores maiores que zero, em ordem crescente.",
-  invalid_tier_percent: "Os percentuais devem estar entre 0 e 100, com até 2 casas decimais.",
-  no_treatment_rooms: "Cadastre pelo menos um espaço.",
-  too_many_treatment_rooms: "Cadastre no máximo 20 espaços.",
-  invalid_treatment_room_name: "Informe o nome de cada espaço.",
-  treatment_room_name_too_long: "O nome do espaço pode ter no máximo 40 caracteres.",
-  duplicate_treatment_room_name: "Cada espaço precisa de um nome diferente.",
-  invalid_treatment_room_beds: "Cada espaço precisa comportar de 1 a 10 atendimentos ao mesmo tempo.",
+  invalid_image_url: "Informe uma URL válida começando com http:// ou https://.",
+  invalid_members: "Algum membro escolhido não é deste workspace. Recarregue a página.",
+  no_stations: "Cadastre pelo menos uma estação.",
+  too_many_stations: "Cadastre no máximo 20 estações.",
+  invalid_station_name: "Informe o nome de cada estação.",
+  station_name_too_long: "O nome da estação pode ter no máximo 40 caracteres.",
+  duplicate_station_name: "Cada estação precisa de um nome diferente.",
   invalid_business_hours: "Informe o horário de funcionamento.",
   invalid_business_hours_order: "O horário de fechamento deve ser depois da abertura.",
-  treatment_room_in_use: "Um espaço removido ainda tem agendamentos. Mova ou exclua os agendamentos antes.",
+  station_in_use: "Uma estação removida ainda tem agendamentos. Desative-a ou mova os agendamentos antes.",
   invalid_opening_balance: "Informe um saldo em caixa de até R$ 1.000.000,00.",
   invalid_opening_balance_date: "Informe o dia do saldo em caixa.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
@@ -48,69 +43,68 @@ const errorMessages: Record<CreateUnitError | UpdateUnitError | "unauthenticated
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
-export type CreateUnitState = { error: string | null }
-export type UpdateUnitState = CreateUnitState
-export type DeleteUnitState = CreateUnitState
+export type UnitFormState = { error: string | null }
 
-// Acesso ao workspace se o usuário puder gerenciar unidades; senão a mensagem de erro.
-async function findManagedAccess(
-  workspaceId: string,
-  userId: string,
-): Promise<{ access: { id: string; actor: Actor } } | { error: string }> {
-  const managed = await findManagedWorkspace(workspaceId, userId, "units.manage")
-  if (!managed.ok) {
-    return { error: managed.error === "forbidden" ? forbiddenMessage("units.manage") : errorMessages[managed.error] }
-  }
-  return { access: managed.access }
+function messageOf(error: CreateUnitError | UpdateUnitError | "unauthenticated") {
+  return error === "forbidden" ? forbiddenMessage("units.manage") : errorMessages[error]
 }
 
-// Sala nova ganha id aqui; a que já existia mantém o seu, e com ele os agendamentos.
-function toTreatmentRoomDocs(rooms: TreatmentRoomInput[]) {
-  return rooms.map(({ id, name, beds }) => ({ _id: new Types.ObjectId(id ?? undefined), name, beds }))
+function toStationDocs(stations: StationInput[]) {
+  return stations.map(({ id, name, active }) => ({ _id: new Types.ObjectId(id ?? undefined), name, active }))
 }
 
-// A ordem dos campos no FormData forma as faixas (um limite para cada, menos a última) e as salas.
+function toObjectIds(ids: string[]) {
+  return ids.map((id) => new Types.ObjectId(id))
+}
+
 function unitInput(formData: FormData) {
   return {
     name: formData.get("name"),
-    avatarUrl: formData.get("avatarUrl"),
-    ownership: formData.get("ownership"),
-    revenueShare: {
-      period: formData.get("revenueSharePeriod"),
-      limits: formData.getAll("tierLimit"),
-      percents: formData.getAll("tierPercent"),
-    },
-    treatmentRooms: {
-      ids: formData.getAll("treatmentRoomId"),
-      names: formData.getAll("treatmentRoomName"),
-      beds: formData.getAll("treatmentRoomBeds"),
+    imageUrl: formData.get("imageUrl"),
+    stations: {
+      ids: formData.getAll("stationId"),
+      names: formData.getAll("stationName"),
+      active: formData.getAll("stationActive"),
     },
     businessHours: { opensAt: formData.get("opensAt"), closesAt: formData.get("closesAt") },
+    workspaceMemberIds: formData.getAll("workspaceMemberId"),
     openingBalance: { amount: formData.get("openingBalance"), date: formData.get("openingBalanceDate") },
   }
 }
 
-// workspaceId vem via argumento do cliente; a posse é conferida aqui, no servidor.
+async function sessionAccess(workspaceId: string) {
+  const userId = await getSessionUserId()
+  if (!userId) return null
+  const access = await findWorkspaceAccess(workspaceId, userId)
+  return { workspaceId: access?.id ?? workspaceId, actor: access?.actor ?? null }
+}
+
+function membersChecker(workspaceId: string) {
+  return async (ids: string[]) =>
+    (await WorkspaceMember.countDocuments({ _id: { $in: toObjectIds(ids) }, workspaceId })) === ids.length
+}
+
+function unitFilter(workspaceId: string, unitId: string) {
+  if (!isObjectIdOrHexString(workspaceId) || !isObjectIdOrHexString(unitId)) return null
+  return { _id: new Types.ObjectId(unitId), workspaceId: new Types.ObjectId(workspaceId) }
+}
+
 export async function createUnitAction(
   workspaceId: string,
-  _prev: CreateUnitState,
+  _prev: UnitFormState,
   formData: FormData,
-): Promise<CreateUnitState> {
-  const userId = await getSessionUserId()
-  if (!userId) return { error: errorMessages.unauthenticated }
+): Promise<UnitFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
 
-  const managed = await findManagedAccess(workspaceId, userId)
-  if ("error" in managed) return managed
-  const { access } = managed
-
-  const result = await createUnit(
-    unitInput(formData),
-    access.id,
-    async (data) => {
-      const { openingBalance, ...unitData } = data
-      const unit = await Unit.create({ ...unitData, treatmentRooms: toTreatmentRoomDocs(data.treatmentRooms) })
-      const id = unit._id.toString()
-      // O saldo informado no cadastro vira uma carteira só da unidade, com o nome dela.
+  const result = await createUnit(unitInput(formData), session, {
+    membersExist: membersChecker(session.workspaceId),
+    insert: async ({ openingBalance, stations, workspaceMemberIds, ...data }) => {
+      const unit = await Unit.create({
+        ...data,
+        stations: toStationDocs(stations),
+        workspaceMemberIds: toObjectIds(workspaceMemberIds),
+      })
       if (openingBalance) {
         await Wallet.create({
           name: unit.name.slice(0, 40),
@@ -119,108 +113,81 @@ export async function createUnitAction(
           workspaceId: data.workspaceId,
         })
       }
-      return { id }
+      return { id: unit._id.toString() }
     },
-  )
+  })
 
-  if (!result.ok) return { error: errorMessages[result.error] }
+  if (!result.ok) return { error: messageOf(result.error) }
 
   refresh()
   return { error: null }
-}
-
-// A escrita ainda filtra por workspaceId para que uma unidade de outro workspace não seja
-// encontrada. Sem sessão ou sem permissão, a mensagem de erro.
-async function resolveUnitTarget(
-  workspaceId: string,
-  unitId: string,
-): Promise<{ ownedId: string; actor: Actor; unitId: string | null } | { error: string }> {
-  const userId = await getSessionUserId()
-  if (!userId) return { error: errorMessages.unauthenticated }
-  const managed = await findManagedAccess(workspaceId, userId)
-  if ("error" in managed) return managed
-  const { access } = managed
-  return { ownedId: access.id, actor: access.actor, unitId: isObjectIdOrHexString(unitId) ? unitId : null }
 }
 
 export async function updateUnitAction(
   workspaceId: string,
   unitId: string,
-  _prev: UpdateUnitState,
+  _prev: UnitFormState,
   formData: FormData,
-): Promise<UpdateUnitState> {
-  const target = await resolveUnitTarget(workspaceId, unitId)
-  if ("error" in target) return target
+): Promise<UnitFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = unitFilter(session.workspaceId, unitId)
 
-  const result = await updateUnit(
-    unitInput(formData),
-    target.unitId,
-    async (id, { name, avatarUrl, revenueShare, treatmentRooms, businessHours }) => {
-      // Campos null saem do documento em vez de ficarem gravados como null.
-      const $unset = { ...(!avatarUrl && { avatarUrl: 1 }), ...(!revenueShare && { revenueShare: 1 }) }
-      const { matchedCount } = await Unit.updateOne(
-        { _id: id, workspaceId: target.ownedId },
-        {
-          $set: {
-            name,
-            treatmentRooms: toTreatmentRoomDocs(treatmentRooms),
-            businessHours,
-            ...(avatarUrl && { avatarUrl }),
-            ...(revenueShare && { revenueShare }),
-          },
-          ...(Object.keys($unset).length && { $unset }),
-        },
-      )
-      if (matchedCount === 0) return false
-      // Espaço removido deixa de ser permitido nos serviços da unidade.
-      const keptRoomIds = treatmentRooms.flatMap((room) => (room.id ? [new Types.ObjectId(room.id)] : []))
-      await Service.updateMany({ unitId: id }, { $pull: { treatmentRoomIds: { $nin: keptRoomIds } } })
-      return true
-    },
-    async (id, keptRoomIds) => {
-      // Unidade de outro workspace não é consultada; a escrita depois devolve unit_not_found.
-      if (!(await Unit.exists({ _id: id, workspaceId: target.ownedId }))) return false
+  const result = await updateUnit(unitInput(formData), filter && unitId, session, {
+    membersExist: membersChecker(session.workspaceId),
+    hasBookingsInRemovedStations: async (id, keptStationIds) => {
+      if (!(await Unit.exists(filter!))) return false
       const inUse = await Booking.exists({
         unitId: id,
         endsAt: { $gt: new Date() },
-        "treatmentRoom.roomId": { $nin: keptRoomIds.map((roomId) => new Types.ObjectId(roomId)) },
+        "station.stationId": { $nin: toObjectIds(keptStationIds) },
       })
       return inUse !== null
     },
-  )
+    update: async (id, { stations, workspaceMemberIds, ...data }) => {
+      const { matchedCount } = await Unit.updateOne(filter!, {
+        $set: { ...data, stations: toStationDocs(stations), workspaceMemberIds: toObjectIds(workspaceMemberIds) },
+      })
+      if (matchedCount === 0) return false
+      const keptStationIds = toObjectIds(stations.flatMap((station) => (station.id ? [station.id] : [])))
+      await Service.updateMany({ unitId: id }, { $pull: { stationIds: { $nin: keptStationIds } } })
+      return true
+    },
+  })
 
-  if (!result.ok) return { error: errorMessages[result.error] }
+  if (!result.ok) return { error: messageOf(result.error) }
 
   refresh()
   return { error: null }
 }
 
-export async function deleteUnitAction(workspaceId: string, unitId: string): Promise<DeleteUnitState> {
-  const target = await resolveUnitTarget(workspaceId, unitId)
-  if ("error" in target) return target
+export async function deleteUnitAction(workspaceId: string, unitId: string): Promise<UnitFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = unitFilter(session.workspaceId, unitId)
 
-  const result = await deleteUnit(target.unitId, async (id) => {
-    const { deletedCount } = await Unit.deleteOne({ _id: id, workspaceId: target.ownedId })
-    if (deletedCount === 0) return false
-    const unitObjectId = new Types.ObjectId(id)
-    await Promise.all([
-      Service.deleteMany({ unitId: id }),
-      Appointment.deleteMany({ unitId: id }),
-      Wallet.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
-      // O estoque próprio da unidade vai junto; o compartilhado continua com as outras.
-      StockItem.deleteMany({ holderId: unitObjectId }),
-      Stock.updateMany({ "units.unitId": unitObjectId }, { $pull: { units: { unitId: unitObjectId } } }),
-    ])
-    // Estoque compartilhado que ficou sem unidades não tem mais quem o use.
-    const orphaned = await Stock.find({ workspaceId: target.ownedId, units: { $size: 0 } }).select({ _id: 1 }).lean()
-    if (orphaned.length > 0) {
-      const ids = orphaned.map((stock) => stock._id)
-      await Promise.all([StockItem.deleteMany({ holderId: { $in: ids } }), Stock.deleteMany({ _id: { $in: ids } })])
-    }
-    return true
+  const result = await deleteUnit(filter && unitId, session, {
+    remove: async (id) => {
+      const { deletedCount } = await Unit.deleteOne(filter!)
+      if (deletedCount === 0) return false
+      const unitObjectId = new Types.ObjectId(id)
+      await Promise.all([
+        Service.deleteMany({ unitId: id }),
+        Appointment.deleteMany({ unitId: id }),
+        Wallet.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
+        StockItem.deleteMany({ holderId: unitObjectId }),
+        Stock.updateMany({ "units.unitId": unitObjectId }, { $pull: { units: { unitId: unitObjectId } } }),
+      ])
+      const orphaned = await Stock.find({ workspaceId: session.workspaceId, units: { $size: 0 } }).select({ _id: 1 }).lean()
+      if (orphaned.length > 0) {
+        const ids = orphaned.map((stock) => stock._id)
+        await Promise.all([StockItem.deleteMany({ holderId: { $in: ids } }), Stock.deleteMany({ _id: { $in: ids } })])
+      }
+      return true
+    },
   })
 
-  if (!result.ok) return { error: errorMessages[result.error] }
+  if (!result.ok) return { error: messageOf(result.error) }
 
   refresh()
   return { error: null }

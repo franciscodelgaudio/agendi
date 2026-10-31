@@ -141,7 +141,7 @@ export function BookingActions({ workspaceId, booking, ...options }: Props) {
                 startsAt: booking.startsAt,
                 durationMinutes: booking.durationMinutes,
                 serviceId: booking.service.serviceId,
-                treatmentRoomId: booking.treatmentRoom.roomId,
+                stationId: booking.station.stationId,
                 productIds: booking.productIds,
                 color: booking.color,
               }}

@@ -35,12 +35,12 @@ const bookingSchema = new Schema(
       ),
       required: true,
     },
-    // Sala da unidade onde acontece o atendimento; o nome é cópia do momento do agendamento.
-    treatmentRoom: {
+    // Estação da unidade onde acontece o atendimento; o nome é cópia do momento do agendamento.
+    station: {
       type: new Schema(
         {
-          roomId: { type: Schema.Types.ObjectId, required: true },
-          roomName: { type: String, required: true },
+          stationId: { type: Schema.Types.ObjectId, required: true },
+          stationName: { type: String, required: true },
         },
         { _id: false },
       ),
@@ -59,8 +59,8 @@ const bookingSchema = new Schema(
 // O calendário filtra por unidades e intervalo; a checagem de conflito, por profissional e intervalo.
 bookingSchema.index({ unitId: 1, startsAt: 1 });
 bookingSchema.index({ therapistId: 1, startsAt: 1 });
-// A ocupação de cada sala.
-bookingSchema.index({ "treatmentRoom.roomId": 1, startsAt: 1 });
+// A ocupação de cada estação.
+bookingSchema.index({ "station.stationId": 1, startsAt: 1 });
 // O uso de cada produto no estoque.
 bookingSchema.index({ "products.productId": 1 });
 

@@ -24,7 +24,7 @@ const errorMessages: Record<CreateServiceError | UpdateServiceError | "workspace
   name_too_long: "O nome pode ter no máximo 80 caracteres.",
   invalid_price: "Informe um valor entre R$ 0,00 e R$ 1.000.000,00, com até 2 casas decimais.",
   invalid_duration: "Informe a duração em minutos, entre 1 e 1440.",
-  treatment_room_not_found: "Algum espaço escolhido não é desta unidade. Recarregue a página.",
+  station_not_found: "Alguma estação escolhida não é desta unidade. Recarregue a página.",
   unit_not_found: "Unidade não encontrada ou sem permissão.",
   service_not_found: "Serviço não encontrado ou sem permissão.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
@@ -51,14 +51,14 @@ function serviceInput(formData: FormData) {
     durationMinutes: formData.get("durationMinutes"),
     productIds: formData.getAll("productId"),
     requiresTherapist: formData.get("requiresTherapist") ?? undefined,
-    treatmentRoomIds: formData.getAll("treatmentRoomId"),
+    stationIds: formData.getAll("stationId"),
   }
 }
 
 // Espaços da unidade entre os ids pedidos.
-async function findUnitTreatmentRooms(unitId: string, ids: string[]) {
-  const unit = await Unit.findById(unitId).select({ "treatmentRooms._id": 1 }).lean()
-  return (unit?.treatmentRooms ?? []).map((room) => ({ id: room._id.toString() })).filter((room) => ids.includes(room.id))
+async function findUnitStations(unitId: string, ids: string[]) {
+  const unit = await Unit.findById(unitId).select({ "stations._id": 1 }).lean()
+  return (unit?.stations ?? []).map((station) => ({ id: station._id.toString() })).filter((station) => ids.includes(station.id))
 }
 
 // workspaceId e unitId vêm via argumento do cliente; a posse é conferida aqui, no servidor.
@@ -78,7 +78,7 @@ export async function createServiceAction(
       return { id: service._id.toString() }
     },
     findProducts: (ids) => findUnitProducts(ownedUnitId, ids),
-    findTreatmentRooms: (ids) => findUnitTreatmentRooms(ownedUnitId, ids),
+    findStations: (ids) => findUnitStations(ownedUnitId, ids),
   })
 
   if (!result.ok) return { error: errorMessages[result.error] }
@@ -110,7 +110,7 @@ export async function updateServiceAction(
       return matchedCount > 0
     },
     findProducts: (ids) => findUnitProducts(target.ownedUnitId, ids),
-    findTreatmentRooms: (ids) => findUnitTreatmentRooms(target.ownedUnitId, ids),
+    findStations: (ids) => findUnitStations(target.ownedUnitId, ids),
   })
 
   if (!result.ok) return { error: errorMessages[result.error] }

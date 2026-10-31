@@ -24,6 +24,7 @@ import { SortableHead } from "@/components/shared/sortable-head"
 import { UserRoleFilter } from "@/components/workspace/[workspaceId]/users/user-filters"
 import { Avatar, AvatarImage } from "@/components/ui/avatar"
 import { InitialFallback } from "@/components/shared/initial-fallback"
+import { userAvatarSrc } from "@/components/shared/user-avatar-src"
 import { Badge } from "@/components/ui/badge"
 import {
   Table,
@@ -202,7 +203,7 @@ function PersonRow({
       <TableCell className="max-w-0 px-4 py-2">
         <div className="flex min-w-0 items-center gap-2.5">
           <Avatar className="size-10">
-            {person.image && <AvatarImage src={person.image} alt={displayName} />}
+            <AvatarImage src={userAvatarSrc(person, 80)} alt={displayName} />
             <InitialFallback name={displayName} />
           </Avatar>
           <span className={person.name ? "truncate font-medium" : "truncate text-muted-foreground"}>

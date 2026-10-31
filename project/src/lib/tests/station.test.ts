@@ -4,7 +4,6 @@ import { parseStations } from "@/service/workspace/[workspaceId]/unit/[unitId]/s
 const SINGLE_ID = "64b7f0c2a1b2c3d4e5f60781";
 const COUPLE_ID = "64b7f0c2a1b2c3d4e5f60782";
 
-// Como chega do FormData: uma posição por estação; id vazio = estação nova; active "true" ou "false".
 describe("parseStations", () => {
   it("lê as estações na ordem do formulário, ativas ou não", () => {
     const result = parseStations({

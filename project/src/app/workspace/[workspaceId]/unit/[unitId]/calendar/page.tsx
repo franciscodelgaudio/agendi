@@ -29,7 +29,7 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
         localField: "_id",
         foreignField: "workspaceId",
         as: "unit",
-        pipeline: [{ $match: { _id: new Types.ObjectId(unitId) } }, { $project: { name: 1, treatmentRooms: 1 } }],
+        pipeline: [{ $match: { _id: new Types.ObjectId(unitId) } }, { $project: { name: 1, stations: 1 } }],
       },
     },
     {
@@ -51,13 +51,13 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
               productIds: { $map: { input: "$productIds", as: "id", in: { $toString: "$$id" } } },
               // Serviço cadastrado antes desses campos exige profissional e aceita qualquer espaço.
               requiresTherapist: { $ifNull: ["$requiresTherapist", true] },
-              treatmentRoomIds: { $map: { input: { $ifNull: ["$treatmentRoomIds", []] }, as: "id", in: { $toString: "$$id" } } },
+              stationIds: { $map: { input: { $ifNull: ["$stationIds", []] }, as: "id", in: { $toString: "$$id" } } },
             },
           },
         ],
       },
     },
-    ...therapistOptionsStages(),
+    ...therapistOptionsStages(unitId),
     {
       $project: {
         _id: 0,
@@ -69,11 +69,11 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
           },
         },
         services: 1,
-        treatmentRooms: {
+        stations: {
           $map: {
-            input: { $ifNull: [{ $first: "$unit.treatmentRooms" }, []] },
-            as: "room",
-            in: { id: { $toString: "$$room._id" }, unitId, name: "$$room.name", beds: "$$room.beds" },
+            input: { $ifNull: [{ $first: "$unit.stations" }, []] },
+            as: "station",
+            in: { id: { $toString: "$$station._id" }, unitId, name: "$$station.name", active: "$$station.active" },
           },
         },
         therapists: 1,

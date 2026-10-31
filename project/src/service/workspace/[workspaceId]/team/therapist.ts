@@ -1,10 +1,10 @@
-import type { PipelineStage } from "mongoose";
+import { Types, type PipelineStage } from "mongoose";
 
 const attendsRoleCond = {
   $or: [{ $eq: ["$$this.admin", true] }, { $in: ["attends", { $ifNull: ["$$this.permissions", []] }] }],
 };
 
-export function therapistOptionsStages(): PipelineStage[] {
+export function therapistOptionsStages(unitId?: string): PipelineStage[] {
   return [
     {
       $set: {
@@ -25,6 +25,16 @@ export function therapistOptionsStages(): PipelineStage[] {
         as: "therapists",
         pipeline: [
           { $match: { $expr: { $in: ["$roleId", "$$roleIds"] } } },
+          {
+            $lookup: {
+              from: "units",
+              localField: "_id",
+              foreignField: "workspaceMemberIds",
+              as: "memberUnits",
+              pipeline: [{ $project: { _id: 1 } }],
+            },
+          },
+          ...(unitId ? [{ $match: { "memberUnits._id": new Types.ObjectId(unitId) } }] : []),
           { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
           { $unwind: "$user" },
           {
@@ -33,6 +43,7 @@ export function therapistOptionsStages(): PipelineStage[] {
               id: { $toString: "$userId" },
               name: { $ifNull: ["$user.name", "$user.email"] },
               image: { $ifNull: ["$user.avatarUrl", null] },
+              unitIds: { $map: { input: "$memberUnits", in: { $toString: "$$this._id" } } },
             },
           },
           { $sort: { name: 1, id: 1 } },

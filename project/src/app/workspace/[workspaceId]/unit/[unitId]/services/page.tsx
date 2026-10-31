@@ -7,7 +7,7 @@ import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { parseServiceListQuery, serviceListPipeline } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service-list"
 import { Workspace } from "@/models/Workspace"
 import { CreateServiceSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/services/create-service-sheet"
-import type { ServiceFieldValues, ServiceRoomOption } from "@/components/workspace/[workspaceId]/unit/[unitId]/services/service-fields"
+import type { ServiceFieldValues, ServiceStationOption } from "@/components/workspace/[workspaceId]/unit/[unitId]/services/service-fields"
 import { ListSearch } from "@/components/shared/list-search"
 import { ServiceTable } from "@/components/workspace/[workspaceId]/unit/[unitId]/services/service-table"
 import {
@@ -37,7 +37,7 @@ export default async function ServicesPage({
   // O total sem filtro separa "unidade sem serviços" de "busca sem resultado".
   const [workspace] = await Workspace.aggregate<{
     actor: Actor
-    unit: { services: ServiceRow[]; serviceCount: number; treatmentRooms: ServiceRoomOption[] } | null
+    unit: { services: ServiceRow[]; serviceCount: number; stations: ServiceStationOption[] } | null
   }>([
     ...access,
     {
@@ -71,8 +71,8 @@ export default async function ServicesPage({
               _id: 0,
               services: 1,
               serviceCount: { $ifNull: [{ $first: "$serviceCount.n" }, 0] },
-              treatmentRooms: {
-                $map: { input: "$treatmentRooms", as: "room", in: { id: { $toString: "$$room._id" }, name: "$$room.name" } },
+              stations: {
+                $map: { input: "$stations", as: "station", in: { id: { $toString: "$$station._id" }, name: "$$station.name" } },
               },
             },
           },
@@ -82,7 +82,7 @@ export default async function ServicesPage({
     { $project: { _id: 0, actor: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   if (!workspace?.unit) notFound()
-  const { services, serviceCount, treatmentRooms } = workspace.unit
+  const { services, serviceCount, stations } = workspace.unit
   const canManage = can(workspace.actor, "services.manage")
 
   return (
@@ -90,7 +90,7 @@ export default async function ServicesPage({
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-lg font-semibold tracking-tight">Serviços</h3>
         {canManage && serviceCount > 0 && (
-          <CreateServiceSheet workspaceId={workspaceId} unitId={unitId} treatmentRooms={treatmentRooms} />
+          <CreateServiceSheet workspaceId={workspaceId} unitId={unitId} stations={stations} />
         )}
       </div>
       {serviceCount === 0 ? (
@@ -108,7 +108,7 @@ export default async function ServicesPage({
           </EmptyHeader>
           {canManage && (
             <EmptyContent>
-              <CreateServiceSheet workspaceId={workspaceId} unitId={unitId} treatmentRooms={treatmentRooms} />
+              <CreateServiceSheet workspaceId={workspaceId} unitId={unitId} stations={stations} />
             </EmptyContent>
           )}
         </Empty>
@@ -117,7 +117,7 @@ export default async function ServicesPage({
           <ListSearch query={query} placeholder="Buscar serviço..." />
           <ServiceTable
             services={services}
-            treatmentRooms={treatmentRooms}
+            stations={stations}
             query={query}
             pathname={`/workspace/${workspaceId}/unit/${unitId}/services`}
             workspaceId={workspaceId}

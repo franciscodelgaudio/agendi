@@ -41,7 +41,7 @@ export function CorrectBookingForm({
           startsAt: booking.startsAt,
           durationMinutes: booking.durationMinutes,
           serviceId: booking.service.serviceId,
-          treatmentRoomId: booking.treatmentRoom.roomId,
+          stationId: booking.station.stationId,
           productIds: booking.productIds,
           color: booking.color,
         }}

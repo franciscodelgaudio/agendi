@@ -12,14 +12,13 @@ const errorMessages: Record<UploadImageError, string> = {
 }
 
 // Pasta no bucket, conferindo a permissão de quem envia: imagem do workspace exige editar o
-// workspace; de unidade, gerenciar unidades; de nó de mídia, gerenciar URAs; de produto (do
-// catálogo do workspace), gerenciar o estoque. null = sem permissão.
+// workspace; de unidade, gerenciar unidades; de produto (do catálogo do workspace), gerenciar
+// o estoque. null = sem permissão.
 async function resolveFolder(workspaceId: string, userId: string, target: FormDataEntryValue | null) {
-  if (target === "workspace" || target === "unit" || target === "ura") {
+  if (target === "workspace" || target === "unit") {
     const access = await findWorkspaceAccess(workspaceId, userId)
-    const permission = target === "ura" ? "uras.manage" : target === "unit" ? "units.manage" : "workspace.manage"
+    const permission = target === "unit" ? "units.manage" : "workspace.manage"
     if (!access || !can(access.actor, permission)) return null
-    if (target === "ura") return `workspaces/${access.id}/uras`
     return target === "unit" ? `workspaces/${access.id}/units` : `workspaces/${access.id}`
   }
   if (target === "product") {
@@ -29,7 +28,7 @@ async function resolveFolder(workspaceId: string, userId: string, target: FormDa
   return null
 }
 
-// Recebe a imagem (multipart: file, target=workspace|unit|ura|product) e devolve a URL pública no R2.
+// Recebe a imagem (multipart: file, target=workspace|unit|product) e devolve a URL pública no R2.
 // A URL volta para o formulário, que a salva no campo avatarUrl.
 export async function POST(request: Request, { params }: RouteContext<"/api/workspace/[workspaceId]/uploads">) {
   const { workspaceId } = await params

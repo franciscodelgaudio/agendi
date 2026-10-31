@@ -3,9 +3,8 @@ import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permiss
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { unitListPipeline, parseUnitListQuery } from "@/service/workspace/[workspaceId]/unit/unit-list"
-import type { BusinessHours } from "@/service/workspace/[workspaceId]/unit/[unitId]/business-hours"
-import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share"
-import type { TreatmentRoomOption } from "@/components/workspace/[workspaceId]/unit/treatment-room-fields"
+import type { UnitFormValues } from "@/components/workspace/[workspaceId]/unit/unit-fields"
+import type { MemberOption } from "@/components/workspace/[workspaceId]/unit/unit-member-fields"
 import { Workspace } from "@/models/Workspace"
 import { CreateUnitSheet } from "@/components/workspace/[workspaceId]/unit/create-unit-sheet"
 import { ListSearch } from "@/components/shared/list-search"
@@ -26,16 +25,8 @@ export default async function UnitsPage({
   // Parte do workspace (e não de units) para que o acesso ao workspace seja garantido.
   // O total sem filtro separa "workspace sem unidades" de "busca sem resultado".
   const [workspace] = await Workspace.aggregate<{
-    units: {
-      id: string
-      name: string
-      avatarUrl: string | null
-      revenueShare: RevenueShare | null
-      treatmentRooms: TreatmentRoomOption[]
-      businessHours: BusinessHours
-      createdAt: Date
-      updatedAt: Date
-    }[]
+    units: (UnitFormValues & { createdAt: Date; updatedAt: Date })[]
+    members: MemberOption[]
     unitCount: number
     actor: Actor
   }>([
@@ -59,31 +50,47 @@ export default async function UnitsPage({
       },
     },
     {
+      $lookup: {
+        from: "workspace_members",
+        localField: "_id",
+        foreignField: "workspaceId",
+        as: "members",
+        pipeline: [
+          { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
+          { $unwind: "$user" },
+          { $project: { _id: 0, id: { $toString: "$_id" }, name: { $ifNull: ["$user.name", "$user.email"] } } },
+          { $sort: { name: 1, id: 1 } },
+        ],
+      },
+    },
+    {
       $project: {
         _id: 0,
         units: 1,
+        members: 1,
         actor: 1,
         unitCount: { $ifNull: [{ $first: "$unitCount.n" }, 0] },
       },
     },
   ])
   if (!workspace) notFound()
-  const { units, unitCount } = workspace
+  const { units, members, unitCount } = workspace
   const canManage = can(workspace.actor, "units.manage")
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-2xl font-semibold tracking-tight">Unidades</h2>
-        {canManage && unitCount > 0 && <CreateUnitSheet workspaceId={workspaceId} />}
+        {canManage && unitCount > 0 && <CreateUnitSheet workspaceId={workspaceId} members={members} />}
       </div>
       {unitCount === 0 ? (
-        <UnitsEmpty workspaceId={workspaceId} canManage={canManage} />
+        <UnitsEmpty workspaceId={workspaceId} canManage={canManage} members={members} />
       ) : (
         <>
           <ListSearch query={query} placeholder="Buscar unidade..." />
           <UnitTable
             units={units}
+            members={members}
             query={query}
             pathname={`/workspace/${workspaceId}/unit`}
             workspaceId={workspaceId}

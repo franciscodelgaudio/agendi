@@ -9,7 +9,6 @@ const attendsRoleCond = {
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 
 describe("therapistOptionsStages", () => {
-  // Membros que atendem, com as unidades de que fazem parte (unitIds), para filtrar por unidade.
   const stages = (memberFilter: object[]) => [
     {
       $set: {

@@ -4,23 +4,23 @@ import { useState } from "react"
 import { PlusIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { FieldSeparator } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
-const MAX_ROOMS = 20
+const MAX_STATIONS = 20
 
-export type TreatmentRoomOption = { id: string; name: string; beds: number }
+export type StationOption = { id: string; name: string; active: boolean }
 
-// id vazio = espaço novo.
-type Row = { key: number; id: string; name: string; beds: string }
+type Row = { key: number; id: string; name: string; active: boolean }
 
-function toRows(rooms: TreatmentRoomOption[] | undefined): Row[] {
-  if (!rooms?.length) return [{ key: 0, id: "", name: "", beds: "1" }]
-  return rooms.map((room, key) => ({ key, id: room.id, name: room.name, beds: String(room.beds) }))
+function toRows(stations: StationOption[] | undefined): Row[] {
+  if (!stations?.length) return [{ key: 0, id: "", name: "", active: true }]
+  return stations.map((station, key) => ({ key, ...station }))
 }
 
-// Espaços da unidade (salas, hidromassagem, sauna...), com quantos atendimentos cada um comporta ao mesmo tempo.
-export function TreatmentRoomFields({ idPrefix, defaultValue }: { idPrefix: string; defaultValue?: TreatmentRoomOption[] }) {
+export function StationFields({ idPrefix, defaultValue }: { idPrefix: string; defaultValue?: StationOption[] }) {
   const [rows, setRows] = useState(() => toRows(defaultValue))
 
   function updateRow(key: number, patch: Partial<Row>) {
@@ -29,43 +29,32 @@ export function TreatmentRoomFields({ idPrefix, defaultValue }: { idPrefix: stri
 
   return (
     <>
-      <FieldSeparator>Espaços</FieldSeparator>
+      <FieldSeparator>Estações</FieldSeparator>
       <div className="divide-y border">
         {rows.map((row, index) => (
           <div key={row.key} className="flex items-center gap-2 p-3">
-            {/* A ordem dos campos no FormData forma os espaços. */}
-            <input type="hidden" name="treatmentRoomId" value={row.id} />
+            <input type="hidden" name="stationId" value={row.id} />
+            <input type="hidden" name="stationActive" value={String(row.active)} />
             <Input
-              id={`${idPrefix}-room-${row.key}`}
-              name="treatmentRoomName"
-              placeholder="Sala Casal, Hidromassagem..."
-              aria-label={`Nome do espaço ${index + 1}`}
+              id={`${idPrefix}-station-${row.key}`}
+              name="stationName"
+              placeholder="Maca 1, Hidromassagem..."
+              aria-label={`Nome da estação ${index + 1}`}
               value={row.name}
               onChange={(e) => updateRow(row.key, { name: e.target.value })}
               maxLength={40}
               required
             />
-            <Input
-              name="treatmentRoomBeds"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={10}
-              step={1}
-              aria-label={`Capacidade do espaço ${index + 1}`}
-              title="Atendimentos ao mesmo tempo"
-              className="w-20 shrink-0"
-              value={row.beds}
-              onChange={(e) => updateRow(row.key, { beds: e.target.value })}
-              required
-            />
-            <span className="shrink-0 text-sm text-muted-foreground">por vez</span>
+            <Label className="shrink-0 gap-2 text-sm font-normal text-muted-foreground">
+              <Checkbox checked={row.active} onCheckedChange={(checked) => updateRow(row.key, { active: checked })} />
+              Ativa
+            </Label>
             {rows.length > 1 && (
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                aria-label={`Remover espaço ${index + 1}`}
+                aria-label={`Remover estação ${index + 1}`}
                 onClick={() => setRows((current) => current.filter((r) => r.key !== row.key))}
               >
                 <Trash2Icon />
@@ -74,7 +63,7 @@ export function TreatmentRoomFields({ idPrefix, defaultValue }: { idPrefix: stri
           </div>
         ))}
 
-        {rows.length < MAX_ROOMS && (
+        {rows.length < MAX_STATIONS && (
           <Button
             type="button"
             variant="ghost"
@@ -82,12 +71,12 @@ export function TreatmentRoomFields({ idPrefix, defaultValue }: { idPrefix: stri
             onClick={() =>
               setRows((current) => [
                 ...current,
-                { key: Math.max(...current.map((r) => r.key)) + 1, id: "", name: "", beds: "1" },
+                { key: Math.max(...current.map((r) => r.key)) + 1, id: "", name: "", active: true },
               ])
             }
           >
             <PlusIcon />
-            Adicionar espaço
+            Adicionar estação
           </Button>
         )}
       </div>

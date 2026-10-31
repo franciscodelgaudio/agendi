@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { InitialFallback } from "@/components/shared/initial-fallback"
+import { userAvatarSrc } from "@/components/shared/user-avatar-src"
 import { RoleSelect, type RoleChoices } from "@/components/workspace/[workspaceId]/users/member-fields"
 import { INVITE_STATUS_LABELS } from "@/components/workspace/[workspaceId]/users/user-labels"
 import {
@@ -216,7 +217,7 @@ function ManageMemberForm({
         <SectionLabel icon={UserIcon}>Informações do usuário</SectionLabel>
         <div className="flex items-center gap-4 bg-muted p-4">
           <Avatar className="size-18">
-            {member.image && <AvatarImage src={member.image} alt={displayName} />}
+            <AvatarImage src={userAvatarSrc(member, 144)} alt={displayName} />
             <InitialFallback name={displayName} className="text-2xl" />
           </Avatar>
           <div className="flex min-w-0 flex-1 flex-col gap-2">

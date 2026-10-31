@@ -5,6 +5,7 @@ import { ChevronsUpDownIcon, GraduationCapIcon, LogOutIcon } from "lucide-react"
 import { useTour } from "@/components/workspace/[workspaceId]/tour/tour"
 import { Avatar, AvatarImage } from "@/components/ui/avatar"
 import { InitialFallback } from "@/components/shared/initial-fallback"
+import { userAvatarSrc } from "@/components/shared/user-avatar-src"
 import { Spinner } from "@/components/ui/spinner"
 import {
   DropdownMenu,
@@ -39,7 +40,7 @@ export function NavUser({ user, logoutAction }: Props) {
   const userInfo = (
     <>
       <Avatar className="size-8 rounded-[0.625rem] after:rounded-[0.625rem]">
-        {user.image && <AvatarImage src={user.image} alt={name} className="rounded-[0.625rem]" />}
+        <AvatarImage src={userAvatarSrc(user, 64)} alt={name} className="rounded-[0.625rem]" />
         <InitialFallback name={name} className="rounded-[0.625rem]" />
       </Avatar>
       <div className="grid flex-1 text-left text-sm leading-tight">

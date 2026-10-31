@@ -56,7 +56,7 @@ export default async function UnitCalendarListPage({
       bookings: BookingPage
       total: number
       services: BookingOptions["services"]
-      treatmentRooms: BookingOptions["treatmentRooms"]
+      stations: BookingOptions["stations"]
     } | null
   }>([
     ...access,
@@ -105,7 +105,7 @@ export default async function UnitCalendarListPage({
                     productIds: { $map: { input: "$productIds", as: "id", in: { $toString: "$$id" } } },
                     // Serviço cadastrado antes desses campos exige profissional e aceita qualquer espaço.
                     requiresTherapist: { $ifNull: ["$requiresTherapist", true] },
-                    treatmentRoomIds: { $map: { input: { $ifNull: ["$treatmentRoomIds", []] }, as: "id", in: { $toString: "$$id" } } },
+                    stationIds: { $map: { input: { $ifNull: ["$stationIds", []] }, as: "id", in: { $toString: "$$id" } } },
                   },
                 },
               ],
@@ -116,15 +116,15 @@ export default async function UnitCalendarListPage({
               _id: 0,
               bookings: { $first: "$bookings" },
               services: 1,
-              treatmentRooms: {
+              stations: {
                 $map: {
-                  input: "$treatmentRooms",
-                  as: "room",
+                  input: "$stations",
+                  as: "station",
                   in: {
-                    id: { $toString: "$$room._id" },
+                    id: { $toString: "$$station._id" },
                     unitId: { $toString: "$_id" },
-                    name: "$$room.name",
-                    beds: "$$room.beds",
+                    name: "$$station.name",
+                    active: "$$station.active",
                   },
                 },
               },
@@ -134,14 +134,14 @@ export default async function UnitCalendarListPage({
         ],
       },
     },
-    ...therapistOptionsStages(),
+    ...therapistOptionsStages(unitId),
     { $project: { _id: 0, actor: 1, therapists: 1, unit: { $ifNull: [{ $first: "$unit" }, null] } } },
   ])
   if (!workspace?.unit) notFound()
-  const { bookings: result, total, services, treatmentRooms } = workspace.unit
+  const { bookings: result, total, services, stations } = workspace.unit
   const { therapists } = workspace
   const canManage = can(workspace.actor, "bookings.manage")
-  const options = { services, therapists, treatmentRooms }
+  const options = { services, therapists, stations }
 
   const base = `/workspace/${workspaceId}/unit/${unitId}/calendar`
   const pathname = `${base}/list`

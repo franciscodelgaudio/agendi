@@ -35,6 +35,7 @@ import { timeFormat } from "@/components/shared/service-format"
 import type { TherapistOption } from "@/components/workspace/[workspaceId]/shared/team/therapist-avatar"
 import { CardEmpty, CardLink, money, plural, RankList, StatTile, TodaySchedule, type TodayBooking } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-overview"
 import { UnitsEmpty } from "@/components/workspace/[workspaceId]/unit/units-empty"
+import type { MemberOption } from "@/components/workspace/[workspaceId]/unit/unit-member-fields"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -65,7 +66,7 @@ function sumAmounts(list: ExpenseCashFlowAmounts[]): ExpenseCashFlowAmounts {
 type UnitInfo = {
   id: string
   name: string
-  avatarUrl: string | null
+  imageUrl: string | null
 }
 
 // Página inicial: visão geral de todas as unidades do workspace.
@@ -82,6 +83,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     name: string
     actor: Actor
     units: UnitInfo[]
+    members: MemberOption[]
     therapists: TherapistOption[]
   }>([
     ...access,
@@ -98,14 +100,28 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
               _id: 0,
               id: { $toString: "$_id" },
               name: 1,
-              avatarUrl: { $ifNull: ["$avatarUrl", null] },
+              imageUrl: { $ifNull: ["$imageUrl", null] },
             },
           },
         ],
       },
     },
+    {
+      $lookup: {
+        from: "workspace_members",
+        localField: "_id",
+        foreignField: "workspaceId",
+        as: "members",
+        pipeline: [
+          { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
+          { $unwind: "$user" },
+          { $project: { _id: 0, id: { $toString: "$_id" }, name: { $ifNull: ["$user.name", "$user.email"] } } },
+          { $sort: { name: 1, id: 1 } },
+        ],
+      },
+    },
     ...therapistOptionsStages(),
-    { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, actor: 1, units: 1, therapists: 1 } },
+    { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, actor: 1, units: 1, members: 1, therapists: 1 } },
   ])
   if (!workspace) notFound()
   const { units } = workspace
@@ -114,7 +130,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
   if (units.length === 0) {
     return (
       <div className="flex flex-1 flex-col p-4">
-        <UnitsEmpty workspaceId={workspace.id} canManage={canManage} />
+        <UnitsEmpty workspaceId={workspace.id} canManage={canManage} members={workspace.members} />
       </div>
     )
   }
@@ -211,7 +227,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
             {todayFormat.format(toDate(today))} · {plural(units.length, "unidade", "unidades")}
           </span>
         </div>
-        {canManage && <CreateUnitSheet workspaceId={workspace.id} />}
+        {canManage && <CreateUnitSheet workspaceId={workspace.id} members={workspace.members} />}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -308,7 +324,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
               items={unitRanking.slice(0, TOP_ITEMS).map(({ unit, month, services }) => ({
                 id: unit.id,
                 name: unit.name,
-                image: unit.avatarUrl,
+                image: unit.imageUrl,
                 href: `${base}/unit/${unit.id}`,
                 real: { count: services.done, cents: month.real.grossCents },
                 forecast: { count: services.done + services.scheduled, cents: month.forecast.grossCents },

@@ -97,7 +97,7 @@ function appointmentLookups(unit: { workspaceId: string; unitId: string }) {
         requiresTherapist: requiresTherapist ?? true,
       }))
     },
-    findTherapists: (ids: string[]) => findWorkspaceTherapists(unit.workspaceId, ids),
+    findTherapists: (ids: string[]) => findWorkspaceTherapists(unit.workspaceId, ids, unit.unitId),
     findProducts: (ids: string[]) => findUnitProducts(unit.unitId, ids),
   }
 }

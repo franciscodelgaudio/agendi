@@ -1,7 +1,7 @@
 import Link from "@/components/shared/link"
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { ArrowLeftIcon, BotIcon, CheckCheckIcon, CheckIcon, CircleAlertIcon, ClockIcon, PaperclipIcon } from "lucide-react"
+import { ArrowLeftIcon, CheckCheckIcon, CheckIcon, CircleAlertIcon, ClockIcon, PaperclipIcon } from "lucide-react"
 import { cn } from "@/service/_shared/utils"
 import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { messageTypeLabels } from "@/service/workspace/[workspaceId]/inbox/messaging-inbox"
@@ -31,8 +31,6 @@ type ConversationView = {
   status: "open" | "closed"
   assignedUserId: string | null
   assignedName: string | null
-  // Sessão de URA em andamento na conversa.
-  session: { uraName: string; status: "running" | "waiting" | "sleeping" } | null
   messages: {
     id: string
     direction: MessageDirection
@@ -41,13 +39,8 @@ type ConversationView = {
     status: DeliveryStatus | null
     error: string | null
     sentAt: Date
-    uraName: string | null
-    mediaUrl: string | null
-    options: { title: string; description: string | null }[] | null
   }[]
 }
-
-const sessionStatusLabels = { running: "rodando", waiting: "aguardando resposta", sleeping: "em pausa" }
 
 const whenFormat = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
@@ -95,19 +88,6 @@ export default async function ConversationPage({
           },
           {
             $lookup: {
-              from: "ura_sessions",
-              localField: "_id",
-              foreignField: "conversationId",
-              as: "session",
-              pipeline: [
-                { $match: { status: { $in: ["running", "waiting", "sleeping"] } } },
-                { $lookup: { from: "uras", localField: "uraId", foreignField: "_id", as: "ura" } },
-                { $project: { _id: 0, status: 1, uraName: { $ifNull: [{ $first: "$ura.name" }, "URA"] } } },
-              ],
-            },
-          },
-          {
-            $lookup: {
               from: "messages",
               localField: "_id",
               foreignField: "conversationId",
@@ -116,7 +96,6 @@ export default async function ConversationPage({
                 { $sort: { sentAt: -1 } },
                 { $limit: MESSAGE_LIMIT },
                 { $sort: { sentAt: 1 } },
-                { $lookup: { from: "uras", localField: "sentByUraId", foreignField: "_id", as: "ura" } },
                 {
                   $project: {
                     _id: 0,
@@ -127,12 +106,6 @@ export default async function ConversationPage({
                     status: 1,
                     error: 1,
                     sentAt: 1,
-                    // URA apagada depois do envio continua identificada como URA.
-                    uraName: {
-                      $cond: [{ $ifNull: ["$sentByUraId", false] }, { $ifNull: [{ $first: "$ura.name" }, "URA"] }, null],
-                    },
-                    mediaUrl: { $ifNull: ["$mediaUrl", null] },
-                    options: { $ifNull: ["$options", null] },
                   },
                 },
               ],
@@ -151,7 +124,6 @@ export default async function ConversationPage({
               status: { $ifNull: ["$status", "open"] },
               assignedUserId: { $toString: "$assignedUserId" },
               assignedName: { $ifNull: [{ $first: "$assigned.name" }, null] },
-              session: { $ifNull: [{ $first: "$session" }, null] },
               messages: 1,
             },
           },
@@ -196,17 +168,10 @@ export default async function ConversationPage({
           </span>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {conversation.session && (
-            <Badge variant="secondary" className="max-sm:hidden">
-              <BotIcon />
-              {conversation.session.uraName} · {sessionStatusLabels[conversation.session.status]}
-            </Badge>
-          )}
           {conversation.status === "closed" && <Badge variant="outline">Encerrada</Badge>}
           <ConversationActions
             workspaceId={workspaceId}
             conversationId={conversation.id}
-            uraRunning={!!conversation.session}
             assignedToMe={conversation.assignedUserId === user.id}
             closed={conversation.status === "closed"}
           />
@@ -250,40 +215,13 @@ function MessageBubble({ message }: { message: ConversationView["messages"][numb
           failed && "bg-destructive/10 text-foreground ring-1 ring-destructive/40",
         )}
       >
-        {message.uraName && (
+        {message.type !== "text" && (
           <span className="flex items-center gap-1 text-xs opacity-80">
-            <BotIcon className="size-3" />
-            {message.uraName}
+            <PaperclipIcon className="size-3" />
+            {messageTypeLabels[message.type]}
           </span>
         )}
-        {message.type === "image" && message.mediaUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- link externo enviado pela URA
-          <img src={message.mediaUrl} alt="" className="mt-1 max-h-60 rounded" />
-        ) : (
-          message.type !== "text" && (
-            <span className="flex items-center gap-1 text-xs opacity-80">
-              <PaperclipIcon className="size-3" />
-              {message.mediaUrl ? (
-                <a href={message.mediaUrl} target="_blank" rel="noreferrer" className="underline">
-                  {messageTypeLabels[message.type]}
-                </a>
-              ) : (
-                messageTypeLabels[message.type]
-              )}
-            </span>
-          )
-        )}
         {message.text && <p className="break-words whitespace-pre-wrap">{message.text}</p>}
-        {message.options && (
-          <ol className="mt-2 grid gap-1 border-t border-current/20 pt-2 text-xs">
-            {message.options.map((option, i) => (
-              <li key={i}>
-                {i + 1}. {option.title}
-                {option.description && <span className="opacity-70"> — {option.description}</span>}
-              </li>
-            ))}
-          </ol>
-        )}
       </div>
       <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
         {whenFormat.format(message.sentAt)}

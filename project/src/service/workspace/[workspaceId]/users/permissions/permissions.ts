@@ -14,7 +14,6 @@ export const PERMISSIONS = [
   "users.manage",
   "inbox.use",
   "channels.manage",
-  "uras.manage",
   "workspace.manage",
   "attends",
 ] as const;

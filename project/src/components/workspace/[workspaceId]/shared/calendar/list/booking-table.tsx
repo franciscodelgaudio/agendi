@@ -149,7 +149,7 @@ export function BookingTable({ bookings, query, pathname, workspaceId, options, 
                   <TableCell className="max-w-0 truncate px-4 @max-lg:hidden">
                     {booking.service.serviceName}{" "}
                     <span className="text-muted-foreground">
-                      · {formatDuration(booking.durationMinutes)} · {booking.treatmentRoom.roomName}
+                      · {formatDuration(booking.durationMinutes)} · {booking.station.stationName}
                     </span>
                   </TableCell>
                   {canManage && (

@@ -3,7 +3,7 @@
 import { isObjectIdOrHexString, type Types } from "mongoose"
 import { forbiddenMessage, type UnitAccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
 import { getSessionUserId } from "@/service/(auth)/session"
-import { blockChecker, bookingLookups, conflictChecker, findUnitTreatmentRoom, roomBookingsFinder } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-store"
+import { blockChecker, bookingLookups, conflictChecker, findUnitStation, stationBookingsFinder } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-store"
 import { findManagedUnit } from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-access"
 import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
 import {
@@ -20,10 +20,10 @@ import { Booking } from "@/models/Booking"
 import { Unit } from "@/models/Unit"
 
 const errorMessages: Record<BookingError | "workspace_not_found" | "unauthenticated", string> = {
-  invalid_input: "Preencha profissional, espaço, hóspede, quarto, início e duração.",
+  invalid_input: "Preencha profissional, estação, hóspede, quarto, início e duração.",
   invalid_therapist: "Escolha o profissional.",
   invalid_service: "Escolha o serviço.",
-  invalid_treatment_room: "Escolha o espaço.",
+  invalid_station: "Escolha a estação.",
   invalid_guest_name: "Informe o nome do hóspede.",
   guest_name_too_long: "O nome do hóspede pode ter no máximo 80 caracteres.",
   invalid_room: "Informe o quarto.",
@@ -32,12 +32,13 @@ const errorMessages: Record<BookingError | "workspace_not_found" | "unauthentica
   invalid_duration: "O agendamento precisa durar entre 5 minutos e 12 horas.",
   invalid_color: "Escolha uma cor da lista.",
   service_not_found: "O serviço escolhido não é desta unidade. Recarregue a página.",
-  therapist_not_found: "O profissional escolhido não pode atender neste workspace. Recarregue a página.",
+  therapist_not_found: "O profissional escolhido não atende nesta unidade. Recarregue a página.",
   therapist_busy: "O profissional já tem um agendamento nesse horário.",
   therapist_unavailable: "O profissional está indisponível nesse horário (agenda travada).",
-  treatment_room_not_found: "O espaço escolhido não é desta unidade. Recarregue a página.",
-  treatment_room_not_allowed: "Este serviço não pode ser feito no espaço escolhido.",
-  room_full: "O espaço já está lotado nesse horário.",
+  station_not_found: "A estação escolhida não é desta unidade. Recarregue a página.",
+  station_not_allowed: "Este serviço não pode ser feito na estação escolhida.",
+  station_inactive: "A estação escolhida está desativada.",
+  station_busy: "A estação já tem um agendamento nesse horário.",
   unit_not_found: "Escolha uma unidade válida deste workspace.",
   booking_not_found: "Agendamento não encontrado ou sem permissão.",
   booking_registered: "Este agendamento acabou de virar atendimento. Recarregue a página para corrigi-lo.",
@@ -58,7 +59,7 @@ function bookingInput(formData: FormData) {
     startsAt: formData.get("startsAt"),
     durationMinutes: formData.get("durationMinutes"),
     serviceId: formData.get("serviceId"),
-    treatmentRoomId: formData.get("treatmentRoomId"),
+    stationId: formData.get("stationId"),
     productIds: formData.getAll("productId"),
     color: formData.get("color"),
   }
@@ -220,17 +221,17 @@ export async function rescheduleBookingAction(
   const result = await rescheduleBooking(times, isObjectIdOrHexString(bookingId) ? bookingId : null, {
     findBooking: async (id) => {
       const booking = await Booking.findOne({ _id: id, unitId: { $in: unitIds } })
-        .select({ therapistId: 1, unitId: 1, treatmentRoom: 1, startsAt: 1, endsAt: 1, appointmentId: 1 })
+        .select({ therapistId: 1, unitId: 1, station: 1, startsAt: 1, endsAt: 1, appointmentId: 1 })
         .lean()
       if (!booking) return null
-      const [room, appointment] = await Promise.all([
-        findUnitTreatmentRoom(booking.unitId, booking.treatmentRoom.roomId.toString()),
+      const [station, appointment] = await Promise.all([
+        findUnitStation(booking.unitId, booking.station.stationId.toString()),
         booking.appointmentId && Appointment.findById(booking.appointmentId).select({ items: 1 }).lean(),
       ])
       appointmentId = appointment ? booking.appointmentId ?? null : null
       return {
         therapistId: booking.therapistId?.toString() ?? null,
-        treatmentRoom: room && { roomId: room.id, beds: room.beds },
+        station: station && { stationId: station.id, active: station.active },
         ...(appointment && {
           registered: {
             serviceCount: appointment.items.length,
@@ -241,7 +242,7 @@ export async function rescheduleBookingAction(
     },
     hasConflict: conflictChecker(unitIds),
     isBlocked: blockChecker(workspaceId),
-    findRoomBookings: roomBookingsFinder(unitIds),
+    findStationBookings: stationBookingsFinder(unitIds),
     update: async (id, fields, appointment) => {
       const { matchedCount } = await Booking.updateOne(
         { _id: id, unitId: { $in: unitIds }, appointmentId },

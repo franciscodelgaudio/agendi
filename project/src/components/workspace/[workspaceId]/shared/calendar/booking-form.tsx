@@ -26,7 +26,7 @@ export type BookingFormValues = {
   startsAt: string
   durationMinutes: number
   serviceId: string | null
-  treatmentRoomId: string | null
+  stationId: string | null
   productIds: string[]
   // null: a cor do profissional.
   color: string | null
@@ -39,7 +39,7 @@ export type BookingFormOptions = {
   // Cada serviço traz a unidade; o formulário só oferece os da unidade escolhida.
   // O preço só aparece quando o agendamento vira atendimento.
   // productIds: produtos padrão do serviço, pré-marcados ao escolhê-lo.
-  // requiresTherapist false: sem campo de profissional. treatmentRoomIds: espaços permitidos (vazio: todos).
+  // requiresTherapist false: sem campo de profissional. stationIds: espaços permitidos (vazio: todos).
   services: {
     id: string
     unitId: string
@@ -48,10 +48,10 @@ export type BookingFormOptions = {
     durationMinutes: number
     productIds: string[]
     requiresTherapist: boolean
-    treatmentRoomIds: string[]
+    stationIds: string[]
   }[]
   // Espaços de cada unidade; o formulário só oferece os da unidade escolhida.
-  treatmentRooms: { id: string; unitId: string; name: string; beds: number }[]
+  stations: { id: string; unitId: string; name: string; active: boolean }[]
 }
 
 type Props = BookingFormOptions & {
@@ -95,15 +95,17 @@ const copy = {
 type ServiceOption = BookingFormOptions["services"][number]
 
 // Espaços da unidade em que o serviço pode ser feito; sem serviço (ou sem restrição), todos.
-function allowedRooms(rooms: BookingFormOptions["treatmentRooms"], unitId: string | null, service?: ServiceOption) {
+function allowedRooms(rooms: BookingFormOptions["stations"], unitId: string | null, service?: ServiceOption) {
   return rooms.filter(
     (room) =>
-      room.unitId === unitId && (!service?.treatmentRoomIds.length || service.treatmentRoomIds.includes(room.id)),
+      room.unitId === unitId &&
+      room.active &&
+      (!service?.stationIds.length || service.stationIds.includes(room.id)),
   )
 }
 
 // Com um espaço só possível, ele já vem escolhido.
-function onlyRoomId(rooms: BookingFormOptions["treatmentRooms"], unitId: string | null, service?: ServiceOption) {
+function onlyRoomId(rooms: BookingFormOptions["stations"], unitId: string | null, service?: ServiceOption) {
   const options = allowedRooms(rooms, unitId, service)
   return options.length === 1 ? options[0].id : null
 }
@@ -122,7 +124,7 @@ function submittedValues(formData: FormData): BookingFormValues {
     startsAt: text("startsAt"),
     durationMinutes: Number(text("durationMinutes")),
     serviceId: text("serviceId") || null,
-    treatmentRoomId: text("treatmentRoomId") || null,
+    stationId: text("stationId") || null,
     productIds: formData.getAll("productId").filter((id) => typeof id === "string"),
     color: text("color") || null,
   }
@@ -132,10 +134,10 @@ function submittedValues(formData: FormData): BookingFormValues {
 export function withSavedValues(
   booking: BookingRow,
   values: BookingFormValues,
-  { therapists, services, treatmentRooms }: BookingFormOptions,
+  { therapists, services, stations }: BookingFormOptions,
 ): BookingRow {
   const service = services.find((option) => option.id === values.serviceId)
-  const room = treatmentRooms.find((option) => option.id === values.treatmentRoomId)
+  const room = stations.find((option) => option.id === values.stationId)
   // Serviço sem profissional: o servidor descarta o que vier no formulário.
   const therapist = service?.requiresTherapist === false ? undefined : therapists.find((t) => t.id === values.therapistId)
   const endsAt = new Date(new Date(`${values.startsAt}:00Z`).getTime() + values.durationMinutes * 60000)
@@ -149,21 +151,17 @@ export function withSavedValues(
     endsAt: endsAt.toISOString().slice(0, 16),
     durationMinutes: values.durationMinutes,
     service: service ? { serviceId: service.id, serviceName: service.name } : booking.service,
-    treatmentRoom: room ? { roomId: room.id, roomName: room.name } : booking.treatmentRoom,
+    station: room ? { stationId: room.id, stationName: room.name } : booking.station,
     productIds: values.productIds,
     color: values.color,
   }
-}
-
-export function capacityLabel(beds: number) {
-  return `${beds} por vez`
 }
 
 export function BookingForm({
   units,
   therapists,
   services: allServices,
-  treatmentRooms: allRooms,
+  stations: allRooms,
   mode,
   variant = "sheet",
   defaultValues,
@@ -177,9 +175,9 @@ export function BookingForm({
   const [unitId, setUnitId] = useState(defaultValues.unitId)
   const [therapistId, setTherapistId] = useState(defaultValues.therapistId)
   const [serviceId, setServiceId] = useState(defaultValues.serviceId)
-  const [treatmentRoomId, setTreatmentRoomId] = useState(
+  const [stationId, setStationId] = useState(
     () =>
-      defaultValues.treatmentRoomId ??
+      defaultValues.stationId ??
       onlyRoomId(allRooms, defaultValues.unitId, allServices.find((service) => service.id === defaultValues.serviceId)),
   )
   const [duration, setDuration] = useState(String(defaultValues.durationMinutes))
@@ -204,11 +202,8 @@ export function BookingForm({
   const service = services.find((option) => option.id === serviceId)
   // Serviço sem profissional (ex.: hidromassagem) esconde o campo; o servidor ignora o profissional.
   const needsTherapist = service?.requiresTherapist ?? true
-  const roomItems = allowedRooms(allRooms, unitId, service).map((room) => ({
-    value: room.id,
-    label: room.name,
-    beds: room.beds,
-  }))
+  const roomItems = allowedRooms(allRooms, unitId, service).map((room) => ({ value: room.id, label: room.name }))
+  const unitTherapists = therapists.filter((therapist) => !unitId || !therapist.unitIds || therapist.unitIds.includes(unitId))
   // A opção automática mostra a cor que o profissional escolhido tem no calendário.
   const therapistIndex = therapists.findIndex((therapist) => therapist.id === therapistId)
   const colorOptions = [
@@ -234,17 +229,17 @@ export function BookingForm({
             <FieldLabel htmlFor="booking-therapist">Profissional</FieldLabel>
             <Select
               name="therapistId"
-              items={therapists.map((therapist) => ({ value: therapist.id, label: therapist.name }))}
+              items={unitTherapists.map((therapist) => ({ value: therapist.id, label: therapist.name }))}
               value={therapistId}
               onValueChange={(value) => setTherapistId(value as string | null)}
               disabled={locked}
               required
             >
               <SelectTrigger id="booking-therapist" className="w-full">
-                <TherapistSelectValue therapists={therapists} placeholder="Escolha o profissional" />
+                <TherapistSelectValue therapists={unitTherapists} placeholder="Escolha o profissional" />
               </SelectTrigger>
               <SelectContent>
-                {therapists.map((therapist) => (
+                {unitTherapists.map((therapist) => (
                   <SelectItem key={therapist.id} value={therapist.id}>
                     <TherapistLabel therapist={therapist} />
                   </SelectItem>
@@ -264,7 +259,7 @@ export function BookingForm({
                 setUnitId(value as string | null)
                 // Serviços, espaços e produtos são de cada unidade, então trocar a unidade limpa os escolhidos.
                 setServiceId(null)
-                setTreatmentRoomId(onlyRoomId(allRooms, value as string | null))
+                setStationId(onlyRoomId(allRooms, value as string | null))
                 setProductIds([])
               }}
               disabled={locked}
@@ -286,23 +281,22 @@ export function BookingForm({
           <input type="hidden" name="unitId" value={unitId ?? ""} />
         )}
         <Field>
-          <FieldLabel htmlFor="booking-treatment-room">Espaço</FieldLabel>
+          <FieldLabel htmlFor="booking-station">Estação</FieldLabel>
           <Select
-            name="treatmentRoomId"
+            name="stationId"
             items={roomItems}
-            value={treatmentRoomId}
-            onValueChange={(value) => setTreatmentRoomId(value as string | null)}
+            value={stationId}
+            onValueChange={(value) => setStationId(value as string | null)}
             disabled={!unitId}
             required
           >
-            <SelectTrigger id="booking-treatment-room" className="w-full">
-              <SelectValue placeholder={unitId ? "Escolha o espaço" : "Escolha a unidade primeiro"} />
+            <SelectTrigger id="booking-station" className="w-full">
+              <SelectValue placeholder={unitId ? "Escolha a estação" : "Escolha a unidade primeiro"} />
             </SelectTrigger>
             <SelectContent>
               {roomItems.map((item) => (
                 <SelectItem key={item.value} value={item.value}>
                   {item.label}
-                  <span className="text-muted-foreground">{capacityLabel(item.beds)}</span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -346,7 +340,7 @@ export function BookingForm({
               setProductIds((current) => withServiceProducts(current, chosen))
               // Espaço que o serviço não pode usar sai da escolha.
               const rooms = allowedRooms(allRooms, unitId, chosen)
-              if (!rooms.some((room) => room.id === treatmentRoomId)) setTreatmentRoomId(onlyRoomId(allRooms, unitId, chosen))
+              if (!rooms.some((room) => room.id === stationId)) setStationId(onlyRoomId(allRooms, unitId, chosen))
             }}
             disabled={!unitId || locked}
             required

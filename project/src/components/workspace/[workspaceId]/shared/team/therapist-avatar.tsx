@@ -4,7 +4,7 @@ import { InitialFallback } from "@/components/shared/initial-fallback"
 import { SelectValue } from "@/components/ui/select"
 import { cn } from "cn"
 
-export type TherapistOption = { id: string; name: string; image: string | null }
+export type TherapistOption = { id: string; name: string; image: string | null; unitIds?: string[] }
 
 // Foto do profissional; sem foto, a inicial do nome.
 export function TherapistAvatar({

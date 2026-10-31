@@ -17,7 +17,7 @@ const serviceCost = `~${formatBRL(AVG_COST_PER_SERVICE_CENTS)}`;
 const ROWS: { label: string; standard: string | boolean; custom: string | boolean }[] = [
   { label: "Usuários ativos", standard: `Até ${maxUsers}`, custom: "A combinar" },
   { label: "Funcionalidades padrão", standard: true, custom: true },
-  { label: "Robô, URA, WhatsApp e Instagram", standard: true, custom: true },
+  { label: "Robô, WhatsApp e Instagram", standard: true, custom: true },
   { label: "Custo médio por atendimento", standard: serviceCost, custom: serviceCost },
   { label: "Atualizações do produto", standard: true, custom: true },
   { label: "Correções de bugs", standard: true, custom: true },

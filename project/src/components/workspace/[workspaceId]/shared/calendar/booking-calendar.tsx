@@ -114,7 +114,7 @@ type Draft = { values: BookingFormValues; key: number; fallbackAnchor: Element |
 // rascunho) e o botão de novo agendamento.
 const KEEPS_DRAFT = "data-keeps-draft"
 
-export function BookingCalendar({ workspaceId, canManage, unitId, units, therapists, services, treatmentRooms }: Props) {
+export function BookingCalendar({ workspaceId, canManage, unitId, units, therapists, services, stations }: Props) {
   const calendarRef = useRef<CalendarRef>(null)
   const [unit, setUnit] = useState(unitId ?? "")
   const [therapist, setTherapist] = useState("")
@@ -152,7 +152,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
   const colors = new Map(therapists.map((option, i) => [option.id, BOOKING_COLORS[i % BOOKING_COLORS.length].value]))
   // O proprietário sempre está entre os profissionais, então basta haver uma unidade.
   const canCreate = canManage && units.length > 0
-  const options = { units: unitId ? undefined : units, therapists, services, treatmentRooms }
+  const options = { units: unitId ? undefined : units, therapists, services, stations }
 
   // Cada busca recria os ids internos dos eventos, e ao soltar um arraste o FullCalendar grava
   // a cópia do evento feita no início dele. Uma busca que chegasse no meio deixaria as duas
@@ -250,7 +250,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
         startsAt,
         durationMinutes,
         serviceId: null,
-        treatmentRoomId: null,
+        stationId: null,
         productIds: [],
         color: null,
       },
@@ -519,7 +519,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
                     </div>
                     <div className="w-full truncate tabular-nums opacity-85">
                       {timeText}
-                      <span className="@max-[8rem]:hidden"> · {booking.treatmentRoom.roomName}</span>
+                      <span className="@max-[8rem]:hidden"> · {booking.station.stationName}</span>
                       <span className="@max-[12rem]:hidden"> · Quarto {booking.guest.room}</span>
                     </div>
                     <div className="w-full truncate opacity-85 @max-[8rem]:hidden">
@@ -568,7 +568,7 @@ export function BookingCalendar({ workspaceId, canManage, unitId, units, therapi
                   startsAt: booking.startsAt,
                   durationMinutes: booking.durationMinutes,
                   serviceId: booking.service.serviceId,
-                  treatmentRoomId: booking.treatmentRoom.roomId,
+                  stationId: booking.station.stationId,
                   productIds: booking.productIds,
                   color: booking.color,
                 },

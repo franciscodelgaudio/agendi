@@ -15,7 +15,6 @@ import { sendReply, type ReplyConversation, type SendReplyError } from "@/servic
 import { insertMessage, touchConversation } from "@/service/workspace/[workspaceId]/inbox/messaging-store"
 import type { MessagingPlatform } from "@/service/workspace/[workspaceId]/inbox/messaging-types"
 import { sendMetaMessage } from "@/service/workspace/[workspaceId]/channels/meta-graph"
-import { endConversationSessions } from "@/service/workspace/[workspaceId]/uras/ura-store"
 import { getSessionUserId } from "@/service/(auth)/session"
 import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 import { Conversation } from "@/models/Conversation"
@@ -205,10 +204,9 @@ export async function sendReplyAction(
     },
   )
 
-  // Quem responde assume a conversa: a URA para e a conversa fica com essa pessoa, se ainda não tinha ninguém.
+  // Quem responde assume a conversa, se ainda não tinha ninguém.
   if (result.ok) {
-    await endConversationSessions(conversationId)
-    await Conversation.updateOne({ _id: conversationId }, { $set: { handedOff: true, status: "open" } })
+    await Conversation.updateOne({ _id: conversationId }, { $set: { status: "open" } })
     await Conversation.updateOne(
       { _id: conversationId, assignedUserId: null },
       { $set: { assignedUserId: new Types.ObjectId(actor.userId) } },
@@ -229,4 +227,24 @@ export async function markConversationReadAction(workspaceId: string, conversati
     { $set: { unreadCount: 0 } },
   )
   if (modifiedCount) refresh()
+}
+
+export async function takeConversationAction(workspaceId: string, conversationId: string) {
+  const actor = await findRole(workspaceId)
+  if (!actor || !can(actor.access, "inbox.use") || !isObjectIdOrHexString(conversationId)) return
+  await Conversation.updateOne(
+    { _id: conversationId, workspaceId: new Types.ObjectId(workspaceId) },
+    { $set: { assignedUserId: new Types.ObjectId(actor.userId) } },
+  )
+  refresh()
+}
+
+export async function closeConversationAction(workspaceId: string, conversationId: string) {
+  const actor = await findRole(workspaceId)
+  if (!actor || !can(actor.access, "inbox.use") || !isObjectIdOrHexString(conversationId)) return
+  await Conversation.updateOne(
+    { _id: conversationId, workspaceId: new Types.ObjectId(workspaceId) },
+    { $set: { status: "closed", assignedUserId: null, unreadCount: 0 } },
+  )
+  refresh()
 }

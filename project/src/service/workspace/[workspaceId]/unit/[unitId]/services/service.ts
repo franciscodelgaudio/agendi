@@ -10,25 +10,25 @@ export type ServiceInputError =
   | "name_too_long"
   | "invalid_price"
   | "invalid_duration"
-  | "treatment_room_not_found"
+  | "station_not_found"
   | ProductSelectionError;
 
 // Espaços da unidade entre os ids pedidos; os que não existem nela ficam de fora.
-export type FindTreatmentRooms = (ids: string[]) => Promise<{ id: string }[]>;
+export type FindStations = (ids: string[]) => Promise<{ id: string }[]>;
 
 // productIds: produtos que o serviço costuma usar, pré-marcados em agendamentos e atendimentos.
 // requiresTherapist false: serviço sem profissional (ex.: hidromassagem), sem comissão.
-// treatmentRoomIds: espaços em que o serviço pode ser feito; vazio aceita qualquer um.
+// stationIds: estações em que o serviço pode ser feito; vazio aceita qualquer uma.
 export type ServiceData = {
   name: string;
   priceCents: number;
   durationMinutes: number;
   productIds: string[];
   requiresTherapist: boolean;
-  treatmentRoomIds: string[];
+  stationIds: string[];
 };
 
-type Lookups = { findProducts: FindProducts; findTreatmentRooms: FindTreatmentRooms };
+type Lookups = { findProducts: FindProducts; findStations: FindStations };
 
 // "350.5" -> 35050. Feito sobre a string para não depender de arredondamento de float.
 export function parsePriceCents(value: string) {
@@ -51,9 +51,9 @@ function parseDurationMinutes(value: string) {
 // Valida e normaliza os campos como chegam do FormData (strings).
 async function parseServiceInput(
   input: unknown,
-  { findProducts, findTreatmentRooms }: Lookups,
+  { findProducts, findStations }: Lookups,
 ): Promise<{ ok: true; data: ServiceData } | { ok: false; error: ServiceInputError }> {
-  const { name, price, durationMinutes, productIds, requiresTherapist, treatmentRoomIds } = (input ?? {}) as Record<
+  const { name, price, durationMinutes, productIds, requiresTherapist, stationIds: stationIdsInput } = (input ?? {}) as Record<
     string,
     unknown
   >;
@@ -64,10 +64,10 @@ async function parseServiceInput(
   if (requiresTherapist !== undefined && requiresTherapist !== "true" && requiresTherapist !== "false") {
     return { ok: false, error: "invalid_input" };
   }
-  if (treatmentRoomIds !== undefined && !isNonEmptyStringList(treatmentRoomIds)) {
+  if (stationIdsInput !== undefined && !isNonEmptyStringList(stationIdsInput)) {
     return { ok: false, error: "invalid_input" };
   }
-  const roomIds = [...new Set((treatmentRoomIds ?? []).map((id) => id.trim()))];
+  const stationIds = [...new Set((stationIdsInput ?? []).map((id) => id.trim()))];
 
   const normalizedName = name.trim();
   if (!normalizedName) return { ok: false, error: "invalid_name" };
@@ -82,9 +82,9 @@ async function parseServiceInput(
   const selection = await resolveProducts(productIds, findProducts);
   if (!selection.ok) return selection;
 
-  if (roomIds.length) {
-    const found = new Set((await findTreatmentRooms(roomIds)).map((room) => room.id));
-    if (roomIds.some((id) => !found.has(id))) return { ok: false, error: "treatment_room_not_found" };
+  if (stationIds.length) {
+    const found = new Set((await findStations(stationIds)).map((station) => station.id));
+    if (stationIds.some((id) => !found.has(id))) return { ok: false, error: "station_not_found" };
   }
 
   return {
@@ -95,7 +95,7 @@ async function parseServiceInput(
       durationMinutes: minutes,
       productIds: selection.products.map((product) => product.productId),
       requiresTherapist: requiresTherapist !== "false",
-      treatmentRoomIds: roomIds,
+      stationIds,
     },
   };
 }

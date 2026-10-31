@@ -41,7 +41,6 @@ const permissionActions: Record<Permission, string> = {
   "users.manage": "gerenciar usuários",
   "inbox.use": "usar as Conversas",
   "channels.manage": "gerenciar canais",
-  "uras.manage": "gerenciar URAs",
   "workspace.manage": "editar o workspace",
   attends: "realizar atendimentos",
 };

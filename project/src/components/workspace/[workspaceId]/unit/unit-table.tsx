@@ -14,22 +14,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import type { UnitListQuery } from "@/service/workspace/[workspaceId]/unit/unit-list"
-import type { BusinessHours } from "@/service/workspace/[workspaceId]/unit/[unitId]/business-hours"
-import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share"
-import type { TreatmentRoomOption } from "@/components/workspace/[workspaceId]/unit/treatment-room-fields"
+import type { UnitFormValues } from "@/components/workspace/[workspaceId]/unit/unit-fields"
+import type { MemberOption } from "@/components/workspace/[workspaceId]/unit/unit-member-fields"
 import { dateTimeFormat } from "@/service/_shared/utils"
 
 type Props = {
-  units: {
-    id: string
-    name: string
-    avatarUrl: string | null
-    revenueShare: RevenueShare | null
-    treatmentRooms: TreatmentRoomOption[]
-    businessHours: BusinessHours
-    createdAt: Date
-    updatedAt: Date
-  }[]
+  units: (UnitFormValues & { createdAt: Date; updatedAt: Date })[]
+  members: MemberOption[]
   query: UnitListQuery
   pathname: string
   workspaceId: string
@@ -37,7 +28,7 @@ type Props = {
   canManage: boolean
 }
 
-export function UnitTable({ units, query, pathname, workspaceId, canManage }: Props) {
+export function UnitTable({ units, members, query, pathname, workspaceId, canManage }: Props) {
   return (
     <div className="border">
       <Table>
@@ -85,8 +76,8 @@ export function UnitTable({ units, query, pathname, workspaceId, canManage }: Pr
                 <TableCell className="relative max-w-0 cursor-pointer px-4">
                   <div className="flex items-center gap-3">
                     <Avatar className="size-8 rounded-lg after:rounded-lg">
-                      {unit.avatarUrl && (
-                        <AvatarImage src={unit.avatarUrl} alt={unit.name} className="rounded-lg object-contain" />
+                      {unit.imageUrl && (
+                        <AvatarImage src={unit.imageUrl} alt={unit.name} className="rounded-lg object-contain" />
                       )}
                       <InitialFallback name={unit.name} className="rounded-lg" />
                     </Avatar>
@@ -105,7 +96,7 @@ export function UnitTable({ units, query, pathname, workspaceId, canManage }: Pr
                 </TableCell>
                 {canManage && (
                   <TableCell className="relative z-10 px-4 text-right">
-                    <UnitActions workspaceId={workspaceId} unit={unit} />
+                    <UnitActions workspaceId={workspaceId} unit={unit} members={members} />
                   </TableCell>
                 )}
               </TableRow>

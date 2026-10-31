@@ -664,7 +664,6 @@ describe("rescheduleBooking", () => {
     expect(deps.update).not.toHaveBeenCalled();
   });
 
-  // Atendimento já registrado é histórico: dá para acertar o horário mesmo com a estação desativada.
   it("move o agendamento já registrado mesmo com a estação desativada", async () => {
     const deps = makeDeps({
       booking: {

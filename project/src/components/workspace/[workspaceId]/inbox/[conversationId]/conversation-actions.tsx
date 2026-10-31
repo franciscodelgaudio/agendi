@@ -1,8 +1,8 @@
 "use client"
 
 import { useTransition } from "react"
-import { CircleStopIcon, EllipsisIcon, HandIcon, OctagonXIcon } from "lucide-react"
-import { closeConversationAction, stopConversationUraAction, takeConversationAction } from "@/lib/actions/ura"
+import { CircleStopIcon, EllipsisIcon, HandIcon } from "lucide-react"
+import { closeConversationAction, takeConversationAction } from "@/lib/actions/messaging"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -14,12 +14,11 @@ import {
 type Props = {
   workspaceId: string
   conversationId: string
-  uraRunning: boolean
   assignedToMe: boolean
   closed: boolean
 }
 
-export function ConversationActions({ workspaceId, conversationId, uraRunning, assignedToMe, closed }: Props) {
+export function ConversationActions({ workspaceId, conversationId, assignedToMe, closed }: Props) {
   const [pending, startTransition] = useTransition()
   const run = (action: (workspaceId: string, conversationId: string) => Promise<void>) =>
     startTransition(() => action(workspaceId, conversationId))
@@ -34,12 +33,6 @@ export function ConversationActions({ workspaceId, conversationId, uraRunning, a
           <DropdownMenuItem onClick={() => run(takeConversationAction)}>
             <HandIcon />
             Assumir conversa
-          </DropdownMenuItem>
-        )}
-        {uraRunning && (
-          <DropdownMenuItem onClick={() => run(stopConversationUraAction)}>
-            <OctagonXIcon />
-            Parar URA
           </DropdownMenuItem>
         )}
         {!closed && (

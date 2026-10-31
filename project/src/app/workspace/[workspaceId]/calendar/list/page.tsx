@@ -60,7 +60,7 @@ export default async function CalendarListPage({
         localField: "_id",
         foreignField: "workspaceId",
         as: "units",
-        pipeline: [{ $sort: { name: 1, _id: 1 } }, { $project: { name: 1, treatmentRooms: 1 } }],
+        pipeline: [{ $sort: { name: 1, _id: 1 } }, { $project: { name: 1, stations: 1 } }],
       },
     },
     {
@@ -100,7 +100,7 @@ export default async function CalendarListPage({
               productIds: { $map: { input: "$productIds", as: "id", in: { $toString: "$$id" } } },
               // Serviço cadastrado antes desses campos exige profissional e aceita qualquer espaço.
               requiresTherapist: { $ifNull: ["$requiresTherapist", true] },
-              treatmentRoomIds: { $map: { input: { $ifNull: ["$treatmentRoomIds", []] }, as: "id", in: { $toString: "$$id" } } },
+              stationIds: { $map: { input: { $ifNull: ["$stationIds", []] }, as: "id", in: { $toString: "$$id" } } },
             },
           },
         ],
@@ -116,7 +116,7 @@ export default async function CalendarListPage({
         total: { $ifNull: [{ $first: "$total.n" }, 0] },
         services: 1,
         // Salas de todas as unidades, cada uma com a sua unidade.
-        treatmentRooms: {
+        stations: {
           $reduce: {
             input: "$units",
             initialValue: [],
@@ -125,13 +125,13 @@ export default async function CalendarListPage({
                 "$$value",
                 {
                   $map: {
-                    input: "$$this.treatmentRooms",
-                    as: "room",
+                    input: "$$this.stations",
+                    as: "station",
                     in: {
-                      id: { $toString: "$$room._id" },
+                      id: { $toString: "$$station._id" },
                       unitId: { $toString: "$$this._id" },
-                      name: "$$room.name",
-                      beds: "$$room.beds",
+                      name: "$$station.name",
+                      active: "$$station.active",
                     },
                   },
                 },

@@ -6,7 +6,7 @@ import { Service } from "@/models/Service"
 import { TherapistBlock } from "@/models/TherapistBlock"
 import { Unit } from "@/models/Unit"
 
-// Buscas no banco usadas por lib/booking, compartilhadas pelas server actions e pela URA.
+// Buscas no banco usadas por lib/booking, compartilhadas pelas server actions.
 
 // Conflito do profissional em qualquer unidade do workspace.
 export function conflictChecker(unitIds: Types.ObjectId[]) {
@@ -45,22 +45,22 @@ export function blockChecker(workspaceId: string) {
   }
 }
 
-// Outros agendamentos da sala que se sobrepõem ao intervalo, nas unidades dadas.
-export function roomBookingsFinder(unitIds: (Types.ObjectId | string)[]) {
+// Outros agendamentos da estação que se sobrepõem ao intervalo, nas unidades dadas.
+export function stationBookingsFinder(unitIds: (Types.ObjectId | string)[]) {
   return async ({
-    treatmentRoomId,
+    stationId,
     startsAt,
     endsAt,
     excludeId,
   }: {
-    treatmentRoomId: string
+    stationId: string
     startsAt: Date
     endsAt: Date
     excludeId?: string
   }) => {
-    if (!isObjectIdOrHexString(treatmentRoomId)) return []
+    if (!isObjectIdOrHexString(stationId)) return []
     return Booking.find({
-      "treatmentRoom.roomId": treatmentRoomId,
+      "station.stationId": stationId,
       unitId: { $in: unitIds },
       startsAt: { $lt: endsAt },
       endsAt: { $gt: startsAt },
@@ -71,28 +71,26 @@ export function roomBookingsFinder(unitIds: (Types.ObjectId | string)[]) {
   }
 }
 
-// Sala da unidade, ou null se não existe nela.
-export async function findUnitTreatmentRoom(unitId: string | Types.ObjectId, roomId: string) {
-  if (!isObjectIdOrHexString(roomId)) return null
-  const unit = await Unit.findOne({ _id: unitId, "treatmentRooms._id": roomId })
-    .select({ "treatmentRooms.$": 1 })
-    .lean()
-  const room = unit?.treatmentRooms[0]
-  return room ? { id: room._id.toString(), name: room.name, beds: room.beds } : null
+// Estação da unidade, ou null se não existe nela.
+export async function findUnitStation(unitId: string | Types.ObjectId, stationId: string) {
+  if (!isObjectIdOrHexString(stationId)) return null
+  const unit = await Unit.findOne({ _id: unitId, "stations._id": stationId }).select({ "stations.$": 1 }).lean()
+  const station = unit?.stations[0]
+  return station ? { id: station._id.toString(), name: station.name, active: station.active } : null
 }
 
-// Serviços cadastrados antes desses campos não os têm: exigem profissional e aceitam qualquer espaço.
+// Serviços cadastrados antes desses campos não os têm: exigem profissional e aceitam qualquer estação.
 export function serviceRules(service: {
   _id: Types.ObjectId
   name: string
   requiresTherapist?: boolean | null
-  treatmentRoomIds?: Types.ObjectId[] | null
+  stationIds?: Types.ObjectId[] | null
 }) {
   return {
     id: service._id.toString(),
     name: service.name,
     requiresTherapist: service.requiresTherapist ?? true,
-    treatmentRoomIds: (service.treatmentRoomIds ?? []).map((id) => id.toString()),
+    stationIds: (service.stationIds ?? []).map((id) => id.toString()),
   }
 }
 
@@ -102,15 +100,16 @@ export function bookingLookups(unit: { workspaceId: string; unitId: string }, un
     findService: async (id: string) => {
       if (!isObjectIdOrHexString(id)) return null
       const service = await Service.findOne({ _id: id, unitId: unit.unitId })
-        .select({ name: 1, requiresTherapist: 1, treatmentRoomIds: 1 })
+        .select({ name: 1, requiresTherapist: 1, stationIds: 1 })
         .lean()
       return service && serviceRules(service)
     },
-    findTherapist: async (id: string) => (await findWorkspaceTherapists(unit.workspaceId, [id]))[0] ?? null,
+    findTherapist: async (id: string) =>
+      (await findWorkspaceTherapists(unit.workspaceId, [id], unit.unitId))[0] ?? null,
     hasConflict: conflictChecker(unitIds),
     isBlocked: blockChecker(unit.workspaceId),
-    findTreatmentRoom: (id: string) => findUnitTreatmentRoom(unit.unitId, id),
-    findRoomBookings: roomBookingsFinder([unit.unitId]),
+    findStation: (id: string) => findUnitStation(unit.unitId, id),
+    findStationBookings: stationBookingsFinder([unit.unitId]),
     findProducts: (ids: string[]) => findUnitProducts(unit.unitId, ids),
   }
 }
