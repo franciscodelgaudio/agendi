@@ -1,32 +1,20 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 import { connectOnUse } from "@/service/_shared/database/mongoose";
+import { MOVEMENT_TYPES } from "@/service/workspace/[workspaceId]/stock/[inventoryId]/stock-movement";
 
-// purchase: entrou no estoque; adjustment: diminuiu na edição; depletion: uma unidade do
-// produto acabou; transfer: foi do estoque de unitId para o de toUnitId.
-export const STOCK_MOVEMENT_KINDS = ["purchase", "adjustment", "depletion", "transfer"] as const;
-
-// Cada mudança na quantidade de um produto, com a unidade que fez (ou a carteira, quando ela
-// pagou a compra): no estoque compartilhado é o que mostra o que cada unidade repôs e consumiu.
 const stockMovementSchema = new Schema(
   {
-    productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
-    // Estoque mexido: o compartilhado ou a própria unidade (como StockItem.holderId).
-    holderId: { type: Schema.Types.ObjectId, required: true },
-    unitId: { type: Schema.Types.ObjectId, ref: "Unit", default: null },
-    walletId: { type: Schema.Types.ObjectId, ref: "Wallet", default: null },
-    kind: { type: String, enum: STOCK_MOVEMENT_KINDS, required: true },
-    // Sempre positiva; o tipo diz se entrou ou saiu.
+    name: { type: String, required: true, trim: true },
+    type: { type: String, enum: MOVEMENT_TYPES, required: true },
     quantity: { type: Number, required: true, min: 1 },
-    toUnitId: { type: Schema.Types.ObjectId, ref: "Unit", default: null },
-    // Custo do que entrou (compra) ou saiu (pelos lotes, no PEPS).
-    costCents: { type: Number, required: true, min: 0, default: 0 },
-    createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
+    inventoryId: { type: Schema.Types.ObjectId, ref: "Inventory", required: true },
+    workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true, index: true },
   },
   { collection: "stock_movements", timestamps: { createdAt: true, updatedAt: false } },
 );
 
-stockMovementSchema.index({ productId: 1, createdAt: -1 });
-stockMovementSchema.index({ unitId: 1, createdAt: -1 });
+stockMovementSchema.index({ inventoryId: 1, createdAt: -1 });
 
 stockMovementSchema.plugin(connectOnUse);
 

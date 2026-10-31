@@ -27,8 +27,8 @@ const permissionLabels: Record<Action, string> = {
   "appointments.manage": "Gerenciar atendimentos",
   "customers.manage": "Cadastrar, editar e remover clientes",
   "stock.manage": "Gerenciar estoque",
-  "stock.transfer": "Transferir produtos entre as unidades de um estoque",
-  "cash_flow.manage": "Gerenciar despesas e grupos do caixa",
+  "stock.transfer": "Transferir produtos entre inventários",
+  "cash_flow.manage": "Gerenciar carteiras e transações do caixa",
   "users.manage": "Convidar, editar e remover usuários",
   "inbox.use": "Usar as Conversas",
   "channels.manage": "Gerenciar canais",
@@ -63,8 +63,6 @@ const unitPageLabels: Record<UnitPage, string> = {
   services: "Serviços",
   calendar: "Agenda",
   appointments: "Atendimentos",
-  stock: "Estoque",
-  cash_flow: "Caixa",
 }
 
 const TOTAL = ACTIONS.length + WORKSPACE_PAGES.length + UNIT_PAGES.length

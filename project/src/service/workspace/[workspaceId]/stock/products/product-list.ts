@@ -1,88 +1,76 @@
 import { Types, type PipelineStage } from "mongoose";
-import { escapeRegex, first, type SearchParams, type SortDir } from "@/service/workspace/[workspaceId]/unit/unit-list";
+import { first, type SearchParams, type SortDir } from "@/service/workspace/[workspaceId]/unit/unit-list";
+import { accentInsensitivePattern } from "@/service/workspace/[workspaceId]/users/user-list";
 
-export const PRODUCT_SORT_FIELDS = ["name", "quantity", "costCents", "rating"] as const;
+export const PRODUCT_PAGE_SIZE = 20;
+const SORT_FIELDS = { name: "name", price: "priceCents", quantity: "quantity" } as const;
 
-export type ProductSortField = (typeof PRODUCT_SORT_FIELDS)[number];
-export type ProductListQuery = { q: string; sort: ProductSortField; dir: SortDir };
+export type ProductSortField = keyof typeof SORT_FIELDS;
+export type ProductListQuery = { q: string; sort: ProductSortField; dir: SortDir; page: number };
+export type ProductListItem = { id: string; name: string; priceCents: number; quantity: number };
+export type ProductListPage = { rows: ProductListItem[]; total: number };
 
 function isSortField(value: string | undefined): value is ProductSortField {
-  return PRODUCT_SORT_FIELDS.includes(value as ProductSortField);
+  return value !== undefined && Object.hasOwn(SORT_FIELDS, value);
 }
 
 export function parseProductListQuery(params: SearchParams): ProductListQuery {
   const sort = first(params.sort);
+  const page = first(params.page);
   return {
     q: first(params.q)?.trim() ?? "",
     sort: isSortField(sort) ? sort : "name",
     dir: first(params.dir) === "desc" ? "desc" : "asc",
+    page: page && /^[1-9]\d*$/.test(page) ? Number(page) : 1,
   };
 }
 
-// Valor do estoque: quantidade × preço de cada lote de cada item.
-const LOTS_VALUE = {
-  $sum: {
-    $map: {
-      input: "$items",
-      as: "item",
-      in: {
-        $sum: {
-          $map: {
-            input: { $ifNull: ["$$item.lots", []] },
-            as: "lot",
-            in: { $multiply: ["$$lot.quantity", "$$lot.unitCostCents"] },
-          },
-        },
-      },
-    },
-  },
-};
+export function productListPipeline(workspaceId: string, { q, sort, dir, page }: ProductListQuery): PipelineStage[] {
+  const match: Record<string, unknown> = { workspaceId: new Types.ObjectId(workspaceId) };
+  if (q) match.name = { $regex: accentInsensitivePattern(q), $options: "i" };
 
-// Preço do lote mais antigo do item (os lotes ficam em ordem de compra).
-const NEXT_UNIT_COST = {
-  $ifNull: [{ $getField: { field: "unitCostCents", input: { $first: { $first: "$items.lots" } } } }, null],
-};
-
-// Etapas sobre os produtos do catálogo, com a quantidade dos itens de estoque. Com holderId
-// (o estoque da unidade ou o compartilhado), só os produtos que estão nele, com a quantidade de
-// lá; sem, todos do catálogo, com a soma de todos os estoques.
-export function productListPipeline({ q, sort, dir }: ProductListQuery, holderId?: string) {
-  const stages: PipelineStage.FacetPipelineStage[] = [];
-  if (q) stages.push({ $match: { name: { $regex: escapeRegex(q), $options: "i" } } });
-  stages.push({
-    $lookup: {
-      from: "stock_items",
-      localField: "_id",
-      foreignField: "productId",
-      as: "items",
-      pipeline: holderId ? [{ $match: { holderId: new Types.ObjectId(holderId) } }] : [],
-    },
-  });
-  if (holderId) stages.push({ $match: { items: { $ne: [] } } });
-  stages.push(
+  return [
+    { $match: match },
     {
-      $addFields: {
-        quantity: { $sum: "$items.quantity" },
-        valueCents: LOTS_VALUE,
-        // Com vários estoques, não há um lote que sai agora.
-        nextUnitCostCents: holderId ? NEXT_UNIT_COST : null,
+      $lookup: {
+        from: "inventories",
+        localField: "_id",
+        foreignField: "products.productId",
+        as: "inventories",
+        pipeline: [{ $project: { _id: 0, products: 1 } }],
       },
     },
-    { $sort: { [sort]: dir === "desc" ? -1 : 1, _id: 1 } },
     {
       $project: {
         _id: 0,
         id: { $toString: "$_id" },
         name: 1,
-        quantity: 1,
-        valueCents: 1,
-        nextUnitCostCents: 1,
-        costCents: 1,
-        notes: { $ifNull: ["$notes", null] },
-        rating: { $ifNull: ["$rating", null] },
-        avatarUrl: { $ifNull: ["$avatarUrl", null] },
+        priceCents: 1,
+        quantity: {
+          $sum: {
+            $map: {
+              input: "$inventories",
+              as: "inventory",
+              in: {
+                $sum: {
+                  $map: {
+                    input: { $filter: { input: "$$inventory.products", cond: { $eq: ["$$this.productId", "$_id"] } } },
+                    in: "$$this.quantity",
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     },
-  );
-  return stages;
+    { $sort: { [SORT_FIELDS[sort]]: dir === "desc" ? -1 : 1, id: 1 } },
+    {
+      $facet: {
+        rows: [{ $skip: (page - 1) * PRODUCT_PAGE_SIZE }, { $limit: PRODUCT_PAGE_SIZE }],
+        total: [{ $count: "n" }],
+      },
+    },
+    { $project: { rows: 1, total: { $ifNull: [{ $first: "$total.n" }, 0] } } },
+  ];
 }

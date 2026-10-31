@@ -3,7 +3,6 @@
 import { useActionState, useState, useTransition } from "react"
 import { EllipsisIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import { deleteUnitAction, updateUnitAction, type UnitFormState } from "@/lib/actions/unit"
-import type { MemberOption } from "@/components/workspace/[workspaceId]/unit/unit-member-fields"
 
 import {
   AlertDialog,
@@ -23,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { FieldError, FieldGroup } from "@/components/ui/field"
-import { UnitFields, type UnitFormValues } from "@/components/workspace/[workspaceId]/unit/unit-fields"
+import { UnitFields, type UnitFormOptions, type UnitFormValues } from "@/components/workspace/[workspaceId]/unit/unit-fields"
 import {
   Sheet,
   SheetContent,
@@ -35,7 +34,7 @@ import {
 
 type Unit = UnitFormValues
 
-export function UnitActions({ workspaceId, unit, members }: { workspaceId: string; unit: Unit; members: MemberOption[] }) {
+export function UnitActions({ workspaceId, unit, options }: { workspaceId: string; unit: Unit; options: UnitFormOptions }) {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
@@ -73,7 +72,7 @@ export function UnitActions({ workspaceId, unit, members }: { workspaceId: strin
             key={editKey}
             workspaceId={workspaceId}
             unit={unit}
-            members={members}
+            options={options}
             onDone={() => setEditOpen(false)}
           />
         </SheetContent>
@@ -92,12 +91,12 @@ export function UnitActions({ workspaceId, unit, members }: { workspaceId: strin
 function EditUnitForm({
   workspaceId,
   unit,
-  members,
+  options,
   onDone,
 }: {
   workspaceId: string
   unit: Unit
-  members: MemberOption[]
+  options: UnitFormOptions
   onDone: () => void
 }) {
   const [state, formAction, pending] = useActionState(
@@ -118,7 +117,7 @@ function EditUnitForm({
       {/* Só os campos rolam; título e botões ficam fixos. */}
       <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
         {state.error && <FieldError>{state.error}</FieldError>}
-        <UnitFields idPrefix={`edit-unit-${unit.id}`} workspaceId={workspaceId} members={members} defaultValues={unit} />
+        <UnitFields idPrefix={`edit-unit-${unit.id}`} workspaceId={workspaceId} options={options} defaultValues={unit} />
       </FieldGroup>
       <SheetFooter>
         <Button type="submit" loading={pending}>

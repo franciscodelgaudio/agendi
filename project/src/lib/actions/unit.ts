@@ -11,12 +11,14 @@ import {
   deleteUnit,
   updateUnit,
   type CreateUnitError,
+  type InventoryRef,
   type UpdateUnitError,
+  type WalletRef,
 } from "@/service/workspace/[workspaceId]/unit/unit"
+import { insertWallet } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
-import { StockItem } from "@/models/StockItem"
-import { Stock } from "@/models/Stock"
+import { Inventory } from "@/models/Inventory"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
@@ -36,8 +38,14 @@ const errorMessages: Record<Exclude<CreateUnitError | UpdateUnitError, "forbidde
   invalid_business_hours: "Informe o horário de funcionamento.",
   invalid_business_hours_order: "O horário de fechamento deve ser depois da abertura.",
   station_in_use: "Uma estação removida ainda tem agendamentos. Desative-a ou mova os agendamentos antes.",
-  invalid_opening_balance: "Informe um saldo em caixa de até R$ 1.000.000,00.",
-  invalid_opening_balance_date: "Informe o dia do saldo em caixa.",
+  invalid_opening_balance: "Informe um saldo inicial de até R$ 1.000.000,00.",
+  invalid_opening_balance_date: "Informe o dia do saldo inicial.",
+  invalid_wallet: "Escolha a carteira da unidade.",
+  invalid_wallet_name: "Informe o nome da carteira nova.",
+  wallet_name_too_long: "O nome da carteira pode ter no máximo 40 caracteres.",
+  invalid_inventory: "Escolha o inventário da unidade.",
+  invalid_inventory_name: "Informe o nome do inventário novo.",
+  inventory_name_too_long: "O nome do inventário pode ter no máximo 40 caracteres.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unit_not_found: "Unidade não encontrada ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
@@ -68,7 +76,11 @@ function unitInput(formData: FormData) {
     },
     businessHours: { opensAt: formData.get("opensAt"), closesAt: formData.get("closesAt") },
     workspaceMemberIds: formData.getAll("workspaceMemberId"),
+    walletId: formData.get("walletId"),
+    walletName: formData.get("walletName"),
     openingBalance: { amount: formData.get("openingBalance"), date: formData.get("openingBalanceDate") },
+    inventoryId: formData.get("inventoryId"),
+    inventoryName: formData.get("inventoryName"),
   }
 }
 
@@ -79,9 +91,23 @@ async function sessionAccess(workspaceId: string) {
   return { workspaceId: access?.id ?? workspaceId, actor: access?.actor ?? null }
 }
 
-function membersChecker(workspaceId: string) {
-  return async (ids: string[]) =>
-    (await WorkspaceMember.countDocuments({ _id: { $in: toObjectIds(ids) }, workspaceId })) === ids.length
+function refsChecker(workspaceId: string) {
+  return {
+    membersExist: async (ids: string[]) =>
+      (await WorkspaceMember.countDocuments({ _id: { $in: toObjectIds(ids) }, workspaceId })) === ids.length,
+    walletExists: async (id: string) => !!(await Wallet.exists({ _id: id, workspaceId })),
+    inventoryExists: async (id: string) => !!(await Inventory.exists({ _id: id, workspaceId })),
+  }
+}
+
+async function resolveWallet(workspaceId: string, wallet: WalletRef) {
+  if ("id" in wallet) return new Types.ObjectId(wallet.id)
+  return new Types.ObjectId((await insertWallet({ workspaceId, ...wallet })).id)
+}
+
+async function resolveInventory(workspaceId: string, inventory: InventoryRef) {
+  if ("id" in inventory) return new Types.ObjectId(inventory.id)
+  return (await Inventory.create({ workspaceId, name: inventory.name }))._id
 }
 
 function unitFilter(workspaceId: string, unitId: string) {
@@ -98,21 +124,15 @@ export async function createUnitAction(
   if (!session) return { error: messageOf("unauthenticated") }
 
   const result = await createUnit(unitInput(formData), session, {
-    membersExist: membersChecker(session.workspaceId),
-    insert: async ({ openingBalance, stations, workspaceMemberIds, ...data }) => {
+    ...refsChecker(session.workspaceId),
+    insert: async ({ stations, workspaceMemberIds, wallet, inventory, ...data }) => {
       const unit = await Unit.create({
         ...data,
         stations: toStationDocs(stations),
         workspaceMemberIds: toObjectIds(workspaceMemberIds),
+        walletId: await resolveWallet(data.workspaceId, wallet),
+        inventoryId: await resolveInventory(data.workspaceId, inventory),
       })
-      if (openingBalance) {
-        await Wallet.create({
-          name: unit.name.slice(0, 40),
-          openingBalance,
-          units: [{ unitId: unit._id, amountCents: null }],
-          workspaceId: data.workspaceId,
-        })
-      }
       return { id: unit._id.toString() }
     },
   })
@@ -134,7 +154,7 @@ export async function updateUnitAction(
   const filter = unitFilter(session.workspaceId, unitId)
 
   const result = await updateUnit(unitInput(formData), filter && unitId, session, {
-    membersExist: membersChecker(session.workspaceId),
+    ...refsChecker(session.workspaceId),
     hasBookingsInRemovedStations: async (id, keptStationIds) => {
       if (!(await Unit.exists(filter!))) return false
       const inUse = await Booking.exists({
@@ -144,9 +164,16 @@ export async function updateUnitAction(
       })
       return inUse !== null
     },
-    update: async (id, { stations, workspaceMemberIds, ...data }) => {
+    update: async (id, { stations, workspaceMemberIds, wallet, inventory, ...data }) => {
+      if (!(await Unit.exists(filter!))) return false
       const { matchedCount } = await Unit.updateOne(filter!, {
-        $set: { ...data, stations: toStationDocs(stations), workspaceMemberIds: toObjectIds(workspaceMemberIds) },
+        $set: {
+          ...data,
+          stations: toStationDocs(stations),
+          workspaceMemberIds: toObjectIds(workspaceMemberIds),
+          walletId: await resolveWallet(session.workspaceId, wallet),
+          inventoryId: await resolveInventory(session.workspaceId, inventory),
+        },
       })
       if (matchedCount === 0) return false
       const keptStationIds = toObjectIds(stations.flatMap((station) => (station.id ? [station.id] : [])))
@@ -170,19 +197,7 @@ export async function deleteUnitAction(workspaceId: string, unitId: string): Pro
     remove: async (id) => {
       const { deletedCount } = await Unit.deleteOne(filter!)
       if (deletedCount === 0) return false
-      const unitObjectId = new Types.ObjectId(id)
-      await Promise.all([
-        Service.deleteMany({ unitId: id }),
-        Appointment.deleteMany({ unitId: id }),
-        Wallet.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
-        StockItem.deleteMany({ holderId: unitObjectId }),
-        Stock.updateMany({ "units.unitId": unitObjectId }, { $pull: { units: { unitId: unitObjectId } } }),
-      ])
-      const orphaned = await Stock.find({ workspaceId: session.workspaceId, units: { $size: 0 } }).select({ _id: 1 }).lean()
-      if (orphaned.length > 0) {
-        const ids = orphaned.map((stock) => stock._id)
-        await Promise.all([StockItem.deleteMany({ holderId: { $in: ids } }), Stock.deleteMany({ _id: { $in: ids } })])
-      }
+      await Promise.all([Service.deleteMany({ unitId: id }), Appointment.deleteMany({ unitId: id })])
       return true
     },
   })

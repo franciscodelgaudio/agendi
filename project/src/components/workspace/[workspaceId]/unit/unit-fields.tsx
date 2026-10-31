@@ -4,6 +4,7 @@ import { ImageUploadField } from "@/components/shared/image-upload-field"
 import { BusinessHoursFields } from "@/components/workspace/[workspaceId]/unit/business-hours-fields"
 import { StationFields, type StationOption } from "@/components/workspace/[workspaceId]/unit/station-fields"
 import { UnitMemberFields, type MemberOption } from "@/components/workspace/[workspaceId]/unit/unit-member-fields"
+import { UnitRefFields, type RefOption } from "@/components/workspace/[workspaceId]/unit/unit-ref-fields"
 import type { BusinessHours } from "@/service/workspace/[workspaceId]/unit/[unitId]/business-hours"
 
 export type UnitFormValues = {
@@ -13,16 +14,20 @@ export type UnitFormValues = {
   stations: StationOption[]
   workspaceMemberIds: string[]
   businessHours: BusinessHours
+  walletId: string
+  inventoryId: string
 }
+
+export type UnitFormOptions = { members: MemberOption[]; wallets: RefOption[]; inventories: RefOption[] }
 
 type Props = {
   idPrefix: string
   workspaceId: string
-  members: MemberOption[]
+  options: UnitFormOptions
   defaultValues?: UnitFormValues
 }
 
-export function UnitFields({ idPrefix, workspaceId, members, defaultValues }: Props) {
+export function UnitFields({ idPrefix, workspaceId, options, defaultValues }: Props) {
   return (
     <>
       <Field>
@@ -47,7 +52,14 @@ export function UnitFields({ idPrefix, workspaceId, members, defaultValues }: Pr
       />
       <BusinessHoursFields idPrefix={idPrefix} defaultValue={defaultValues?.businessHours} />
       <StationFields idPrefix={idPrefix} defaultValue={defaultValues?.stations} />
-      <UnitMemberFields members={members} defaultValue={defaultValues?.workspaceMemberIds} />
+      <UnitMemberFields members={options.members} defaultValue={defaultValues?.workspaceMemberIds} />
+      <UnitRefFields
+        idPrefix={idPrefix}
+        wallets={options.wallets}
+        inventories={options.inventories}
+        defaultWalletId={defaultValues?.walletId}
+        defaultInventoryId={defaultValues?.inventoryId}
+      />
     </>
   )
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { openingBalanceRange, parseOpeningBalance } from "@/service/workspace/[workspaceId]/cash-flow/opening-balance";
+import { parseOpeningBalance } from "@/service/workspace/[workspaceId]/cash-flow/opening-balance";
 
 describe("parseOpeningBalance", () => {
   it.each([
@@ -49,25 +49,5 @@ describe("parseOpeningBalance", () => {
     ["dia que não é texto", { amount: "100", date: 20260901 }],
   ])("recusa %s", (_label, input) => {
     expect(parseOpeningBalance(input)).toEqual({ ok: false, error: "invalid_input" });
-  });
-});
-
-describe("openingBalanceRange", () => {
-  it("vai do dia do saldo inicial até hoje", () => {
-    expect(openingBalanceRange({ amountCents: 100, date: "2026-09-01" }, "2026-09-24")).toEqual({
-      from: "2026-09-01",
-      to: "2026-09-24",
-    });
-  });
-
-  it("saldo informado hoje cobre só o dia de hoje", () => {
-    expect(openingBalanceRange({ amountCents: 100, date: "2026-09-24" }, "2026-09-24")).toEqual({
-      from: "2026-09-24",
-      to: "2026-09-24",
-    });
-  });
-
-  it("sem intervalo quando o saldo inicial é de um dia futuro", () => {
-    expect(openingBalanceRange({ amountCents: 100, date: "2026-09-25" }, "2026-09-24")).toBeNull();
   });
 });

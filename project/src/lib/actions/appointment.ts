@@ -18,6 +18,7 @@ import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
 import { Unit } from "@/models/Unit"
 import { Service } from "@/models/Service"
+import { removeAppointmentTransaction, syncAppointmentTransactionById } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
 
 const errorMessages: Record<
   | CreateAppointmentError
@@ -119,6 +120,7 @@ export async function createAppointmentAction(
     ...appointmentLookups(unit),
     insert: async (data) => {
       const appointment = await Appointment.create({ ...data, createdBy: userId })
+      await syncAppointmentTransactionById(appointment._id)
       return { id: appointment._id.toString() }
     },
   })
@@ -150,6 +152,7 @@ export async function updateAppointmentAction(
       ...appointmentLookups(unit),
       update: async (id, fields) => {
         const { matchedCount } = await Appointment.updateOne({ _id: id, unitId: unit.unitId }, { $set: { ...fields, discount: fields.discount ?? null } })
+        if (matchedCount > 0) await syncAppointmentTransactionById(id)
         return matchedCount > 0
       },
     },
@@ -197,6 +200,7 @@ export async function updateWorkspaceAppointmentAction(
           { _id: id, unitId: { $in: workspaceUnitIds } },
           { $set: { ...fields, discount: fields.discount ?? null, unitId: unit.unitId } },
         )
+        if (matchedCount > 0) await syncAppointmentTransactionById(id)
         return matchedCount > 0
       },
     },
@@ -225,7 +229,10 @@ export async function deleteAppointmentAction(
     async (id) => {
       const { deletedCount } = await Appointment.deleteOne({ _id: id, unitId: unit.unitId })
       // O agendamento de onde o atendimento veio volta a ser editável e convertível.
-      if (deletedCount > 0) await Booking.updateOne({ appointmentId: id }, { $set: { appointmentId: null } })
+      if (deletedCount > 0) {
+        await Booking.updateOne({ appointmentId: id }, { $set: { appointmentId: null } })
+        await removeAppointmentTransaction(id)
+      }
       return deletedCount > 0
     },
   )
@@ -296,6 +303,7 @@ async function convertBookingInUnit(
       },
       insert: async (data) => {
         const appointment = await Appointment.create({ ...data, createdBy: userId })
+        await syncAppointmentTransactionById(appointment._id)
         return { id: appointment._id.toString() }
       },
       link: async (id, appointmentId) => {
@@ -304,6 +312,7 @@ async function convertBookingInUnit(
       },
       removeAppointment: async (appointmentId) => {
         await Appointment.deleteOne({ _id: appointmentId })
+        await removeAppointmentTransaction(appointmentId)
       },
     },
   )

@@ -1,436 +1,186 @@
 import { describe, it, expect, vi } from "vitest";
-import { createWallet, deleteWallet, updateWallet, walletBalance } from "@/service/workspace/[workspaceId]/cash-flow/wallet";
+import { createWallet, deleteWallet, updateWallet } from "@/service/workspace/[workspaceId]/cash-flow/wallet";
+import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
-const WALLET_ID = "64b7f0c2a1b2c3d4e5f60780";
-const UNIT_A = "64b7f0c2a1b2c3d4e5f60720";
-const UNIT_B = "64b7f0c2a1b2c3d4e5f60721";
-const UNIT_C = "64b7f0c2a1b2c3d4e5f60722";
+const WALLET_ID = "64b7f0c2a1b2c3d4e5f60800";
 
-// Como chega do FormData: o saldo vem do AmountInput ("1000.00") com o dia, as unidades
-// marcadas vêm com o valor distribuído a cada uma (vazio quando a carteira não é distribuída).
-const BALANCE = { amount: "1000.00", date: "2026-09-01" };
-const shared = {
-  name: "Itaú",
-  openingBalance: BALANCE,
-  distributed: null,
-  units: [
-    { unitId: UNIT_A, amount: "" },
-    { unitId: UNIT_B, amount: "" },
-  ],
-};
-const distributed = {
-  name: "Itaú",
-  openingBalance: BALANCE,
-  distributed: "on",
-  units: [
-    { unitId: UNIT_A, amount: "600.00" },
-    { unitId: UNIT_B, amount: "400.00" },
-  ],
-};
-
-function makeDeps({ exist = true, inOtherWallet = false } = {}) {
-  return {
-    insert: vi.fn().mockResolvedValue({ id: WALLET_ID }),
-    update: vi.fn().mockResolvedValue(true),
-    unitsExist: vi.fn().mockResolvedValue(exist),
-    unitsInOtherWallet: vi.fn().mockResolvedValue(inOtherWallet),
-  };
-}
+const MANAGER = actorWith("cash_flow.manage");
 
 describe("createWallet", () => {
-  it("cria a carteira compartilhada, sem valor por unidade", async () => {
+  function makeDeps() {
+    return { insert: vi.fn().mockResolvedValue({ id: WALLET_ID }) };
+  }
+  const ctx = { workspaceId: WORKSPACE_ID, actor: ADMIN };
+
+  it("cria a carteira no workspace sem saldo inicial", async () => {
     const deps = makeDeps();
 
-    const result = await createWallet(shared, WORKSPACE_ID, deps);
+    const result = await createWallet({ name: "Conta Itaú" }, ctx, deps);
 
     expect(result).toEqual({ ok: true, walletId: WALLET_ID });
-    expect(deps.insert).toHaveBeenCalledWith({
-      name: "Itaú",
-      openingBalance: { amountCents: 100_000, date: "2026-09-01" },
-      units: [
-        { unitId: UNIT_A, amountCents: null },
-        { unitId: UNIT_B, amountCents: null },
-      ],
-      workspaceId: WORKSPACE_ID,
-    });
+    expect(deps.insert).toHaveBeenCalledWith({ workspaceId: WORKSPACE_ID, name: "Conta Itaú", openingBalance: null });
   });
 
-  it("cria a carteira distribuída, com o valor de cada unidade em centavos", async () => {
-    const deps = makeDeps();
-
-    await createWallet(distributed, WORKSPACE_ID, deps);
-
-    expect(deps.insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        units: [
-          { unitId: UNIT_A, amountCents: 60_000 },
-          { unitId: UNIT_B, amountCents: 40_000 },
-        ],
-      }),
-    );
-  });
-
-  it("na carteira distribuída, unidade sem valor fica com zero", async () => {
+  it("com saldo inicial, leva o valor em centavos e o dia", async () => {
     const deps = makeDeps();
 
     await createWallet(
-      { ...distributed, units: [{ unitId: UNIT_A, amount: "600.00" }, { unitId: UNIT_B, amount: " " }] },
-      WORKSPACE_ID,
+      { name: "  Conta Itaú  ", openingBalance: { amount: "2500.00", date: "2026-09-01" } },
+      { workspaceId: WORKSPACE_ID, actor: MANAGER },
       deps,
     );
 
-    expect(deps.insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        units: [
-          { unitId: UNIT_A, amountCents: 60_000 },
-          { unitId: UNIT_B, amountCents: 0 },
-        ],
-      }),
-    );
+    expect(deps.insert).toHaveBeenCalledWith({
+      workspaceId: WORKSPACE_ID,
+      name: "Conta Itaú",
+      openingBalance: { amountCents: 250_000, date: "2026-09-01" },
+    });
   });
 
-  it("aceita distribuir menos que o saldo (o resto fica não distribuído)", async () => {
+  it("saldo inicial sem valor fica sem saldo", async () => {
     const deps = makeDeps();
 
-    const result = await createWallet(
-      { ...distributed, units: [{ unitId: UNIT_A, amount: "300.00" }] },
-      WORKSPACE_ID,
-      deps,
-    );
+    await createWallet({ name: "Conta", openingBalance: { amount: "", date: "" } }, ctx, deps);
 
-    expect(result).toEqual({ ok: true, walletId: WALLET_ID });
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ openingBalance: null }));
   });
 
-  it("na carteira compartilhada, ignora valores que vierem nas unidades", async () => {
+  it.each([
+    ["input nulo", null, "invalid_input"],
+    ["nome ausente", {}, "invalid_input"],
+    ["nome que não é texto", { name: 1 }, "invalid_input"],
+    ["nome vazio", { name: "  " }, "invalid_name"],
+    ["nome com mais de 40 caracteres", { name: "a".repeat(41) }, "name_too_long"],
+    ["saldo inválido", { name: "Conta", openingBalance: { amount: "abc", date: "2026-09-01" } }, "invalid_opening_balance"],
+    ["dia do saldo inválido", { name: "Conta", openingBalance: { amount: "10", date: "2026-02-30" } }, "invalid_opening_balance_date"],
+  ])("recusa %s", async (_label, input, error) => {
     const deps = makeDeps();
 
-    await createWallet({ ...shared, units: [{ unitId: UNIT_A, amount: "abc" }] }, WORKSPACE_ID, deps);
+    const result = await createWallet(input, ctx, deps);
 
-    expect(deps.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ units: [{ unitId: UNIT_A, amountCents: null }] }),
-    );
-  });
-
-  it("remove espaços das pontas do nome", async () => {
-    const deps = makeDeps();
-
-    await createWallet({ ...shared, name: "  Itaú  " }, WORKSPACE_ID, deps);
-
-    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ name: "Itaú" }));
-  });
-
-  it("confere as unidades no workspace, sem excluir nenhuma carteira da checagem", async () => {
-    const deps = makeDeps();
-
-    await createWallet(shared, WORKSPACE_ID, deps);
-
-    expect(deps.unitsExist).toHaveBeenCalledWith(WORKSPACE_ID, [UNIT_A, UNIT_B]);
-    expect(deps.unitsInOtherWallet).toHaveBeenCalledWith([UNIT_A, UNIT_B], null);
-  });
-
-  it("sem workspace, não grava", async () => {
-    const deps = makeDeps();
-
-    expect(await createWallet(shared, null, deps)).toEqual({ ok: false, error: "workspace_not_found" });
+    expect(result).toEqual({ ok: false, error });
     expect(deps.insert).not.toHaveBeenCalled();
   });
 
   it.each([
-    ["nome vazio", { ...shared, name: "   " }, "invalid_name"],
-    ["nome com mais de 40 caracteres", { ...shared, name: "a".repeat(41) }, "name_too_long"],
-    ["nome que não é texto", { ...shared, name: 1 }, "invalid_input"],
-    ["saldo vazio", { ...shared, openingBalance: { amount: "", date: "2026-09-01" } }, "invalid_opening_balance"],
-    ["saldo inválido", { ...shared, openingBalance: { amount: "-1", date: "2026-09-01" } }, "invalid_opening_balance"],
-    ["dia do saldo inválido", { ...shared, openingBalance: { amount: "10", date: "" } }, "invalid_opening_balance_date"],
-    ["sem unidades", { ...shared, units: [] }, "no_units"],
-    ["unidades que não são lista", { ...shared, units: "x" }, "invalid_input"],
-    ["unidade repetida", { ...shared, units: [{ unitId: UNIT_A, amount: "" }, { unitId: UNIT_A, amount: "" }] }, "invalid_input"],
-    ["id de unidade inválido", { ...shared, units: [{ unitId: "x", amount: "" }] }, "invalid_units"],
-    [
-      "valor da unidade inválido",
-      { ...distributed, units: [{ unitId: UNIT_A, amount: "1,50" }] },
-      "invalid_unit_amount",
-    ],
-    [
-      "distribuição maior que o saldo",
-      { ...distributed, units: [{ unitId: UNIT_A, amount: "600.00" }, { unitId: UNIT_B, amount: "400.01" }] },
-      "distribution_exceeds_balance",
-    ],
-  ])("recusa %s", async (_label, input, error) => {
+    ["sem acesso ao workspace", null, "workspace_not_found"],
+    ["sem a permissão de gerenciar o caixa", STAFF, "forbidden"],
+  ] as const)("%s, não cria", async (_label, actor, error) => {
     const deps = makeDeps();
 
-    expect(await createWallet(input, WORKSPACE_ID, deps)).toEqual({ ok: false, error });
-    expect(deps.insert).not.toHaveBeenCalled();
-  });
+    const result = await createWallet({ name: "Conta" }, { workspaceId: WORKSPACE_ID, actor }, deps);
 
-  it("recusa unidade que não é do workspace", async () => {
-    const deps = makeDeps({ exist: false });
-
-    expect(await createWallet(shared, WORKSPACE_ID, deps)).toEqual({ ok: false, error: "invalid_units" });
-    expect(deps.insert).not.toHaveBeenCalled();
-  });
-
-  it("recusa unidade que já está em outra carteira", async () => {
-    const deps = makeDeps({ inOtherWallet: true });
-
-    expect(await createWallet(shared, WORKSPACE_ID, deps)).toEqual({ ok: false, error: "unit_in_other_wallet" });
+    expect(result).toEqual({ ok: false, error });
     expect(deps.insert).not.toHaveBeenCalled();
   });
 });
 
 describe("updateWallet", () => {
-  it("grava nome, saldo e unidades da carteira", async () => {
+  function makeDeps(found = true) {
+    return { update: vi.fn().mockResolvedValue(found) };
+  }
+
+  it("renomeia a carteira", async () => {
     const deps = makeDeps();
 
-    const result = await updateWallet(distributed, WORKSPACE_ID, WALLET_ID, deps);
+    const result = await updateWallet({ name: " Conta Nubank " }, WALLET_ID, { actor: MANAGER }, deps);
 
     expect(result).toEqual({ ok: true });
-    expect(deps.update).toHaveBeenCalledWith(WALLET_ID, {
-      name: "Itaú",
-      openingBalance: { amountCents: 100_000, date: "2026-09-01" },
-      units: [
-        { unitId: UNIT_A, amountCents: 60_000 },
-        { unitId: UNIT_B, amountCents: 40_000 },
-      ],
-    });
+    expect(deps.update).toHaveBeenCalledWith(WALLET_ID, { name: "Conta Nubank" });
   });
 
-  it("a própria carteira não conta como outra na checagem das unidades", async () => {
+  it("recusa nome vazio sem gravar", async () => {
     const deps = makeDeps();
 
-    await updateWallet(shared, WORKSPACE_ID, WALLET_ID, deps);
+    const result = await updateWallet({ name: "" }, WALLET_ID, { actor: ADMIN }, deps);
 
-    expect(deps.unitsInOtherWallet).toHaveBeenCalledWith([UNIT_A, UNIT_B], WALLET_ID);
-  });
-
-  it("recusa unidade que já está em outra carteira", async () => {
-    const deps = makeDeps({ inOtherWallet: true });
-
-    expect(await updateWallet(shared, WORKSPACE_ID, WALLET_ID, deps)).toEqual({
-      ok: false,
-      error: "unit_in_other_wallet",
-    });
+    expect(result).toEqual({ ok: false, error: "invalid_name" });
     expect(deps.update).not.toHaveBeenCalled();
   });
 
-  it("recusa entrada inválida sem gravar", async () => {
+  it.each([null, undefined, ""])("sem id (%j), devolve não encontrada", async (walletId) => {
     const deps = makeDeps();
 
-    expect(await updateWallet({ ...shared, units: [] }, WORKSPACE_ID, WALLET_ID, deps)).toEqual({
-      ok: false,
-      error: "no_units",
-    });
+    const result = await updateWallet({ name: "Conta" }, walletId, { actor: ADMIN }, deps);
+
+    expect(result).toEqual({ ok: false, error: "wallet_not_found" });
     expect(deps.update).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["sem id", WORKSPACE_ID, null],
-    ["sem workspace", null, WALLET_ID],
-  ])("carteira não encontrada %s", async (_label, workspaceId, walletId) => {
-    const deps = makeDeps();
+  it("devolve não encontrada quando a carteira não é do workspace", async () => {
+    const result = await updateWallet({ name: "Conta" }, WALLET_ID, { actor: ADMIN }, makeDeps(false));
 
-    expect(await updateWallet(shared, workspaceId, walletId, deps)).toEqual({ ok: false, error: "wallet_not_found" });
-    expect(deps.update).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: false, error: "wallet_not_found" });
   });
 
-  it("carteira não encontrada quando ela não existe no workspace", async () => {
+  it("sem a permissão de gerenciar o caixa, não renomeia", async () => {
     const deps = makeDeps();
-    deps.update.mockResolvedValue(false);
 
-    expect(await updateWallet(shared, WORKSPACE_ID, WALLET_ID, deps)).toEqual({
-      ok: false,
-      error: "wallet_not_found",
-    });
+    const result = await updateWallet({ name: "Conta" }, WALLET_ID, { actor: STAFF }, deps);
+
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+    expect(deps.update).not.toHaveBeenCalled();
   });
 });
 
 describe("deleteWallet", () => {
-  // hasExpenses: a carteira tem despesas ou grupos de despesa lançados nela.
-  function makeDeps({ found = true, hasExpenses = false } = {}) {
-    return { remove: vi.fn().mockResolvedValue(found), hasExpenses: vi.fn().mockResolvedValue(hasExpenses) };
+  function makeDeps({ hasUnits = false, hasTransactions = false, found = true } = {}) {
+    return {
+      hasUnits: vi.fn().mockResolvedValue(hasUnits),
+      hasTransactions: vi.fn().mockResolvedValue(hasTransactions),
+      remove: vi.fn().mockResolvedValue(found),
+    };
   }
 
-  it("exclui a carteira sem despesas", async () => {
+  it("exclui a carteira sem unidades nem transações", async () => {
     const deps = makeDeps();
 
-    expect(await deleteWallet(WALLET_ID, deps)).toEqual({ ok: true });
-    expect(deps.hasExpenses).toHaveBeenCalledWith(WALLET_ID);
+    const result = await deleteWallet(WALLET_ID, { actor: MANAGER }, deps);
+
+    expect(result).toEqual({ ok: true });
     expect(deps.remove).toHaveBeenCalledWith(WALLET_ID);
   });
 
-  it("não exclui a carteira com despesas ou grupos, para nada ficar sem dono", async () => {
-    const deps = makeDeps({ hasExpenses: true });
+  it("não exclui a carteira que alguma unidade usa", async () => {
+    const deps = makeDeps({ hasUnits: true });
 
-    expect(await deleteWallet(WALLET_ID, deps)).toEqual({ ok: false, error: "wallet_has_expenses" });
+    const result = await deleteWallet(WALLET_ID, { actor: ADMIN }, deps);
+
+    expect(result).toEqual({ ok: false, error: "wallet_in_use" });
     expect(deps.remove).not.toHaveBeenCalled();
   });
 
-  it("carteira não encontrada sem id ou quando ela não existe", async () => {
+  it("não exclui a carteira com transações", async () => {
+    const deps = makeDeps({ hasTransactions: true });
+
+    const result = await deleteWallet(WALLET_ID, { actor: ADMIN }, deps);
+
+    expect(result).toEqual({ ok: false, error: "wallet_has_transactions" });
+    expect(deps.remove).not.toHaveBeenCalled();
+  });
+
+  it.each([null, undefined, ""])("sem id (%j), devolve não encontrada", async (walletId) => {
     const deps = makeDeps();
-    expect(await deleteWallet(null, deps)).toEqual({ ok: false, error: "wallet_not_found" });
-    expect(deps.hasExpenses).not.toHaveBeenCalled();
-    expect(await deleteWallet(WALLET_ID, makeDeps({ found: false }))).toEqual({
-      ok: false,
-      error: "wallet_not_found",
-    });
-  });
-});
 
-// netByUnit: líquido real de cada unidade do dia do saldo inicial até hoje.
-describe("walletBalance", () => {
-  const opening = { amountCents: 100_000, date: "2026-09-01" };
+    const result = await deleteWallet(walletId, { actor: ADMIN }, deps);
 
-  it("carteira compartilhada: saldo inicial mais o líquido de todas as unidades, sem saldo por unidade", () => {
-    const wallet = {
-      openingBalance: opening,
-      units: [
-        { unitId: UNIT_A, amountCents: null },
-        { unitId: UNIT_B, amountCents: null },
-      ],
-    };
-
-    expect(walletBalance(wallet, { [UNIT_A]: 5_000, [UNIT_B]: -2_000 })).toEqual({
-      balanceCents: 103_000,
-      undistributedCents: null,
-      units: [
-        { unitId: UNIT_A, balanceCents: null },
-        { unitId: UNIT_B, balanceCents: null },
-      ],
-    });
+    expect(result).toEqual({ ok: false, error: "wallet_not_found" });
+    expect(deps.hasUnits).not.toHaveBeenCalled();
   });
 
-  it("carteira de uma unidade só: o saldo da unidade é o da carteira", () => {
-    const wallet = { openingBalance: opening, units: [{ unitId: UNIT_A, amountCents: null }] };
+  it("devolve não encontrada quando a remoção não acha a carteira", async () => {
+    const result = await deleteWallet(WALLET_ID, { actor: ADMIN }, makeDeps({ found: false }));
 
-    expect(walletBalance(wallet, { [UNIT_A]: 5_000 })).toEqual({
-      balanceCents: 105_000,
-      undistributedCents: null,
-      units: [{ unitId: UNIT_A, balanceCents: 105_000 }],
-    });
+    expect(result).toEqual({ ok: false, error: "wallet_not_found" });
   });
 
-  it("carteira distribuída: cada unidade tem a parte dela mais o próprio líquido, e a soma fecha com a carteira", () => {
-    const wallet = {
-      openingBalance: opening,
-      units: [
-        { unitId: UNIT_A, amountCents: 60_000 },
-        { unitId: UNIT_B, amountCents: 40_000 },
-      ],
-    };
+  it("sem a permissão de gerenciar o caixa, não exclui", async () => {
+    const deps = makeDeps();
 
-    expect(walletBalance(wallet, { [UNIT_A]: 5_000, [UNIT_B]: -50_000 })).toEqual({
-      balanceCents: 55_000,
-      undistributedCents: 0,
-      units: [
-        { unitId: UNIT_A, balanceCents: 65_000 },
-        { unitId: UNIT_B, balanceCents: -10_000 },
-      ],
-    });
-  });
+    const result = await deleteWallet(WALLET_ID, { actor: STAFF }, deps);
 
-  it("carteira distribuída em parte: o resto do saldo inicial fica não distribuído", () => {
-    const wallet = {
-      openingBalance: opening,
-      units: [
-        { unitId: UNIT_A, amountCents: 30_000 },
-        { unitId: UNIT_B, amountCents: 0 },
-      ],
-    };
-
-    expect(walletBalance(wallet, { [UNIT_A]: 1_000, [UNIT_B]: 2_000 })).toEqual({
-      balanceCents: 103_000,
-      undistributedCents: 70_000,
-      units: [
-        { unitId: UNIT_A, balanceCents: 31_000 },
-        { unitId: UNIT_B, balanceCents: 2_000 },
-      ],
-    });
-  });
-
-  it("unidade sem líquido informado conta como zero", () => {
-    const wallet = {
-      openingBalance: opening,
-      units: [
-        { unitId: UNIT_A, amountCents: 60_000 },
-        { unitId: UNIT_C, amountCents: 40_000 },
-      ],
-    };
-
-    expect(walletBalance(wallet, { [UNIT_A]: 5_000 })).toEqual({
-      balanceCents: 105_000,
-      undistributedCents: 0,
-      units: [
-        { unitId: UNIT_A, balanceCents: 65_000 },
-        { unitId: UNIT_C, balanceCents: 40_000 },
-      ],
-    });
-  });
-
-  it("carteira sem unidades (todas excluídas) fica só com o saldo inicial", () => {
-    expect(walletBalance({ openingBalance: opening, units: [] }, {})).toEqual({
-      balanceCents: 100_000,
-      undistributedCents: null,
-      units: [],
-    });
-  });
-
-  // walletExpenseCents: despesas pagas da própria carteira do dia do saldo inicial até hoje.
-  describe("com despesas da carteira", () => {
-    it("carteira compartilhada: as despesas saem do saldo da carteira", () => {
-      const wallet = {
-        openingBalance: opening,
-        units: [
-          { unitId: UNIT_A, amountCents: null },
-          { unitId: UNIT_B, amountCents: null },
-        ],
-      };
-
-      expect(walletBalance(wallet, { [UNIT_A]: 5_000, [UNIT_B]: -2_000 }, 8_000)).toEqual({
-        balanceCents: 95_000,
-        undistributedCents: null,
-        units: [
-          { unitId: UNIT_A, balanceCents: null },
-          { unitId: UNIT_B, balanceCents: null },
-        ],
-      });
-    });
-
-    it("carteira de uma unidade só: o saldo da unidade, que é o da carteira, também desconta", () => {
-      const wallet = { openingBalance: opening, units: [{ unitId: UNIT_A, amountCents: null }] };
-
-      expect(walletBalance(wallet, { [UNIT_A]: 5_000 }, 8_000)).toEqual({
-        balanceCents: 97_000,
-        undistributedCents: null,
-        units: [{ unitId: UNIT_A, balanceCents: 97_000 }],
-      });
-    });
-
-    it("carteira distribuída: as despesas saem do não distribuído, que pode ficar negativo, e não das partes", () => {
-      const wallet = {
-        openingBalance: opening,
-        units: [
-          { unitId: UNIT_A, amountCents: 60_000 },
-          { unitId: UNIT_B, amountCents: 40_000 },
-        ],
-      };
-
-      expect(walletBalance(wallet, { [UNIT_A]: 5_000, [UNIT_B]: -50_000 }, 8_000)).toEqual({
-        balanceCents: 47_000,
-        undistributedCents: -8_000,
-        units: [
-          { unitId: UNIT_A, balanceCents: 65_000 },
-          { unitId: UNIT_B, balanceCents: -10_000 },
-        ],
-      });
-    });
-
-    it("carteira sem unidades: saldo inicial menos as despesas", () => {
-      expect(walletBalance({ openingBalance: opening, units: [] }, {}, 8_000)).toEqual({
-        balanceCents: 92_000,
-        undistributedCents: null,
-        units: [],
-      });
-    });
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+    expect(deps.remove).not.toHaveBeenCalled();
   });
 });

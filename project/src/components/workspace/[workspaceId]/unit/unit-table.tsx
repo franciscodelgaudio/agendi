@@ -14,13 +14,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import type { UnitListQuery } from "@/service/workspace/[workspaceId]/unit/unit-list"
-import type { UnitFormValues } from "@/components/workspace/[workspaceId]/unit/unit-fields"
-import type { MemberOption } from "@/components/workspace/[workspaceId]/unit/unit-member-fields"
+import type { UnitFormOptions, UnitFormValues } from "@/components/workspace/[workspaceId]/unit/unit-fields"
 import { dateTimeFormat } from "@/service/_shared/utils"
 
 type Props = {
   units: (UnitFormValues & { createdAt: Date; updatedAt: Date })[]
-  members: MemberOption[]
+  options: UnitFormOptions
   query: UnitListQuery
   pathname: string
   workspaceId: string
@@ -28,7 +27,7 @@ type Props = {
   canManage: boolean
 }
 
-export function UnitTable({ units, members, query, pathname, workspaceId, canManage }: Props) {
+export function UnitTable({ units, options, query, pathname, workspaceId, canManage }: Props) {
   return (
     <div className="border">
       <Table>
@@ -96,7 +95,7 @@ export function UnitTable({ units, members, query, pathname, workspaceId, canMan
                 </TableCell>
                 {canManage && (
                   <TableCell className="relative z-10 px-4 text-right">
-                    <UnitActions workspaceId={workspaceId} unit={unit} members={members} />
+                    <UnitActions workspaceId={workspaceId} unit={unit} options={options} />
                   </TableCell>
                 )}
               </TableRow>

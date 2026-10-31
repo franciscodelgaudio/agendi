@@ -18,6 +18,7 @@ import {
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
 import { Unit } from "@/models/Unit"
+import { syncAppointmentTransactionById } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
 
 const errorMessages: Record<BookingError | "workspace_not_found" | "unauthenticated", string> = {
   invalid_input: "Preencha profissional, estação, hóspede, quarto, início e duração.",
@@ -156,6 +157,7 @@ async function syncAppointment(
       },
     },
   )
+  await syncAppointmentTransactionById(appointmentId)
 }
 
 // Corrige pelo formulário um agendamento que já virou atendimento; o atendimento acompanha.

@@ -4,140 +4,202 @@ import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { getSessionUserId } from "@/service/(auth)/session"
 import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
-import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
+import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 import {
   createWallet,
   deleteWallet,
   updateWallet,
   type CreateWalletError,
-  type DeleteWalletResult,
+  type DeleteWalletError,
   type UpdateWalletError,
-  type WalletUnit,
 } from "@/service/workspace/[workspaceId]/cash-flow/wallet"
-import { Expense } from "@/models/Expense"
-import { ExpenseGroup } from "@/models/ExpenseGroup"
+import {
+  createTransaction,
+  deleteTransaction,
+  updateTransaction,
+  type CreateTransactionError,
+  type DeleteTransactionError,
+  type UpdateTransactionError,
+} from "@/service/workspace/[workspaceId]/cash-flow/wallets/[walletId]/transaction"
+import { insertWallet } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
+import { Transaction } from "@/models/Transaction"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
 
-type DeleteWalletError = Extract<DeleteWalletResult, { ok: false }>["error"]
+type WalletError =
+  | CreateWalletError
+  | UpdateWalletError
+  | DeleteWalletError
+  | CreateTransactionError
+  | UpdateTransactionError
+  | DeleteTransactionError
 
-const errorMessages: Record<CreateWalletError | UpdateWalletError | DeleteWalletError | "unauthenticated", string> = {
-  invalid_input: "Informe o nome, o saldo e as unidades da carteira.",
-  invalid_name: "Informe o nome da carteira.",
-  name_too_long: "O nome pode ter no máximo 40 caracteres.",
-  invalid_opening_balance: "Informe um saldo de até R$ 1.000.000,00.",
-  invalid_opening_balance_date: "Informe o dia do saldo.",
-  no_units: "Escolha pelo menos uma unidade.",
-  invalid_units: "Escolha só unidades deste workspace.",
-  invalid_unit_amount: "Informe o valor de cada unidade, de até R$ 1.000.000,00.",
-  distribution_exceeds_balance: "A soma dos valores das unidades passa do saldo da carteira.",
-  unit_in_other_wallet: "Uma das unidades já está em outra carteira. Tire-a de lá antes.",
+const errorMessages: Record<Exclude<WalletError, "forbidden"> | "unauthenticated", string> = {
+  invalid_input: "Preencha todos os campos.",
+  invalid_name: "Informe o nome.",
+  name_too_long: "O nome ficou longo demais.",
+  invalid_opening_balance: "Informe um saldo inicial de até R$ 1.000.000,00.",
+  invalid_opening_balance_date: "Informe o dia do saldo inicial.",
+  invalid_total: "Informe um valor maior que zero, como 150,00.",
+  invalid_type: "Escolha entrada ou saída.",
+  invalid_paid_at: "Informe um dia de pagamento válido.",
+  wallet_not_found: "Carteira não encontrada neste workspace.",
+  wallet_in_use: "Alguma unidade ainda usa esta carteira. Troque a carteira dela antes.",
+  wallet_has_transactions: "Esta carteira tem transações. Exclua as transações antes.",
+  transaction_not_found: "Transação não encontrada nesta carteira.",
+  transaction_from_appointment: "Esta entrada vem de um atendimento. Altere o atendimento.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
-  wallet_not_found: "Carteira não encontrada ou sem permissão.",
-  wallet_has_expenses: "Esta carteira tem despesas ou grupos lançados. Exclua-os antes.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
-export type WalletActionState = { error: string | null }
+export type WalletFormState = { error: string | null }
 
-// Id do workspace se o usuário gerenciar o caixa nele; senão a mensagem de erro.
-async function resolveWorkspace(workspaceId: string): Promise<{ workspaceId: string } | { error: string }> {
+function messageOf(error: WalletError | "unauthenticated") {
+  return error === "forbidden" ? forbiddenMessage("cash_flow.manage") : errorMessages[error]
+}
+
+async function sessionAccess(workspaceId: string) {
   const userId = await getSessionUserId()
-  if (!userId) return { error: errorMessages.unauthenticated }
-  const managed = await findManagedWorkspace(workspaceId, userId, "cash_flow.manage")
-  if (!managed.ok) {
-    return { error: managed.error === "forbidden" ? forbiddenMessage("cash_flow.manage") : errorMessages[managed.error] }
-  }
-  return { workspaceId: managed.access.id }
+  if (!userId) return null
+  const access = await findWorkspaceAccess(workspaceId, userId)
+  return { workspaceId: access?.id ?? workspaceId, actor: access?.actor ?? null }
 }
 
-// Unidades marcadas (unitId) com o valor de cada uma no campo unitAmount-<id>.
-function walletInput(formData: FormData) {
-  return {
-    name: formData.get("name"),
-    openingBalance: { amount: formData.get("openingBalance"), date: formData.get("openingBalanceDate") },
-    distributed: formData.get("distributed"),
-    units: formData.getAll("unitId").map((unitId) => ({ unitId, amount: formData.get(`unitAmount-${unitId}`) })),
-  }
-}
-
-function unitsExist(workspaceId: string, unitIds: string[]) {
-  return Unit.countDocuments({ _id: { $in: unitIds }, workspaceId }).then((count) => count === unitIds.length)
-}
-
-async function unitsInOtherWallet(unitIds: string[], excludeId: string | null) {
-  const filter = { "units.unitId": { $in: unitIds }, ...(excludeId && { _id: { $ne: excludeId } }) }
-  return !!(await Wallet.exists(filter))
-}
-
-function toUnitDocs(units: WalletUnit[]) {
-  return units.map(({ unitId, amountCents }) => ({ unitId: new Types.ObjectId(unitId), amountCents }))
+function workspaceFilter(workspaceId: string, id: string) {
+  if (!isObjectIdOrHexString(workspaceId) || !isObjectIdOrHexString(id)) return null
+  return { _id: new Types.ObjectId(id), workspaceId: new Types.ObjectId(workspaceId) }
 }
 
 export async function createWalletAction(
   workspaceId: string,
-  _prev: WalletActionState,
+  _prev: WalletFormState,
   formData: FormData,
-): Promise<WalletActionState> {
-  const target = await resolveWorkspace(workspaceId)
-  if ("error" in target) return target
+): Promise<WalletFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
 
-  const result = await createWallet(walletInput(formData), target.workspaceId, {
-    unitsExist,
-    unitsInOtherWallet,
-    insert: async ({ units, ...data }) => {
-      const wallet = await Wallet.create({ ...data, units: toUnitDocs(units) })
-      return { id: wallet._id.toString() }
+  const result = await createWallet(
+    {
+      name: formData.get("name"),
+      openingBalance: { amount: formData.get("openingBalance"), date: formData.get("openingBalanceDate") },
     },
-  })
-  if (!result.ok) return { error: errorMessages[result.error] }
+    session,
+    { insert: insertWallet },
+  )
+
+  if (!result.ok) return { error: messageOf(result.error) }
 
   refresh()
   return { error: null }
 }
 
-// A escrita filtra por workspaceId para que uma carteira de outro workspace não seja encontrada.
 export async function updateWalletAction(
   workspaceId: string,
   walletId: string,
-  _prev: WalletActionState,
+  _prev: WalletFormState,
   formData: FormData,
-): Promise<WalletActionState> {
-  const target = await resolveWorkspace(workspaceId)
-  if ("error" in target) return target
+): Promise<WalletFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = workspaceFilter(session.workspaceId, walletId)
 
-  const id = isObjectIdOrHexString(walletId) ? walletId : null
-  const result = await updateWallet(walletInput(formData), target.workspaceId, id, {
-    unitsExist,
-    unitsInOtherWallet,
-    update: async (walletId, { units, ...data }) => {
-      const { matchedCount } = await Wallet.updateOne(
-        { _id: walletId, workspaceId: target.workspaceId },
-        { $set: { ...data, units: toUnitDocs(units) } },
-      )
-      return matchedCount > 0
-    },
+  const result = await updateWallet({ name: formData.get("name") }, filter && walletId, session, {
+    update: async (_id, data) => (await Wallet.updateOne(filter!, { $set: data })).matchedCount > 0,
   })
-  if (!result.ok) return { error: errorMessages[result.error] }
+
+  if (!result.ok) return { error: messageOf(result.error) }
 
   refresh()
   return { error: null }
 }
 
-export async function deleteWalletAction(workspaceId: string, walletId: string): Promise<WalletActionState> {
-  const target = await resolveWorkspace(workspaceId)
-  if ("error" in target) return target
+export async function deleteWalletAction(workspaceId: string, walletId: string): Promise<WalletFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = workspaceFilter(session.workspaceId, walletId)
 
-  const id = isObjectIdOrHexString(walletId) ? walletId : null
-  const result = await deleteWallet(id, {
-    hasExpenses: async (walletId) =>
-      !!(await Expense.exists({ walletId })) || !!(await ExpenseGroup.exists({ walletId })),
-    remove: async (walletId) => {
-      const { deletedCount } = await Wallet.deleteOne({ _id: walletId, workspaceId: target.workspaceId })
-      return deletedCount > 0
+  const result = await deleteWallet(filter && walletId, session, {
+    hasUnits: async () => !!(await Unit.exists({ walletId: filter!._id })),
+    hasTransactions: async () => !!(await Transaction.exists({ walletId: filter!._id })),
+    remove: async () => (await Wallet.deleteOne(filter!)).deletedCount > 0,
+  })
+
+  if (!result.ok) return { error: messageOf(result.error) }
+
+  refresh()
+  return { error: null }
+}
+
+function transactionInput(formData: FormData) {
+  return {
+    name: formData.get("name"),
+    total: formData.get("total"),
+    type: formData.get("type"),
+    paidAt: formData.get("paidAt"),
+  }
+}
+
+async function findTransaction(filter: ReturnType<typeof workspaceFilter>) {
+  const transaction = filter && (await Transaction.findOne(filter).select({ appointmentId: 1 }).lean())
+  return transaction ? { fromAppointment: !!transaction.appointmentId } : null
+}
+
+export async function createTransactionAction(
+  workspaceId: string,
+  walletId: string,
+  _prev: WalletFormState,
+  formData: FormData,
+): Promise<WalletFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const walletFilter = workspaceFilter(session.workspaceId, walletId)
+
+  const result = await createTransaction(transactionInput(formData), walletFilter && walletId, session, {
+    walletExists: async () => !!(await Wallet.exists(walletFilter!)),
+    insert: async (data) => {
+      const transaction = await Transaction.create(data)
+      return { id: transaction._id.toString() }
     },
   })
-  if (!result.ok) return { error: errorMessages[result.error] }
+
+  if (!result.ok) return { error: messageOf(result.error) }
+
+  refresh()
+  return { error: null }
+}
+
+export async function updateTransactionAction(
+  workspaceId: string,
+  transactionId: string,
+  _prev: WalletFormState,
+  formData: FormData,
+): Promise<WalletFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = workspaceFilter(session.workspaceId, transactionId)
+
+  const result = await updateTransaction(transactionInput(formData), filter && transactionId, session, {
+    findTransaction: () => findTransaction(filter),
+    update: async (_id, data) => (await Transaction.updateOne(filter!, { $set: data })).matchedCount > 0,
+  })
+
+  if (!result.ok) return { error: messageOf(result.error) }
+
+  refresh()
+  return { error: null }
+}
+
+export async function deleteTransactionAction(workspaceId: string, transactionId: string): Promise<WalletFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = workspaceFilter(session.workspaceId, transactionId)
+
+  const result = await deleteTransaction(filter && transactionId, session, {
+    findTransaction: () => findTransaction(filter),
+    remove: async () => (await Transaction.deleteOne(filter!)).deletedCount > 0,
+  })
+
+  if (!result.ok) return { error: messageOf(result.error) }
 
   refresh()
   return { error: null }

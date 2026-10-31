@@ -3,12 +3,10 @@
 import { useActionState, useState } from "react"
 import { PlusIcon } from "lucide-react"
 import { createUnitAction, type UnitFormState } from "@/lib/actions/unit"
-import type { MemberOption } from "@/components/workspace/[workspaceId]/unit/unit-member-fields"
 
 import { Button } from "@/components/ui/button"
-import { Field, FieldDescription, FieldError, FieldGroup } from "@/components/ui/field"
-import { UnitFields } from "@/components/workspace/[workspaceId]/unit/unit-fields"
-import { OpeningBalanceFields } from "@/components/workspace/[workspaceId]/shared/cash-flow/opening-balance-fields"
+import { FieldError, FieldGroup } from "@/components/ui/field"
+import { UnitFields, type UnitFormOptions } from "@/components/workspace/[workspaceId]/unit/unit-fields"
 import {
   Sheet,
   SheetContent,
@@ -19,7 +17,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 
-export function CreateUnitSheet({ workspaceId, members }: { workspaceId: string; members: MemberOption[] }) {
+export function CreateUnitSheet({ workspaceId, options }: { workspaceId: string; options: UnitFormOptions }) {
   const [open, setOpen] = useState(false)
   const [state, formAction, pending] = useActionState(
     async (prev: UnitFormState, formData: FormData) => {
@@ -45,13 +43,7 @@ export function CreateUnitSheet({ workspaceId, members }: { workspaceId: string;
           {/* Só os campos rolam; título e botões ficam fixos. */}
           <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
             {state.error && <FieldError>{state.error}</FieldError>}
-            <UnitFields idPrefix="create-unit" workspaceId={workspaceId} members={members} />
-            <Field>
-              <OpeningBalanceFields idPrefix="create-unit" />
-              <FieldDescription>
-                Cria uma carteira só desta unidade. Para dividir uma conta com outras unidades, use Carteiras no Caixa.
-              </FieldDescription>
-            </Field>
+            <UnitFields idPrefix="create-unit" workspaceId={workspaceId} options={options} />
           </FieldGroup>
           <SheetFooter>
             <Button type="submit" loading={pending}>

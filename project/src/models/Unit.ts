@@ -21,6 +21,8 @@ const unitSchema = new Schema(
     stations: { type: [stationSchema], default: [] },
     businessHours: { type: businessHoursSchema, required: true },
     workspaceMemberIds: { type: [Schema.Types.ObjectId], ref: "WorkspaceMember", default: [], index: true },
+    walletId: { type: Schema.Types.ObjectId, ref: "Wallet", required: true, index: true },
+    inventoryId: { type: Schema.Types.ObjectId, ref: "Inventory", required: true, index: true },
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true, index: true },
   },
   { collection: "units", timestamps: true },

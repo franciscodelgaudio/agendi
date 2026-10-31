@@ -12,25 +12,36 @@ describe("visiblePages", () => {
     const actor = {
       admin: false,
       permissions: [],
-      pages: { workspace: ["users", "home", "calendar"], unit: ["stock", "overview"] },
+      pages: { workspace: ["users", "home", "calendar"], unit: ["appointments", "overview"] },
     } as const;
 
     expect(visiblePages(actor)).toEqual({
       workspace: ["home", "calendar", "users"],
-      unit: ["overview", "stock"],
+      unit: ["overview", "appointments"],
     });
   });
 
   it("ignora páginas que não estão mais no catálogo", () => {
-    const actor = { admin: false, permissions: [], pages: { workspace: ["home", "billing"], unit: ["reports"] } } as const;
+    const actor = {
+      admin: false,
+      permissions: [],
+      pages: { workspace: ["home", "billing"], unit: ["reports", "stock", "cash_flow"] },
+    } as const;
 
     expect(visiblePages(actor)).toEqual({ workspace: ["home"], unit: [] });
   });
 });
 
 describe("WORKSPACE_PAGES", () => {
-  it("tem o estoque de todas as unidades depois da equipe, em /stock", () => {
+  it("tem as carteiras em /cash-flow e os inventários em /stock", () => {
     expect(WORKSPACE_PAGES).toEqual(["home", "units", "calendar", "cash_flow", "stock", "users"]);
+    expect(WORKSPACE_PAGE_PATHS.cash_flow).toBe("/cash-flow");
     expect(WORKSPACE_PAGE_PATHS.stock).toBe("/stock");
+  });
+});
+
+describe("UNIT_PAGES", () => {
+  it("a unidade não tem mais abas de caixa nem de estoque", () => {
+    expect(UNIT_PAGES).toEqual(["overview", "services", "calendar", "appointments"]);
   });
 });

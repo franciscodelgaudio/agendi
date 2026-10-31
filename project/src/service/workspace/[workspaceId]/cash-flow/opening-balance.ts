@@ -1,5 +1,4 @@
 import { parseDay } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-list";
-import type { DayRange } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
 import { parsePriceCents } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service";
 
 export type OpeningBalanceError = "invalid_input" | "invalid_opening_balance" | "invalid_opening_balance_date";
@@ -26,9 +25,4 @@ export function parseOpeningBalance(input: unknown): OpeningBalanceResult {
   const day = date?.trim() ?? "";
   if (!parseDay(day)) return { ok: false, error: "invalid_opening_balance_date" };
   return { ok: true, value: { amountCents, date: day } };
-}
-
-// Dias cujo líquido real entra no saldo de hoje; null enquanto o saldo inicial é de um dia futuro.
-export function openingBalanceRange({ date }: OpeningBalance, today: string): DayRange | null {
-  return date <= today ? { from: date, to: today } : null;
 }

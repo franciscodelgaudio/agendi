@@ -6,6 +6,8 @@ const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const SINGLE_ID = "64b7f0c2a1b2c3d4e5f60781";
 const ANA_MEMBER_ID = "64b7f0c2a1b2c3d4e5f60791";
+const WALLET_ID = "64b7f0c2a1b2c3d4e5f60800";
+const INVENTORY_ID = "64b7f0c2a1b2c3d4e5f60900";
 const BIA_MEMBER_ID = "64b7f0c2a1b2c3d4e5f60792";
 
 const MANAGER = actorWith("units.manage");
@@ -13,19 +15,30 @@ const MANAGER = actorWith("units.manage");
 const STATIONS_INPUT = { ids: [""], names: ["Sala Single"], active: ["true"] };
 const STATIONS = [{ id: null, name: "Sala Single", active: true }];
 const HOURS = { opensAt: "08:00", closesAt: "22:00" };
-const BASE = { name: "Spa Central", stations: STATIONS_INPUT, businessHours: HOURS, workspaceMemberIds: [] };
+const BASE = {
+  name: "Spa Central",
+  stations: STATIONS_INPUT,
+  businessHours: HOURS,
+  workspaceMemberIds: [],
+  walletId: WALLET_ID,
+  inventoryId: INVENTORY_ID,
+};
 const SAVED = {
   name: "Spa Central",
   imageUrl: null,
   stations: STATIONS,
   businessHours: HOURS,
   workspaceMemberIds: [],
+  wallet: { id: WALLET_ID },
+  inventory: { id: INVENTORY_ID },
 };
 
 describe("createUnit", () => {
-  function makeDeps(membersExist = true) {
+  function makeDeps({ membersExist = true, walletExists = true, inventoryExists = true } = {}) {
     return {
       membersExist: vi.fn().mockResolvedValue(membersExist),
+      walletExists: vi.fn().mockResolvedValue(walletExists),
+      inventoryExists: vi.fn().mockResolvedValue(inventoryExists),
       insert: vi.fn().mockResolvedValue({ id: UNIT_ID }),
     };
   }
@@ -37,7 +50,9 @@ describe("createUnit", () => {
     const result = await createUnit(BASE, ctx, deps);
 
     expect(result).toEqual({ ok: true, unitId: UNIT_ID });
-    expect(deps.insert).toHaveBeenCalledWith({ workspaceId: WORKSPACE_ID, ...SAVED, openingBalance: null });
+    expect(deps.insert).toHaveBeenCalledWith({ workspaceId: WORKSPACE_ID, ...SAVED });
+    expect(deps.walletExists).toHaveBeenCalledWith(WALLET_ID);
+    expect(deps.inventoryExists).toHaveBeenCalledWith(INVENTORY_ID);
   });
 
   it("quem gerencia unidades também cria", async () => {
@@ -88,7 +103,7 @@ describe("createUnit", () => {
   });
 
   it("recusa membro que não é do workspace", async () => {
-    const deps = makeDeps(false);
+    const deps = makeDeps({ membersExist: false });
 
     const result = await createUnit({ ...BASE, workspaceMemberIds: [ANA_MEMBER_ID] }, ctx, deps);
 
@@ -148,42 +163,103 @@ describe("createUnit", () => {
   });
 });
 
-describe("createUnit com saldo inicial", () => {
+describe("carteira e inventário da unidade", () => {
+  function makeDeps({ walletExists = true, inventoryExists = true } = {}) {
+    return {
+      membersExist: vi.fn().mockResolvedValue(true),
+      walletExists: vi.fn().mockResolvedValue(walletExists),
+      inventoryExists: vi.fn().mockResolvedValue(inventoryExists),
+      insert: vi.fn().mockResolvedValue({ id: UNIT_ID }),
+      hasBookingsInRemovedStations: vi.fn().mockResolvedValue(false),
+      update: vi.fn().mockResolvedValue(true),
+    };
+  }
   const ctx = { workspaceId: WORKSPACE_ID, actor: ADMIN };
 
-  it("salva o saldo em caixa informado na criação", async () => {
-    const insert = vi.fn().mockResolvedValue({ id: UNIT_ID });
+  it("cria uma carteira nova com o saldo inicial e um inventário novo junto com a unidade", async () => {
+    const deps = makeDeps();
 
-    const result = await createUnit(
-      { ...BASE, openingBalance: { amount: "2500.00", date: "2026-09-01" } },
+    await createUnit(
+      {
+        ...BASE,
+        walletId: "new",
+        walletName: "  Caixa Centro  ",
+        openingBalance: { amount: "2500.00", date: "2026-09-01" },
+        inventoryId: "new",
+        inventoryName: " Estoque Centro ",
+      },
       ctx,
-      { membersExist: vi.fn(), insert },
+      deps,
     );
 
-    expect(result).toEqual({ ok: true, unitId: UNIT_ID });
-    expect(insert).toHaveBeenCalledWith(
-      expect.objectContaining({ openingBalance: { amountCents: 250_000, date: "2026-09-01" } }),
+    expect(deps.walletExists).not.toHaveBeenCalled();
+    expect(deps.inventoryExists).not.toHaveBeenCalled();
+    expect(deps.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wallet: { name: "Caixa Centro", openingBalance: { amountCents: 250_000, date: "2026-09-01" } },
+        inventory: { name: "Estoque Centro" },
+      }),
     );
   });
 
-  it("sem valor, cria a unidade sem saldo inicial", async () => {
-    const insert = vi.fn().mockResolvedValue({ id: UNIT_ID });
+  it("carteira nova sem saldo inicial fica sem saldo", async () => {
+    const deps = makeDeps();
 
-    await createUnit({ ...BASE, openingBalance: { amount: "", date: "" } }, ctx, { membersExist: vi.fn(), insert });
+    await createUnit({ ...BASE, walletId: "new", walletName: "Caixa", openingBalance: { amount: "", date: "" } }, ctx, deps);
 
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ openingBalance: null }));
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ wallet: { name: "Caixa", openingBalance: null } }));
+  });
+
+  it("com carteira existente, ignora o saldo inicial enviado", async () => {
+    const deps = makeDeps();
+
+    await createUnit({ ...BASE, openingBalance: { amount: "100", date: "2026-09-01" } }, ctx, deps);
+
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ wallet: { id: WALLET_ID } }));
+  });
+
+  it("ao editar, troca a carteira e o inventário por outros existentes ou novos", async () => {
+    const deps = makeDeps();
+
+    await updateUnit({ ...BASE, inventoryId: "new", inventoryName: "Estoque novo" }, UNIT_ID, { actor: ADMIN }, deps);
+
+    expect(deps.update).toHaveBeenCalledWith(
+      UNIT_ID,
+      expect.objectContaining({ wallet: { id: WALLET_ID }, inventory: { name: "Estoque novo" } }),
+    );
   });
 
   it.each([
-    ["valor inválido", { amount: "abc", date: "2026-09-01" }, "invalid_opening_balance"],
-    ["dia inválido", { amount: "100.00", date: "2026-02-30" }, "invalid_opening_balance_date"],
-  ])("retorna erro sem salvar quando o saldo tem %s", async (_label, openingBalance, error) => {
-    const insert = vi.fn();
+    ["carteira ausente", { ...BASE, walletId: undefined }, "invalid_wallet"],
+    ["carteira que não é ObjectId", { ...BASE, walletId: "conta" }, "invalid_wallet"],
+    ["inventário ausente", { ...BASE, inventoryId: "" }, "invalid_inventory"],
+    ["carteira nova sem nome", { ...BASE, walletId: "new", walletName: " " }, "invalid_wallet_name"],
+    ["carteira nova com nome longo", { ...BASE, walletId: "new", walletName: "a".repeat(41) }, "wallet_name_too_long"],
+    ["inventário novo sem nome", { ...BASE, inventoryId: "new" }, "invalid_inventory_name"],
+    ["inventário novo com nome longo", { ...BASE, inventoryId: "new", inventoryName: "a".repeat(41) }, "inventory_name_too_long"],
+    ["saldo inicial inválido na carteira nova", { ...BASE, walletId: "new", walletName: "Caixa", openingBalance: { amount: "x", date: "2026-09-01" } }, "invalid_opening_balance"],
+  ])("recusa %s", async (_label, input, error) => {
+    const deps = makeDeps();
 
-    const result = await createUnit({ ...BASE, openingBalance }, ctx, { membersExist: vi.fn(), insert });
+    const result = await createUnit(input, ctx, deps);
 
     expect(result).toEqual({ ok: false, error });
-    expect(insert).not.toHaveBeenCalled();
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["carteira", { walletExists: false }, "invalid_wallet"],
+    ["inventário", { inventoryExists: false }, "invalid_inventory"],
+  ])("recusa %s que não é do workspace", async (_label, options, error) => {
+    const deps = makeDeps(options);
+
+    const created = await createUnit(BASE, ctx, deps);
+    const updated = await updateUnit(BASE, UNIT_ID, { actor: ADMIN }, deps);
+
+    expect(created).toEqual({ ok: false, error });
+    expect(updated).toEqual({ ok: false, error });
+    expect(deps.insert).not.toHaveBeenCalled();
+    expect(deps.update).not.toHaveBeenCalled();
   });
 });
 
@@ -191,6 +267,8 @@ describe("updateUnit", () => {
   function makeDeps({ found = true, inUse = false, membersExist = true } = {}) {
     return {
       membersExist: vi.fn().mockResolvedValue(membersExist),
+      walletExists: vi.fn().mockResolvedValue(true),
+      inventoryExists: vi.fn().mockResolvedValue(true),
       hasBookingsInRemovedStations: vi.fn().mockResolvedValue(inUse),
       update: vi.fn().mockResolvedValue(found),
     };

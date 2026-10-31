@@ -1,10 +1,8 @@
 import { notFound } from "next/navigation"
 import { Types } from "mongoose"
-import { CalendarCheckIcon, CalendarXIcon, PiggyBankIcon, LeafIcon, StoreIcon, TrendingUpIcon } from "lucide-react"
+import { CalendarCheckIcon, CalendarXIcon, PiggyBankIcon, LeafIcon, StoreIcon, TrendingUpIcon, WalletIcon } from "lucide-react"
 import {
-  applyExpenses,
   cashFlowBuckets,
-  costCurve,
   dailyAppointmentTotalsPipeline,
   dailyBookingForecastPipeline,
   parseCashFlowQuery,
@@ -12,13 +10,12 @@ import {
   serviceBookingForecastPipeline,
   summarizeCashFlow,
   summarizeServices,
-  type ExpenseCashFlowAmounts,
+  type CashFlowAmounts,
   type DayRange,
   type DayTotal,
   type ServiceTotal,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow"
-import { dailyExpenseTotalsPipeline, type ExpenseDayTotal } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
-import { groupLimitsOf } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
+import { walletListPipeline, type WalletListItem } from "@/service/workspace/[workspaceId]/cash-flow/wallet-list"
 import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
@@ -26,16 +23,15 @@ import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/t
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
-import { Expense } from "@/models/Expense"
-import { ExpenseGroup } from "@/models/ExpenseGroup"
+import { Wallet } from "@/models/Wallet"
 import { Workspace } from "@/models/Workspace"
-import { CostCumulativeChart, CostPeriodChart } from "@/components/workspace/[workspaceId]/shared/cash-flow/cost-curve-chart"
+import Link from "@/components/shared/link"
 import { CreateUnitSheet } from "@/components/workspace/[workspaceId]/unit/create-unit-sheet"
 import { timeFormat } from "@/components/shared/service-format"
 import type { TherapistOption } from "@/components/workspace/[workspaceId]/shared/team/therapist-avatar"
 import { CardEmpty, CardLink, money, plural, RankList, StatTile, TodaySchedule, type TodayBooking } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-overview"
 import { UnitsEmpty } from "@/components/workspace/[workspaceId]/unit/units-empty"
-import type { MemberOption } from "@/components/workspace/[workspaceId]/unit/unit-member-fields"
+import { loadUnitFormOptions } from "@/service/workspace/[workspaceId]/unit/unit-form-store"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -50,15 +46,11 @@ function toDate(day: string) {
   return new Date(Date.UTC(year, month - 1, date))
 }
 
-const ZERO: ExpenseCashFlowAmounts = { grossCents: 0, expenseCents: 0, netCents: 0 }
+const ZERO: CashFlowAmounts = { grossCents: 0, netCents: 0 }
 
-function sumAmounts(list: ExpenseCashFlowAmounts[]): ExpenseCashFlowAmounts {
+function sumAmounts(list: CashFlowAmounts[]): CashFlowAmounts {
   return list.reduce(
-    (sum, amounts) => ({
-      grossCents: sum.grossCents + amounts.grossCents,
-      expenseCents: sum.expenseCents + amounts.expenseCents,
-      netCents: sum.netCents + amounts.netCents,
-    }),
+    (sum, amounts) => ({ grossCents: sum.grossCents + amounts.grossCents, netCents: sum.netCents + amounts.netCents }),
     ZERO,
   )
 }
@@ -83,7 +75,6 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     name: string
     actor: Actor
     units: UnitInfo[]
-    members: MemberOption[]
     therapists: TherapistOption[]
   }>([
     ...access,
@@ -106,64 +97,44 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         ],
       },
     },
-    {
-      $lookup: {
-        from: "workspace_members",
-        localField: "_id",
-        foreignField: "workspaceId",
-        as: "members",
-        pipeline: [
-          { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
-          { $unwind: "$user" },
-          { $project: { _id: 0, id: { $toString: "$_id" }, name: { $ifNull: ["$user.name", "$user.email"] } } },
-          { $sort: { name: 1, id: 1 } },
-        ],
-      },
-    },
     ...therapistOptionsStages(),
-    { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, actor: 1, units: 1, members: 1, therapists: 1 } },
+    { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, actor: 1, units: 1, therapists: 1 } },
   ])
   if (!workspace) notFound()
   const { units } = workspace
   const canManage = can(workspace.actor, "units.manage")
+  const options = canManage ? await loadUnitFormOptions(workspace.id) : { members: [], wallets: [], inventories: [] }
 
   if (units.length === 0) {
     return (
       <div className="flex flex-1 flex-col p-4">
-        <UnitsEmpty workspaceId={workspace.id} canManage={canManage} members={workspace.members} />
+        <UnitsEmpty workspaceId={workspace.id} canManage={canManage} options={options} />
       </div>
     )
   }
 
-  // Mês corrente para os indicadores e o ranking de unidades; ano corrente para a curva de custos.
   const today = parseCashFlowQuery({}, now).date
   const monthBuckets = cashFlowBuckets({ view: "month", date: today })
-  const yearBuckets = cashFlowBuckets({ view: "year", date: today })
   const month = { from: monthBuckets[0].from, to: monthBuckets.at(-1)!.to }
-  const yearRange = { from: yearBuckets[0].from, to: yearBuckets.at(-1)!.to }
   const [year, monthNumber, day] = today.split("-").map(Number)
   const todayStart = new Date(Date.UTC(year, monthNumber - 1, day, BRT_OFFSET_HOURS))
   const todayEnd = new Date(todayStart.getTime() + DAY_MS)
   const unitIds = units.map((unit) => new Types.ObjectId(unit.id))
 
-  const [perUnit, todayBookings] = await Promise.all([
+  const [perUnit, todayBookings, wallets] = await Promise.all([
     Promise.all(
       units.map(async (unit) => {
         const unitMatch = { $match: { unitId: new Types.ObjectId(unit.id) } }
-        const [appointments, bookings, serviceAppointments, serviceBookings, expenses, groups] = await Promise.all([
-          Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(yearRange)]),
-          Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(yearRange, now)]),
+        const [appointments, bookings, serviceAppointments, serviceBookings] = await Promise.all([
+          Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(month)]),
+          Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(month, now)]),
           Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(month)]),
           Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(month, now)]),
-          Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(yearRange)]),
-          ExpenseGroup.find({ unitId: new Types.ObjectId(unit.id) }).select({ monthlyLimitCents: 1, limitChanges: 1 }).lean(),
         ])
         return {
           unit,
-          groupLimits: groups.map(groupLimitsOf),
           appointments,
           bookings,
-          expenses,
           services: summarizeServices(serviceAppointments, serviceBookings),
         }
       }),
@@ -172,16 +143,16 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
       .sort({ startsAt: 1 })
       .select({ unitId: 1, startsAt: 1, endsAt: 1, guest: 1, service: 1, therapistId: 1, therapistName: 1, appointmentId: 1 })
       .lean(),
+    Wallet.aggregate<WalletListItem>(walletListPipeline(workspace.id)),
   ])
 
-  const unitSummaries = perUnit.map(({ unit, appointments, bookings, expenses, services, groupLimits }) => {
-    const summarize = (buckets: DayRange[]) => applyExpenses(summarizeCashFlow(buckets, appointments, bookings), expenses)
+  const unitSummaries = perUnit.map(({ unit, appointments, bookings, services }) => {
+    const summarize = (buckets: DayRange[]) => summarizeCashFlow(buckets, appointments, bookings)
     const done = services.reduce((sum, service) => sum + service.real.count, 0)
     const all = services.reduce((sum, service) => sum + service.forecast.count, 0)
     return {
       unit,
       month: summarize(monthBuckets).total,
-      year: { buckets: summarize(yearBuckets).buckets, groups: groupLimits },
       services: { done, scheduled: all - done },
     }
   })
@@ -190,9 +161,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     real: sumAmounts(unitSummaries.map((summary) => summary.month.real)),
     forecast: sumAmounts(unitSummaries.map((summary) => summary.month.forecast)),
   }
-  const curve = costCurve(unitSummaries.map((summary) => summary.year))
-  const spentCents = curve.at(-1)?.spentCumulativeCents ?? 0
-  const plannedCents = curve.at(-1)?.plannedCumulativeCents ?? 0
+  const balanceCents = wallets.reduce((sum, wallet) => sum + wallet.balanceCents, 0)
   const servicesDone = unitSummaries.reduce((sum, summary) => sum + summary.services.done, 0)
   const servicesScheduled = unitSummaries.reduce((sum, summary) => sum + summary.services.scheduled, 0)
 
@@ -227,7 +196,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
             {todayFormat.format(toDate(today))} · {plural(units.length, "unidade", "unidades")}
           </span>
         </div>
-        {canManage && <CreateUnitSheet workspaceId={workspace.id} members={workspace.members} />}
+        {canManage && <CreateUnitSheet workspaceId={workspace.id} options={options} />}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -240,11 +209,9 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         />
         <StatTile
           icon={PiggyBankIcon}
-          label="Líquido do mês"
-          value={money(monthTotal.real.netCents)}
-          detail={
-            monthTotal.real.expenseCents ? `${money(monthTotal.real.expenseCents)} em despesas pagas` : "Sem despesas pagas"
-          }
+          label="Saldo nas carteiras"
+          value={money(balanceCents)}
+          detail={wallets.length ? plural(wallets.length, "carteira", "carteiras") : "Nenhuma carteira"}
         />
         <StatTile
           icon={LeafIcon}
@@ -292,21 +259,26 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
 
         <Card>
           <CardHeader>
-            <CardTitle>Custos em {yearRange.from.slice(0, 4)}</CardTitle>
-            <CardDescription>
-              {money(spentCents)} gastos de {money(plannedCents)} planejados
-            </CardDescription>
-            <CardLink href={`${base}/unit`}>Ver unidades</CardLink>
+            <CardTitle>Carteiras</CardTitle>
+            <CardDescription>{money(balanceCents)} no total</CardDescription>
+            <CardLink href={`${base}/cash-flow`}>Caixa</CardLink>
           </CardHeader>
-          <CardContent className="gap-6">
-            <div className="grid gap-2">
-              <span className="text-sm font-medium">Custo fixo</span>
-              <CostPeriodChart points={curve} view="year" />
-            </div>
-            <div className="grid gap-2">
-              <span className="text-sm font-medium">Acumulado</span>
-              <CostCumulativeChart points={curve} view="year" />
-            </div>
+          <CardContent className="flex-1">
+            {wallets.length ? (
+              <ul className="flex flex-col gap-3">
+                {wallets.map((wallet) => (
+                  <li key={wallet.id} className="flex items-center justify-between gap-3">
+                    <Link href={`${base}/cash-flow/wallets/${wallet.id}`} className="flex min-w-0 items-center gap-2 font-medium hover:underline">
+                      <WalletIcon className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{wallet.name}</span>
+                    </Link>
+                    <span className="shrink-0 font-medium tabular-nums">{money(wallet.balanceCents)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <CardEmpty icon={WalletIcon}>Nenhuma carteira. Elas são criadas junto com as unidades.</CardEmpty>
+            )}
           </CardContent>
         </Card>
       </div>

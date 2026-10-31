@@ -1,6 +1,6 @@
 import { MapPinIcon } from "lucide-react"
 import { CreateUnitSheet } from "@/components/workspace/[workspaceId]/unit/create-unit-sheet"
-import type { MemberOption } from "@/components/workspace/[workspaceId]/unit/unit-member-fields"
+import type { UnitFormOptions } from "@/components/workspace/[workspaceId]/unit/unit-fields"
 import {
   Empty,
   EmptyContent,
@@ -10,9 +10,9 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 
-type Props = { workspaceId: string; canManage: boolean; members: MemberOption[] }
+type Props = { workspaceId: string; canManage: boolean; options: UnitFormOptions }
 
-export function UnitsEmpty({ workspaceId, canManage, members }: Props) {
+export function UnitsEmpty({ workspaceId, canManage, options }: Props) {
   return (
     <Empty className="border">
       <EmptyHeader>
@@ -28,7 +28,7 @@ export function UnitsEmpty({ workspaceId, canManage, members }: Props) {
       </EmptyHeader>
       {canManage && (
         <EmptyContent>
-          <CreateUnitSheet workspaceId={workspaceId} members={members} />
+          <CreateUnitSheet workspaceId={workspaceId} options={options} />
         </EmptyContent>
       )}
     </Empty>

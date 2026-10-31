@@ -36,7 +36,7 @@ const permissionActions: Record<Permission, string> = {
   "appointments.manage": "gerenciar atendimentos",
   "customers.manage": "gerenciar clientes",
   "stock.manage": "gerenciar o estoque",
-  "stock.transfer": "transferir produtos entre unidades",
+  "stock.transfer": "transferir produtos entre inventários",
   "cash_flow.manage": "gerenciar o caixa",
   "users.manage": "gerenciar usuários",
   "inbox.use": "usar as Conversas",

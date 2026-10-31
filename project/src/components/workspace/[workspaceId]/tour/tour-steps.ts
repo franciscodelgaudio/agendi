@@ -84,7 +84,7 @@ const start: Tour = {
     {
       ...openUnit[0],
       mission: 0,
-      body: "Cada unidade é um espaço de atendimento, próprio ou dentro de um estabelecimento parceiro. Clique em Unidades.",
+      body: "Cada unidade é um local de atendimento, com as próprias estações e membros. Clique em Unidades.",
     },
     {
       id: "create-unit",
@@ -172,7 +172,7 @@ const start: Tour = {
       action: "form",
       expect: "booking-event",
       title: "Dados do agendamento",
-      body: "Escolha o profissional, o espaço e o serviço e informe o hóspede. Depois clique em Agendar.",
+      body: "Escolha o profissional, a estação e o serviço e informe o hóspede. Depois clique em Agendar.",
       show: managesUnitPage("calendar", "bookings.manage"),
     },
     {
@@ -187,9 +187,7 @@ const start: Tour = {
 const general: Tour = {
   id: "general",
   title: "Geral",
-  show: (access) =>
-    (["calendar", "cash_flow"] as const).some((page) => access.pages.workspace.includes(page)) ||
-    access.pages.unit.includes("stock"),
+  show: (access) => (["calendar", "cash_flow", "stock"] as const).some((page) => access.pages.workspace.includes(page)),
   steps: [
     {
       id: "nav-calendar",
@@ -207,31 +205,18 @@ const general: Tour = {
       href: "/cash-flow",
       sidebar: true,
       side: "right",
-      title: "Caixa geral",
-      body: "O caixa de todas as unidades somado. Clique em Caixa.",
+      title: "Caixa",
+      body: "As carteiras do workspace, com as entradas, as saídas e o saldo de cada uma. Os atendimentos entram sozinhos. Clique em Caixa.",
       show: workspacePage("cash_flow"),
     },
     {
-      id: "cash-flow-nav",
-      target: "cash-flow-nav",
-      title: "Períodos",
-      body: "Veja a semana, o mês ou o ano e navegue entre os períodos. O previsto vem dos agendamentos; o realizado, dos atendimentos.",
-      show: workspacePage("cash_flow"),
-    },
-    ...openUnit,
-    {
-      id: "unit-tab-cash_flow",
-      target: "unit-tab-cash_flow",
-      title: "Caixa da unidade",
-      body: "Entradas, despesas por grupo e o líquido só desta unidade.",
-      show: unitPage("cash_flow"),
-    },
-    {
-      id: "unit-tab-stock",
-      target: "unit-tab-stock",
+      id: "nav-stock",
+      target: "nav-stock",
+      sidebar: true,
+      side: "right",
       title: "Estoque",
-      body: "Os produtos da unidade, as compras e o consumo, que sai sozinho a cada atendimento.",
-      show: unitPage("stock"),
+      body: "Os inventários com a quantidade de cada produto, as entradas, as saídas e o catálogo de produtos.",
+      show: workspacePage("stock"),
     },
   ],
 }
