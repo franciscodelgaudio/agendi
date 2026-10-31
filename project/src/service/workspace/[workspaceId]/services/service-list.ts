@@ -25,8 +25,8 @@ export function parseServiceListQuery(params: SearchParams): ServiceListQuery {
   };
 }
 
-export function serviceListPipeline(workspaceId: string, { q, sort, dir, page }: ServiceListQuery): PipelineStage[] {
-  const match: Record<string, unknown> = { workspaceId: new Types.ObjectId(workspaceId) };
+export function serviceListPipeline(workspaceId: string, unitId: string, { q, sort, dir, page }: ServiceListQuery): PipelineStage[] {
+  const match: Record<string, unknown> = { workspaceId: new Types.ObjectId(workspaceId), unitId: new Types.ObjectId(unitId) };
   if (q) match.name = { $regex: accentInsensitivePattern(q), $options: "i" };
 
   return [

@@ -7,6 +7,7 @@ import {
 } from "@/service/workspace/[workspaceId]/services/service-list";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
+const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const BASE = { q: "", sort: "name", dir: "asc", page: 1 } as const;
 
 describe("parseServiceListQuery", () => {
@@ -25,7 +26,7 @@ describe("parseServiceListQuery", () => {
 });
 
 describe("serviceListPipeline", () => {
-  const workspaceMatch = { workspaceId: new Types.ObjectId(WORKSPACE_ID) };
+  const unitMatch = { workspaceId: new Types.ObjectId(WORKSPACE_ID), unitId: new Types.ObjectId(UNIT_ID) };
   const tail = (sort: Record<string, number>, skip: number) => [
     { $sort: { ...sort, _id: 1 } },
     {
@@ -41,19 +42,20 @@ describe("serviceListPipeline", () => {
     { $project: { rows: 1, total: { $ifNull: [{ $first: "$total.n" }, 0] } } },
   ];
 
-  it("lista os serviços do workspace por nome", () => {
-    expect(serviceListPipeline(WORKSPACE_ID, BASE)).toEqual([{ $match: workspaceMatch }, ...tail({ name: 1 }, 0)]);
+  it("lista os serviços da unidade por nome", () => {
+    expect(serviceListPipeline(WORKSPACE_ID, UNIT_ID, BASE)).toEqual([{ $match: unitMatch }, ...tail({ name: 1 }, 0)]);
   });
 
   it("busca no nome sem diferenciar acentos, ordena pela duração decrescente e pagina", () => {
-    const stages = serviceListPipeline(WORKSPACE_ID, { q: "facial", sort: "duration", dir: "desc", page: 2 });
-    const match = stages[0] as { $match: { name: { $regex: string; $options: string } } };
+    const stages = serviceListPipeline(WORKSPACE_ID, UNIT_ID, { q: "facial", sort: "duration", dir: "desc", page: 2 });
+    const match = stages[0] as { $match: { workspaceId: Types.ObjectId; unitId: Types.ObjectId; name: { $regex: string; $options: string } } };
 
+    expect(match.$match.unitId).toEqual(new Types.ObjectId(UNIT_ID));
     expect(stages.slice(1)).toEqual(tail({ durationMinutes: -1 }, SERVICE_PAGE_SIZE));
     expect(new RegExp(match.$match.name.$regex, match.$match.name.$options).test("Limpeza Fácial")).toBe(true);
   });
 
   it("ordena pelo preço", () => {
-    expect(serviceListPipeline(WORKSPACE_ID, { ...BASE, sort: "price" })[1]).toEqual({ $sort: { priceCents: 1, _id: 1 } });
+    expect(serviceListPipeline(WORKSPACE_ID, UNIT_ID, { ...BASE, sort: "price" })[1]).toEqual({ $sort: { priceCents: 1, _id: 1 } });
   });
 });

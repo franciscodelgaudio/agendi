@@ -103,7 +103,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
   if (!workspace) notFound()
   const { units } = workspace
   const canManage = can(workspace.actor, "units.manage")
-  const options = canManage ? await loadUnitFormOptions(workspace.id) : { members: [], wallets: [], inventories: [] }
+  const options = canManage ? await loadUnitFormOptions(workspace.id) : { members: [] }
 
   if (units.length === 0) {
     return (

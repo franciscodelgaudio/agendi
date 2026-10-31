@@ -48,8 +48,8 @@ export type CreateServiceResult = { ok: true; serviceId: string } | { ok: false;
 
 export async function createService(
   input: unknown,
-  ctx: { workspaceId: string; actor: Actor | null },
-  deps: { insert: (data: ServiceData & { workspaceId: string }) => Promise<{ id: string }> },
+  ctx: { workspaceId: string; unitId: string; actor: Actor | null },
+  deps: { insert: (data: ServiceData & { workspaceId: string; unitId: string }) => Promise<{ id: string }> },
 ): Promise<CreateServiceResult> {
   const accessError = checkAccess(ctx.actor, "services.manage");
   if (accessError) return { ok: false, error: accessError };
@@ -57,7 +57,7 @@ export async function createService(
   const parsed = parseService(input);
   if (!parsed.ok) return parsed;
 
-  const service = await deps.insert({ workspaceId: ctx.workspaceId, ...parsed.data });
+  const service = await deps.insert({ workspaceId: ctx.workspaceId, unitId: ctx.unitId, ...parsed.data });
   return { ok: true, serviceId: service.id };
 }
 

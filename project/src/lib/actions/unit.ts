@@ -11,10 +11,16 @@ import {
   deleteUnit,
   updateUnit,
   type CreateUnitError,
-  type InventoryRef,
   type UpdateUnitError,
-  type WalletRef,
 } from "@/service/workspace/[workspaceId]/unit/unit"
+import {
+  setUnitInventory,
+  setUnitWallet,
+  type InventoryRef,
+  type SetUnitInventoryError,
+  type SetUnitWalletError,
+  type WalletRef,
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-refs"
 import { insertWallet } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
 import { Appointment } from "@/models/Appointment"
 import { Inventory } from "@/models/Inventory"
@@ -22,7 +28,9 @@ import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 
-const errorMessages: Record<Exclude<CreateUnitError | UpdateUnitError, "forbidden"> | "unauthenticated", string> = {
+type UnitError = CreateUnitError | UpdateUnitError | SetUnitWalletError | SetUnitInventoryError
+
+const errorMessages: Record<Exclude<UnitError, "forbidden"> | "unauthenticated", string> = {
   invalid_input: "Preencha todos os campos da unidade.",
   invalid_name: "Informe o nome da unidade.",
   name_too_long: "O nome pode ter no máximo 80 caracteres.",
@@ -51,7 +59,7 @@ const errorMessages: Record<Exclude<CreateUnitError | UpdateUnitError, "forbidde
 
 export type UnitFormState = { error: string | null }
 
-function messageOf(error: CreateUnitError | UpdateUnitError | "unauthenticated") {
+function messageOf(error: UnitError | "unauthenticated") {
   return error === "forbidden" ? forbiddenMessage("units.manage") : errorMessages[error]
 }
 
@@ -74,11 +82,6 @@ function unitInput(formData: FormData) {
     },
     businessHours: { opensAt: formData.get("opensAt"), closesAt: formData.get("closesAt") },
     workspaceMemberIds: formData.getAll("workspaceMemberId"),
-    walletId: formData.get("walletId"),
-    walletName: formData.get("walletName"),
-    openingBalance: { amount: formData.get("openingBalance"), date: formData.get("openingBalanceDate") },
-    inventoryId: formData.get("inventoryId"),
-    inventoryName: formData.get("inventoryName"),
   }
 }
 
@@ -89,21 +92,19 @@ async function sessionAccess(workspaceId: string) {
   return { workspaceId: access?.id ?? workspaceId, actor: access?.actor ?? null }
 }
 
-function refsChecker(workspaceId: string) {
-  return {
-    membersExist: async (ids: string[]) =>
-      (await WorkspaceMember.countDocuments({ _id: { $in: toObjectIds(ids) }, workspaceId })) === ids.length,
-    walletExists: async (id: string) => !!(await Wallet.exists({ _id: id, workspaceId })),
-    inventoryExists: async (id: string) => !!(await Inventory.exists({ _id: id, workspaceId })),
-  }
+function membersChecker(workspaceId: string) {
+  return async (ids: string[]) =>
+    (await WorkspaceMember.countDocuments({ _id: { $in: toObjectIds(ids) }, workspaceId })) === ids.length
 }
 
-async function resolveWallet(workspaceId: string, wallet: WalletRef) {
+async function resolveWallet(workspaceId: string, wallet: WalletRef | null) {
+  if (!wallet) return null
   if ("id" in wallet) return new Types.ObjectId(wallet.id)
   return new Types.ObjectId((await insertWallet({ workspaceId, ...wallet })).id)
 }
 
-async function resolveInventory(workspaceId: string, inventory: InventoryRef) {
+async function resolveInventory(workspaceId: string, inventory: InventoryRef | null) {
+  if (!inventory) return null
   if ("id" in inventory) return new Types.ObjectId(inventory.id)
   return (await Inventory.create({ workspaceId, name: inventory.name }))._id
 }
@@ -122,14 +123,12 @@ export async function createUnitAction(
   if (!session) return { error: messageOf("unauthenticated") }
 
   const result = await createUnit(unitInput(formData), session, {
-    ...refsChecker(session.workspaceId),
-    insert: async ({ stations, workspaceMemberIds, wallet, inventory, ...data }) => {
+    membersExist: membersChecker(session.workspaceId),
+    insert: async ({ stations, workspaceMemberIds, ...data }) => {
       const unit = await Unit.create({
         ...data,
         stations: toStationDocs(stations),
         workspaceMemberIds: toObjectIds(workspaceMemberIds),
-        walletId: await resolveWallet(data.workspaceId, wallet),
-        inventoryId: await resolveInventory(data.workspaceId, inventory),
       })
       return { id: unit._id.toString() }
     },
@@ -152,7 +151,7 @@ export async function updateUnitAction(
   const filter = unitFilter(session.workspaceId, unitId)
 
   const result = await updateUnit(unitInput(formData), filter && unitId, session, {
-    ...refsChecker(session.workspaceId),
+    membersExist: membersChecker(session.workspaceId),
     hasBookingsInRemovedStations: async (id, keptStationIds) => {
       if (!(await Unit.exists(filter!))) return false
       const inUse = await Appointment.exists({
@@ -163,18 +162,71 @@ export async function updateUnitAction(
       })
       return inUse !== null
     },
-    update: async (id, { stations, workspaceMemberIds, wallet, inventory, ...data }) => {
-      if (!(await Unit.exists(filter!))) return false
+    update: async (_id, { stations, workspaceMemberIds, ...data }) => {
       const { matchedCount } = await Unit.updateOne(filter!, {
         $set: {
           ...data,
           stations: toStationDocs(stations),
           workspaceMemberIds: toObjectIds(workspaceMemberIds),
-          walletId: await resolveWallet(session.workspaceId, wallet),
-          inventoryId: await resolveInventory(session.workspaceId, inventory),
         },
       })
       return matchedCount > 0
+    },
+  })
+
+  if (!result.ok) return { error: messageOf(result.error) }
+
+  refresh()
+  return { error: null }
+}
+
+export async function setUnitWalletAction(
+  workspaceId: string,
+  unitId: string,
+  _prev: UnitFormState,
+  formData: FormData,
+): Promise<UnitFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = unitFilter(session.workspaceId, unitId)
+
+  const input = {
+    walletId: formData.get("walletId"),
+    walletName: formData.get("walletName"),
+    openingBalance: { amount: formData.get("openingBalance"), date: formData.get("openingBalanceDate") },
+  }
+  const result = await setUnitWallet(input, filter && unitId, session, {
+    walletExists: async (id) => !!(await Wallet.exists({ _id: id, workspaceId: session.workspaceId })),
+    update: async (_id, wallet) => {
+      if (!(await Unit.exists(filter!))) return false
+      const walletId = await resolveWallet(session.workspaceId, wallet)
+      return (await Unit.updateOne(filter!, { $set: { walletId } })).matchedCount > 0
+    },
+  })
+
+  if (!result.ok) return { error: messageOf(result.error) }
+
+  refresh()
+  return { error: null }
+}
+
+export async function setUnitInventoryAction(
+  workspaceId: string,
+  unitId: string,
+  _prev: UnitFormState,
+  formData: FormData,
+): Promise<UnitFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = unitFilter(session.workspaceId, unitId)
+
+  const input = { inventoryId: formData.get("inventoryId"), inventoryName: formData.get("inventoryName") }
+  const result = await setUnitInventory(input, filter && unitId, session, {
+    inventoryExists: async (id) => !!(await Inventory.exists({ _id: id, workspaceId: session.workspaceId })),
+    update: async (_id, inventory) => {
+      if (!(await Unit.exists(filter!))) return false
+      const inventoryId = await resolveInventory(session.workspaceId, inventory)
+      return (await Unit.updateOne(filter!, { $set: { inventoryId } })).matchedCount > 0
     },
   })
 

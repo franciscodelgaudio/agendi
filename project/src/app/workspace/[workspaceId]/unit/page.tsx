@@ -4,7 +4,7 @@ import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { unitListPipeline, parseUnitListQuery } from "@/service/workspace/[workspaceId]/unit/unit-list"
 import type { UnitFormValues } from "@/components/workspace/[workspaceId]/unit/unit-fields"
-import { loadUnitFormOptions, loadUnitRefs } from "@/service/workspace/[workspaceId]/unit/unit-form-store"
+import { loadUnitFormOptions } from "@/service/workspace/[workspaceId]/unit/unit-form-store"
 import { Workspace } from "@/models/Workspace"
 import { CreateUnitSheet } from "@/components/workspace/[workspaceId]/unit/create-unit-sheet"
 import { ListSearch } from "@/components/shared/list-search"
@@ -25,7 +25,7 @@ export default async function UnitsPage({
   // Parte do workspace (e não de units) para que o acesso ao workspace seja garantido.
   // O total sem filtro separa "workspace sem unidades" de "busca sem resultado".
   const [workspace] = await Workspace.aggregate<{
-    units: (Omit<UnitFormValues, "walletId" | "inventoryId"> & { createdAt: Date; updatedAt: Date })[]
+    units: (UnitFormValues & { createdAt: Date; updatedAt: Date })[]
     unitCount: number
     actor: Actor
   }>([
@@ -58,9 +58,8 @@ export default async function UnitsPage({
     },
   ])
   if (!workspace) notFound()
-  const { unitCount } = workspace
-  const [options, refs] = await Promise.all([loadUnitFormOptions(workspaceId), loadUnitRefs(workspaceId)])
-  const units = workspace.units.map((unit) => ({ ...unit, walletId: "", inventoryId: "", ...refs.get(unit.id) }))
+  const { units, unitCount } = workspace
+  const options = await loadUnitFormOptions(workspaceId)
   const canManage = can(workspace.actor, "units.manage")
 
   return (

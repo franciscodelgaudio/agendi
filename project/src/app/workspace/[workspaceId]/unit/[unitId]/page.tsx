@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { CalendarCheckIcon, CalendarXIcon, PiggyBankIcon, LeafIcon, TrendingUpIcon } from "lucide-react"
+import { CalendarCheckIcon, CalendarXIcon, PiggyBankIcon, LeafIcon, PackageIcon, TrendingUpIcon } from "lucide-react"
 import {
   cashFlowBuckets,
   dailyDoneTotalsPipeline,
@@ -16,6 +16,8 @@ import {
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow"
 import { walletListPipeline, type WalletListItem } from "@/service/workspace/[workspaceId]/cash-flow/wallet-list"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
+import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { loadUnitRefOptions } from "@/service/workspace/[workspaceId]/unit/unit-form-store"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
@@ -25,8 +27,11 @@ import { Wallet } from "@/models/Wallet"
 import { Workspace } from "@/models/Workspace"
 import { timeFormat } from "@/components/shared/service-format"
 import type { TherapistOption } from "@/components/workspace/[workspaceId]/shared/team/therapist-avatar"
-import { CardEmpty, CardLink, money, plural, StatTile, TodaySchedule, type TodayBooking } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-overview"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { CardEmpty, CardLink, CardLinkButton, money, plural, StatTile, TodaySchedule, type TodayBooking } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-overview"
+import { UnitInventorySheet, UnitWalletSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-ref-sheets"
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+
+type UnitInventory = { id: string; name: string; productCount: number; quantity: number }
 
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
@@ -52,8 +57,9 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
   // Parte do workspace para garantir o acesso.
   const [workspace] = await Workspace.aggregate<{
     id: string
+    actor: Actor
     therapists: TherapistOption[]
-    unit: { id: string; walletId: string | null } | null
+    unit: { id: string; walletId: string | null; inventory: UnitInventory | null } | null
   }>([
     ...access,
     {
@@ -64,7 +70,33 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
         as: "unit",
         pipeline: [
           { $match: { _id: new Types.ObjectId(unitId) } },
-          { $project: { _id: 0, id: { $toString: "$_id" }, walletId: { $toString: "$walletId" } } },
+          {
+            $lookup: {
+              from: "inventories",
+              localField: "inventoryId",
+              foreignField: "_id",
+              as: "inventory",
+              pipeline: [
+                {
+                  $project: {
+                    _id: 0,
+                    id: { $toString: "$_id" },
+                    name: 1,
+                    productCount: { $size: { $filter: { input: "$products", cond: { $gt: ["$$this.quantity", 0] } } } },
+                    quantity: { $sum: "$products.quantity" },
+                  },
+                },
+              ],
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              id: { $toString: "$_id" },
+              walletId: { $ifNull: [{ $toString: "$walletId" }, null] },
+              inventory: { $ifNull: [{ $first: "$inventory" }, null] },
+            },
+          },
         ],
       },
     },
@@ -73,12 +105,16 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
       $project: {
         _id: 0,
         id: { $toString: "$_id" },
+        actor: 1,
         therapists: 1,
         unit: { $ifNull: [{ $first: "$unit" }, null] },
       },
     },
   ])
   if (!workspace?.unit) notFound()
+  const canManage = can(workspace.actor, "units.manage")
+  const refOptions = canManage ? await loadUnitRefOptions(workspaceId) : { wallets: [], inventories: [] }
+  const { inventory } = workspace.unit
 
   // Mês corrente para os indicadores; ano corrente para a curva de custos.
   const today = parseCashFlowQuery({}, now).date
@@ -181,33 +217,89 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{wallet ? wallet.name : "Carteira"}</CardTitle>
-            <CardDescription>Entradas e saídas pagas da carteira da unidade</CardDescription>
-            {wallet && <CardLink href={`/workspace/${workspaceId}/cash-flow/wallets/${wallet.id}`}>Transações</CardLink>}
-          </CardHeader>
-          <CardContent className="flex-1">
-            {wallet ? (
-              <dl className="grid gap-3">
-                <div className="flex justify-between gap-3">
-                  <dt className="text-muted-foreground">Entradas</dt>
-                  <dd className="font-medium tabular-nums">{money(wallet.incomingCents)}</dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-muted-foreground">Saídas</dt>
-                  <dd className="font-medium tabular-nums">{money(wallet.expenseCents)}</dd>
-                </div>
-                <div className="flex justify-between gap-3 border-t pt-3">
-                  <dt className="font-medium">Saldo</dt>
-                  <dd className="font-semibold tabular-nums">{money(wallet.balanceCents)}</dd>
-                </div>
-              </dl>
-            ) : (
-              <CardEmpty icon={PiggyBankIcon}>Esta unidade ainda não tem carteira.</CardEmpty>
-            )}
-          </CardContent>
-        </Card>
+        <div className="flex flex-col gap-4">
+          <Card className="flex-1">
+            <CardHeader>
+              <CardTitle>{wallet ? wallet.name : "Carteira"}</CardTitle>
+              <CardDescription>Entradas e saídas pagas da carteira da unidade</CardDescription>
+              {(canManage || wallet) && (
+                <CardAction className="flex gap-1">
+                  {canManage && (
+                    <UnitWalletSheet
+                      workspaceId={workspaceId}
+                      unitId={unitId}
+                      options={refOptions.wallets}
+                      currentId={wallet?.id ?? null}
+                    />
+                  )}
+                  {wallet && (
+                    <CardLinkButton href={`/workspace/${workspaceId}/cash-flow/wallets/${wallet.id}`}>Transações</CardLinkButton>
+                  )}
+                </CardAction>
+              )}
+            </CardHeader>
+            <CardContent className="flex-1">
+              {wallet ? (
+                <dl className="grid gap-3">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Entradas</dt>
+                    <dd className="font-medium tabular-nums">{money(wallet.incomingCents)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Saídas</dt>
+                    <dd className="font-medium tabular-nums">{money(wallet.expenseCents)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3 border-t pt-3">
+                    <dt className="font-medium">Saldo</dt>
+                    <dd className="font-semibold tabular-nums">{money(wallet.balanceCents)}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <CardEmpty icon={PiggyBankIcon}>
+                  Esta unidade não tem carteira. Sem ela, os atendimentos concluídos não entram no caixa.
+                </CardEmpty>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{inventory ? inventory.name : "Estoque"}</CardTitle>
+              <CardDescription>Produtos do inventário da unidade</CardDescription>
+              {(canManage || inventory) && (
+                <CardAction className="flex gap-1">
+                  {canManage && (
+                    <UnitInventorySheet
+                      workspaceId={workspaceId}
+                      unitId={unitId}
+                      options={refOptions.inventories}
+                      currentId={inventory?.id ?? null}
+                    />
+                  )}
+                  {inventory && (
+                    <CardLinkButton href={`/workspace/${workspaceId}/stock/${inventory.id}`}>Produtos</CardLinkButton>
+                  )}
+                </CardAction>
+              )}
+            </CardHeader>
+            <CardContent>
+              {inventory ? (
+                <dl className="grid gap-3">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Produtos em estoque</dt>
+                    <dd className="font-medium tabular-nums">{inventory.productCount}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Unidades no total</dt>
+                    <dd className="font-medium tabular-nums">{inventory.quantity}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <CardEmpty icon={PackageIcon}>Esta unidade não tem estoque.</CardEmpty>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )

@@ -18,13 +18,19 @@ export function plural(count: number, one: string, many: string) {
 }
 
 // Botão "ver mais" no canto do card, para a aba com os detalhes.
+export function CardLinkButton({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Button variant="ghost" size="sm" nativeButton={false} render={<Link href={href} />}>
+      {children}
+      <ArrowRightIcon />
+    </Button>
+  )
+}
+
 export function CardLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <CardAction>
-      <Button variant="ghost" size="sm" nativeButton={false} render={<Link href={href} />}>
-        {children}
-        <ArrowRightIcon />
-      </Button>
+      <CardLinkButton href={href}>{children}</CardLinkButton>
     </CardAction>
   )
 }

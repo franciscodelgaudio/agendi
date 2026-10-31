@@ -3,6 +3,7 @@ import { createService, deleteService, updateService } from "@/service/workspace
 import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
+const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const SERVICE_ID = "64b7f0c2a1b2c3d4e5f60731";
 
 const MANAGER = actorWith("services.manage");
@@ -13,15 +14,15 @@ describe("createService", () => {
   function makeDeps() {
     return { insert: vi.fn().mockResolvedValue({ id: SERVICE_ID }) };
   }
-  const ctx = { workspaceId: WORKSPACE_ID, actor: MANAGER };
+  const ctx = { workspaceId: WORKSPACE_ID, unitId: UNIT_ID, actor: MANAGER };
 
-  it("cadastra o serviço no workspace com a duração em minutos e o preço em centavos", async () => {
+  it("cadastra o serviço na unidade com a duração em minutos e o preço em centavos", async () => {
     const deps = makeDeps();
 
     const result = await createService(VALID, ctx, deps);
 
     expect(result).toEqual({ ok: true, serviceId: SERVICE_ID });
-    expect(deps.insert).toHaveBeenCalledWith({ workspaceId: WORKSPACE_ID, ...SAVED });
+    expect(deps.insert).toHaveBeenCalledWith({ workspaceId: WORKSPACE_ID, unitId: UNIT_ID, ...SAVED });
   });
 
   it("aceita duração de 5 minutos a 12 horas e preço zero", async () => {
@@ -55,7 +56,7 @@ describe("createService", () => {
   ] as const)("%s, não cadastra", async (_label, actor, error) => {
     const deps = makeDeps();
 
-    const result = await createService(VALID, { workspaceId: WORKSPACE_ID, actor }, deps);
+    const result = await createService(VALID, { workspaceId: WORKSPACE_ID, unitId: UNIT_ID, actor }, deps);
 
     expect(result).toEqual({ ok: false, error });
     expect(deps.insert).not.toHaveBeenCalled();
