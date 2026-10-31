@@ -22,7 +22,7 @@ export function InviteMemberPopover({ workspaceId, choices }: { workspaceId: str
         setOpen(next)
       }}
     >
-      <PopoverTrigger data-tour="invite-member" render={<Button />}>
+      <PopoverTrigger render={<Button />}>
         <CirclePlusIcon data-icon="inline-start" />
         Convidar usuário
       </PopoverTrigger>

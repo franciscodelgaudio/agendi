@@ -20,7 +20,7 @@ type UploadOptions = {
 
 type Props = UploadOptions & {
   id: string
-  label: string
+  label: React.ReactNode
   name?: string
 }
 
@@ -95,12 +95,12 @@ export function ImageUploadField({ id, label, name = "avatarUrl", ...options }: 
       >
         {({ dragging }) => (
           <>
-            <div className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground">
+            <div className="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground">
               {shown ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={shown} alt="" className="size-full object-contain" />
               ) : (
-                <ImagePlusIcon className="size-6" />
+                <ImagePlusIcon className="size-5" />
               )}
               {uploading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/60">

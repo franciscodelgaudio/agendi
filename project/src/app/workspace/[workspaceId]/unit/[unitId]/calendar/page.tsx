@@ -21,15 +21,13 @@ export default async function UnitCalendarPage({ params }: PageProps<"/workspace
         <h3 className="text-lg font-semibold tracking-tight">Agenda</h3>
         <CalendarNav base={`/workspace/${workspaceId}/unit/${unitId}/calendar`} />
       </div>
-      <div data-tour="unit-calendar">
-        <AppointmentCalendar
-          workspaceId={workspaceId}
-          canSchedule={can(actor, "bookings.manage")}
-          canAttend={can(actor, "appointments.manage")}
-          unitId={unitId}
-          {...options}
-        />
-      </div>
+      <AppointmentCalendar
+        workspaceId={workspaceId}
+        canSchedule={can(actor, "bookings.manage")}
+        canAttend={can(actor, "appointments.manage")}
+        unitId={unitId}
+        {...options}
+      />
     </div>
   )
 }

@@ -21,8 +21,7 @@ import {
 } from "@/components/ui/sidebar"
 import { WORKSPACE_PAGE_PATHS, type WorkspacePage } from "@/service/workspace/[workspaceId]/page-access"
 
-// tour: marca do item para o tutorial destacá-lo.
-type NavItem = { title: string; href: string; icon: LucideIcon; tour: string }
+type NavItem = { title: string; href: string; icon: LucideIcon }
 
 // Itens com subpáginas (ex.: a lista do calendário) seguem ativos nelas; o Início só na própria página.
 export function isNavItemActive(pathname: string, href: string, base: string) {
@@ -34,7 +33,7 @@ export function NavMain({ workspaceId, pages }: { workspaceId: string; pages: Wo
   const pathname = usePathname()
   const base = `/workspace/${workspaceId}`
   const item = (page: WorkspacePage, title: string, icon: LucideIcon) =>
-    pages.includes(page) ? [{ title, href: `${base}${WORKSPACE_PAGE_PATHS[page]}`, icon, tour: `nav-${page}` }] : []
+    pages.includes(page) ? [{ title, href: `${base}${WORKSPACE_PAGE_PATHS[page]}`, icon }] : []
   const groups: { label?: string; items: NavItem[] }[] = [
     { items: item("home", "Início", HomeIcon) },
     {
@@ -57,7 +56,6 @@ export function NavMain({ workspaceId, pages }: { workspaceId: string; pages: Wo
         {group.items.map((item) => (
           <SidebarMenuItem key={item.href}>
             <SidebarMenuButton
-              data-tour={item.tour}
               tooltip={item.title}
               isActive={isNavItemActive(pathname, item.href, base)}
               render={<Link href={item.href} />}

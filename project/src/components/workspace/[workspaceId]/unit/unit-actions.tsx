@@ -25,6 +25,7 @@ import { FieldError, FieldGroup } from "@/components/ui/field"
 import { UnitFields, type UnitFormOptions, type UnitFormValues } from "@/components/workspace/[workspaceId]/unit/unit-fields"
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -67,7 +68,7 @@ export function UnitActions({ workspaceId, unit, options }: { workspaceId: strin
       </DropdownMenu>
 
       <Sheet open={editOpen} onOpenChange={setEditOpen}>
-        <SheetContent>
+        <SheetContent className="w-full sm:max-w-[420px]">
           <EditUnitForm
             key={editKey}
             workspaceId={workspaceId}
@@ -114,8 +115,7 @@ function EditUnitForm({
         <SheetTitle>Editar unidade</SheetTitle>
         <SheetDescription>Altere os dados desta unidade.</SheetDescription>
       </SheetHeader>
-      {/* Só os campos rolam; título e botões ficam fixos. */}
-      <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+      <FieldGroup className="min-h-0 flex-1 gap-6 overflow-y-auto px-4 pb-4">
         {state.error && <FieldError>{state.error}</FieldError>}
         <UnitFields idPrefix={`edit-unit-${unit.id}`} workspaceId={workspaceId} options={options} defaultValues={unit} />
       </FieldGroup>
@@ -123,6 +123,7 @@ function EditUnitForm({
         <Button type="submit" loading={pending}>
           {pending ? "Salvando..." : "Salvar"}
         </Button>
+        <SheetClose render={<Button type="button" variant="outline" />}>Cancelar</SheetClose>
       </SheetFooter>
     </form>
   )

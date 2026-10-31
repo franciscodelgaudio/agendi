@@ -4,7 +4,8 @@ import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { unitListPipeline, parseUnitListQuery } from "@/service/workspace/[workspaceId]/unit/unit-list"
 import type { UnitFormValues } from "@/components/workspace/[workspaceId]/unit/unit-fields"
-import { loadUnitFormOptions } from "@/service/workspace/[workspaceId]/unit/unit-form-store"
+import type { MemberOption } from "@/components/workspace/[workspaceId]/unit/unit-member-fields"
+import { unitMemberOptionsStages } from "@/service/workspace/[workspaceId]/unit/unit-form-store"
 import { Workspace } from "@/models/Workspace"
 import { CreateUnitSheet } from "@/components/workspace/[workspaceId]/unit/create-unit-sheet"
 import { ListSearch } from "@/components/shared/list-search"
@@ -28,6 +29,7 @@ export default async function UnitsPage({
     units: (UnitFormValues & { createdAt: Date; updatedAt: Date })[]
     unitCount: number
     actor: Actor
+    members: MemberOption[]
   }>([
     ...access,
     {
@@ -48,18 +50,20 @@ export default async function UnitsPage({
         pipeline: [{ $count: "n" }],
       },
     },
+    ...unitMemberOptionsStages(),
     {
       $project: {
         _id: 0,
         units: 1,
         actor: 1,
+        members: 1,
         unitCount: { $ifNull: [{ $first: "$unitCount.n" }, 0] },
       },
     },
   ])
   if (!workspace) notFound()
   const { units, unitCount } = workspace
-  const options = await loadUnitFormOptions(workspaceId)
+  const options = { members: workspace.members }
   const canManage = can(workspace.actor, "units.manage")
 
   return (

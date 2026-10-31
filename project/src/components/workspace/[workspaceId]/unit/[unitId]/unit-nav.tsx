@@ -18,17 +18,16 @@ export function UnitNav({ workspaceId, unitId, pages }: { workspaceId: string; u
     appointments: { title: "Atendimentos", icon: CircleCheckIcon },
     services: { title: "Serviços", icon: LeafIcon },
   }
-  const items = pages.map((page) => ({ ...tabs[page], href: `${base}${UNIT_PAGE_PATHS[page]}`, tour: `unit-tab-${page}` }))
+  const items = pages.map((page) => ({ ...tabs[page], href: `${base}${UNIT_PAGE_PATHS[page]}` }))
 
   return (
-    <nav data-tour="unit-tabs" className="sticky top-0 z-20 -mx-4 flex gap-1 overflow-x-auto bg-background px-4 pt-2 overflow-y-hidden shadow-[inset_0_-1px_0_var(--border)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav className="sticky top-0 z-20 -mx-4 flex gap-1 overflow-x-auto bg-background px-4 pt-2 overflow-y-hidden shadow-[inset_0_-1px_0_var(--border)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {items.map((item) => {
         // Abas com subpáginas (ex.: a lista do calendário) seguem ativas nelas.
         const isActive = pathname === item.href || (item.href !== base && pathname.startsWith(`${item.href}/`))
         return (
           <Link
             key={item.href}
-            data-tour={item.tour}
             href={item.href}
             aria-current={isActive ? "page" : undefined}
             className={cn(

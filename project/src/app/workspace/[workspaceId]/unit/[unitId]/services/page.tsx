@@ -65,7 +65,7 @@ export default async function UnitServicesPage({
               </TableRow>
             )}
             {result.rows.map((service) => (
-              <TableRow key={service.id} data-tour="service-row">
+              <TableRow key={service.id}>
                 <TableCell className="max-w-0 truncate px-4 font-medium">{service.name}</TableCell>
                 <TableCell className="px-4 text-muted-foreground @max-md:hidden">{formatDuration(service.durationMinutes)}</TableCell>
                 <TableCell className="px-4 text-right tabular-nums">{currencyFormat.format(service.priceCents / 100)}</TableCell>

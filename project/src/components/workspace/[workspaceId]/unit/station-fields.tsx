@@ -3,8 +3,9 @@
 import { useState } from "react"
 import { PlusIcon, Trash2Icon } from "lucide-react"
 
+import { FieldHelp, RequiredMark } from "@/components/shared/field-hints"
 import { Button } from "@/components/ui/button"
-import { FieldSeparator } from "@/components/ui/field"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 
 const MAX_STATIONS = 20
@@ -26,53 +27,60 @@ export function StationFields({ idPrefix, defaultValue }: { idPrefix: string; de
   }
 
   return (
-    <>
-      <FieldSeparator>Estações</FieldSeparator>
-      <div className="divide-y border">
+    <Field>
+      <div className="flex items-center gap-1.5">
+        <FieldLabel htmlFor={`${idPrefix}-station-${rows[0].key}`}>
+          Estações <RequiredMark />
+        </FieldLabel>
+        <FieldHelp>Macas, cadeiras ou salas onde os atendimentos acontecem.</FieldHelp>
+      </div>
+      <div className="flex flex-col gap-2">
         {rows.map((row, index) => (
-          <div key={row.key} className="flex items-center gap-2 p-3">
+          <div key={row.key} className="flex items-center gap-1">
             <input type="hidden" name="stationId" value={row.id} />
             <Input
               id={`${idPrefix}-station-${row.key}`}
               name="stationName"
-              placeholder="Maca 1, Hidromassagem..."
+              placeholder={index === 0 ? "Maca 1" : `Estação ${index + 1}`}
               aria-label={`Nome da estação ${index + 1}`}
               value={row.name}
               onChange={(e) => updateRow(row.key, { name: e.target.value })}
               maxLength={40}
+              className="min-w-0 flex-1"
               required
             />
-            {rows.length > 1 && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Remover estação ${index + 1}`}
-                onClick={() => setRows((current) => current.filter((r) => r.key !== row.key))}
-              >
-                <Trash2Icon />
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`Remover estação ${index + 1}`}
+              disabled={rows.length === 1}
+              onClick={() => setRows((current) => current.filter((r) => r.key !== row.key))}
+            >
+              <Trash2Icon />
+            </Button>
           </div>
         ))}
 
         {rows.length < MAX_STATIONS && (
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full"
-            onClick={() =>
-              setRows((current) => [
-                ...current,
-                { key: Math.max(...current.map((r) => r.key)) + 1, id: "", name: "" },
-              ])
-            }
-          >
-            <PlusIcon />
-            Adicionar estação
-          </Button>
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setRows((current) => [
+                  ...current,
+                  { key: Math.max(...current.map((r) => r.key)) + 1, id: "", name: "" },
+                ])
+              }
+            >
+              <PlusIcon data-icon="inline-start" />
+              Adicionar estação
+            </Button>
+          </div>
         )}
       </div>
-    </>
+    </Field>
   )
 }

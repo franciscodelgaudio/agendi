@@ -17,7 +17,7 @@ import {
 import { walletListPipeline, type WalletListItem } from "@/service/workspace/[workspaceId]/cash-flow/wallet-list"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
-import { loadUnitRefOptions } from "@/service/workspace/[workspaceId]/unit/unit-form-store"
+import { unitRefOptionsStages } from "@/service/workspace/[workspaceId]/unit/unit-form-store"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
@@ -28,7 +28,7 @@ import { Workspace } from "@/models/Workspace"
 import { timeFormat } from "@/components/shared/service-format"
 import type { TherapistOption } from "@/components/workspace/[workspaceId]/shared/team/therapist-avatar"
 import { CardEmpty, CardLink, CardLinkButton, money, plural, StatTile, TodaySchedule, type TodayBooking } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-overview"
-import { UnitInventorySheet, UnitWalletSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-ref-sheets"
+import { UnitInventorySheet, UnitWalletSheet, type RefOption } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-ref-sheets"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 type UnitInventory = { id: string; name: string; productCount: number; quantity: number }
@@ -60,6 +60,8 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
     actor: Actor
     therapists: TherapistOption[]
     unit: { id: string; walletId: string | null; inventory: UnitInventory | null } | null
+    wallets: RefOption[]
+    inventories: RefOption[]
   }>([
     ...access,
     {
@@ -101,19 +103,24 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
       },
     },
     ...therapistOptionsStages(),
+    ...unitRefOptionsStages(),
     {
       $project: {
         _id: 0,
         id: { $toString: "$_id" },
         actor: 1,
         therapists: 1,
+        wallets: 1,
+        inventories: 1,
         unit: { $ifNull: [{ $first: "$unit" }, null] },
       },
     },
   ])
   if (!workspace?.unit) notFound()
   const canManage = can(workspace.actor, "units.manage")
-  const refOptions = canManage ? await loadUnitRefOptions(workspaceId) : { wallets: [], inventories: [] }
+  const refOptions = canManage
+    ? { wallets: workspace.wallets, inventories: workspace.inventories }
+    : { wallets: [], inventories: [] }
   const { inventory } = workspace.unit
 
   // Mês corrente para os indicadores; ano corrente para a curva de custos.

@@ -2,10 +2,10 @@
 
 import type { BusinessHours } from "@/service/workspace/[workspaceId]/unit/[unitId]/business-hours"
 
-import { Field, FieldLabel, FieldSeparator } from "@/components/ui/field"
+import { RequiredMark } from "@/components/shared/field-hints"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-// De meia em meia hora, de "00:00" a "24:00".
 const TIMES = Array.from({ length: 49 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`)
 const OPENS = TIMES.slice(0, -1).map((value) => ({ value, label: value }))
 const CLOSES = TIMES.slice(1).map((value) => ({ value, label: value }))
@@ -20,10 +20,9 @@ function TimeSelect({ id, name, label, items, defaultValue }: {
   defaultValue: string
 }) {
   return (
-    <Field>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+    <div className="min-w-0 flex-1">
       <Select name={name} items={items} defaultValue={defaultValue} required>
-        <SelectTrigger id={id} className="w-full">
+        <SelectTrigger id={id} aria-label={label} className="w-full">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -34,20 +33,22 @@ function TimeSelect({ id, name, label, items, defaultValue }: {
           ))}
         </SelectContent>
       </Select>
-    </Field>
+    </div>
   )
 }
 
-// Horário de funcionamento da unidade; define a faixa de horas visível no calendário.
 export function BusinessHoursFields({ idPrefix, defaultValue }: { idPrefix: string; defaultValue?: BusinessHours }) {
   const hours = defaultValue ?? DEFAULT_HOURS
   return (
-    <>
-      <FieldSeparator>Horário de funcionamento</FieldSeparator>
-      <div className="grid grid-cols-2 gap-4">
+    <Field>
+      <FieldLabel htmlFor={`${idPrefix}-opens-at`}>
+        Horário de funcionamento <RequiredMark />
+      </FieldLabel>
+      <div className="flex items-center gap-2">
         <TimeSelect id={`${idPrefix}-opens-at`} name="opensAt" label="Abre às" items={OPENS} defaultValue={hours.opensAt} />
+        <span className="text-sm text-muted-foreground">às</span>
         <TimeSelect id={`${idPrefix}-closes-at`} name="closesAt" label="Fecha às" items={CLOSES} defaultValue={hours.closesAt} />
       </div>
-    </>
+    </Field>
   )
 }

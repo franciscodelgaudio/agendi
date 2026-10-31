@@ -4,11 +4,13 @@ import { useActionState, useState } from "react"
 import { PlusIcon } from "lucide-react"
 import { createUnitAction, type UnitFormState } from "@/lib/actions/unit"
 
+import { RequiredMark } from "@/components/shared/field-hints"
 import { Button } from "@/components/ui/button"
 import { FieldError, FieldGroup } from "@/components/ui/field"
 import { UnitFields, type UnitFormOptions } from "@/components/workspace/[workspaceId]/unit/unit-fields"
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -30,25 +32,27 @@ export function CreateUnitSheet({ workspaceId, options }: { workspaceId: string;
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger data-tour="create-unit" render={<Button />}>
+      <SheetTrigger render={<Button />}>
         <PlusIcon />
         Cadastrar unidade
       </SheetTrigger>
-      <SheetContent data-tour="create-unit-form">
+      <SheetContent className="w-full sm:max-w-[420px]">
         <form action={formAction} className="flex min-h-0 flex-1 flex-col">
           <SheetHeader>
             <SheetTitle>Cadastrar unidade</SheetTitle>
-            <SheetDescription>Adicione uma unidade a este workspace.</SheetDescription>
+            <SheetDescription>
+              Adicione uma unidade a este workspace. Campos com <RequiredMark /> são obrigatórios.
+            </SheetDescription>
           </SheetHeader>
-          {/* Só os campos rolam; título e botões ficam fixos. */}
-          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+          <FieldGroup className="min-h-0 flex-1 gap-6 overflow-y-auto px-4 pb-4">
             {state.error && <FieldError>{state.error}</FieldError>}
             <UnitFields idPrefix="create-unit" workspaceId={workspaceId} options={options} />
           </FieldGroup>
           <SheetFooter>
             <Button type="submit" loading={pending}>
-              {pending ? "Cadastrando..." : "Cadastrar"}
+              {pending ? "Cadastrando..." : "Cadastrar unidade"}
             </Button>
+            <SheetClose render={<Button type="button" variant="outline" />}>Cancelar</SheetClose>
           </SheetFooter>
         </form>
       </SheetContent>

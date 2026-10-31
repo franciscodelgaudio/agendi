@@ -1,4 +1,5 @@
 import { Field, FieldLabel } from "@/components/ui/field"
+import { OptionalMark, RequiredMark } from "@/components/shared/field-hints"
 import { Input } from "@/components/ui/input"
 import { ImageUploadField } from "@/components/shared/image-upload-field"
 import { BusinessHoursFields } from "@/components/workspace/[workspaceId]/unit/business-hours-fields"
@@ -28,7 +29,9 @@ export function UnitFields({ idPrefix, workspaceId, options, defaultValues }: Pr
   return (
     <>
       <Field>
-        <FieldLabel htmlFor={`${idPrefix}-name`}>Nome</FieldLabel>
+        <FieldLabel htmlFor={`${idPrefix}-name`}>
+          Nome <RequiredMark />
+        </FieldLabel>
         <Input
           id={`${idPrefix}-name`}
           name="name"
@@ -41,7 +44,11 @@ export function UnitFields({ idPrefix, workspaceId, options, defaultValues }: Pr
       </Field>
       <ImageUploadField
         id={`${idPrefix}-image`}
-        label="Imagem (opcional)"
+        label={
+          <>
+            Imagem <OptionalMark />
+          </>
+        }
         name="imageUrl"
         workspaceId={workspaceId}
         target="unit"

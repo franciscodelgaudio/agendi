@@ -1,27 +1,46 @@
-import { Types } from "mongoose"
-import { Inventory } from "@/models/Inventory"
-import { Wallet } from "@/models/Wallet"
-import { WorkspaceMember } from "@/models/WorkspaceMember"
+import type { PipelineStage } from "mongoose"
 
-export async function loadUnitFormOptions(workspaceId: string) {
-  const members = await WorkspaceMember.aggregate<{ id: string; name: string }>([
-    { $match: { workspaceId: new Types.ObjectId(workspaceId) } },
-    { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
-    { $unwind: "$user" },
-    { $project: { _id: 0, id: { $toString: "$_id" }, name: { $ifNull: ["$user.name", "$user.email"] } } },
-    { $sort: { name: 1, id: 1 } },
-  ])
-  return { members }
+export function unitMemberOptionsStages(): PipelineStage[] {
+  return [
+    {
+      $lookup: {
+        from: "workspace_members",
+        localField: "_id",
+        foreignField: "workspaceId",
+        as: "members",
+        pipeline: [
+          { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
+          { $unwind: "$user" },
+          {
+            $project: {
+              _id: 0,
+              id: { $toString: "$_id" },
+              name: { $ifNull: ["$user.name", "$user.email"] },
+              image: { $ifNull: ["$user.avatarUrl", null] },
+            },
+          },
+          { $sort: { name: 1, id: 1 } },
+        ],
+      },
+    },
+  ]
 }
 
-export async function loadUnitRefOptions(workspaceId: string) {
-  const workspace = new Types.ObjectId(workspaceId)
-  const [wallets, inventories] = await Promise.all([
-    Wallet.find({ workspaceId: workspace }).select({ name: 1 }).sort({ name: 1 }).lean(),
-    Inventory.find({ workspaceId: workspace }).select({ name: 1 }).sort({ name: 1 }).lean(),
-  ])
+function nameOptionsLookup(from: string, as: string): PipelineStage {
   return {
-    wallets: wallets.map((wallet) => ({ id: wallet._id.toString(), name: wallet.name })),
-    inventories: inventories.map((inventory) => ({ id: inventory._id.toString(), name: inventory.name })),
+    $lookup: {
+      from,
+      localField: "_id",
+      foreignField: "workspaceId",
+      as,
+      pipeline: [
+        { $sort: { name: 1, _id: 1 } },
+        { $project: { _id: 0, id: { $toString: "$_id" }, name: 1 } },
+      ],
+    },
   }
+}
+
+export function unitRefOptionsStages(): PipelineStage[] {
+  return [nameOptionsLookup("wallets", "wallets"), nameOptionsLookup("inventories", "inventories")]
 }

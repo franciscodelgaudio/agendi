@@ -29,9 +29,10 @@ import Link from "@/components/shared/link"
 import { CreateUnitSheet } from "@/components/workspace/[workspaceId]/unit/create-unit-sheet"
 import { timeFormat } from "@/components/shared/service-format"
 import type { TherapistOption } from "@/components/workspace/[workspaceId]/shared/team/therapist-avatar"
+import type { MemberOption } from "@/components/workspace/[workspaceId]/unit/unit-member-fields"
 import { CardEmpty, CardLink, money, plural, RankList, StatTile, TodaySchedule, type TodayBooking } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-overview"
 import { UnitsEmpty } from "@/components/workspace/[workspaceId]/unit/units-empty"
-import { loadUnitFormOptions } from "@/service/workspace/[workspaceId]/unit/unit-form-store"
+import { unitMemberOptionsStages } from "@/service/workspace/[workspaceId]/unit/unit-form-store"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -76,6 +77,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     actor: Actor
     units: UnitInfo[]
     therapists: TherapistOption[]
+    members: MemberOption[]
   }>([
     ...access,
     {
@@ -98,12 +100,13 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
       },
     },
     ...therapistOptionsStages(),
-    { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, actor: 1, units: 1, therapists: 1 } },
+    ...unitMemberOptionsStages(),
+    { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, actor: 1, units: 1, therapists: 1, members: 1 } },
   ])
   if (!workspace) notFound()
   const { units } = workspace
   const canManage = can(workspace.actor, "units.manage")
-  const options = canManage ? await loadUnitFormOptions(workspace.id) : { members: [] }
+  const options = { members: canManage ? workspace.members : [] }
 
   if (units.length === 0) {
     return (

@@ -86,11 +86,11 @@ export function CreateServiceSheet({ workspaceId, unitId }: { workspaceId: strin
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger data-tour="create-service" render={<Button />}>
+      <SheetTrigger render={<Button />}>
         <PlusIcon />
         Cadastrar serviço
       </SheetTrigger>
-      <SheetContent data-tour="create-service-form">
+      <SheetContent>
         <form action={formAction} className="flex min-h-0 flex-1 flex-col">
           <SheetHeader>
             <SheetTitle>Cadastrar serviço</SheetTitle>

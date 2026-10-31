@@ -1,7 +1,6 @@
 import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
 import { NavigationProgressBar, NavigationProgressProvider } from "@/components/shared/navigation-progress"
-import { TourProvider } from "@/components/workspace/[workspaceId]/tour/tour"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { MobileNav } from "@/components/workspace/[workspaceId]/mobile-nav"
 import { visiblePages } from "@/service/workspace/[workspaceId]/page-access"
@@ -34,18 +33,12 @@ export default async function WorkspaceLayout({
   return (
     <NavigationProgressProvider>
       <SidebarProvider defaultOpen={defaultOpen}>
-        {/* Dentro do SidebarProvider: no celular o tutorial abre a sidebar nos passos dela. */}
-        <TourProvider
-          workspaceId={workspaceId}
-          access={{ actor: workspace.actor, pages: visiblePages(workspace.actor) }}
-        >
-          {sidebar}
-          <SidebarInset className="pb-(--bottom-nav-height)">
-            <NavigationProgressBar />
-            {children}
-          </SidebarInset>
-          <MobileNav workspaceId={workspaceId} pages={visiblePages(workspace.actor).workspace} />
-        </TourProvider>
+        {sidebar}
+        <SidebarInset className="pb-(--bottom-nav-height)">
+          <NavigationProgressBar />
+          {children}
+        </SidebarInset>
+        <MobileNav workspaceId={workspaceId} pages={visiblePages(workspace.actor).workspace} />
       </SidebarProvider>
     </NavigationProgressProvider>
   )

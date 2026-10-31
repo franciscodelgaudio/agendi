@@ -1,8 +1,7 @@
 "use client"
 
 import { useTransition } from "react"
-import { ChevronsUpDownIcon, GraduationCapIcon, LogOutIcon } from "lucide-react"
-import { useTour } from "@/components/workspace/[workspaceId]/tour/tour"
+import { ChevronsUpDownIcon, LogOutIcon } from "lucide-react"
 import { Avatar, AvatarImage } from "@/components/ui/avatar"
 import { InitialFallback } from "@/components/shared/initial-fallback"
 import { userAvatarSrc } from "@/components/shared/user-avatar-src"
@@ -14,9 +13,6 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -33,7 +29,6 @@ type Props = {
 
 export function NavUser({ user, logoutAction }: Props) {
   const { isMobile } = useSidebar()
-  const tour = useTour()
   const [isPending, startTransition] = useTransition()
   const name = user.name || user.email || "Usuário"
 
@@ -57,7 +52,6 @@ export function NavUser({ user, logoutAction }: Props) {
           <DropdownMenuTrigger
             render={
               <SidebarMenuButton
-                data-tour="user-menu"
                 size="lg"
                 className="data-popup-open:bg-sidebar-accent data-popup-open:text-sidebar-accent-foreground"
               />
@@ -79,21 +73,6 @@ export function NavUser({ user, logoutAction }: Props) {
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            {tour && tour.tours.length > 0 && (
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <GraduationCapIcon />
-                  Tutoriais
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  {tour.tours.map((item) => (
-                    <DropdownMenuItem key={item.id} onClick={() => tour.start(item.id)}>
-                      {item.title}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            )}
             <DropdownMenuItem
               disabled={isPending}
               onClick={() => startTransition(() => logoutAction())}
