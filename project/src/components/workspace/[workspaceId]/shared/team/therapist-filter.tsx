@@ -7,8 +7,7 @@ import { TherapistLabel, TherapistSelectValue, type TherapistOption } from "@/co
 const ALL = "all"
 
 type Props = {
-  // therapist vazio = todas; os demais campos da query são preservados na URL.
-  query: { therapist: string } & Record<string, string>
+  query: { member: string } & Record<string, string>
   therapists: TherapistOption[]
 }
 
@@ -22,14 +21,14 @@ export function TherapistFilter({ query, therapists }: Props) {
   return (
     <Select
       items={items}
-      value={query.therapist || ALL}
+      value={query.member || ALL}
       onValueChange={(value) => {
-        const therapist = value === ALL ? "" : (value as string)
-        replaceQuery({ ...query, therapist })
+        const member = value === ALL ? "" : (value as string)
+        replaceQuery({ ...query, member })
       }}
     >
       <SelectTrigger className="w-full sm:w-56" aria-label="Filtrar por profissional">
-        <TherapistSelectValue therapists={therapists} fallback="Todos os profissionais" />
+        <TherapistSelectValue therapists={therapists} fallback="Todas as profissionais" />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={ALL}>Todos os profissionais</SelectItem>

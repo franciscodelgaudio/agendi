@@ -20,6 +20,7 @@ export function InventoryHeader({
           <Button
             variant="ghost"
             size="icon-sm"
+            nativeButton={false}
             aria-label="Voltar aos inventários"
             render={<Link href={`/workspace/${workspaceId}/stock`} />}
           >
@@ -31,8 +32,8 @@ export function InventoryHeader({
       </div>
       <SectionNav
         items={[
-          { title: "Produtos", icon: BoxesIcon, href: base },
-          { title: "Movimentos", icon: HistoryIcon, href: `${base}/movements` },
+          { title: "Produtos", icon: <BoxesIcon />, href: base },
+          { title: "Movimentos", icon: <HistoryIcon />, href: `${base}/movements` },
         ]}
       />
     </>

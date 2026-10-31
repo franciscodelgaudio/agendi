@@ -1,138 +1,106 @@
 "use server"
 
 import { refresh } from "next/cache"
-import { isObjectIdOrHexString } from "mongoose"
+import { isObjectIdOrHexString, Types } from "mongoose"
 import { getSessionUserId } from "@/service/(auth)/session"
 import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
-import { findUnitProducts } from "@/service/workspace/[workspaceId]/stock/products/product-lookup"
-import { findManagedUnit } from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-access"
+import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 import {
   createService,
   deleteService,
   updateService,
-  type CreateServiceError,
+  type DeleteServiceError,
   type UpdateServiceError,
-} from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service"
+} from "@/service/workspace/[workspaceId]/services/service"
+import { Appointment } from "@/models/Appointment"
 import { Service } from "@/models/Service"
-import { Unit } from "@/models/Unit"
 
-const errorMessages: Record<CreateServiceError | UpdateServiceError | "workspace_not_found" | "unauthenticated", string> = {
-  invalid_input: "Preencha nome, valor e duração.",
-  too_many_products: "Escolha no máximo 20 produtos.",
-  product_not_found: "Algum produto não foi encontrado nesta unidade. Recarregue a página.",
+const errorMessages: Record<Exclude<UpdateServiceError | DeleteServiceError, "forbidden"> | "unauthenticated", string> = {
+  invalid_input: "Preencha nome, duração e preço.",
   invalid_name: "Informe o nome do serviço.",
   name_too_long: "O nome pode ter no máximo 80 caracteres.",
-  invalid_price: "Informe um valor entre R$ 0,00 e R$ 1.000.000,00, com até 2 casas decimais.",
-  invalid_duration: "Informe a duração em minutos, entre 1 e 1440.",
-  station_not_found: "Alguma estação escolhida não é desta unidade. Recarregue a página.",
-  unit_not_found: "Unidade não encontrada ou sem permissão.",
-  service_not_found: "Serviço não encontrado ou sem permissão.",
+  invalid_duration: "Informe a duração em minutos, de 5 a 720.",
+  invalid_price: "Informe um preço válido, como 180,00.",
+  service_not_found: "Serviço não encontrado neste workspace.",
+  service_in_use: "Este serviço ainda tem agendamentos por fazer. Conclua, cancele ou troque o serviço deles antes.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
 export type ServiceActionState = { error: string | null }
 
-// id da unidade se o usuário puder gerenciá-la; senão a mensagem de erro.
-async function findManagedUnitId(workspaceId: string, unitId: string): Promise<{ unitId: string } | { error: string }> {
+function messageOf(error: UpdateServiceError | DeleteServiceError | "unauthenticated") {
+  return error === "forbidden" ? forbiddenMessage("services.manage") : errorMessages[error]
+}
+
+async function sessionAccess(workspaceId: string) {
   const userId = await getSessionUserId()
-  if (!userId) return { error: errorMessages.unauthenticated }
-  const access = await findManagedUnit(workspaceId, unitId, userId, "services.manage")
-  if (!access.ok) {
-    return { error: access.error === "forbidden" ? forbiddenMessage("services.manage") : errorMessages[access.error] }
-  }
-  return { unitId: access.unit.unitId }
+  if (!userId) return null
+  const access = await findWorkspaceAccess(workspaceId, userId)
+  return { workspaceId: access?.id ?? workspaceId, actor: access?.actor ?? null }
+}
+
+function serviceFilter(workspaceId: string, serviceId: string) {
+  if (!isObjectIdOrHexString(workspaceId) || !isObjectIdOrHexString(serviceId)) return null
+  return { _id: new Types.ObjectId(serviceId), workspaceId: new Types.ObjectId(workspaceId) }
 }
 
 function serviceInput(formData: FormData) {
-  return {
-    name: formData.get("name"),
-    price: formData.get("price"),
-    durationMinutes: formData.get("durationMinutes"),
-    productIds: formData.getAll("productId"),
-    requiresTherapist: formData.get("requiresTherapist") ?? undefined,
-    stationIds: formData.getAll("stationId"),
-  }
+  return { name: formData.get("name"), duration: formData.get("duration"), price: formData.get("price") }
 }
 
-// Espaços da unidade entre os ids pedidos.
-async function findUnitStations(unitId: string, ids: string[]) {
-  const unit = await Unit.findById(unitId).select({ "stations._id": 1 }).lean()
-  return (unit?.stations ?? []).map((station) => ({ id: station._id.toString() })).filter((station) => ids.includes(station.id))
-}
-
-// workspaceId e unitId vêm via argumento do cliente; a posse é conferida aqui, no servidor.
 export async function createServiceAction(
   workspaceId: string,
-  unitId: string,
   _prev: ServiceActionState,
   formData: FormData,
 ): Promise<ServiceActionState> {
-  const owned = await findManagedUnitId(workspaceId, unitId)
-  if ("error" in owned) return owned
-  const ownedUnitId = owned.unitId
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
 
-  const result = await createService(serviceInput(formData), ownedUnitId, {
+  const result = await createService(serviceInput(formData), session, {
     insert: async (data) => {
       const service = await Service.create(data)
       return { id: service._id.toString() }
     },
-    findProducts: (ids) => findUnitProducts(ownedUnitId, ids),
-    findStations: (ids) => findUnitStations(ownedUnitId, ids),
   })
 
-  if (!result.ok) return { error: errorMessages[result.error] }
+  if (!result.ok) return { error: messageOf(result.error) }
 
   refresh()
   return { error: null }
-}
-
-// A escrita ainda filtra por unitId para que um serviço de outra unidade não seja encontrado.
-async function resolveServiceTarget(workspaceId: string, unitId: string, serviceId: string) {
-  const owned = await findManagedUnitId(workspaceId, unitId)
-  if ("error" in owned) return owned
-  return { ownedUnitId: owned.unitId, serviceId: isObjectIdOrHexString(serviceId) ? serviceId : null }
 }
 
 export async function updateServiceAction(
   workspaceId: string,
-  unitId: string,
   serviceId: string,
   _prev: ServiceActionState,
   formData: FormData,
 ): Promise<ServiceActionState> {
-  const target = await resolveServiceTarget(workspaceId, unitId, serviceId)
-  if ("error" in target) return target
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = serviceFilter(session.workspaceId, serviceId)
 
-  const result = await updateService(serviceInput(formData), target.serviceId, {
-    update: async (id, data) => {
-      const { matchedCount } = await Service.updateOne({ _id: id, unitId: target.ownedUnitId }, { $set: data })
-      return matchedCount > 0
-    },
-    findProducts: (ids) => findUnitProducts(target.ownedUnitId, ids),
-    findStations: (ids) => findUnitStations(target.ownedUnitId, ids),
+  const result = await updateService(serviceInput(formData), filter && serviceId, session, {
+    update: async (_id, data) => (await Service.updateOne(filter!, { $set: data })).matchedCount > 0,
   })
 
-  if (!result.ok) return { error: errorMessages[result.error] }
+  if (!result.ok) return { error: messageOf(result.error) }
 
   refresh()
   return { error: null }
 }
 
-export async function deleteServiceAction(
-  workspaceId: string,
-  unitId: string,
-  serviceId: string,
-): Promise<ServiceActionState> {
-  const target = await resolveServiceTarget(workspaceId, unitId, serviceId)
-  if ("error" in target) return target
+export async function deleteServiceAction(workspaceId: string, serviceId: string): Promise<ServiceActionState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = serviceFilter(session.workspaceId, serviceId)
 
-  const result = await deleteService(target.serviceId, async (id) => {
-    const { deletedCount } = await Service.deleteOne({ _id: id, unitId: target.ownedUnitId })
-    return deletedCount > 0
+  const result = await deleteService(filter && serviceId, session, {
+    hasScheduled: async () => !!(await Appointment.exists({ serviceId: filter!._id, status: "scheduled" })),
+    remove: async () => (await Service.deleteOne(filter!)).deletedCount > 0,
   })
 
-  if (!result.ok) return { error: errorMessages[result.error] }
+  if (!result.ok) return { error: messageOf(result.error) }
 
   refresh()
   return { error: null }

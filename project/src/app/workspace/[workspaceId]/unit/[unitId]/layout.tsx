@@ -51,8 +51,8 @@ async function UnitHeader({ workspaceId, unitId }: { workspaceId: string; unitId
           {
             $lookup: {
               from: "services",
-              localField: "_id",
-              foreignField: "unitId",
+              localField: "workspaceId",
+              foreignField: "workspaceId",
               as: "services",
               pipeline: [{ $limit: 1 }, { $project: { _id: 1 } }],
             },
@@ -84,12 +84,11 @@ async function UnitHeader({ workspaceId, unitId }: { workspaceId: string; unitId
         <h2 className="min-w-0 truncate text-2xl font-semibold tracking-tight">{unit.name}</h2>
       </div>
       {!unit.hasServices && (
-        <ServicesSetupNotice workspaceId={workspaceId} unitId={unitId} canManage={can(workspace.actor, "services.manage")} />
+        <ServicesSetupNotice workspaceId={workspaceId} canManage={can(workspace.actor, "services.manage")} />
       )}
       <UnitNav
         workspaceId={workspaceId}
         unitId={unitId}
-        hasServices={unit.hasServices}
         pages={visiblePages(workspace.actor).unit}
       />
     </>

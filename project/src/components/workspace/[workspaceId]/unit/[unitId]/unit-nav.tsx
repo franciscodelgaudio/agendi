@@ -7,26 +7,13 @@ import { Button } from "@/components/ui/button"
 import { UNIT_PAGE_PATHS, type UnitPage } from "@/service/workspace/[workspaceId]/page-access"
 import { cn } from "@/service/_shared/utils"
 
-type NavItem = { title: string; icon: LucideIcon; pending?: boolean }
+type NavItem = { title: string; icon: LucideIcon }
 
-// hasServices: sem serviços a unidade não agenda nem registra atendimentos, então a aba
-// Serviços ganha um indicador até o primeiro cadastro. pages: abas liberadas para a função do usuário.
-export function UnitNav({
-  workspaceId,
-  unitId,
-  hasServices,
-  pages,
-}: {
-  workspaceId: string
-  unitId: string
-  hasServices: boolean
-  pages: UnitPage[]
-}) {
+export function UnitNav({ workspaceId, unitId, pages }: { workspaceId: string; unitId: string; pages: UnitPage[] }) {
   const pathname = usePathname()
   const base = `/workspace/${workspaceId}/unit/${unitId}`
   const tabs: Record<UnitPage, NavItem> = {
     overview: { title: "Visão geral", icon: LayoutDashboardIcon },
-    services: { title: "Serviços", icon: LeafIcon, pending: !hasServices },
     calendar: { title: "Agenda", icon: CalendarIcon },
     appointments: { title: "Atendimentos", icon: CircleCheckIcon },
   }
@@ -52,11 +39,6 @@ export function UnitNav({
           >
             <item.icon />
             {item.title}
-            {item.pending && (
-              <span className="size-1.5 rounded-full bg-primary">
-                <span className="sr-only">(pendente)</span>
-              </span>
-            )}
           </Link>
         )
       })}
@@ -64,19 +46,8 @@ export function UnitNav({
   )
 }
 
-// Aviso da unidade sem serviços, fora da própria aba Serviços (lá o vazio já orienta).
-export function ServicesSetupNotice({
-  workspaceId,
-  unitId,
-  canManage,
-}: {
-  workspaceId: string
-  unitId: string
-  canManage: boolean
-}) {
-  const pathname = usePathname()
-  const href = `/workspace/${workspaceId}/unit/${unitId}/services`
-  if (pathname === href) return null
+export function ServicesSetupNotice({ workspaceId, canManage }: { workspaceId: string; canManage: boolean }) {
+  const href = `/workspace/${workspaceId}/services`
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
@@ -85,10 +56,10 @@ export function ServicesSetupNotice({
       </span>
       <div className="grid min-w-0 flex-1 basis-60">
         <span className="font-medium">
-          {canManage ? "Comece cadastrando os serviços" : "Unidade sem serviços cadastrados"}
+          {canManage ? "Comece cadastrando os serviços" : "Nenhum serviço cadastrado"}
         </span>
         <span className="text-sm text-muted-foreground">
-          Agendamentos, atendimentos e caixa dependem dos serviços da unidade, com valor e duração.
+          Os agendamentos dependem dos serviços do workspace, com duração e preço.
         </span>
       </div>
       {canManage && (

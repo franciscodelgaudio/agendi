@@ -1,131 +1,142 @@
 "use server"
 
 import { refresh } from "next/cache"
-import { isObjectIdOrHexString } from "mongoose"
+import { isObjectIdOrHexString, Types } from "mongoose"
 import { getSessionUserId } from "@/service/(auth)/session"
-import { findWorkspaceTherapists, objectIds } from "@/service/workspace/[workspaceId]/team/therapist-lookup"
-import { findUnitProducts } from "@/service/workspace/[workspaceId]/stock/products/product-lookup"
-import { forbiddenMessage, type UnitAccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
-import { findManagedUnit } from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-access"
+import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
+import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 import {
   createAppointment,
   deleteAppointment,
+  rescheduleAppointment,
+  setAppointmentStatus,
   updateAppointment,
-  type CreateAppointmentError,
-} from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment"
-import { bookingAppointmentInput, convertBooking } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/booking-convert"
+  type AppointmentFieldsError,
+  type RescheduleAppointmentError,
+  type SetAppointmentStatusError,
+  type UpdateAppointmentError,
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment"
+import {
+  appointmentLookups,
+  blockChecker,
+  conflictChecker,
+  findUnitStation,
+  stationAppointmentsFinder,
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-store"
+import { recordAppointmentIncome, removeAppointmentIncome } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
+import { customerListPipeline, type CustomerListPage } from "@/service/workspace/[workspaceId]/customers/customer-list"
 import { Appointment } from "@/models/Appointment"
-import { Booking } from "@/models/Booking"
-import { Unit } from "@/models/Unit"
+import { Customer } from "@/models/Customer"
 import { Service } from "@/models/Service"
-import { removeAppointmentTransaction, syncAppointmentTransactionById } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
+import { Unit } from "@/models/Unit"
 
-const errorMessages: Record<
-  | CreateAppointmentError
-  | "appointment_not_found"
-  | "booking_not_found"
-  | "booking_already_converted"
-  | "workspace_not_found"
-  | "unauthenticated",
-  string
-> = {
-  invalid_input: "Preencha hóspede, quarto, data/hora e os serviços.",
-  invalid_guest_name: "Informe o nome do hóspede.",
-  guest_name_too_long: "O nome do hóspede pode ter no máximo 80 caracteres.",
-  invalid_room: "Informe o quarto.",
-  room_too_long: "O quarto pode ter no máximo 20 caracteres.",
-  invalid_performed_at: "Informe uma data e hora válidas.",
-  no_items: "Adicione pelo menos um serviço.",
-  too_many_items: "Um atendimento pode ter no máximo 20 serviços.",
-  invalid_item: "Escolha o serviço e o profissional de cada linha.",
-  invalid_duration: "A duração de cada serviço deve ser entre 5 minutos e 12 horas.",
-  service_not_found: "Algum serviço não foi encontrado nesta unidade. Recarregue a página.",
-  therapist_not_found: "Algum profissional escolhido não pode atender neste workspace. Recarregue a página.",
-  invalid_discount: "O desconto deve ser um percentual entre 0,01% e 100% ou um valor maior que zero.",
-  discount_reason_too_long: "O motivo do desconto pode ter no máximo 120 caracteres.",
-  discount_exceeds_total: "O desconto não pode ser maior que o total dos serviços.",
+type AppointmentError =
+  | AppointmentFieldsError
+  | UpdateAppointmentError
+  | RescheduleAppointmentError
+  | SetAppointmentStatusError
+  | "unit_not_found"
+
+const errorMessages: Record<Exclude<AppointmentError, "forbidden"> | "unauthenticated", string> = {
+  invalid_input: "Preencha serviço, cliente, profissional, estação e início.",
+  invalid_service: "Escolha o serviço.",
+  invalid_customer: "Escolha o cliente.",
+  invalid_member: "Escolha a profissional.",
+  invalid_station: "Escolha a estação.",
+  invalid_starts_at: "Informe uma data e hora válidas.",
+  invalid_duration: "O agendamento precisa durar entre 5 minutos e 12 horas.",
+  invalid_color: "Escolha uma cor da lista.",
+  invalid_status: "Situação inválida.",
+  service_not_found: "O serviço escolhido não existe mais. Recarregue a página.",
+  customer_not_found: "O cliente escolhido não existe mais. Recarregue a página.",
+  member_not_found: "A profissional escolhida não atende nesta unidade. Recarregue a página.",
+  station_not_found: "A estação escolhida não é desta unidade. Recarregue a página.",
+  station_inactive: "A estação escolhida está desativada.",
+  member_unavailable: "A profissional está indisponível nesse horário (agenda travada).",
+  member_busy: "A profissional já tem um agendamento nesse horário.",
+  station_busy: "A estação já tem um agendamento nesse horário.",
+  appointment_not_found: "Agendamento não encontrado ou sem permissão.",
+  appointment_not_scheduled: "Só é possível alterar agendamentos que ainda não foram concluídos nem cancelados.",
   unit_not_found: "Escolha uma unidade válida deste workspace.",
-  too_many_products: "Escolha no máximo 20 produtos.",
-  product_not_found: "Algum produto não foi encontrado nesta unidade. Recarregue a página.",
-  appointment_not_found: "Atendimento não encontrado ou sem permissão.",
-  booking_not_found: "Agendamento não encontrado ou sem permissão.",
-  booking_already_converted: "Este agendamento já foi registrado como atendimento.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
 export type AppointmentActionState = { error: string | null }
 
-function accessError(error: UnitAccessError): AppointmentActionState {
-  return { error: error === "forbidden" ? forbiddenMessage("appointments.manage") : errorMessages[error] }
+function messageOf(
+  error: AppointmentError | "unauthenticated",
+  permission: "bookings.manage" | "appointments.manage" = "bookings.manage",
+) {
+  return error === "forbidden" ? forbiddenMessage(permission) : errorMessages[error]
 }
 
-// Unidade gerenciável pelo usuário, com o motivo quando não é.
-function findAppointmentUnit(workspaceId: string, unitId: unknown, userId: string) {
-  return findManagedUnit(workspaceId, typeof unitId === "string" ? unitId : "", userId, "appointments.manage")
+async function sessionAccess(workspaceId: string) {
+  const userId = await getSessionUserId()
+  if (!userId) return null
+  const access = await findWorkspaceAccess(workspaceId, userId)
+  return { workspaceId: access?.id ?? workspaceId, actor: access?.actor ?? null }
+}
+
+function appointmentFilter(workspaceId: string, appointmentId: string) {
+  if (!isObjectIdOrHexString(workspaceId) || !isObjectIdOrHexString(appointmentId)) return null
+  return { _id: new Types.ObjectId(appointmentId), workspaceId: new Types.ObjectId(workspaceId) }
 }
 
 function appointmentInput(formData: FormData) {
   return {
-    guestName: formData.get("guestName"),
-    room: formData.get("room"),
-    performedAt: formData.get("performedAt"),
-    serviceIds: formData.getAll("serviceId"),
-    therapistIds: formData.getAll("therapistId"),
-    // Sem o campo, vale a duração do cadastro de cada serviço.
-    durations: formData.has("durationMinutes") ? formData.getAll("durationMinutes") : undefined,
-    productIds: formData.getAll("productId"),
-    // Tipo vazio (ou sem o campo) = sem desconto.
-    discountType: formData.get("discountType") ?? undefined,
-    discountValue: formData.get("discountValue") ?? undefined,
-    discountReason: formData.get("discountReason") ?? undefined,
+    serviceId: formData.get("serviceId"),
+    customerId: formData.get("customerId"),
+    workspaceMemberId: formData.get("workspaceMemberId"),
+    stationId: formData.get("stationId"),
+    startsAt: formData.get("startsAt"),
+    durationMinutes: formData.get("durationMinutes"),
+    color: formData.get("color"),
   }
 }
 
-// Buscas usadas por createAppointment/updateAppointment, restritas à unidade e ao workspace.
-function appointmentLookups(unit: { workspaceId: string; unitId: string }) {
+function toIds<T extends { serviceId: string; customerId: string; workspaceMemberId: string; stationId: string }>(fields: T) {
   return {
-    findServices: async (ids: string[]) => {
-      const services = await Service.find({ _id: { $in: objectIds(ids) }, unitId: unit.unitId })
-        .select({ name: 1, priceCents: 1, durationMinutes: 1, requiresTherapist: 1 })
-        .lean()
-      // Serviço cadastrado antes do campo exige profissional.
-      return services.map(({ _id, name, priceCents, durationMinutes, requiresTherapist }) => ({
-        id: _id.toString(),
-        name,
-        priceCents,
-        durationMinutes,
-        requiresTherapist: requiresTherapist ?? true,
-      }))
-    },
-    findTherapists: (ids: string[]) => findWorkspaceTherapists(unit.workspaceId, ids, unit.unitId),
-    findProducts: (ids: string[]) => findUnitProducts(unit.unitId, ids),
+    ...fields,
+    serviceId: new Types.ObjectId(fields.serviceId),
+    customerId: new Types.ObjectId(fields.customerId),
+    workspaceMemberId: new Types.ObjectId(fields.workspaceMemberId),
+    stationId: new Types.ObjectId(fields.stationId),
   }
 }
 
-// workspaceId e unitId vêm via argumento do cliente; a posse é conferida aqui, no servidor.
 export async function createAppointmentAction(
   workspaceId: string,
-  unitId: string,
   _prev: AppointmentActionState,
   formData: FormData,
 ): Promise<AppointmentActionState> {
-  const userId = await getSessionUserId()
-  if (!userId) return { error: errorMessages.unauthenticated }
-  const access = await findAppointmentUnit(workspaceId, unitId, userId)
-  if (!access.ok) return accessError(access.error)
-  const { unit } = access
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const unitId = formData.get("unitId")
+  const validUnit =
+    typeof unitId === "string" &&
+    isObjectIdOrHexString(unitId) &&
+    !!(await Unit.exists({ _id: unitId, workspaceId: session.workspaceId }))
+  if (session.actor && !validUnit) return { error: messageOf("unit_not_found") }
+  const unit = { workspaceId: session.workspaceId, unitId: String(unitId) }
 
-  const result = await createAppointment(appointmentInput(formData), unit.unitId, {
-    ...appointmentLookups(unit),
-    insert: async (data) => {
-      const appointment = await Appointment.create({ ...data, createdBy: userId })
-      await syncAppointmentTransactionById(appointment._id)
-      return { id: appointment._id.toString() }
+  const result = await createAppointment(
+    appointmentInput(formData),
+    { ...unit, actor: session.actor },
+    {
+      ...appointmentLookups(unit),
+      insert: async (data) => {
+        const appointment = await Appointment.create({
+          ...toIds(data),
+          workspaceId: new Types.ObjectId(data.workspaceId),
+          unitId: new Types.ObjectId(data.unitId),
+        })
+        return { id: appointment._id.toString() }
+      },
     },
-  })
+  )
 
-  if (!result.ok) return { error: errorMessages[result.error] }
+  if (!result.ok) return { error: messageOf(result.error) }
 
   refresh()
   return { error: null }
@@ -133,189 +144,123 @@ export async function createAppointmentAction(
 
 export async function updateAppointmentAction(
   workspaceId: string,
-  unitId: string,
   appointmentId: string,
   _prev: AppointmentActionState,
   formData: FormData,
 ): Promise<AppointmentActionState> {
-  const userId = await getSessionUserId()
-  if (!userId) return { error: errorMessages.unauthenticated }
-  const access = await findAppointmentUnit(workspaceId, unitId, userId)
-  if (!access.ok) return accessError(access.error)
-  const { unit } = access
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = appointmentFilter(session.workspaceId, appointmentId)
+  const current = filter && (await Appointment.findOne(filter).select({ status: 1, unitId: 1 }).lean())
 
-  // A escrita ainda filtra por unitId.
-  const result = await updateAppointment(
-    appointmentInput(formData),
-    isObjectIdOrHexString(appointmentId) ? appointmentId : null,
-    {
-      ...appointmentLookups(unit),
-      update: async (id, fields) => {
-        const { matchedCount } = await Appointment.updateOne({ _id: id, unitId: unit.unitId }, { $set: { ...fields, discount: fields.discount ?? null } })
-        if (matchedCount > 0) await syncAppointmentTransactionById(id)
-        return matchedCount > 0
-      },
-    },
-  )
-
-  if (!result.ok) return { error: errorMessages[result.error] }
-
-  refresh()
-  return { error: null }
-}
-
-// Visão do workspace: a unidade vem do formulário (campo unitId) e a posse é conferida
-// em createAppointmentAction.
-export async function createWorkspaceAppointmentAction(
-  workspaceId: string,
-  prev: AppointmentActionState,
-  formData: FormData,
-): Promise<AppointmentActionState> {
-  const unitId = formData.get("unitId")
-  return createAppointmentAction(workspaceId, typeof unitId === "string" ? unitId : "", prev, formData)
-}
-
-// Visão do workspace: permite mover o atendimento para outra unidade. O atendimento
-// precisa ser de alguma unidade do workspace, e a nova unidade precisa ser gerenciável.
-export async function updateWorkspaceAppointmentAction(
-  workspaceId: string,
-  appointmentId: string,
-  _prev: AppointmentActionState,
-  formData: FormData,
-): Promise<AppointmentActionState> {
-  const userId = await getSessionUserId()
-  if (!userId) return { error: errorMessages.unauthenticated }
-  const access = await findAppointmentUnit(workspaceId, formData.get("unitId"), userId)
-  if (!access.ok) return accessError(access.error)
-  const { unit } = access
-
-  const result = await updateAppointment(
-    appointmentInput(formData),
-    isObjectIdOrHexString(appointmentId) ? appointmentId : null,
-    {
-      ...appointmentLookups(unit),
-      update: async (id, fields) => {
-        const workspaceUnitIds = await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id")
-        const { matchedCount } = await Appointment.updateOne(
-          { _id: id, unitId: { $in: workspaceUnitIds } },
-          { $set: { ...fields, discount: fields.discount ?? null, unitId: unit.unitId } },
-        )
-        if (matchedCount > 0) await syncAppointmentTransactionById(id)
-        return matchedCount > 0
-      },
-    },
-  )
-
-  if (!result.ok) return { error: errorMessages[result.error] }
-
-  refresh()
-  return { error: null }
-}
-
-export async function deleteAppointmentAction(
-  workspaceId: string,
-  unitId: string,
-  appointmentId: string,
-): Promise<AppointmentActionState> {
-  const userId = await getSessionUserId()
-  if (!userId) return { error: errorMessages.unauthenticated }
-  const access = await findAppointmentUnit(workspaceId, unitId, userId)
-  if (!access.ok) return accessError(access.error)
-  const { unit } = access
-
-  // A exclusão ainda filtra por unitId.
-  const result = await deleteAppointment(
-    isObjectIdOrHexString(appointmentId) ? appointmentId : null,
-    async (id) => {
-      const { deletedCount } = await Appointment.deleteOne({ _id: id, unitId: unit.unitId })
-      // O agendamento de onde o atendimento veio volta a ser editável e convertível.
-      if (deletedCount > 0) {
-        await Booking.updateOne({ appointmentId: id }, { $set: { appointmentId: null } })
-        await removeAppointmentTransaction(id)
-      }
-      return deletedCount > 0
-    },
-  )
-
-  if (!result.ok) return { error: errorMessages[result.error] }
-
-  refresh()
-  return { error: null }
-}
-
-// Registra o atendimento a partir de um agendamento do calendário. A unidade vem do
-// formulário e precisa ser gerenciável; o agendamento precisa ser de alguma unidade do workspace.
-export async function convertBookingAction(
-  workspaceId: string,
-  bookingId: string,
-  _prev: AppointmentActionState,
-  formData: FormData,
-): Promise<AppointmentActionState> {
-  const userId = await getSessionUserId()
-  if (!userId) return { error: errorMessages.unauthenticated }
-  const access = await findAppointmentUnit(workspaceId, formData.get("unitId"), userId)
-  if (!access.ok) return accessError(access.error)
-  return convertBookingInUnit(appointmentInput(formData), bookingId, access.unit, userId)
-}
-
-// Registro com um clique: o atendimento sai dos dados salvos no agendamento (inclusive a
-// duração), sem formulário. A unidade é a do agendamento e precisa ser gerenciável.
-export async function registerBookingAction(workspaceId: string, bookingId: string): Promise<AppointmentActionState> {
-  const userId = await getSessionUserId()
-  if (!userId) return { error: errorMessages.unauthenticated }
-  if (!isObjectIdOrHexString(bookingId)) return { error: errorMessages.booking_not_found }
-  const booking = await Booking.findById(bookingId)
-    .select({ unitId: 1, guest: 1, startsAt: 1, endsAt: 1, service: 1, therapistId: 1, products: 1 })
-    .lean()
-  if (!booking) return { error: errorMessages.booking_not_found }
-  const access = await findAppointmentUnit(workspaceId, booking.unitId.toString(), userId)
-  if (!access.ok) return accessError(access.error)
-
-  const input = bookingAppointmentInput({
-    guest: { name: booking.guest?.name ?? "", room: booking.guest?.room ?? "" },
-    startsAt: booking.startsAt,
-    endsAt: booking.endsAt,
-    service: { serviceId: booking.service.serviceId.toString() },
-    therapistId: booking.therapistId?.toString() ?? null,
-    products: booking.products.map((product) => ({ productId: product.productId.toString() })),
+  const result = await updateAppointment(appointmentInput(formData), filter && appointmentId, session, {
+    ...appointmentLookups({ workspaceId: session.workspaceId, unitId: current?.unitId.toString() ?? "" }),
+    findAppointment: async () => current && { status: current.status },
+    update: async (_id, fields) =>
+      (await Appointment.updateOne({ ...filter!, status: "scheduled" }, { $set: toIds(fields) })).matchedCount > 0,
   })
-  return convertBookingInUnit(input, bookingId, access.unit, userId)
+
+  if (!result.ok) return { error: messageOf(result.error) }
+
+  refresh()
+  return { error: null }
 }
 
-async function convertBookingInUnit(
-  input: unknown,
-  bookingId: string,
-  unit: { workspaceId: string; unitId: string },
-  userId: string,
+export async function rescheduleAppointmentAction(
+  workspaceId: string,
+  appointmentId: string,
+  times: { startsAt: string; endsAt: string },
 ): Promise<AppointmentActionState> {
-  const workspaceUnitIds = await Unit.find({ workspaceId: unit.workspaceId }).distinct("_id")
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = appointmentFilter(session.workspaceId, appointmentId)
+  const current =
+    filter &&
+    (await Appointment.findOne(filter).select({ status: 1, unitId: 1, workspaceMemberId: 1, stationId: 1 }).lean())
 
-  const result = await convertBooking(
-    input,
-    { bookingId: isObjectIdOrHexString(bookingId) ? bookingId : null, unitId: unit.unitId },
-    {
-      ...appointmentLookups(unit),
-      findBooking: async (id) => {
-        const booking = await Booking.findOne({ _id: id, unitId: { $in: workspaceUnitIds } })
-          .select({ appointmentId: 1 })
-          .lean()
-        return booking && { appointmentId: booking.appointmentId?.toString() ?? null }
-      },
-      insert: async (data) => {
-        const appointment = await Appointment.create({ ...data, createdBy: userId })
-        await syncAppointmentTransactionById(appointment._id)
-        return { id: appointment._id.toString() }
-      },
-      link: async (id, appointmentId) => {
-        const { matchedCount } = await Booking.updateOne({ _id: id, appointmentId: null }, { $set: { appointmentId } })
-        return matchedCount > 0
-      },
-      removeAppointment: async (appointmentId) => {
-        await Appointment.deleteOne({ _id: appointmentId })
-        await removeAppointmentTransaction(appointmentId)
-      },
+  const result = await rescheduleAppointment(times, filter && appointmentId, session, {
+    findAppointment: async () => {
+      if (!current) return null
+      const station = await findUnitStation(current.unitId, current.stationId.toString())
+      return {
+        status: current.status,
+        workspaceMemberId: current.workspaceMemberId.toString(),
+        station: station && { id: station.id, active: station.active },
+      }
     },
-  )
+    hasConflict: conflictChecker(session.workspaceId),
+    isBlocked: blockChecker(session.workspaceId),
+    findStationAppointments: stationAppointmentsFinder(current?.unitId ?? new Types.ObjectId()),
+    update: async (_id, data) =>
+      (await Appointment.updateOne({ ...filter!, status: "scheduled" }, { $set: data })).matchedCount > 0,
+  })
 
-  return { error: result.ok ? null : errorMessages[result.error] }
+  if (!result.ok) return { error: messageOf(result.error) }
+
+  refresh()
+  return { error: null }
+}
+
+export async function setAppointmentStatusAction(
+  workspaceId: string,
+  appointmentId: string,
+  status: string,
+): Promise<AppointmentActionState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = appointmentFilter(session.workspaceId, appointmentId)
+  let previous: string | null = null
+
+  const result = await setAppointmentStatus({ status }, filter && appointmentId, session, {
+    findAppointment: async () => {
+      const found = await Appointment.findOne(filter!).select({ status: 1, serviceId: 1 }).lean()
+      previous = found?.status ?? null
+      return found && { status: found.status, serviceId: found.serviceId.toString() }
+    },
+    findServicePrice: async (serviceId) => {
+      const service = await Service.findOne({ _id: serviceId, workspaceId: session.workspaceId })
+        .select({ priceCents: 1 })
+        .lean()
+      return service?.priceCents ?? null
+    },
+    update: async (_id, next) => (await Appointment.updateOne(filter!, { $set: { status: next } })).matchedCount > 0,
+    recordIncome: recordAppointmentIncome,
+    removeIncome: removeAppointmentIncome,
+  })
+
+  if (!result.ok) {
+    const touchesDone = status === "done" || previous === "done"
+    return { error: messageOf(result.error, touchesDone ? "appointments.manage" : "bookings.manage") }
+  }
+
+  refresh()
+  return { error: null }
+}
+
+export async function deleteAppointmentAction(workspaceId: string, appointmentId: string): Promise<AppointmentActionState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = appointmentFilter(session.workspaceId, appointmentId)
+
+  const result = await deleteAppointment(filter && appointmentId, session, {
+    remove: async () => (await Appointment.deleteOne(filter!)).deletedCount > 0,
+    removeIncome: removeAppointmentIncome,
+  })
+
+  if (!result.ok) return { error: messageOf(result.error) }
+
+  refresh()
+  return { error: null }
+}
+
+export type CustomerOption = { id: string; name: string; cellphone: string | null }
+
+export async function searchCustomersAction(workspaceId: string, q: string): Promise<CustomerOption[]> {
+  if (typeof q !== "string") return []
+  const session = await sessionAccess(workspaceId)
+  if (!session?.actor) return []
+  const [page] = await Customer.aggregate<CustomerListPage>(
+    customerListPipeline(session.workspaceId, { q: q.trim(), sort: "name", dir: "asc", page: 1 }),
+  )
+  return (page?.rows ?? []).map(({ id, name, cellphone }) => ({ id, name, cellphone }))
 }

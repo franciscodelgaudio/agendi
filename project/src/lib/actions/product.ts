@@ -12,11 +12,8 @@ import {
   type DeleteProductError,
   type UpdateProductError,
 } from "@/service/workspace/[workspaceId]/stock/products/product"
-import { PRODUCT_SEARCH_LIMIT, productSearchPipeline } from "@/service/workspace/[workspaceId]/stock/products/product-search"
-import { objectIds } from "@/service/workspace/[workspaceId]/team/therapist-lookup"
 import { Inventory } from "@/models/Inventory"
 import { Product } from "@/models/Product"
-import type { ProductOption } from "@/components/workspace/[workspaceId]/shared/stock/product-picker"
 
 const errorMessages: Record<Exclude<UpdateProductError | DeleteProductError, "forbidden"> | "unauthenticated", string> = {
   invalid_input: "Preencha o nome e o preço.",
@@ -115,24 +112,4 @@ export async function deleteProductAction(workspaceId: string, productId: string
 
   refresh()
   return { error: null }
-}
-
-export async function searchProductsAction(workspaceId: string, _unitId: string, q: string): Promise<ProductOption[]> {
-  if (typeof q !== "string") return []
-  const session = await sessionAccess(workspaceId)
-  if (!session?.actor) return []
-  return Product.aggregate<ProductOption>(productSearchPipeline(session.workspaceId, q))
-}
-
-export async function productNamesAction(workspaceId: string, _unitId: string, ids: string[]): Promise<ProductOption[]> {
-  if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string")) return []
-  const session = await sessionAccess(workspaceId)
-  if (!session?.actor) return []
-  const products = await Product.find({
-    _id: { $in: objectIds(ids.slice(0, PRODUCT_SEARCH_LIMIT)) },
-    workspaceId: session.workspaceId,
-  })
-    .select({ name: 1 })
-    .lean()
-  return products.map((product) => ({ id: product._id.toString(), name: product.name }))
 }

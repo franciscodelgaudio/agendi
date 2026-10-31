@@ -1,6 +1,5 @@
 import type { PipelineStage } from "mongoose";
-import { parseDay } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-list";
-import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone";
+import { BRT_OFFSET_HOURS, parseDay } from "@/service/_shared/timezone";
 import { first, type SearchParams } from "@/service/workspace/[workspaceId]/unit/unit-list";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -13,15 +12,7 @@ export type CashFlowView = (typeof CASH_FLOW_VIEWS)[number];
 export type CashFlowQuery = { view: CashFlowView; date: string };
 // Dias do calendário ("2026-09-24"), ambos inclusivos.
 export type DayRange = { from: string; to: string };
-// Faturamento de um profissional num dia, com a quantidade de serviços. therapistId null: serviços
-// sem profissional (ex.: hidromassagem), que entram no bruto.
-export type DayTotal = {
-  date: string;
-  therapistId: string | null;
-  therapistName: string | null;
-  count: number;
-  cents: number;
-};
+export type DayTotal = { date: string; count: number; cents: number };
 
 export type CashFlowAmounts = { grossCents: number; netCents: number };
 export type CashFlowBucket = DayRange & { real: CashFlowAmounts; forecast: CashFlowAmounts };
@@ -102,61 +93,54 @@ function dayKey(field: string) {
   return { $dateToString: { format: "%Y-%m-%d", date: field, timezone: "-03:00" } };
 }
 
-const PROJECT_DAY_TOTAL = {
-  $project: {
-    _id: 0,
-    date: "$_id.date",
-    therapistId: { $toString: "$_id.therapistId" },
-    therapistName: 1,
-    count: 1,
-    cents: 1,
+const PROJECT_DAY_TOTAL = { $project: { _id: 0, date: "$_id", count: 1, cents: 1 } };
+
+const INCOME_LOOKUP = {
+  $lookup: {
+    from: "transactions",
+    localField: "_id",
+    foreignField: "appointmentId",
+    as: "income",
+    pipeline: [{ $project: { _id: 0, totalCents: 1 } }],
   },
 };
+const INCOME_CENTS = { $ifNull: [{ $first: "$income.totalCents" }, 0] };
 
-// Etapas para o $lookup de appointments da unidade: faturamento por dia e profissional,
-// com o nome do registro mais recente.
-export function dailyAppointmentTotalsPipeline(range: DayRange): PipelineStage.FacetPipelineStage[] {
+const PRICE_LOOKUP = {
+  $lookup: {
+    from: "services",
+    localField: "serviceId",
+    foreignField: "_id",
+    as: "services",
+    pipeline: [{ $project: { _id: 0, name: 1, priceCents: 1 } }],
+  },
+};
+const PRICE_CENTS = { $ifNull: [{ $first: "$services.priceCents" }, 0] };
+
+function doneMatch(range: DayRange) {
   const { start, end } = rangeBounds(range);
+  return { $match: { status: "done", startsAt: { $gte: start, $lt: end } } };
+}
+
+function scheduledMatch(range: DayRange, now: Date) {
+  const { start, end } = rangeBounds(range);
+  return { $match: { status: "scheduled", startsAt: { $gte: now > start ? now : start, $lt: end } } };
+}
+
+export function dailyDoneTotalsPipeline(range: DayRange): PipelineStage.FacetPipelineStage[] {
   return [
-    { $match: { performedAt: { $gte: start, $lt: end } } },
-    { $sort: { performedAt: 1 } },
-    { $unwind: "$items" },
-    {
-      $group: {
-        _id: { date: dayKey("$performedAt"), therapistId: "$items.therapistId" },
-        therapistName: { $last: "$items.therapistName" },
-        count: { $sum: 1 },
-        cents: { $sum: "$items.priceCents" },
-      },
-    },
+    doneMatch(range),
+    INCOME_LOOKUP,
+    { $group: { _id: dayKey("$startsAt"), count: { $sum: 1 }, cents: { $sum: INCOME_CENTS } } },
     PROJECT_DAY_TOTAL,
   ];
 }
 
-// Etapas para o $lookup de bookings da unidade: valor previsto por dia e profissional dos
-// agendamentos de agora em diante, pelo preço atual do serviço.
-export function dailyBookingForecastPipeline(range: DayRange, now: Date): PipelineStage.FacetPipelineStage[] {
-  const { start, end } = rangeBounds(range);
+export function dailyScheduledForecastPipeline(range: DayRange, now: Date): PipelineStage.FacetPipelineStage[] {
   return [
-    { $match: { startsAt: { $gte: now > start ? now : start, $lt: end } } },
-    { $sort: { startsAt: 1 } },
-    {
-      $lookup: {
-        from: "services",
-        localField: "service.serviceId",
-        foreignField: "_id",
-        as: "services",
-        pipeline: [{ $project: { _id: 0, priceCents: 1 } }],
-      },
-    },
-    {
-      $group: {
-        _id: { date: dayKey("$startsAt"), therapistId: "$therapistId" },
-        therapistName: { $last: "$therapistName" },
-        count: { $sum: 1 },
-        cents: { $sum: { $ifNull: [{ $first: "$services.priceCents" }, 0] } },
-      },
-    },
+    scheduledMatch(range, now),
+    PRICE_LOOKUP,
+    { $group: { _id: dayKey("$startsAt"), count: { $sum: 1 }, cents: { $sum: PRICE_CENTS } } },
     PROJECT_DAY_TOTAL,
   ];
 }
@@ -165,46 +149,26 @@ const PROJECT_SERVICE_TOTAL = {
   $project: { _id: 0, serviceId: { $toString: "$_id" }, serviceName: 1, count: 1, cents: 1 },
 };
 
-// Etapas para o $lookup de appointments da unidade: faturamento por serviço no intervalo.
-export function serviceAppointmentTotalsPipeline(range: DayRange): PipelineStage.FacetPipelineStage[] {
-  const { start, end } = rangeBounds(range);
+export function serviceDoneTotalsPipeline(range: DayRange): PipelineStage.FacetPipelineStage[] {
   return [
-    { $match: { performedAt: { $gte: start, $lt: end } } },
-    { $sort: { performedAt: 1 } },
-    { $unwind: "$items" },
-    {
-      $group: {
-        _id: "$items.serviceId",
-        serviceName: { $last: "$items.serviceName" },
-        count: { $sum: 1 },
-        cents: { $sum: "$items.priceCents" },
-      },
-    },
+    doneMatch(range),
+    { $sort: { startsAt: 1 } },
+    INCOME_LOOKUP,
+    { $group: { _id: "$serviceId", serviceName: { $last: "$name" }, count: { $sum: 1 }, cents: { $sum: INCOME_CENTS } } },
     PROJECT_SERVICE_TOTAL,
   ];
 }
 
-// Etapas para o $lookup de bookings da unidade: valor previsto por serviço dos agendamentos
-// de agora em diante, pelo nome e preço atuais do serviço.
-export function serviceBookingForecastPipeline(range: DayRange, now: Date): PipelineStage.FacetPipelineStage[] {
-  const { start, end } = rangeBounds(range);
+export function serviceScheduledForecastPipeline(range: DayRange, now: Date): PipelineStage.FacetPipelineStage[] {
   return [
-    { $match: { startsAt: { $gte: now > start ? now : start, $lt: end } } },
-    {
-      $lookup: {
-        from: "services",
-        localField: "service.serviceId",
-        foreignField: "_id",
-        as: "services",
-        pipeline: [{ $project: { _id: 0, name: 1, priceCents: 1 } }],
-      },
-    },
+    scheduledMatch(range, now),
+    PRICE_LOOKUP,
     {
       $group: {
-        _id: "$service.serviceId",
-        serviceName: { $last: { $ifNull: [{ $first: "$services.name" }, "$service.serviceName"] } },
+        _id: "$serviceId",
+        serviceName: { $last: { $ifNull: [{ $first: "$services.name" }, "$name"] } },
         count: { $sum: 1 },
-        cents: { $sum: { $ifNull: [{ $first: "$services.priceCents" }, 0] } },
+        cents: { $sum: PRICE_CENTS },
       },
     },
     PROJECT_SERVICE_TOTAL,

@@ -40,7 +40,7 @@ export function therapistOptionsStages(unitId?: string): PipelineStage[] {
           {
             $project: {
               _id: 0,
-              id: { $toString: "$userId" },
+              id: { $toString: "$_id" },
               name: { $ifNull: ["$user.name", "$user.email"] },
               image: { $ifNull: ["$user.avatarUrl", null] },
               unitIds: { $map: { input: "$memberUnits", in: { $toString: "$$this._id" } } },

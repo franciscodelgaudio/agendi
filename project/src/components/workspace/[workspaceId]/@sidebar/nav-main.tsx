@@ -7,6 +7,8 @@ import {
   CalendarIcon,
   HomeIcon,
   ArchiveIcon,
+  ContactIcon,
+  LeafIcon,
   UsersIcon,
   WalletIcon,
   type LucideIcon,
@@ -41,6 +43,8 @@ export function NavMain({ workspaceId, pages }: { workspaceId: string; pages: Wo
       items: [
         ...item("units", "Unidades", MapPinIcon),
         ...item("calendar", "Agenda", CalendarIcon),
+        ...item("customers", "Clientes", ContactIcon),
+        ...item("services", "Serviços", LeafIcon),
         ...item("cash_flow", "Caixa", WalletIcon),
         ...item("stock", "Estoque", ArchiveIcon),
       ],

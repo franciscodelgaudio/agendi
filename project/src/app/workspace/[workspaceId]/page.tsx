@@ -3,11 +3,11 @@ import { Types } from "mongoose"
 import { CalendarCheckIcon, CalendarXIcon, PiggyBankIcon, LeafIcon, StoreIcon, TrendingUpIcon, WalletIcon } from "lucide-react"
 import {
   cashFlowBuckets,
-  dailyAppointmentTotalsPipeline,
-  dailyBookingForecastPipeline,
+  dailyDoneTotalsPipeline,
+  dailyScheduledForecastPipeline,
   parseCashFlowQuery,
-  serviceAppointmentTotalsPipeline,
-  serviceBookingForecastPipeline,
+  serviceDoneTotalsPipeline,
+  serviceScheduledForecastPipeline,
   summarizeCashFlow,
   summarizeServices,
   type CashFlowAmounts,
@@ -22,7 +22,7 @@ import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
 import { Appointment } from "@/models/Appointment"
-import { Booking } from "@/models/Booking"
+import { loadDayAppointments } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/calendar-options-store"
 import { Wallet } from "@/models/Wallet"
 import { Workspace } from "@/models/Workspace"
 import Link from "@/components/shared/link"
@@ -126,10 +126,10 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
       units.map(async (unit) => {
         const unitMatch = { $match: { unitId: new Types.ObjectId(unit.id) } }
         const [appointments, bookings, serviceAppointments, serviceBookings] = await Promise.all([
-          Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(month)]),
-          Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(month, now)]),
-          Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(month)]),
-          Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(month, now)]),
+          Appointment.aggregate<DayTotal>([unitMatch, ...dailyDoneTotalsPipeline(month)]),
+          Appointment.aggregate<DayTotal>([unitMatch, ...dailyScheduledForecastPipeline(month, now)]),
+          Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceDoneTotalsPipeline(month)]),
+          Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceScheduledForecastPipeline(month, now)]),
         ])
         return {
           unit,
@@ -139,10 +139,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         }
       }),
     ),
-    Booking.find({ unitId: { $in: unitIds }, startsAt: { $gte: todayStart, $lt: todayEnd } })
-      .sort({ startsAt: 1 })
-      .select({ unitId: 1, startsAt: 1, endsAt: 1, guest: 1, service: 1, therapistId: 1, therapistName: 1, appointmentId: 1 })
-      .lean(),
+    loadDayAppointments(unitIds, todayStart, todayEnd),
     Wallet.aggregate<WalletListItem>(walletListPipeline(workspace.id)),
   ])
 
@@ -171,15 +168,8 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
 
   const unitNames = new Map(units.map((unit) => [unit.id, unit.name]))
   const schedule: TodayBooking[] = todayBookings.map((booking) => ({
-    id: booking._id.toString(),
-    startsAt: booking.startsAt,
-    endsAt: booking.endsAt,
-    guest: booking.guest!,
-    serviceName: booking.service.serviceName,
-    therapistId: booking.therapistId?.toString() ?? null,
-    therapistName: booking.therapistName ?? null,
-    attended: !!booking.appointmentId,
-    unitName: units.length > 1 ? unitNames.get(booking.unitId.toString()) : undefined,
+    ...booking,
+    unitName: units.length > 1 ? unitNames.get(booking.unitId) : undefined,
   }))
   const attendedToday = schedule.filter((booking) => booking.attended).length
   const nextBooking = schedule.find((booking) => !booking.attended && booking.startsAt > now)

@@ -1,100 +1,15 @@
-import { notFound } from "next/navigation"
-import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
+import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
-import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
-import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
-import { Workspace } from "@/models/Workspace"
-import { BookingCalendar, type BookingOptions } from "@/components/workspace/[workspaceId]/shared/calendar/booking-calendar"
+import { requireUser } from "@/service/(auth)/session"
+import { loadCalendarOptions } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/calendar-options-store"
+import { AppointmentCalendar } from "@/components/workspace/[workspaceId]/shared/calendar/appointment-calendar"
 import { CalendarNav } from "@/components/workspace/[workspaceId]/shared/calendar/calendar-nav"
 
-// Agenda de todas as unidades do workspace. Os agendamentos são buscados pelo próprio
-// calendário, conforme o período visível; aqui vêm só as opções dos filtros e do formulário.
 export default async function CalendarPage({ params }: PageProps<"/workspace/[workspaceId]/calendar">) {
   const { workspaceId } = await params
   const user = await requireUser()
-  await requirePage(workspaceId, user.id, { workspace: "calendar" })
-  const access = workspaceAccessStages(workspaceId, user.id)
-  if (!access) notFound()
-
-  const [workspace] = await Workspace.aggregate<BookingOptions & { actor: Actor }>([
-    ...access,
-    {
-      $lookup: {
-        from: "units",
-        localField: "_id",
-        foreignField: "workspaceId",
-        as: "units",
-        pipeline: [{ $sort: { name: 1, _id: 1 } }, { $project: { name: 1, stations: 1 } }],
-      },
-    },
-    {
-      $lookup: {
-        from: "services",
-        localField: "units._id",
-        foreignField: "unitId",
-        as: "services",
-        pipeline: [
-          { $sort: { name: 1, _id: 1 } },
-          {
-            $project: {
-              _id: 0,
-              id: { $toString: "$_id" },
-              unitId: { $toString: "$unitId" },
-              name: 1,
-              priceCents: 1,
-              durationMinutes: 1,
-              productIds: { $map: { input: "$productIds", as: "id", in: { $toString: "$$id" } } },
-              // Serviço cadastrado antes desses campos exige profissional e aceita qualquer espaço.
-              requiresTherapist: { $ifNull: ["$requiresTherapist", true] },
-              stationIds: { $map: { input: { $ifNull: ["$stationIds", []] }, as: "id", in: { $toString: "$$id" } } },
-            },
-          },
-        ],
-      },
-    },
-    ...therapistOptionsStages(),
-    {
-      $project: {
-        _id: 0,
-        actor: 1,
-        units: {
-          $map: {
-            input: "$units",
-            as: "unit",
-            in: { id: { $toString: "$$unit._id" }, name: "$$unit.name" },
-          },
-        },
-        services: 1,
-        // Salas de todas as unidades, cada uma com a sua unidade.
-        stations: {
-          $reduce: {
-            input: "$units",
-            initialValue: [],
-            in: {
-              $concatArrays: [
-                "$$value",
-                {
-                  $map: {
-                    input: "$$this.stations",
-                    as: "station",
-                    in: {
-                      id: { $toString: "$$station._id" },
-                      unitId: { $toString: "$$this._id" },
-                      name: "$$station.name",
-                      active: "$$station.active",
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        },
-        therapists: 1,
-      },
-    },
-  ])
-  if (!workspace) notFound()
-  const { actor, ...options } = workspace
+  const { actor } = await requirePage(workspaceId, user.id, { workspace: "calendar" })
+  const options = await loadCalendarOptions(workspaceId)
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
@@ -102,7 +17,12 @@ export default async function CalendarPage({ params }: PageProps<"/workspace/[wo
         <h2 className="text-2xl font-semibold tracking-tight">Agenda</h2>
         <CalendarNav base={`/workspace/${workspaceId}/calendar`} />
       </div>
-      <BookingCalendar workspaceId={workspaceId} canManage={can(actor, "bookings.manage")} {...options} />
+      <AppointmentCalendar
+        workspaceId={workspaceId}
+        canSchedule={can(actor, "bookings.manage")}
+        canAttend={can(actor, "appointments.manage")}
+        {...options}
+      />
     </div>
   )
 }

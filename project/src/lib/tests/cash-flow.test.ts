@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   cashFlowBuckets,
-  dailyAppointmentTotalsPipeline,
-  dailyBookingForecastPipeline,
+  dailyDoneTotalsPipeline,
+  dailyScheduledForecastPipeline,
   parseCashFlowQuery,
-  serviceAppointmentTotalsPipeline,
-  serviceBookingForecastPipeline,
+  serviceDoneTotalsPipeline,
+  serviceScheduledForecastPipeline,
   summarizeCashFlow,
   summarizeServices,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
@@ -90,106 +90,67 @@ describe("cashFlowBuckets", () => {
   });
 });
 
-// O dia em Brasília vai de 03:00 UTC até 03:00 UTC do dia seguinte.
 const dayKey = (field: string) => ({ $dateToString: { format: "%Y-%m-%d", date: field, timezone: "-03:00" } });
-const PROJECT = {
-  $project: {
-    _id: 0,
-    date: "$_id.date",
-    therapistId: { $toString: "$_id.therapistId" },
-    therapistName: 1,
-    count: 1,
-    cents: 1,
+const RANGE = { from: "2026-09-21", to: "2026-09-27" };
+const RANGE_MATCH = { $gte: new Date("2026-09-21T03:00:00.000Z"), $lt: new Date("2026-09-28T03:00:00.000Z") };
+const PROJECT_DAY = { $project: { _id: 0, date: "$_id", count: 1, cents: 1 } };
+const INCOME_LOOKUP = {
+  $lookup: {
+    from: "transactions",
+    localField: "_id",
+    foreignField: "appointmentId",
+    as: "income",
+    pipeline: [{ $project: { _id: 0, totalCents: 1 } }],
   },
 };
-const RANGE = { from: "2026-09-21", to: "2026-09-27" };
+const INCOME_CENTS = { $ifNull: [{ $first: "$income.totalCents" }, 0] };
+const PRICE_LOOKUP = {
+  $lookup: {
+    from: "services",
+    localField: "serviceId",
+    foreignField: "_id",
+    as: "services",
+    pipeline: [{ $project: { _id: 0, name: 1, priceCents: 1 } }],
+  },
+};
+const PRICE_CENTS = { $ifNull: [{ $first: "$services.priceCents" }, 0] };
 
-describe("dailyAppointmentTotalsPipeline", () => {
-  it("filtra o intervalo em Brasília e soma os serviços por dia e profissional, com o nome mais recente", () => {
-    expect(dailyAppointmentTotalsPipeline(RANGE)).toEqual([
-      {
-        $match: {
-          performedAt: { $gte: new Date("2026-09-21T03:00:00.000Z"), $lt: new Date("2026-09-28T03:00:00.000Z") },
-        },
-      },
-      { $sort: { performedAt: 1 } },
-      { $unwind: "$items" },
-      {
-        $group: {
-          _id: { date: dayKey("$performedAt"), therapistId: "$items.therapistId" },
-          therapistName: { $last: "$items.therapistName" },
-          count: { $sum: 1 },
-          cents: { $sum: "$items.priceCents" },
-        },
-      },
-      PROJECT,
+describe("dailyDoneTotalsPipeline", () => {
+  it("soma por dia em Brasília os agendamentos concluídos, pelo valor que entrou no caixa", () => {
+    expect(dailyDoneTotalsPipeline(RANGE)).toEqual([
+      { $match: { status: "done", startsAt: RANGE_MATCH } },
+      INCOME_LOOKUP,
+      { $group: { _id: dayKey("$startsAt"), count: { $sum: 1 }, cents: { $sum: INCOME_CENTS } } },
+      PROJECT_DAY,
     ]);
   });
 });
 
-describe("dailyBookingForecastPipeline", () => {
-  const stagesAfterMatch = [
-    { $sort: { startsAt: 1 } },
-    {
-      $lookup: {
-        from: "services",
-        localField: "service.serviceId",
-        foreignField: "_id",
-        as: "services",
-        pipeline: [{ $project: { _id: 0, priceCents: 1 } }],
-      },
-    },
-    // Agendamento sem serviço (ou com serviço excluído) conta como zero.
-    {
-      $group: {
-        _id: { date: dayKey("$startsAt"), therapistId: "$therapistId" },
-        therapistName: { $last: "$therapistName" },
-        count: { $sum: 1 },
-        cents: { $sum: { $ifNull: [{ $first: "$services.priceCents" }, 0] } },
-      },
-    },
-    PROJECT,
+describe("dailyScheduledForecastPipeline", () => {
+  const afterMatch = [
+    PRICE_LOOKUP,
+    { $group: { _id: dayKey("$startsAt"), count: { $sum: 1 }, cents: { $sum: PRICE_CENTS } } },
+    PROJECT_DAY,
   ];
 
-  it("só conta agendamentos a partir de agora, com o preço atual do serviço, por dia e profissional", () => {
-    expect(dailyBookingForecastPipeline(RANGE, NOW)).toEqual([
-      { $match: { startsAt: { $gte: NOW, $lt: new Date("2026-09-28T03:00:00.000Z") } } },
-      ...stagesAfterMatch,
+  it("só conta os agendados de agora em diante, pelo preço atual do serviço", () => {
+    expect(dailyScheduledForecastPipeline(RANGE, NOW)).toEqual([
+      { $match: { status: "scheduled", startsAt: { $gte: NOW, $lt: RANGE_MATCH.$lt } } },
+      ...afterMatch,
     ]);
   });
 
   it("intervalo todo no futuro começa no início do intervalo", () => {
-    const [match] = dailyBookingForecastPipeline(RANGE, new Date("2026-01-01T12:00:00.000Z"));
-
-    expect(match).toEqual({
-      $match: {
-        startsAt: { $gte: new Date("2026-09-21T03:00:00.000Z"), $lt: new Date("2026-09-28T03:00:00.000Z") },
-      },
+    expect(dailyScheduledForecastPipeline(RANGE, new Date("2026-01-01T12:00:00.000Z"))[0]).toEqual({
+      $match: { status: "scheduled", startsAt: RANGE_MATCH },
     });
   });
 });
 
-// Total de um dia de um profissional, como vem das pipelines diárias.
-const total = (date: string, cents: number, therapistId = "ana", count = 1) => ({
-  date,
-  therapistId,
-  therapistName: therapistId === "ana" ? "Ana" : "Bia",
-  count,
-  cents,
-});
+const total = (date: string, cents: number, count = 1) => ({ date, count, cents });
 const zero = { grossCents: 0, netCents: 0 };
 
 describe("summarizeCashFlow", () => {
-  it("faturamento sem profissional entra no bruto", () => {
-    const result = summarizeCashFlow(
-      [day("2026-09-21")],
-      [total("2026-09-21", 10_000, "ana"), { ...total("2026-09-21", 15_000), therapistId: null, therapistName: null }],
-      [],
-    );
-
-    expect(result.total.real).toEqual({ grossCents: 25_000, netCents: 25_000 });
-  });
-
   it("sem movimento, tudo zerado", () => {
     expect(summarizeCashFlow([day("2026-09-21")], [], [])).toEqual({
       buckets: [{ ...day("2026-09-21"), real: zero, forecast: zero }],
@@ -197,7 +158,7 @@ describe("summarizeCashFlow", () => {
     });
   });
 
-  it("real soma atendimentos, previsto soma atendimentos e agendamentos", () => {
+  it("real soma os concluídos; previsto soma concluídos e agendados", () => {
     const result = summarizeCashFlow(
       [{ from: "2026-09-21", to: "2026-09-22" }, day("2026-09-23")],
       [total("2026-09-21", 10_000), total("2026-09-22", 5_000)],
@@ -212,11 +173,7 @@ describe("summarizeCashFlow", () => {
           real: { grossCents: 15_000, netCents: 15_000 },
           forecast: { grossCents: 15_000, netCents: 15_000 },
         },
-        {
-          ...day("2026-09-23"),
-          real: zero,
-          forecast: { grossCents: 7_000, netCents: 7_000 },
-        },
+        { ...day("2026-09-23"), real: zero, forecast: { grossCents: 7_000, netCents: 7_000 } },
       ],
       total: {
         real: { grossCents: 15_000, netCents: 15_000 },
@@ -224,63 +181,33 @@ describe("summarizeCashFlow", () => {
       },
     });
   });
-
-  it("profissionais do mesmo dia somam no bruto", () => {
-    const result = summarizeCashFlow(
-      [day("2026-09-21")],
-      [total("2026-09-21", 10_000, "ana"), total("2026-09-21", 6_000, "bia")],
-      [],
-    );
-
-    expect(result.total.real).toEqual({ grossCents: 16_000, netCents: 16_000 });
-  });
 });
 
 const PROJECT_SERVICE = { $project: { _id: 0, serviceId: { $toString: "$_id" }, serviceName: 1, count: 1, cents: 1 } };
 
-describe("serviceAppointmentTotalsPipeline", () => {
-  it("filtra o intervalo em Brasília e soma cada serviço, com o nome do registro mais recente", () => {
-    expect(serviceAppointmentTotalsPipeline(RANGE)).toEqual([
-      {
-        $match: {
-          performedAt: { $gte: new Date("2026-09-21T03:00:00.000Z"), $lt: new Date("2026-09-28T03:00:00.000Z") },
-        },
-      },
-      { $sort: { performedAt: 1 } },
-      { $unwind: "$items" },
-      {
-        $group: {
-          _id: "$items.serviceId",
-          serviceName: { $last: "$items.serviceName" },
-          count: { $sum: 1 },
-          cents: { $sum: "$items.priceCents" },
-        },
-      },
+describe("serviceDoneTotalsPipeline", () => {
+  it("soma cada serviço dos concluídos no intervalo, com o nome copiado mais recente e o valor que entrou no caixa", () => {
+    expect(serviceDoneTotalsPipeline(RANGE)).toEqual([
+      { $match: { status: "done", startsAt: RANGE_MATCH } },
+      { $sort: { startsAt: 1 } },
+      INCOME_LOOKUP,
+      { $group: { _id: "$serviceId", serviceName: { $last: "$name" }, count: { $sum: 1 }, cents: { $sum: INCOME_CENTS } } },
       PROJECT_SERVICE,
     ]);
   });
 });
 
-describe("serviceBookingForecastPipeline", () => {
-  it("só conta agendamentos a partir de agora, com o nome e o preço atuais do serviço", () => {
-    expect(serviceBookingForecastPipeline(RANGE, NOW)).toEqual([
-      { $match: { startsAt: { $gte: NOW, $lt: new Date("2026-09-28T03:00:00.000Z") } } },
-      {
-        $lookup: {
-          from: "services",
-          localField: "service.serviceId",
-          foreignField: "_id",
-          as: "services",
-          pipeline: [{ $project: { _id: 0, name: 1, priceCents: 1 } }],
-        },
-      },
-      // Serviço excluído mantém o nome copiado no agendamento e conta como zero.
+describe("serviceScheduledForecastPipeline", () => {
+  it("soma cada serviço dos agendados de agora em diante, com o nome e o preço atuais do serviço", () => {
+    expect(serviceScheduledForecastPipeline(RANGE, NOW)).toEqual([
+      { $match: { status: "scheduled", startsAt: { $gte: NOW, $lt: RANGE_MATCH.$lt } } },
+      PRICE_LOOKUP,
       {
         $group: {
-          _id: "$service.serviceId",
-          serviceName: { $last: { $ifNull: [{ $first: "$services.name" }, "$service.serviceName"] } },
+          _id: "$serviceId",
+          serviceName: { $last: { $ifNull: [{ $first: "$services.name" }, "$name"] } },
           count: { $sum: 1 },
-          cents: { $sum: { $ifNull: [{ $first: "$services.priceCents" }, 0] } },
+          cents: { $sum: PRICE_CENTS },
         },
       },
       PROJECT_SERVICE,

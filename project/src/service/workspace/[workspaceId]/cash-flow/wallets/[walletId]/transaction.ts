@@ -138,11 +138,16 @@ export async function deleteTransaction(
 }
 
 export function appointmentTransaction(appointment: {
-  guest: { name: string };
-  items: { priceCents: number }[];
-  performedAt: Date;
+  name: string;
+  customerName: string | null;
+  priceCents: number;
+  startsAt: Date;
 }): { name: string; totalCents: number; type: "incoming"; paidAt: Date } | null {
-  const totalCents = appointment.items.reduce((sum, item) => sum + item.priceCents, 0);
-  if (totalCents <= 0) return null;
-  return { name: `Atendimento · ${appointment.guest.name}`, totalCents, type: "incoming", paidAt: appointment.performedAt };
+  if (appointment.priceCents <= 0) return null;
+  return {
+    name: appointment.customerName ? `${appointment.name} · ${appointment.customerName}` : appointment.name,
+    totalCents: appointment.priceCents,
+    type: "incoming",
+    paidAt: appointment.startsAt,
+  };
 }

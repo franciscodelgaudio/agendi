@@ -1,11 +1,10 @@
 "use client"
 
-import type { LucideIcon } from "lucide-react"
 import { usePathname } from "next/navigation"
 import Link from "@/components/shared/link"
 import { cn } from "@/service/_shared/utils"
 
-export type SectionNavItem = { title: string; icon: LucideIcon; href: string }
+export type SectionNavItem = { title: string; icon: React.ReactNode; href: string }
 
 export function SectionNav({ items }: { items: SectionNavItem[] }) {
   const pathname = usePathname()
@@ -24,7 +23,7 @@ export function SectionNav({ items }: { items: SectionNavItem[] }) {
               isActive ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
-            <item.icon />
+            {item.icon}
             {item.title}
           </Link>
         )

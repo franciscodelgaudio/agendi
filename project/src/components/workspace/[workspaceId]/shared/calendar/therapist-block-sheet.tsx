@@ -7,7 +7,7 @@ import {
   deleteTherapistBlockAction,
   type TherapistBlockActionState,
 } from "@/lib/actions/therapist-block"
-import type { TherapistBlockRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
+import type { TherapistBlockRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list"
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"

@@ -1,88 +1,59 @@
 import { describe, it, expect } from "vitest";
-import { parseServiceListQuery, serviceListPipeline } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service-list";
+import { Types } from "mongoose";
+import {
+  parseServiceListQuery,
+  SERVICE_PAGE_SIZE,
+  serviceListPipeline,
+} from "@/service/workspace/[workspaceId]/services/service-list";
+
+const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
+const BASE = { q: "", sort: "name", dir: "asc", page: 1 } as const;
 
 describe("parseServiceListQuery", () => {
-  it("usa busca vazia e ordenação por nome crescente quando não há parâmetros", () => {
-    expect(parseServiceListQuery({})).toEqual({ q: "", sort: "name", dir: "asc" });
+  it("sem parâmetros, ordena por nome crescente na página 1", () => {
+    expect(parseServiceListQuery({})).toEqual(BASE);
   });
 
-  it("lê busca, campo e direção válidos", () => {
-    expect(parseServiceListQuery({ q: "massagem", sort: "priceCents", dir: "desc" })).toEqual({
-      q: "massagem",
-      sort: "priceCents",
-      dir: "desc",
-    });
+  it.each(["name", "price", "duration"])("aceita ordenação por %s", (sort) => {
+    expect(parseServiceListQuery({ sort }).sort).toBe(sort);
   });
 
-  it("aceita ordenação por durationMinutes", () => {
-    expect(parseServiceListQuery({ sort: "durationMinutes" }).sort).toBe("durationMinutes");
-  });
-
-  it("remove espaços das pontas da busca", () => {
-    expect(parseServiceListQuery({ q: "  massagem  " }).q).toBe("massagem");
-  });
-
-  it("usa o primeiro valor quando o parâmetro vem repetido", () => {
-    expect(
-      parseServiceListQuery({ q: ["a", "b"], sort: ["durationMinutes", "name"], dir: ["desc", "asc"] }),
-    ).toEqual({ q: "a", sort: "durationMinutes", dir: "desc" });
-  });
-
-  it.each([
-    ["campo fora da lista", { sort: "unitId" }],
-    ["campo de unidade (não existe em serviço)", { sort: "avatarUrl" }],
-    ["campo com operador", { sort: "$where" }],
-  ])("volta para nome quando o sort é %s", (_label, params) => {
-    expect(parseServiceListQuery(params).sort).toBe("name");
-  });
-
-  it("volta para crescente quando a direção é inválida", () => {
-    expect(parseServiceListQuery({ dir: "sideways" }).dir).toBe("asc");
+  it("lê busca, direção e página e ignora valores inválidos", () => {
+    expect(parseServiceListQuery({ q: " candle ", dir: "desc", page: "2" })).toEqual({ ...BASE, q: "candle", dir: "desc", page: 2 });
+    expect(parseServiceListQuery({ sort: "avatarUrl", dir: "x", page: "0" })).toEqual(BASE);
   });
 });
 
 describe("serviceListPipeline", () => {
-  const PROJECT = {
-    $project: {
-      _id: 0,
-      id: { $toString: "$_id" },
-      name: 1,
-      priceCents: 1,
-      durationMinutes: 1,
-      // Produtos padrão, para pré-marcar na edição.
-      productIds: { $map: { input: "$productIds", as: "id", in: { $toString: "$$id" } } },
-      // Serviço cadastrado antes desses campos exige profissional e aceita qualquer espaço.
-      requiresTherapist: { $ifNull: ["$requiresTherapist", true] },
-      stationIds: { $map: { input: { $ifNull: ["$stationIds", []] }, as: "id", in: { $toString: "$$id" } } },
+  const workspaceMatch = { workspaceId: new Types.ObjectId(WORKSPACE_ID) };
+  const tail = (sort: Record<string, number>, skip: number) => [
+    { $sort: { ...sort, _id: 1 } },
+    {
+      $facet: {
+        rows: [
+          { $skip: skip },
+          { $limit: SERVICE_PAGE_SIZE },
+          { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, durationMinutes: 1, priceCents: 1 } },
+        ],
+        total: [{ $count: "n" }],
+      },
     },
-  };
+    { $project: { rows: 1, total: { $ifNull: [{ $first: "$total.n" }, 0] } } },
+  ];
 
-  it("sem busca, só ordena (com _id de desempate) e projeta", () => {
-    expect(serviceListPipeline({ q: "", sort: "name", dir: "asc" })).toEqual([
-      { $sort: { name: 1, _id: 1 } },
-      PROJECT,
-    ]);
+  it("lista os serviços do workspace por nome", () => {
+    expect(serviceListPipeline(WORKSPACE_ID, BASE)).toEqual([{ $match: workspaceMatch }, ...tail({ name: 1 }, 0)]);
   });
 
-  it.each([
-    ["priceCents", "desc", { priceCents: -1, _id: 1 }],
-    ["priceCents", "asc", { priceCents: 1, _id: 1 }],
-    ["durationMinutes", "desc", { durationMinutes: -1, _id: 1 }],
-  ] as const)("ordena por %s %s", (sort, dir, $sort) => {
-    expect(serviceListPipeline({ q: "", sort, dir })).toEqual([{ $sort }, PROJECT]);
+  it("busca no nome sem diferenciar acentos, ordena pela duração decrescente e pagina", () => {
+    const stages = serviceListPipeline(WORKSPACE_ID, { q: "facial", sort: "duration", dir: "desc", page: 2 });
+    const match = stages[0] as { $match: { name: { $regex: string; $options: string } } };
+
+    expect(stages.slice(1)).toEqual(tail({ durationMinutes: -1 }, SERVICE_PAGE_SIZE));
+    expect(new RegExp(match.$match.name.$regex, match.$match.name.$options).test("Limpeza Fácial")).toBe(true);
   });
 
-  it("com busca, filtra o nome sem diferenciar maiúsculas antes de ordenar", () => {
-    expect(serviceListPipeline({ q: "massagem", sort: "name", dir: "asc" })).toEqual([
-      { $match: { name: { $regex: "massagem", $options: "i" } } },
-      { $sort: { name: 1, _id: 1 } },
-      PROJECT,
-    ]);
-  });
-
-  it("escapa caracteres especiais de regex da busca", () => {
-    const [match] = serviceListPipeline({ q: "a.b*(c)", sort: "name", dir: "asc" });
-
-    expect(match).toEqual({ $match: { name: { $regex: "a\\.b\\*\\(c\\)", $options: "i" } } });
+  it("ordena pelo preço", () => {
+    expect(serviceListPipeline(WORKSPACE_ID, { ...BASE, sort: "price" })[1]).toEqual({ $sort: { priceCents: 1, _id: 1 } });
   });
 });

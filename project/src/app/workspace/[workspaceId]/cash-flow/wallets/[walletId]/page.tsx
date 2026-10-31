@@ -54,7 +54,7 @@ export default async function WalletPage({
     <div className="flex flex-1 flex-col gap-4 p-4">
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-2">
-          <Button variant="ghost" size="icon-sm" aria-label="Voltar ao caixa" render={<Link href={`/workspace/${workspaceId}/cash-flow`} />}>
+          <Button variant="ghost" size="icon-sm" nativeButton={false} aria-label="Voltar ao caixa" render={<Link href={`/workspace/${workspaceId}/cash-flow`} />}>
             <ChevronLeftIcon />
           </Button>
           <h2 className="truncate text-2xl font-semibold tracking-tight">{wallet.name}</h2>

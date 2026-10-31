@@ -33,15 +33,17 @@ describe("visiblePages", () => {
 });
 
 describe("WORKSPACE_PAGES", () => {
-  it("tem as carteiras em /cash-flow e os inventários em /stock", () => {
-    expect(WORKSPACE_PAGES).toEqual(["home", "units", "calendar", "cash_flow", "stock", "users"]);
+  it("tem clientes e serviços do workspace, as carteiras em /cash-flow e os inventários em /stock", () => {
+    expect(WORKSPACE_PAGES).toEqual(["home", "units", "calendar", "customers", "services", "cash_flow", "stock", "users"]);
+    expect(WORKSPACE_PAGE_PATHS.customers).toBe("/customers");
+    expect(WORKSPACE_PAGE_PATHS.services).toBe("/services");
     expect(WORKSPACE_PAGE_PATHS.cash_flow).toBe("/cash-flow");
     expect(WORKSPACE_PAGE_PATHS.stock).toBe("/stock");
   });
 });
 
 describe("UNIT_PAGES", () => {
-  it("a unidade não tem mais abas de caixa nem de estoque", () => {
-    expect(UNIT_PAGES).toEqual(["overview", "services", "calendar", "appointments"]);
+  it("a unidade não tem mais abas de caixa, estoque nem serviços", () => {
+    expect(UNIT_PAGES).toEqual(["overview", "calendar", "appointments"]);
   });
 });

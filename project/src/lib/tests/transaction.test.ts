@@ -211,19 +211,22 @@ describe("deleteTransaction", () => {
 });
 
 describe("appointmentTransaction", () => {
-  const performedAt = new Date("2026-10-05T17:30:00.000Z");
+  const startsAt = new Date("2026-10-05T17:30:00.000Z");
 
-  it("o atendimento vira uma entrada paga no horário dele, com a soma dos serviços cobrados", () => {
-    expect(
-      appointmentTransaction({
-        guest: { name: "João Silva" },
-        items: [{ priceCents: 18_000 }, { priceCents: 7_000 }],
-        performedAt,
-      }),
-    ).toEqual({ name: "Atendimento · João Silva", totalCents: 25_000, type: "incoming", paidAt: performedAt });
+  it("o agendamento concluído vira uma entrada paga no horário dele, com o nome do serviço e do cliente", () => {
+    expect(appointmentTransaction({ name: "Massagem Candle", customerName: "João Silva", priceCents: 18_000, startsAt })).toEqual({
+      name: "Massagem Candle · João Silva",
+      totalCents: 18_000,
+      type: "incoming",
+      paidAt: startsAt,
+    });
   });
 
-  it("atendimento sem valor cobrado não gera entrada", () => {
-    expect(appointmentTransaction({ guest: { name: "João" }, items: [{ priceCents: 0 }], performedAt })).toBeNull();
+  it("sem cliente, fica só o nome do serviço", () => {
+    expect(appointmentTransaction({ name: "Massagem", customerName: null, priceCents: 100, startsAt })?.name).toBe("Massagem");
+  });
+
+  it("agendamento sem valor não gera entrada", () => {
+    expect(appointmentTransaction({ name: "Massagem", customerName: "João", priceCents: 0, startsAt })).toBeNull();
   });
 });

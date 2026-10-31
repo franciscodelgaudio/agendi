@@ -7,12 +7,12 @@ const ALL = "all"
 
 const items = [
   { value: ALL, label: "Todos os status" },
-  { value: "pending", label: "Pendentes" },
-  { value: "done", label: "Atendidos" },
+  { value: "scheduled", label: "Agendados" },
+  { value: "done", label: "Concluídos" },
+  { value: "cancelled", label: "Cancelados" },
 ]
 
 type Props = {
-  // status vazio = todos; os demais campos da query são preservados na URL.
   query: { status: string } & Record<string, string>
 }
 

@@ -1,5 +1,5 @@
-import { parseDay } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-list";
-import { parsePriceCents } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service";
+import { parseDay } from "@/service/_shared/timezone";
+import { parsePriceCents } from "@/service/_shared/money";
 
 export type OpeningBalanceError = "invalid_input" | "invalid_opening_balance" | "invalid_opening_balance_date";
 

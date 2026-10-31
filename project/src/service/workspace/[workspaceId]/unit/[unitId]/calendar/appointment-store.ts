@@ -1,29 +1,30 @@
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { findUnitProducts } from "@/service/workspace/[workspaceId]/stock/products/product-lookup"
 import { findWorkspaceTherapists } from "@/service/workspace/[workspaceId]/team/therapist-lookup"
-import { Booking } from "@/models/Booking"
+import { Appointment } from "@/models/Appointment"
+import { Customer } from "@/models/Customer"
 import { Service } from "@/models/Service"
 import { TherapistBlock } from "@/models/TherapistBlock"
 import { Unit } from "@/models/Unit"
 
-// Buscas no banco usadas por lib/booking, compartilhadas pelas server actions.
+const ACTIVE = { $ne: "cancelled" as const }
 
-// Conflito do profissional em qualquer unidade do workspace.
-export function conflictChecker(unitIds: Types.ObjectId[]) {
+export function conflictChecker(workspaceId: string) {
   return async ({
-    therapistId,
+    workspaceMemberId,
     startsAt,
     endsAt,
     excludeId,
   }: {
-    therapistId: string
+    workspaceMemberId: string
     startsAt: Date
     endsAt: Date
     excludeId?: string
   }) => {
-    const conflict = await Booking.exists({
-      therapistId,
-      unitId: { $in: unitIds },
+    if (!isObjectIdOrHexString(workspaceMemberId)) return false
+    const conflict = await Appointment.exists({
+      workspaceId,
+      workspaceMemberId,
+      status: ACTIVE,
       startsAt: { $lt: endsAt },
       endsAt: { $gt: startsAt },
       ...(excludeId && { _id: { $ne: excludeId } }),
@@ -32,12 +33,12 @@ export function conflictChecker(unitIds: Types.ObjectId[]) {
   }
 }
 
-// Agenda do profissional travada em algum momento do intervalo, no workspace.
 export function blockChecker(workspaceId: string) {
-  return async ({ therapistId, startsAt, endsAt }: { therapistId: string; startsAt: Date; endsAt: Date }) => {
+  return async ({ workspaceMemberId, startsAt, endsAt }: { workspaceMemberId: string; startsAt: Date; endsAt: Date }) => {
+    if (!isObjectIdOrHexString(workspaceMemberId)) return false
     const block = await TherapistBlock.exists({
       workspaceId,
-      therapistId,
+      therapistId: workspaceMemberId,
       startsAt: { $lt: endsAt },
       endsAt: { $gt: startsAt },
     })
@@ -45,8 +46,7 @@ export function blockChecker(workspaceId: string) {
   }
 }
 
-// Outros agendamentos da estação que se sobrepõem ao intervalo, nas unidades dadas.
-export function stationBookingsFinder(unitIds: (Types.ObjectId | string)[]) {
+export function stationAppointmentsFinder(unitId: string | Types.ObjectId) {
   return async ({
     stationId,
     startsAt,
@@ -59,9 +59,10 @@ export function stationBookingsFinder(unitIds: (Types.ObjectId | string)[]) {
     excludeId?: string
   }) => {
     if (!isObjectIdOrHexString(stationId)) return []
-    return Booking.find({
-      "station.stationId": stationId,
-      unitId: { $in: unitIds },
+    return Appointment.find({
+      unitId,
+      stationId,
+      status: ACTIVE,
       startsAt: { $lt: endsAt },
       endsAt: { $gt: startsAt },
       ...(excludeId && { _id: { $ne: excludeId } }),
@@ -71,7 +72,6 @@ export function stationBookingsFinder(unitIds: (Types.ObjectId | string)[]) {
   }
 }
 
-// Estação da unidade, ou null se não existe nela.
 export async function findUnitStation(unitId: string | Types.ObjectId, stationId: string) {
   if (!isObjectIdOrHexString(stationId)) return null
   const unit = await Unit.findOne({ _id: unitId, "stations._id": stationId }).select({ "stations.$": 1 }).lean()
@@ -79,37 +79,24 @@ export async function findUnitStation(unitId: string | Types.ObjectId, stationId
   return station ? { id: station._id.toString(), name: station.name, active: station.active } : null
 }
 
-// Serviços cadastrados antes desses campos não os têm: exigem profissional e aceitam qualquer estação.
-export function serviceRules(service: {
-  _id: Types.ObjectId
-  name: string
-  requiresTherapist?: boolean | null
-  stationIds?: Types.ObjectId[] | null
-}) {
-  return {
-    id: service._id.toString(),
-    name: service.name,
-    requiresTherapist: service.requiresTherapist ?? true,
-    stationIds: (service.stationIds ?? []).map((id) => id.toString()),
-  }
-}
-
-// Buscas usadas por createBooking/updateBooking, restritas à unidade e ao workspace.
-export function bookingLookups(unit: { workspaceId: string; unitId: string }, unitIds: Types.ObjectId[]) {
+export function appointmentLookups(unit: { workspaceId: string; unitId: string }) {
   return {
     findService: async (id: string) => {
       if (!isObjectIdOrHexString(id)) return null
-      const service = await Service.findOne({ _id: id, unitId: unit.unitId })
-        .select({ name: 1, requiresTherapist: 1, stationIds: 1 })
+      const service = await Service.findOne({ _id: id, workspaceId: unit.workspaceId })
+        .select({ name: 1, durationMinutes: 1, priceCents: 1 })
         .lean()
-      return service && serviceRules(service)
+      return service && { id: service._id.toString(), name: service.name, durationMinutes: service.durationMinutes }
     },
-    findTherapist: async (id: string) =>
-      (await findWorkspaceTherapists(unit.workspaceId, [id], unit.unitId))[0] ?? null,
-    hasConflict: conflictChecker(unitIds),
-    isBlocked: blockChecker(unit.workspaceId),
+    findCustomer: async (id: string) => {
+      if (!isObjectIdOrHexString(id)) return null
+      const customer = await Customer.findOne({ _id: id, workspaceId: unit.workspaceId }).select({ _id: 1 }).lean()
+      return customer && { id: customer._id.toString() }
+    },
+    findMember: async (id: string) => (await findWorkspaceTherapists(unit.workspaceId, [id], unit.unitId))[0] ?? null,
     findStation: (id: string) => findUnitStation(unit.unitId, id),
-    findStationBookings: stationBookingsFinder([unit.unitId]),
-    findProducts: (ids: string[]) => findUnitProducts(unit.unitId, ids),
+    hasConflict: conflictChecker(unit.workspaceId),
+    isBlocked: blockChecker(unit.workspaceId),
+    findStationAppointments: stationAppointmentsFinder(unit.unitId),
   }
 }

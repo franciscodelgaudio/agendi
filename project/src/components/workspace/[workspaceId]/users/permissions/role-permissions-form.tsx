@@ -53,6 +53,8 @@ const workspacePageLabels: Record<WorkspacePage, string> = {
   home: "Início",
   units: "Unidades",
   calendar: "Agenda",
+  customers: "Clientes",
+  services: "Serviços",
   cash_flow: "Caixa",
   stock: "Estoque",
   users: "Usuários",
@@ -60,7 +62,6 @@ const workspacePageLabels: Record<WorkspacePage, string> = {
 
 const unitPageLabels: Record<UnitPage, string> = {
   overview: "Visão geral",
-  services: "Serviços",
   calendar: "Agenda",
   appointments: "Atendimentos",
 }

@@ -277,13 +277,13 @@ describe("updateRolePermissions", () => {
     const deps = makeDeps([ROLE_ID]);
 
     await updateRolePermissions(
-      { [ROLE_ID]: { permissions: ["attends", "attends"], workspace: ["home", "home"], unit: ["stock", "stock"] } },
+      { [ROLE_ID]: { permissions: ["attends", "attends"], workspace: ["home", "home"], unit: ["appointments", "appointments"] } },
       { actor: ADMIN },
       deps,
     );
 
     expect(deps.save).toHaveBeenCalledWith({
-      [ROLE_ID]: { permissions: ["attends"], pages: { workspace: ["home"], unit: ["stock"] } },
+      [ROLE_ID]: { permissions: ["attends"], pages: { workspace: ["home"], unit: ["appointments"] } },
     });
   });
 

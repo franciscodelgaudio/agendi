@@ -3,11 +3,11 @@ import { isObjectIdOrHexString, Types } from "mongoose"
 import { CalendarCheckIcon, CalendarXIcon, PiggyBankIcon, LeafIcon, TrendingUpIcon } from "lucide-react"
 import {
   cashFlowBuckets,
-  dailyAppointmentTotalsPipeline,
-  dailyBookingForecastPipeline,
+  dailyDoneTotalsPipeline,
+  dailyScheduledForecastPipeline,
   parseCashFlowQuery,
-  serviceAppointmentTotalsPipeline,
-  serviceBookingForecastPipeline,
+  serviceDoneTotalsPipeline,
+  serviceScheduledForecastPipeline,
   summarizeCashFlow,
   summarizeServices,
   type DayRange,
@@ -20,7 +20,7 @@ import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
 import { Appointment } from "@/models/Appointment"
-import { Booking } from "@/models/Booking"
+import { loadDayAppointments } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/calendar-options-store"
 import { Wallet } from "@/models/Wallet"
 import { Workspace } from "@/models/Workspace"
 import { timeFormat } from "@/components/shared/service-format"
@@ -92,14 +92,11 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
   const unitMatch = { $match: { unitId: unitObjectId } }
   const walletId = workspace.unit.walletId
   const [appointments, bookings, serviceAppointments, serviceBookings, todayBookings, [wallet]] = await Promise.all([
-    Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(month)]),
-    Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(month, now)]),
-    Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(month)]),
-    Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(month, now)]),
-    Booking.find({ unitId: unitObjectId, startsAt: { $gte: todayStart, $lt: todayEnd } })
-      .sort({ startsAt: 1 })
-      .select({ startsAt: 1, endsAt: 1, guest: 1, service: 1, therapistId: 1, therapistName: 1, appointmentId: 1 })
-      .lean(),
+    Appointment.aggregate<DayTotal>([unitMatch, ...dailyDoneTotalsPipeline(month)]),
+    Appointment.aggregate<DayTotal>([unitMatch, ...dailyScheduledForecastPipeline(month, now)]),
+    Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceDoneTotalsPipeline(month)]),
+    Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceScheduledForecastPipeline(month, now)]),
+    loadDayAppointments([unitObjectId], todayStart, todayEnd),
     walletId && Types.ObjectId.isValid(walletId)
       ? Wallet.aggregate<WalletListItem>([{ $match: { _id: new Types.ObjectId(walletId) } }, ...walletListPipeline(workspaceId)])
       : Promise.resolve([] as WalletListItem[]),
@@ -112,16 +109,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
   const servicesDone = services.reduce((sum, service) => sum + service.real.count, 0)
   const servicesScheduled = services.reduce((sum, service) => sum + service.forecast.count, 0) - servicesDone
 
-  const schedule: TodayBooking[] = todayBookings.map((booking) => ({
-    id: booking._id.toString(),
-    startsAt: booking.startsAt,
-    endsAt: booking.endsAt,
-    guest: booking.guest!,
-    serviceName: booking.service.serviceName,
-    therapistId: booking.therapistId?.toString() ?? null,
-    therapistName: booking.therapistName ?? null,
-    attended: !!booking.appointmentId,
-  }))
+  const schedule: TodayBooking[] = todayBookings
   const attendedToday = schedule.filter((booking) => booking.attended).length
   const nextBooking = schedule.find((booking) => !booking.attended && booking.startsAt > now)
 

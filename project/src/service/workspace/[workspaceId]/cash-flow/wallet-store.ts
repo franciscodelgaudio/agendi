@@ -3,6 +3,7 @@ import { BRT_OFFSET_HOURS, parseDay } from "@/service/_shared/timezone"
 import type { OpeningBalance } from "@/service/workspace/[workspaceId]/cash-flow/opening-balance"
 import { appointmentTransaction } from "@/service/workspace/[workspaceId]/cash-flow/wallets/[walletId]/transaction"
 import { Appointment } from "@/models/Appointment"
+import { Customer } from "@/models/Customer"
 import { Transaction } from "@/models/Transaction"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
@@ -35,24 +36,22 @@ export async function insertWallet({
   return { id: wallet._id.toString() }
 }
 
-async function syncAppointmentTransaction(appointment: {
-  _id: Types.ObjectId
-  unitId: Types.ObjectId
-  guest?: { name?: string | null } | null
-  items: { priceCents: number }[]
-  performedAt: Date
-}) {
+export async function recordAppointmentIncome(appointmentId: string, priceCents: number) {
+  const appointment = await Appointment.findById(appointmentId)
+    .select({ name: 1, startsAt: 1, unitId: 1, customerId: 1 })
+    .lean()
+  if (!appointment) return
+  const [unit, customer] = await Promise.all([
+    Unit.findById(appointment.unitId).select({ walletId: 1, workspaceId: 1 }).lean(),
+    Customer.findById(appointment.customerId).select({ name: 1 }).lean(),
+  ])
   const data = appointmentTransaction({
-    guest: { name: appointment.guest?.name ?? "" },
-    items: appointment.items,
-    performedAt: appointment.performedAt,
+    name: appointment.name,
+    customerName: customer?.name ?? null,
+    priceCents,
+    startsAt: appointment.startsAt,
   })
-  if (!data) {
-    await Transaction.deleteOne({ appointmentId: appointment._id })
-    return
-  }
-  const unit = await Unit.findById(appointment.unitId).select({ walletId: 1, workspaceId: 1 }).lean()
-  if (!unit?.walletId) return
+  if (!data || !unit?.walletId) return
   await Transaction.updateOne(
     { appointmentId: appointment._id },
     { $set: data, $setOnInsert: { walletId: unit.walletId, workspaceId: unit.workspaceId } },
@@ -60,17 +59,6 @@ async function syncAppointmentTransaction(appointment: {
   )
 }
 
-export async function removeAppointmentTransaction(appointmentId: Types.ObjectId | string) {
+export async function removeAppointmentIncome(appointmentId: Types.ObjectId | string) {
   await Transaction.deleteOne({ appointmentId: new Types.ObjectId(appointmentId) })
-}
-
-export async function syncAppointmentTransactionById(appointmentId: Types.ObjectId | string) {
-  const appointment = await Appointment.findById(appointmentId)
-    .select({ unitId: 1, guest: 1, items: 1, performedAt: 1 })
-    .lean()
-  if (!appointment) {
-    await removeAppointmentTransaction(appointmentId)
-    return
-  }
-  await syncAppointmentTransaction(appointment)
 }

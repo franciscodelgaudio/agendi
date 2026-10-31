@@ -25,7 +25,7 @@ const errorMessages: Record<CreateCustomerError | UpdateCustomerError | "unauthe
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
-export type CustomerFormState = { error: string | null }
+export type CustomerFormState = { error: string | null; customerId?: string }
 
 function customerInput(formData: FormData) {
   return {
@@ -65,7 +65,7 @@ export async function createCustomerAction(
   if (!result.ok) return { error: errorMessages[result.error] }
 
   refresh()
-  return { error: null }
+  return { error: null, customerId: result.customerId }
 }
 
 export async function updateCustomerAction(

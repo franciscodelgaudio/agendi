@@ -17,12 +17,10 @@ import {
 } from "@/service/workspace/[workspaceId]/unit/unit"
 import { insertWallet } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
 import { Appointment } from "@/models/Appointment"
-import { Booking } from "@/models/Booking"
 import { Inventory } from "@/models/Inventory"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
-import { Service } from "@/models/Service"
 
 const errorMessages: Record<Exclude<CreateUnitError | UpdateUnitError, "forbidden"> | "unauthenticated", string> = {
   invalid_input: "Preencha todos os campos da unidade.",
@@ -157,10 +155,11 @@ export async function updateUnitAction(
     ...refsChecker(session.workspaceId),
     hasBookingsInRemovedStations: async (id, keptStationIds) => {
       if (!(await Unit.exists(filter!))) return false
-      const inUse = await Booking.exists({
+      const inUse = await Appointment.exists({
         unitId: id,
+        status: "scheduled",
         endsAt: { $gt: new Date() },
-        "station.stationId": { $nin: toObjectIds(keptStationIds) },
+        stationId: { $nin: toObjectIds(keptStationIds) },
       })
       return inUse !== null
     },
@@ -175,10 +174,7 @@ export async function updateUnitAction(
           inventoryId: await resolveInventory(session.workspaceId, inventory),
         },
       })
-      if (matchedCount === 0) return false
-      const keptStationIds = toObjectIds(stations.flatMap((station) => (station.id ? [station.id] : [])))
-      await Service.updateMany({ unitId: id }, { $pull: { stationIds: { $nin: keptStationIds } } })
-      return true
+      return matchedCount > 0
     },
   })
 
@@ -197,7 +193,7 @@ export async function deleteUnitAction(workspaceId: string, unitId: string): Pro
     remove: async (id) => {
       const { deletedCount } = await Unit.deleteOne(filter!)
       if (deletedCount === 0) return false
-      await Promise.all([Service.deleteMany({ unitId: id }), Appointment.deleteMany({ unitId: id })])
+      await Appointment.deleteMany({ unitId: id })
       return true
     },
   })

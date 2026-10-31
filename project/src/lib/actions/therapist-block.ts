@@ -3,7 +3,7 @@
 import { isObjectIdOrHexString } from "mongoose"
 import { forbiddenMessage, type AccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
 import { getSessionUserId } from "@/service/(auth)/session"
-import { conflictChecker } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-store"
+import { conflictChecker } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-store"
 import { findWorkspaceTherapists } from "@/service/workspace/[workspaceId]/team/therapist-lookup"
 import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
 import {
@@ -12,7 +12,6 @@ import {
   type TherapistBlockError,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/therapist-block"
 import { TherapistBlock } from "@/models/TherapistBlock"
-import { Unit } from "@/models/Unit"
 
 const errorMessages: Record<TherapistBlockError | "workspace_not_found" | "unauthenticated", string> = {
   invalid_input: "Preencha profissional, início e fim.",
@@ -46,7 +45,6 @@ export async function createTherapistBlockAction(
   const managed = await findManagedWorkspace(workspaceId, userId, "bookings.manage")
   if (!managed.ok) return accessError(managed.error)
   const { id } = managed.access
-  const unitIds = await Unit.find({ workspaceId: id }).distinct("_id")
 
   const result = await createTherapistBlock(
     {
@@ -60,7 +58,8 @@ export async function createTherapistBlockAction(
     },
     {
       findTherapist: async (therapistId) => (await findWorkspaceTherapists(id, [therapistId]))[0] ?? null,
-      hasBookings: conflictChecker(unitIds),
+      hasBookings: ({ therapistId, startsAt, endsAt }) =>
+        conflictChecker(id)({ workspaceMemberId: therapistId, startsAt, endsAt }),
       insert: async (data) => {
         const block = await TherapistBlock.create({ ...data, workspaceId: id, createdBy: userId })
         return { id: block._id.toString() }

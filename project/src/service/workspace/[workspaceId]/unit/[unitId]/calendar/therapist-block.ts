@@ -1,4 +1,4 @@
-import { parsePerformedAt } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment";
+import { parsePerformedAt } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment";
 
 // Agenda travada: o profissional não atende no intervalo (folga, consulta...), em nenhuma unidade.
 

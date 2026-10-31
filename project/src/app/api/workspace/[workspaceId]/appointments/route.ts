@@ -1,55 +1,32 @@
+import { Types } from "mongoose"
 import {
-  bookingListPipeline,
-  parseBookingRange,
+  calendarPipeline,
+  parseCalendarRange,
   therapistBlockListPipeline,
-  type BookingRow,
+  type AppointmentRow,
   type TherapistBlockRow,
-} from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-list"
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list"
 import { findVisiblePages } from "@/service/workspace/[workspaceId]/page-guard"
-import { getSessionUserId, workspaceAccessStages } from "@/service/(auth)/session"
-import { Workspace } from "@/models/Workspace"
+import { getSessionUserId } from "@/service/(auth)/session"
+import { Appointment } from "@/models/Appointment"
+import { TherapistBlock } from "@/models/TherapistBlock"
 
-// Agendamentos e agendas travadas do intervalo visível no calendário (?start=&end=&unit=&therapist=), de todas
-// as unidades do workspace ou das filtradas. Qualquer membro do workspace que veja o calendário
-// do sistema pode ver; filtrado por unidade, basta ver o calendário das unidades.
-// É GET (e não server action) porque o FullCalendar busca os eventos durante o render.
-export async function GET(request: Request, { params }: RouteContext<"/api/workspace/[workspaceId]/bookings">) {
+export async function GET(request: Request, { params }: RouteContext<"/api/workspace/[workspaceId]/appointments">) {
   const { workspaceId } = await params
   const userId = await getSessionUserId()
   if (!userId) return Response.json({ error: "Sua sessão expirou. Entre novamente." }, { status: 401 })
-  const query = parseBookingRange(Object.fromEntries(new URL(request.url).searchParams))
-  if (!query) return Response.json({ error: "Período inválido." }, { status: 400 })
-  const access = workspaceAccessStages(workspaceId, userId)
-  if (!access) return Response.json({ error: "Workspace não encontrado." }, { status: 404 })
+  const range = parseCalendarRange(Object.fromEntries(new URL(request.url).searchParams))
+  if (!range) return Response.json({ error: "Período inválido." }, { status: 400 })
   const visible = await findVisiblePages(workspaceId, userId)
   if (!visible) return Response.json({ error: "Workspace não encontrado." }, { status: 404 })
-  if (!visible.pages.workspace.includes("calendar") && !(query.unit && visible.pages.unit.includes("calendar"))) {
+  if (!visible.pages.workspace.includes("calendar") && !(range.unit && visible.pages.unit.includes("calendar"))) {
     return Response.json({ error: "Sem permissão para ver a agenda." }, { status: 403 })
   }
 
-  const [workspace] = await Workspace.aggregate<{ bookings: BookingRow[]; blocks: TherapistBlockRow[] }>([
-    ...access,
-    { $lookup: { from: "units", localField: "_id", foreignField: "workspaceId", as: "units" } },
-    {
-      $lookup: {
-        from: "bookings",
-        localField: "units._id",
-        foreignField: "unitId",
-        as: "bookings",
-        pipeline: bookingListPipeline(query),
-      },
-    },
-    {
-      $lookup: {
-        from: "therapist_blocks",
-        localField: "_id",
-        foreignField: "workspaceId",
-        as: "blocks",
-        pipeline: therapistBlockListPipeline(query),
-      },
-    },
-    { $project: { _id: 0, bookings: 1, blocks: 1 } },
+  const workspaceMatch = { $match: { workspaceId: new Types.ObjectId(workspaceId) } }
+  const [appointments, blocks] = await Promise.all([
+    Appointment.aggregate<AppointmentRow>([workspaceMatch, ...calendarPipeline(range)]),
+    TherapistBlock.aggregate<TherapistBlockRow>([workspaceMatch, ...therapistBlockListPipeline(range)]),
   ])
-  if (!workspace) return Response.json({ error: "Workspace não encontrado." }, { status: 404 })
-  return Response.json({ bookings: workspace.bookings, blocks: workspace.blocks })
+  return Response.json({ appointments, blocks })
 }

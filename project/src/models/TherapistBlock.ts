@@ -6,7 +6,7 @@ import { connectOnUse } from "@/service/_shared/database/mongoose";
 const therapistBlockSchema = new Schema(
   {
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
-    therapistId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    therapistId: { type: Schema.Types.ObjectId, ref: "WorkspaceMember", required: true },
     therapistName: { type: String, required: true },
     startsAt: { type: Date, required: true },
     endsAt: { type: Date, required: true },
