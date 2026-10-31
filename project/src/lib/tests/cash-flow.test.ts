@@ -16,7 +16,6 @@ import {
   summarizeServices,
   summarizeTherapists,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
-import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share";
 
 // 24/09/2026 (quinta-feira) às 23:30 em Brasília (já é dia 25 em UTC).
 const NOW = new Date("2026-09-25T02:30:00.000Z");
@@ -149,32 +148,10 @@ describe("cashFlowBuckets", () => {
 });
 
 describe("cashFlowFetchRange", () => {
-  const monthBuckets = cashFlowBuckets({ view: "month", date: "2026-09-24" });
+  it("cobre do primeiro ao último intervalo exibido", () => {
+    const buckets = cashFlowBuckets({ view: "month", date: "2026-09-24" });
 
-  it("sem repasse, cobre só os intervalos exibidos", () => {
-    expect(cashFlowFetchRange(monthBuckets, null)).toEqual({ from: "2026-09-01", to: "2026-09-30" });
-  });
-
-  it("repasse semanal: estende até as semanas completas das pontas", () => {
-    expect(cashFlowFetchRange(monthBuckets, "weekly")).toEqual({ from: "2026-08-31", to: "2026-10-04" });
-  });
-
-  it("repasse quinzenal: quinzenas são 1–15 e 16–fim do mês", () => {
-    const buckets = [{ from: "2026-09-14", to: "2026-09-20" }];
-
-    expect(cashFlowFetchRange(buckets, "biweekly")).toEqual({ from: "2026-09-01", to: "2026-09-30" });
-  });
-
-  it("repasse mensal numa semana que atravessa meses: cobre os dois meses inteiros", () => {
-    const buckets = cashFlowBuckets({ view: "week", date: "2026-10-01" });
-
-    expect(cashFlowFetchRange(buckets, "monthly")).toEqual({ from: "2026-09-01", to: "2026-10-31" });
-  });
-
-  it("repasse mensal na visão anual não estende nada", () => {
-    const buckets = cashFlowBuckets({ view: "year", date: "2026-09-24" });
-
-    expect(cashFlowFetchRange(buckets, "monthly")).toEqual({ from: "2026-01-01", to: "2026-12-31" });
+    expect(cashFlowFetchRange(buckets)).toEqual({ from: "2026-09-01", to: "2026-09-30" });
   });
 });
 
@@ -265,7 +242,7 @@ const total = (date: string, cents: number, therapistId = "ana", count = 1) => (
   count,
   cents,
 });
-const zero = { grossCents: 0, partnerShareCents: 0, netCents: 0 };
+const zero = { grossCents: 0, netCents: 0 };
 
 describe("summarizeCashFlow", () => {
   it("faturamento sem profissional entra no bruto", () => {
@@ -273,25 +250,23 @@ describe("summarizeCashFlow", () => {
       [day("2026-09-21")],
       [total("2026-09-21", 10_000, "ana"), { ...total("2026-09-21", 15_000), therapistId: null, therapistName: null }],
       [],
-      null,
     );
 
-    expect(result.total.real).toEqual({ grossCents: 25_000, partnerShareCents: 0, netCents: 25_000 });
+    expect(result.total.real).toEqual({ grossCents: 25_000, netCents: 25_000 });
   });
 
   it("sem movimento, tudo zerado", () => {
-    expect(summarizeCashFlow([day("2026-09-21")], [], [], null)).toEqual({
+    expect(summarizeCashFlow([day("2026-09-21")], [], [])).toEqual({
       buckets: [{ ...day("2026-09-21"), real: zero, forecast: zero }],
       total: { real: zero, forecast: zero },
     });
   });
 
-  it("espaço próprio: real soma atendimentos, previsto soma atendimentos e agendamentos, sem repasse", () => {
+  it("real soma atendimentos, previsto soma atendimentos e agendamentos", () => {
     const result = summarizeCashFlow(
       [{ from: "2026-09-21", to: "2026-09-22" }, day("2026-09-23")],
       [total("2026-09-21", 10_000), total("2026-09-22", 5_000)],
       [total("2026-09-23", 7_000)],
-      null,
     );
 
     expect(result).toEqual({
@@ -299,18 +274,18 @@ describe("summarizeCashFlow", () => {
         {
           from: "2026-09-21",
           to: "2026-09-22",
-          real: { grossCents: 15_000, partnerShareCents: 0, netCents: 15_000 },
-          forecast: { grossCents: 15_000, partnerShareCents: 0, netCents: 15_000 },
+          real: { grossCents: 15_000, netCents: 15_000 },
+          forecast: { grossCents: 15_000, netCents: 15_000 },
         },
         {
           ...day("2026-09-23"),
           real: zero,
-          forecast: { grossCents: 7_000, partnerShareCents: 0, netCents: 7_000 },
+          forecast: { grossCents: 7_000, netCents: 7_000 },
         },
       ],
       total: {
-        real: { grossCents: 15_000, partnerShareCents: 0, netCents: 15_000 },
-        forecast: { grossCents: 22_000, partnerShareCents: 0, netCents: 22_000 },
+        real: { grossCents: 15_000, netCents: 15_000 },
+        forecast: { grossCents: 22_000, netCents: 22_000 },
       },
     });
   });
@@ -320,101 +295,10 @@ describe("summarizeCashFlow", () => {
       [day("2026-09-21")],
       [total("2026-09-21", 10_000, "ana"), total("2026-09-21", 6_000, "bia")],
       [],
-      null,
     );
 
-    expect(result.total.real).toEqual({ grossCents: 16_000, partnerShareCents: 0, netCents: 16_000 });
+    expect(result.total.real).toEqual({ grossCents: 16_000, netCents: 16_000 });
   });
-
-  it("dias buscados fora dos intervalos só entram no cálculo do repasse, não nos totais", () => {
-    const share: RevenueShare = { period: "weekly", tiers: [{ upToCents: null, percent: 20 }] };
-
-    const result = summarizeCashFlow(
-      [day("2026-09-21"), day("2026-09-22")],
-      [total("2026-09-20", 99_000), total("2026-09-21", 10_000), total("2026-09-22", 30_000)],
-      [],
-      share,
-    );
-
-    expect(result.buckets.map((bucket) => bucket.real)).toEqual([
-      { grossCents: 10_000, partnerShareCents: 2_000, netCents: 8_000 },
-      { grossCents: 30_000, partnerShareCents: 6_000, netCents: 24_000 },
-    ]);
-    expect(result.total.real).toEqual({ grossCents: 40_000, partnerShareCents: 8_000, netCents: 32_000 });
-  });
-
-  it("repasse mensal por faixa numa semana: calcula sobre o mês e rateia pelo faturamento de cada dia", () => {
-    // Até R$ 1.000 paga 10% sobre o total; acima disso, 20% sobre o total.
-    const share: RevenueShare = {
-      period: "monthly",
-      tiers: [
-        { upToCents: 100_000, percent: 10 },
-        { upToCents: null, percent: 20 },
-      ],
-    };
-
-    const result = summarizeCashFlow(
-      [day("2026-09-21"), day("2026-09-22"), day("2026-09-25")],
-      [total("2026-09-02", 80_000), total("2026-09-21", 20_000), total("2026-09-22", 20_000)],
-      [total("2026-09-25", 60_000)],
-      share,
-    );
-
-    // Real: mês = R$ 1.200 -> 20% = R$ 240, rateado 20.000/120.000 para cada dia.
-    // Previsto: mês = R$ 1.800 -> 20% = R$ 360, rateado 20.000/180.000 e 60.000/180.000.
-    expect(result.buckets).toEqual([
-      {
-        ...day("2026-09-21"),
-        real: { grossCents: 20_000, partnerShareCents: 4_000, netCents: 16_000 },
-        forecast: { grossCents: 20_000, partnerShareCents: 4_000, netCents: 16_000 },
-      },
-      {
-        ...day("2026-09-22"),
-        real: { grossCents: 20_000, partnerShareCents: 4_000, netCents: 16_000 },
-        forecast: { grossCents: 20_000, partnerShareCents: 4_000, netCents: 16_000 },
-      },
-      {
-        ...day("2026-09-25"),
-        real: zero,
-        forecast: { grossCents: 60_000, partnerShareCents: 12_000, netCents: 48_000 },
-      },
-    ]);
-    expect(result.total).toEqual({
-      real: { grossCents: 40_000, partnerShareCents: 8_000, netCents: 32_000 },
-      forecast: { grossCents: 100_000, partnerShareCents: 20_000, netCents: 80_000 },
-    });
-  });
-
-  it("intervalo que atravessa dois períodos de repasse soma a parte de cada um", () => {
-    // Quinzenal: até R$ 500 paga 10% sobre o total; acima disso, 20% sobre o total.
-    const share: RevenueShare = {
-      period: "biweekly",
-      tiers: [
-        { upToCents: 50_000, percent: 10 },
-        { upToCents: null, percent: 20 },
-      ],
-    };
-
-    const result = summarizeCashFlow(
-      [{ from: "2026-09-14", to: "2026-09-20" }],
-      [total("2026-09-03", 60_000), total("2026-09-14", 10_000), total("2026-09-18", 10_000)],
-      [],
-      share,
-    );
-
-    // 1ª quinzena: R$ 700 -> 20% = R$ 140, dia 14 fica com 10.000/70.000 = R$ 20.
-    // 2ª quinzena: R$ 100 -> 10% = R$ 10, todo do dia 18.
-    expect(result.buckets[0].real).toEqual({ grossCents: 20_000, partnerShareCents: 3_000, netCents: 17_000 });
-  });
-
-  it("repasse é calculado sobre o bruto e sai do líquido", () => {
-    const share: RevenueShare = { period: "weekly", tiers: [{ upToCents: null, percent: 20 }] };
-
-    const result = summarizeCashFlow([day("2026-09-21")], [total("2026-09-21", 10_000, "ana")], [], share);
-
-    expect(result.total.real).toEqual({ grossCents: 10_000, partnerShareCents: 2_000, netCents: 8_000 });
-  });
-
 });
 
 describe("summarizeTherapists", () => {
@@ -588,10 +472,9 @@ describe("summarizeServices", () => {
 describe("applyExpenses", () => {
   const WEEK = [day("2026-09-21"), day("2026-09-22")];
   // Semana com R$ 100 de bruto na segunda e nada na terça, sem descontos.
-  const summary = () => summarizeCashFlow(WEEK, [total("2026-09-21", 10_000)], [], null);
+  const summary = () => summarizeCashFlow(WEEK, [total("2026-09-21", 10_000)], []);
   const amounts = (grossCents: number, expenseCents: number) => ({
     grossCents,
-    partnerShareCents: 0,
     expenseCents,
     netCents: grossCents - expenseCents,
   });
@@ -632,7 +515,7 @@ describe("applyExpenses", () => {
   });
 
   it("soma no intervalo as despesas de todos os dias dele", () => {
-    const month = summarizeCashFlow([{ from: "2026-09-21", to: "2026-09-27" }], [], [], null);
+    const month = summarizeCashFlow([{ from: "2026-09-21", to: "2026-09-27" }], [], []);
 
     const result = applyExpenses(month, [
       { date: "2026-09-21", totalCents: 100, paidCents: 100 },
@@ -648,38 +531,37 @@ describe("summarizeCosts", () => {
   const TAXES = { id: "g2", name: "Impostos", paidCents: 50_000 };
   const SUPPLIES = { id: "g3", name: "Insumos", paidCents: 0 };
 
-  it("junta repasse e grupos, do maior para o menor, com a fatia de cada um no total", () => {
-    const result = summarizeCosts({ partnerShareCents: 100_000 }, [RENT, TAXES]);
+  it("lista os grupos do maior para o menor, com a fatia de cada um no total", () => {
+    const result = summarizeCosts([TAXES, RENT]);
 
     expect(result).toEqual({
-      totalCents: 450_000,
+      totalCents: 350_000,
       rows: [
-        { kind: "group", group: RENT, cents: 300_000, share: 300_000 / 450_000 },
-        { kind: "partner_share", cents: 100_000, share: 100_000 / 450_000 },
-        { kind: "group", group: TAXES, cents: 50_000, share: 50_000 / 450_000 },
+        { group: RENT, cents: 300_000, share: 300_000 / 350_000 },
+        { group: TAXES, cents: 50_000, share: 50_000 / 350_000 },
       ],
     });
   });
 
   it("deixa de fora o que ficou em zero", () => {
-    const result = summarizeCosts({ partnerShareCents: 0 }, [SUPPLIES, TAXES]);
+    const result = summarizeCosts([SUPPLIES, TAXES]);
 
     expect(result).toEqual({
       totalCents: 50_000,
-      rows: [{ kind: "group", group: TAXES, cents: 50_000, share: 1 }],
+      rows: [{ group: TAXES, cents: 50_000, share: 1 }],
     });
   });
 
-  it("no empate, o repasse vem antes dos grupos, e os grupos na ordem recebida", () => {
+  it("no empate, os grupos ficam na ordem recebida", () => {
     const a = { id: "a", name: "B", paidCents: 1_000 };
     const b = { id: "b", name: "A", paidCents: 1_000 };
-    const result = summarizeCosts({ partnerShareCents: 1_000 }, [a, b]);
+    const result = summarizeCosts([a, b]);
 
-    expect(result.rows.map((row) => (row.kind === "group" ? row.group.id : row.kind))).toEqual(["partner_share", "a", "b"]);
+    expect(result.rows.map((row) => row.group.id)).toEqual(["a", "b"]);
   });
 
   it("sem gasto nenhum, não tem linhas e o total é zero", () => {
-    expect(summarizeCosts({ partnerShareCents: 0 }, [SUPPLIES])).toEqual({
+    expect(summarizeCosts([SUPPLIES])).toEqual({
       totalCents: 0,
       rows: [],
     });
@@ -687,10 +569,9 @@ describe("summarizeCosts", () => {
 });
 
 describe("costCurve", () => {
-  // Custos de um mês. O repasse fica alto para mostrar que não entra na curva.
+  // Custos de um mês. O bruto fica alto para mostrar que não entra na curva.
   const costs = (expenseCents: number) => ({
     grossCents: 999_999,
-    partnerShareCents: 1_111,
     expenseCents,
     netCents: -1,
   });

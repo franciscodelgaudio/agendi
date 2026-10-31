@@ -7,7 +7,6 @@ import {
   FileTextIcon,
   FolderIcon,
   GraduationCapIcon,
-  HandshakeIcon,
   HeartPulseIcon,
   HouseIcon,
   LandmarkIcon,
@@ -51,8 +50,6 @@ const ICONS: Record<string, LucideIcon> = {
   "file-text": FileTextIcon,
   "heart-pulse": HeartPulseIcon,
   tag: TagIcon,
-  // Só do grupo automático de repasse, fora do catálogo.
-  handshake: HandshakeIcon,
 }
 
 // Quadrado na cor do ícone com o desenho em branco; sem ícone, fica neutro.

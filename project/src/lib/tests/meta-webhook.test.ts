@@ -364,7 +364,7 @@ describe("parseMetaWebhook · payload inválido", () => {
   });
 });
 
-describe("parseMetaWebhook · respostas de menu", () => {
+describe("parseMetaWebhook · respostas de botão e lista", () => {
   function whatsappMessage(content: Record<string, unknown>) {
     return whatsappPayload({
       metadata: WA_METADATA,
@@ -373,34 +373,37 @@ describe("parseMetaWebhook · respostas de menu", () => {
     });
   }
 
-  it("converte o toque num botão do WhatsApp em texto com o id da opção", () => {
+  it("converte o toque num botão do WhatsApp no texto do botão", () => {
     const payload = whatsappMessage({
       type: "interactive",
       interactive: { type: "button_reply", button_reply: { id: "opt_0", title: "Agendar" } },
     });
 
     expect(parseMetaWebhook(payload)).toEqual([
-      expect.objectContaining({ kind: "message", type: "text", text: "Agendar", optionId: "opt_0" }),
+      expect.objectContaining({ kind: "message", type: "text", text: "Agendar" }),
     ]);
+    expect(parseMetaWebhook(payload)[0]).not.toHaveProperty("optionId");
   });
 
-  it("converte a escolha numa lista do WhatsApp em texto com o id da linha", () => {
+  it("converte a escolha numa lista do WhatsApp no título da linha", () => {
     const payload = whatsappMessage({
       type: "interactive",
       interactive: { type: "list_reply", list_reply: { id: "slot_1", title: "sáb 03/10 14:30", description: "com Bia" } },
     });
 
     expect(parseMetaWebhook(payload)).toEqual([
-      expect.objectContaining({ type: "text", text: "sáb 03/10 14:30", optionId: "slot_1" }),
+      expect.objectContaining({ type: "text", text: "sáb 03/10 14:30" }),
     ]);
+    expect(parseMetaWebhook(payload)[0]).not.toHaveProperty("optionId");
   });
 
-  it("converte o botão de resposta rápida de template em texto com o payload", () => {
+  it("converte o botão de resposta rápida de template no texto do botão", () => {
     const payload = whatsappMessage({ type: "button", button: { text: "Confirmar", payload: "CONFIRMAR" } });
 
     expect(parseMetaWebhook(payload)).toEqual([
-      expect.objectContaining({ type: "text", text: "Confirmar", optionId: "CONFIRMAR" }),
+      expect.objectContaining({ type: "text", text: "Confirmar" }),
     ]);
+    expect(parseMetaWebhook(payload)[0]).not.toHaveProperty("optionId");
   });
 
   it("resposta interativa sem id nem título vira mensagem de outro tipo", () => {
@@ -411,12 +414,7 @@ describe("parseMetaWebhook · respostas de menu", () => {
     expect(event).not.toHaveProperty("optionId");
   });
 
-  it("mensagem comum não tem optionId", () => {
-    const [event] = parseMetaWebhook(whatsappMessage({ type: "text", text: { body: "Oi" } }));
-    expect(event).not.toHaveProperty("optionId");
-  });
-
-  it("converte a resposta rápida do Instagram guardando o payload", () => {
+  it("converte a resposta rápida do Instagram só no texto", () => {
     const payload = instagramPayload([
       {
         sender: { id: "6000000000000001" },
@@ -427,7 +425,8 @@ describe("parseMetaWebhook · respostas de menu", () => {
     ]);
 
     expect(parseMetaWebhook(payload)).toEqual([
-      expect.objectContaining({ platform: "instagram", type: "text", text: "Agendar", optionId: "opt_0" }),
+      expect.objectContaining({ platform: "instagram", type: "text", text: "Agendar" }),
     ]);
+    expect(parseMetaWebhook(payload)[0]).not.toHaveProperty("optionId");
   });
 });

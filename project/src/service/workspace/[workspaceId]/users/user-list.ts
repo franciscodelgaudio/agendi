@@ -53,7 +53,7 @@ export function parseUserListQuery(params: SearchParams): UserListQuery {
   };
 }
 
-function accentInsensitivePattern(q: string) {
+export function accentInsensitivePattern(q: string) {
   const plain = q.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
   return escapeRegex(plain).replace(/[aeioucn]/g, (letter) => ACCENT_CLASSES[letter]);
 }

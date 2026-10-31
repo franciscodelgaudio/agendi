@@ -138,7 +138,6 @@ export async function loadWalletExpensesScreen(
     id: group._id.toString(),
     name: group.name,
     icon: (group.iconId && iconsById.get(group.iconId.toString())) || null,
-    automatic: false,
   }))
   const expenses = expenseDocs.map((expense) => ({
     id: expense._id.toString(),
@@ -150,7 +149,6 @@ export async function loadWalletExpensesScreen(
     series: expense.series
       ? { kind: expense.series.kind as ExpenseSeries["kind"], number: expense.series.number, count: expense.series.count }
       : null,
-    automatic: false,
   }))
 
   return { ...found, month, groups, expenses }

@@ -2,18 +2,17 @@
 
 import Link from "@/components/shared/link"
 import { usePathname } from "next/navigation"
-import { CalendarIcon, HomeIcon, MenuIcon, MessagesSquareIcon, WalletIcon, type LucideIcon } from "lucide-react"
+import { CalendarIcon, HomeIcon, MenuIcon, WalletIcon, type LucideIcon } from "lucide-react"
 import { useSidebar } from "@/components/ui/sidebar"
 import { isNavItemActive } from "@/components/workspace/[workspaceId]/@sidebar/nav-main"
 import { WORKSPACE_PAGE_PATHS, type WorkspacePage } from "@/service/workspace/[workspaceId]/page-access"
-import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 
 const tabClass =
   "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors data-active:text-primary [&_svg]:size-5"
 
 // Barra de abas do celular: os atalhos que a role pode ver e "Menu", que abre a sidebar com o resto.
 // Altura em --bottom-nav-height (globals.css), que as páginas de tela cheia descontam.
-export function MobileNav({ workspaceId, pages, actor }: { workspaceId: string; pages: WorkspacePage[]; actor: Actor }) {
+export function MobileNav({ workspaceId, pages }: { workspaceId: string; pages: WorkspacePage[] }) {
   const pathname = usePathname()
   const { openMobile, setOpenMobile } = useSidebar()
   const base = `/workspace/${workspaceId}`
@@ -22,7 +21,6 @@ export function MobileNav({ workspaceId, pages, actor }: { workspaceId: string; 
   const tabs = [
     ...item("home", "Início", HomeIcon),
     ...item("calendar", "Agenda", CalendarIcon),
-    ...(can(actor, "inbox.use") ? [{ title: "Conversas", href: `${base}/inbox`, icon: MessagesSquareIcon }] : []),
     ...item("cash_flow", "Caixa", WalletIcon),
   ]
 

@@ -1,6 +1,6 @@
 import type { PipelineStage } from "mongoose";
 import { parseDay } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-list";
-import type { CashFlowAmounts, DayRange, ExpenseDayCents } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
+import type { DayRange, ExpenseDayCents } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
 import { parsePriceCents } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service";
 
 const MAX_DESCRIPTION_LENGTH = 80;
@@ -376,40 +376,4 @@ export function expenseGroupYearOverview(
     })),
   );
   return { groups: sorted.map(({ id, name }) => ({ id, name })), rows, total };
-}
-
-type StaffAmounts = Pick<CashFlowAmounts, "partnerShareCents">;
-
-// Grupo automático do período, fora do banco: repasse. O limite é o previsto; lançado e pago
-// são o que já correu. Sem repasse, o grupo não aparece.
-export function staffExpenseGroups({ real, forecast }: { real: StaffAmounts; forecast: StaffAmounts }) {
-  return [
-    {
-      id: "partner_share" as const,
-      name: "Repasse",
-      automatic: true as const,
-      monthlyLimitCents: forecast.partnerShareCents,
-      limitCents: forecast.partnerShareCents,
-      totalCents: real.partnerShareCents,
-      paidCents: real.partnerShareCents,
-      overLimit: false,
-    },
-  ].filter((row) => row.limitCents > 0);
-}
-
-// Despesa automática do mês, fora do banco: o repasse que já correu, no dia dado, pago só se
-// marcado (partnerSharePaid). Sem valor, não aparece.
-export function staffExpenses(real: StaffAmounts, date: string, partnerSharePaid: boolean) {
-  return [
-    {
-      id: "partner_share" as const,
-      groupId: "partner_share" as const,
-      description: "Repasse",
-      amountCents: real.partnerShareCents,
-      date,
-      paid: partnerSharePaid,
-      series: null,
-      automatic: true as const,
-    },
-  ].filter((row) => row.amountCents > 0);
 }

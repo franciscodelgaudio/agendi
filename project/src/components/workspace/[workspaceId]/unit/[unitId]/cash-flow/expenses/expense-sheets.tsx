@@ -48,8 +48,7 @@ import {
 } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
-// automatic: equipe e repasse, calculados pelo caixa e sem lançamentos.
-export type ExpenseGroupOption = { id: string; name: string; icon: ExpenseGroupIcon | null; automatic?: boolean }
+export type ExpenseGroupOption = { id: string; name: string; icon: ExpenseGroupIcon | null }
 export type ExpenseRow = {
   id: string
   groupId: string
@@ -59,8 +58,6 @@ export type ExpenseRow = {
   paid: boolean
   // null quando a despesa é à vista.
   series: { kind: "installments" | "recurring"; number: number; count: number } | null
-  // Repasse do mês, calculado pelo caixa; só o status dele pode ser editado.
-  automatic?: boolean
 }
 
 type Repeat = "none" | "installments" | "recurring"
@@ -286,19 +283,16 @@ export function CreateExpenseSheet({ workspaceId, owner, groups, defaultDate }: 
 }
 
 // Badge de pagamento que alterna ao clicar; o erro aparece num tooltip sobre o badge até ser dispensado.
-// setPaid troca a ação de despesa cadastrada (o repasse, que é calculado, usa a dele).
 export function ExpensePaidToggle({
   workspaceId,
   owner,
   expense,
   disabled,
-  setPaid = (paid) => setExpensePaidAction(workspaceId, owner, expense.id, paid),
 }: {
   workspaceId: string
   owner: ExpenseOwner
   expense: ExpenseRow
   disabled: boolean
-  setPaid?: (paid: boolean) => Promise<ExpenseActionState>
 }) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -334,7 +328,7 @@ export function ExpensePaidToggle({
             const next = !checked
             setOptimistic(next)
             startTransition(async () => {
-              const result = await setPaid(next)
+              const result = await setExpensePaidAction(workspaceId, owner, expense.id, next)
               setError(result.error)
               setOptimistic(null)
             })

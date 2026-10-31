@@ -31,7 +31,6 @@ import { expenseGroupIconExists } from "@/service/workspace/[workspaceId]/unit/[
 import { groupLimitsOf } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
 import { Expense } from "@/models/Expense"
 import { ExpenseGroup } from "@/models/ExpenseGroup"
-import { PartnerSharePayment } from "@/models/PartnerSharePayment"
 import { Wallet } from "@/models/Wallet"
 
 type OwnerError = "unit_not_found" | "owner_not_found" | "workspace_not_found" | "unauthenticated"
@@ -319,39 +318,6 @@ export async function setExpensePaidAction(
     now: new Date(),
   })
   if (!result.ok) return { error: expenseErrorMessages[result.error] }
-
-  refresh()
-  return { error: null }
-}
-
-// Marca o repasse da unidade no mês ("2026-10") como pago ou pendente; o valor segue o calculado.
-export async function setPartnerSharePaidAction(
-  workspaceId: string,
-  unitId: string,
-  month: string,
-  paid: boolean,
-): Promise<ExpenseActionState> {
-  const userId = await getSessionUserId()
-  if (!userId) return { error: expenseErrorMessages.unauthenticated }
-  const access = await findManagedUnit(workspaceId, unitId, userId, "cash_flow.manage")
-  if (!access.ok) {
-    return { error: access.error === "forbidden" ? forbiddenMessage("cash_flow.manage") : expenseErrorMessages[access.error] }
-  }
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return { error: "Mês inválido." }
-
-  const key = { unitId: new Types.ObjectId(access.unit.unitId), month }
-  if (paid) {
-    await PartnerSharePayment.updateOne(
-      key,
-      {
-        $set: { paidAt: new Date() },
-        $setOnInsert: { workspaceId: new Types.ObjectId(access.unit.workspaceId), createdBy: new Types.ObjectId(userId) },
-      },
-      { upsert: true },
-    )
-  } else {
-    await PartnerSharePayment.deleteOne(key)
-  }
 
   refresh()
   return { error: null }

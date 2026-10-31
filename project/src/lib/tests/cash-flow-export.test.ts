@@ -13,7 +13,6 @@ import type { ExpenseCashFlowAmounts } from "@/service/workspace/[workspaceId]/u
 function amounts(overrides: Partial<ExpenseCashFlowAmounts> = {}): ExpenseCashFlowAmounts {
   return {
     grossCents: 0,
-    partnerShareCents: 0,
     expenseCents: 0,
     netCents: 0,
     ...overrides,
@@ -40,8 +39,8 @@ describe("parseExportFormat", () => {
 const SEPT = { from: "2026-09-01", to: "2026-09-30" };
 
 function cashFlowInput(overrides: Partial<CashFlowReportInput> = {}): CashFlowReportInput {
-  const week1 = amounts({ grossCents: 100000, partnerShareCents: 30000, expenseCents: 20000, netCents: 50000 });
-  const week2 = amounts({ grossCents: 50000, partnerShareCents: 15000, netCents: 35000 });
+  const week1 = amounts({ grossCents: 100000, expenseCents: 20000, netCents: 80000 });
+  const week2 = amounts({ grossCents: 50000, netCents: 50000 });
   return {
     unitName: "Centro",
     query: { view: "month", date: "2026-09-24" },
@@ -54,11 +53,11 @@ function cashFlowInput(overrides: Partial<CashFlowReportInput> = {}): CashFlowRe
         { from: "2026-09-07", to: "2026-09-07", real: week2, forecast: amounts() },
       ],
       total: {
-        real: amounts({ grossCents: 150000, partnerShareCents: 45000, expenseCents: 20000, netCents: 85000 }),
+        real: amounts({ grossCents: 150000, expenseCents: 20000, netCents: 130000 }),
         forecast: amounts(),
       },
     },
-    columns: { partnerShare: true, expenses: true },
+    columns: { expenses: true },
     curve: [
       {
         from: "2026-08-01",
@@ -78,10 +77,10 @@ function cashFlowInput(overrides: Partial<CashFlowReportInput> = {}): CashFlowRe
       },
     ],
     costs: {
-      totalCents: 65000,
+      totalCents: 25000,
       rows: [
-        { kind: "partner_share", cents: 45000, share: 45000 / 65000 },
-        { kind: "group", group: { name: "Aluguel" }, cents: 20000, share: 20000 / 65000 },
+        { group: { name: "Aluguel" }, cents: 20000, share: 20000 / 25000 },
+        { group: { name: "Insumos" }, cents: 5000, share: 5000 / 25000 },
       ],
     },
     therapists: {
@@ -136,25 +135,24 @@ describe("cashFlowReport", () => {
     ]);
   });
 
-  it("a tabela do fluxo tem só as deduções existentes, negativas, e o total no rodapé", () => {
+  it("a tabela do fluxo tem as despesas negativas, o líquido e o total no rodapé", () => {
     const [flow] = cashFlowReport(cashFlowInput()).tables;
     expect(flow.title).toBe("Fluxo de caixa");
     expect(flow.columns).toEqual([
       { label: "Período", kind: "text" },
       { label: "Bruto", kind: "money" },
-      { label: "Repasse", kind: "money" },
       { label: "Despesas", kind: "money" },
       { label: "Líquido", kind: "money" },
     ]);
     expect(flow.rows).toEqual([
-      ["01/09 a 06/09", 100000, -30000, -20000, 50000],
-      ["07/09", 50000, -15000, 0, 35000],
+      ["01/09 a 06/09", 100000, -20000, 80000],
+      ["07/09", 50000, 0, 50000],
     ]);
-    expect(flow.total).toEqual(["Total", 150000, -45000, -20000, 85000]);
+    expect(flow.total).toEqual(["Total", 150000, -20000, 130000]);
   });
 
-  it("sem nenhuma dedução, a tabela do fluxo tem só o bruto", () => {
-    const columns = { partnerShare: false, expenses: false };
+  it("sem despesas, a tabela do fluxo tem só o bruto", () => {
+    const columns = { expenses: false };
     const [flow] = cashFlowReport(cashFlowInput({ columns })).tables;
     expect(flow.columns).toEqual([
       { label: "Período", kind: "text" },
@@ -165,12 +163,6 @@ describe("cashFlowReport", () => {
       ["07/09", 50000],
     ]);
     expect(flow.total).toEqual(["Total", 150000]);
-  });
-
-  it("com todas as deduções, segue a ordem da tela: repasse e despesas", () => {
-    const columns = { partnerShare: true, expenses: true };
-    const [flow] = cashFlowReport(cashFlowInput({ columns })).tables;
-    expect(flow.columns.map((column) => column.label)).toEqual(["Período", "Bruto", "Repasse", "Despesas", "Líquido"]);
   });
 
   it("na semana, o intervalo é o dia da semana; no ano, o mês com inicial maiúscula", () => {
@@ -207,17 +199,10 @@ describe("cashFlowReport", () => {
       { label: "%", kind: "percent" },
     ]);
     expect(costs.rows).toEqual([
-      ["Repasse", 45000, 45000 / 65000],
-      ["Aluguel", 20000, 20000 / 65000],
+      ["Aluguel", 20000, 20000 / 25000],
+      ["Insumos", 5000, 5000 / 25000],
     ]);
-    expect(costs.total).toEqual(["Total", 65000, 1]);
-  });
-
-  it("usa o nome da tela para o repasse", () => {
-    const costs = cashFlowReport(
-      cashFlowInput({ costs: { totalCents: 100, rows: [{ kind: "partner_share", cents: 100, share: 1 }] } }),
-    ).tables[2];
-    expect(costs.rows.map((row) => row[0])).toEqual(["Repasse"]);
+    expect(costs.total).toEqual(["Total", 25000, 1]);
   });
 
   it("sem gastos, a tabela de gastos por grupo some", () => {

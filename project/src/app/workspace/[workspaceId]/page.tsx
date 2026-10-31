@@ -4,7 +4,6 @@ import { CalendarCheckIcon, CalendarXIcon, PiggyBankIcon, LeafIcon, StoreIcon, T
 import {
   applyExpenses,
   cashFlowBuckets,
-  cashFlowFetchRange,
   costCurve,
   dailyAppointmentTotalsPipeline,
   dailyBookingForecastPipeline,
@@ -13,7 +12,7 @@ import {
   serviceBookingForecastPipeline,
   summarizeCashFlow,
   summarizeServices,
-  type CashFlowAmounts,
+  type ExpenseCashFlowAmounts,
   type DayRange,
   type DayTotal,
   type ServiceTotal,
@@ -21,7 +20,6 @@ import {
 import { dailyExpenseTotalsPipeline, type ExpenseDayTotal } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
 import { groupLimitsOf } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
 import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
-import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
@@ -51,14 +49,13 @@ function toDate(day: string) {
   return new Date(Date.UTC(year, month - 1, date))
 }
 
-const ZERO: CashFlowAmounts = { grossCents: 0, partnerShareCents: 0, netCents: 0 }
+const ZERO: ExpenseCashFlowAmounts = { grossCents: 0, expenseCents: 0, netCents: 0 }
 
-// Soma dos valores já calculados por unidade (cada uma com seu repasse).
-function sumAmounts(list: CashFlowAmounts[]): CashFlowAmounts {
+function sumAmounts(list: ExpenseCashFlowAmounts[]): ExpenseCashFlowAmounts {
   return list.reduce(
     (sum, amounts) => ({
       grossCents: sum.grossCents + amounts.grossCents,
-      partnerShareCents: sum.partnerShareCents + amounts.partnerShareCents,
+      expenseCents: sum.expenseCents + amounts.expenseCents,
       netCents: sum.netCents + amounts.netCents,
     }),
     ZERO,
@@ -69,7 +66,6 @@ type UnitInfo = {
   id: string
   name: string
   avatarUrl: string | null
-  revenueShare: RevenueShare | null
 }
 
 // Página inicial: visão geral de todas as unidades do workspace.
@@ -103,7 +99,6 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
               id: { $toString: "$_id" },
               name: 1,
               avatarUrl: { $ifNull: ["$avatarUrl", null] },
-              revenueShare: { $ifNull: ["$revenueShare", null] },
             },
           },
         ],
@@ -135,16 +130,13 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
   const todayEnd = new Date(todayStart.getTime() + DAY_MS)
   const unitIds = units.map((unit) => new Types.ObjectId(unit.id))
 
-  // O repasse depende do faturamento de cada unidade, então o caixa é calculado unidade a
-  // unidade (com o resto dos períodos de repasse das pontas) e só depois somado.
   const [perUnit, todayBookings] = await Promise.all([
     Promise.all(
       units.map(async (unit) => {
-        const range = cashFlowFetchRange(yearBuckets, unit.revenueShare?.period ?? null)
         const unitMatch = { $match: { unitId: new Types.ObjectId(unit.id) } }
         const [appointments, bookings, serviceAppointments, serviceBookings, expenses, groups] = await Promise.all([
-          Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
-          Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
+          Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(yearRange)]),
+          Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(yearRange, now)]),
           Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(month)]),
           Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(month, now)]),
           Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(yearRange)]),
@@ -167,14 +159,13 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
   ])
 
   const unitSummaries = perUnit.map(({ unit, appointments, bookings, expenses, services, groupLimits }) => {
-    const summarize = (buckets: DayRange[]) => summarizeCashFlow(buckets, appointments, bookings, unit.revenueShare)
+    const summarize = (buckets: DayRange[]) => applyExpenses(summarizeCashFlow(buckets, appointments, bookings), expenses)
     const done = services.reduce((sum, service) => sum + service.real.count, 0)
     const all = services.reduce((sum, service) => sum + service.forecast.count, 0)
     return {
       unit,
-      hasDeductions: !!unit.revenueShare,
       month: summarize(monthBuckets).total,
-      year: { buckets: applyExpenses(summarize(yearBuckets), expenses).buckets, groups: groupLimits },
+      year: { buckets: summarize(yearBuckets).buckets, groups: groupLimits },
       services: { done, scheduled: all - done },
     }
   })
@@ -188,8 +179,6 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
   const plannedCents = curve.at(-1)?.plannedCumulativeCents ?? 0
   const servicesDone = unitSummaries.reduce((sum, summary) => sum + summary.services.done, 0)
   const servicesScheduled = unitSummaries.reduce((sum, summary) => sum + summary.services.scheduled, 0)
-  const hasDeductions = unitSummaries.some((summary) => summary.hasDeductions)
-  const deductionsCents = monthTotal.real.partnerShareCents
 
   const unitRanking = [...unitSummaries].sort(
     (a, b) => b.month.forecast.grossCents - a.month.forecast.grossCents || a.unit.name.localeCompare(b.unit.name, "pt-BR"),
@@ -238,7 +227,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
           label="Líquido do mês"
           value={money(monthTotal.real.netCents)}
           detail={
-            hasDeductions ? `${money(deductionsCents)} em repasse` : "Sem repasse"
+            monthTotal.real.expenseCents ? `${money(monthTotal.real.expenseCents)} em despesas pagas` : "Sem despesas pagas"
           }
         />
         <StatTile

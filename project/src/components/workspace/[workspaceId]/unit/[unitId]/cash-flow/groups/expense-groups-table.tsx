@@ -14,10 +14,9 @@ function money(cents: number) {
 }
 
 type Props = {
-  // Grupos automáticos (equipe e repasse) não são editados nem excluídos. limits: o limite em
-  // cada mês de limitMonths, para a edição.
+  // limits: o limite em cada mês de limitMonths, para a edição.
   groups: ExpenseGroupSummary<
-    ExpenseGroupInfo & { icon: ExpenseGroupIcon | null; automatic?: boolean; limits: (number | null)[] }
+    ExpenseGroupInfo & { icon: ExpenseGroupIcon | null; limits: (number | null)[] }
   >[]
   icons: ExpenseGroupIcon[]
   limitMonths: LimitMonths
@@ -108,15 +107,13 @@ export function ExpenseGroupsTable({
               </TableCell>
               {canManage && (
                 <TableCell className="px-4 text-right">
-                  {!group.automatic && (
-                    <ExpenseGroupActions
-                      workspaceId={workspaceId}
-                      owner={owner}
-                      icons={icons}
-                      limitMonths={limitMonths}
-                      group={group}
-                    />
-                  )}
+                  <ExpenseGroupActions
+                    workspaceId={workspaceId}
+                    owner={owner}
+                    icons={icons}
+                    limitMonths={limitMonths}
+                    group={group}
+                  />
                 </TableCell>
               )}
             </TableRow>

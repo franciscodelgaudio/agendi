@@ -12,8 +12,6 @@ import {
   setGroupLimitFrom,
   setGroupLimitForMonth,
   setExpensePaid,
-  staffExpenseGroups,
-  staffExpenses,
   summarizeExpenseGroups,
   updateExpense,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense";
@@ -724,31 +722,6 @@ describe("expenseGroupYearOverview", () => {
   });
 });
 
-describe("staffExpenseGroups", () => {
-  const amounts = (partnerShareCents: number) => ({ grossCents: 999_999, partnerShareCents, netCents: -1 });
-
-  it("repasse tem limite no previsto, e lançado e pago no que já correu", () => {
-    const result = staffExpenseGroups({ real: amounts(300), forecast: amounts(500) });
-
-    expect(result).toEqual([
-      {
-        id: "partner_share",
-        name: "Repasse",
-        automatic: true,
-        monthlyLimitCents: 500,
-        limitCents: 500,
-        totalCents: 300,
-        paidCents: 300,
-        overLimit: false,
-      },
-    ]);
-  });
-
-  it("sem repasse, não há grupos automáticos", () => {
-    expect(staffExpenseGroups({ real: amounts(0), forecast: amounts(0) })).toEqual([]);
-  });
-});
-
 describe("splitInstallments", () => {
   it("divide igualmente quando o valor é exato", () => {
     expect(splitInstallments(30_000, 3)).toEqual([10_000, 10_000, 10_000]);
@@ -781,34 +754,5 @@ describe("monthlyDates", () => {
 
   it("considera fevereiro de ano bissexto", () => {
     expect(monthlyDates("2028-01-30", 2)).toEqual(["2028-01-30", "2028-02-29"]);
-  });
-});
-
-describe("staffExpenses", () => {
-  const real = (partnerShareCents: number) => ({ grossCents: 999_999, partnerShareCents, netCents: -1 });
-
-  it("o repasse vira uma despesa automática no dia dado, no grupo do repasse", () => {
-    expect(staffExpenses(real(33_600), "2026-10-31", true)).toEqual([
-      {
-        id: "partner_share",
-        groupId: "partner_share",
-        description: "Repasse",
-        amountCents: 33_600,
-        date: "2026-10-31",
-        paid: true,
-        series: null,
-        automatic: true,
-      },
-    ]);
-  });
-
-  it("sem repasse, não há despesa automática", () => {
-    expect(staffExpenses(real(0), "2026-10-31", true)).toEqual([]);
-  });
-
-  it("repasse não marcado fica pendente", () => {
-    const result = staffExpenses(real(33_600), "2026-10-31", false);
-
-    expect(result.map(({ id, paid }) => ({ id, paid }))).toEqual([{ id: "partner_share", paid: false }]);
   });
 });

@@ -223,22 +223,14 @@ describe("statusesBefore", () => {
 });
 
 describe("ingestWebhookEvents · aviso de mensagem recebida", () => {
-  it("avisa cada mensagem recebida nova, com a conversa, o texto e a opção escolhida", async () => {
+  it("avisa cada mensagem recebida nova, com a conversa e o texto", async () => {
     const deps = { ...makeDeps(), onInbound: vi.fn().mockResolvedValue(undefined) };
 
-    await ingestWebhookEvents([{ ...inbound, text: "Agendar", optionId: "opt_0" }, { ...inbound, externalMessageId: "wamid.BBB" }], deps);
+    await ingestWebhookEvents([{ ...inbound, text: "Agendar" }, { ...inbound, externalMessageId: "wamid.BBB" }], deps);
 
     expect(deps.onInbound.mock.calls).toEqual([
-      [{ workspaceId: WORKSPACE_ID, channelId: CHANNEL_ID, conversationId: CONVERSATION_ID, text: "Agendar", optionId: "opt_0" }],
-      [
-        {
-          workspaceId: WORKSPACE_ID,
-          channelId: CHANNEL_ID,
-          conversationId: CONVERSATION_ID,
-          text: "Oi, tem horário amanhã?",
-          optionId: null,
-        },
-      ],
+      [{ workspaceId: WORKSPACE_ID, channelId: CHANNEL_ID, conversationId: CONVERSATION_ID, text: "Agendar" }],
+      [{ workspaceId: WORKSPACE_ID, channelId: CHANNEL_ID, conversationId: CONVERSATION_ID, text: "Oi, tem horário amanhã?" }],
     ]);
     // Só depois de atualizar a conversa.
     expect(deps.touchConversation.mock.invocationCallOrder[0]).toBeLessThan(deps.onInbound.mock.invocationCallOrder[0]);

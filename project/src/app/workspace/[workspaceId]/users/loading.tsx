@@ -3,7 +3,7 @@ import { FiltersSkeleton, PageSkeleton, PaginationSkeleton, TableSkeleton } from
 export default function Loading() {
   return (
     <PageSkeleton section>
-      <FiltersSkeleton selects={2} />
+      <FiltersSkeleton selects={1} />
       <TableSkeleton columns={4} avatar />
       <PaginationSkeleton />
     </PageSkeleton>

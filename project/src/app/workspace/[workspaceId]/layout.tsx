@@ -44,7 +44,7 @@ export default async function WorkspaceLayout({
             <NavigationProgressBar />
             {children}
           </SidebarInset>
-          <MobileNav workspaceId={workspaceId} pages={visiblePages(workspace.actor).workspace} actor={workspace.actor} />
+          <MobileNav workspaceId={workspaceId} pages={visiblePages(workspace.actor).workspace} />
         </TourProvider>
       </SidebarProvider>
     </NavigationProgressProvider>

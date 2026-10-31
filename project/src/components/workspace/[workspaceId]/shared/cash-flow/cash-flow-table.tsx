@@ -36,15 +36,12 @@ function money(cents: number) {
 type Props = {
   view: CashFlowView
   summary: ExpenseCashFlowSummary
-  // Sem repasse (espaço próprio) nem despesas, bruto e líquido são iguais e só o bruto aparece.
-  hasPartnerShare: boolean
+  // Sem despesas, bruto e líquido são iguais e só o bruto aparece.
   hasExpenses: boolean
   today: string
 }
 
-type Columns = { partnerShare: boolean; expenses: boolean }
-
-// Com a tabela estreita, somem as deduções e ficam só bruto e líquido.
+// Com a tabela estreita, somem as despesas e ficam só bruto e líquido.
 const DEDUCTION = "@max-2xl:hidden"
 
 function Deduction({ cents, className }: { cents: number; className: string }) {
@@ -55,22 +52,19 @@ function Deduction({ cents, className }: { cents: number; className: string }) {
   )
 }
 
-function AmountCells({ amounts, columns }: { amounts: ExpenseCashFlowAmounts; columns: Columns }) {
-  const detailed = columns.partnerShare || columns.expenses
+function AmountCells({ amounts, detailed }: { amounts: ExpenseCashFlowAmounts; detailed: boolean }) {
   return (
     <>
       <TableCell className="px-4 text-right tabular-nums">{money(amounts.grossCents)}</TableCell>
-      {columns.partnerShare && <Deduction cents={amounts.partnerShareCents} className={DEDUCTION} />}
-      {columns.expenses && <Deduction cents={amounts.expenseCents} className={DEDUCTION} />}
+      {detailed && <Deduction cents={amounts.expenseCents} className={DEDUCTION} />}
       {detailed && <TableCell className="px-4 text-right font-medium tabular-nums">{money(amounts.netCents)}</TableCell>}
     </>
   )
 }
 
 // Atendimentos registrados e despesas pagas.
-export function CashFlowTable({ view, summary, hasPartnerShare, hasExpenses, today }: Props) {
-  const columns = { partnerShare: hasPartnerShare, expenses: hasExpenses }
-  const detailed = hasPartnerShare || hasExpenses
+export function CashFlowTable({ view, summary, hasExpenses, today }: Props) {
+  const detailed = hasExpenses
   const deduction = cn("px-4 text-right", DEDUCTION)
 
   return (
@@ -82,8 +76,7 @@ export function CashFlowTable({ view, summary, hasPartnerShare, hasExpenses, tod
             {detailed ? (
               <>
                 <TableHead className="px-4 text-right">Bruto</TableHead>
-                {hasPartnerShare && <TableHead className={deduction}>Repasse</TableHead>}
-                {hasExpenses && <TableHead className={deduction}>Despesas</TableHead>}
+                <TableHead className={deduction}>Despesas</TableHead>
                 <TableHead className="px-4 text-right">Líquido</TableHead>
               </>
             ) : (
@@ -100,7 +93,7 @@ export function CashFlowTable({ view, summary, hasPartnerShare, hasExpenses, tod
                   {bucketLabel(view, bucket)}
                   {isCurrent && <span className="ml-2 text-xs text-muted-foreground">(atual)</span>}
                 </TableCell>
-                <AmountCells amounts={bucket.real} columns={columns} />
+                <AmountCells amounts={bucket.real} detailed={detailed} />
               </TableRow>
             )
           })}
@@ -108,7 +101,7 @@ export function CashFlowTable({ view, summary, hasPartnerShare, hasExpenses, tod
         <TableFooter>
           <TableRow>
             <TableCell className="px-4 font-semibold">Total</TableCell>
-            <AmountCells amounts={summary.total.real} columns={columns} />
+            <AmountCells amounts={summary.total.real} detailed={detailed} />
           </TableRow>
         </TableFooter>
       </Table>

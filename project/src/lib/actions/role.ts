@@ -13,6 +13,8 @@ import {
   type UpdateRolePermissionsError,
 } from "@/service/workspace/[workspaceId]/users/permissions/role"
 import { getSessionUserId } from "@/service/(auth)/session"
+import { visiblePages } from "@/service/workspace/[workspaceId]/page-access"
+import { PERMISSIONS } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 import { Invite } from "@/models/Invite"
 import { Workspace } from "@/models/Workspace"
@@ -63,13 +65,25 @@ async function findRole(workspaceId: string, roleId: string) {
   return (await listRoles(workspaceId)).find((role) => role._id.equals(roleId)) ?? null
 }
 
-export async function createRoleAction(workspaceId: string, _prev: RoleFormState, formData: FormData): Promise<RoleFormState> {
+export async function createRoleAction(
+  workspaceId: string,
+  _prev: RoleFormState,
+  formData: FormData,
+): Promise<RoleFormState & { roleId?: string }> {
   const found = await findAccess(workspaceId)
   if ("error" in found) return found
   const { access } = found
+  const baseRoleId = formData.get("baseRoleId")
 
-  const result = await createRole({ name: formData.get("name") }, { actor: access?.actor ?? null }, {
+  const input = { name: formData.get("name"), baseRoleId: baseRoleId === "none" ? null : baseRoleId }
+  const result = await createRole(input, { actor: access?.actor ?? null }, {
     isNameTaken: (name) => isNameTaken(access!.id, name),
+    findBaseRole: async (roleId) => {
+      const role = await findRole(access!.id, roleId)
+      if (!role) return null
+      const pages = visiblePages({ admin: false, permissions: role.permissions, pages: role.pages ?? { workspace: [], unit: [] } })
+      return { permissions: role.permissions.filter((item) => PERMISSIONS.includes(item)), pages }
+    },
     create: async (data) => {
       const _id = new Types.ObjectId()
       await Workspace.updateOne({ _id: access!.id }, { $push: { roles: { _id, ...data } } })
@@ -79,7 +93,7 @@ export async function createRoleAction(workspaceId: string, _prev: RoleFormState
   if (!result.ok) return { error: errorMessages[result.error] }
 
   refresh()
-  return { error: null }
+  return { error: null, roleId: result.roleId }
 }
 
 export async function renameRoleAction(

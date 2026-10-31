@@ -48,16 +48,17 @@ describe("unitListPipeline", () => {
       _id: 0,
       id: { $toString: "$_id" },
       name: 1,
-      avatarUrl: { $ifNull: ["$avatarUrl", null] },
-      // Unidades em espaço próprio não têm regra de repasse.
-      revenueShare: { $ifNull: ["$revenueShare", null] },
-      // Salas para o formulário de edição, com os ids em texto.
-      treatmentRooms: {
+      imageUrl: { $ifNull: ["$imageUrl", null] },
+      // Estações e membros para o formulário de edição, com os ids em texto.
+      stations: {
         $map: {
-          input: "$treatmentRooms",
-          as: "room",
-          in: { id: { $toString: "$$room._id" }, name: "$$room.name", beds: "$$room.beds" },
+          input: "$stations",
+          as: "station",
+          in: { id: { $toString: "$$station._id" }, name: "$$station.name", active: "$$station.active" },
         },
+      },
+      workspaceMemberIds: {
+        $map: { input: { $ifNull: ["$workspaceMemberIds", []] }, as: "member", in: { $toString: "$$member" } },
       },
       businessHours: 1,
       createdAt: 1,

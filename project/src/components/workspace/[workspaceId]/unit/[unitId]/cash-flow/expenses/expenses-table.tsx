@@ -1,6 +1,5 @@
 import type { ExpenseOwner } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
 import { ExpenseActions, ExpensePaidToggle, type ExpenseGroupOption, type ExpenseRow } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense-sheets"
-import { setPartnerSharePaidAction } from "@/lib/actions/expense"
 import { ExpenseGroupIconBadge } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/expense-group-icon"
 import { currencyFormat } from "@/components/shared/service-format"
 import { SortableHead } from "@/components/shared/sortable-head"
@@ -44,7 +43,6 @@ export function ExpensesTable({
   canManage,
 }: Props) {
   const groupsById = new Map(groups.map((group) => [group.id, group]))
-  const registeredGroups = groups.filter((group) => !group.automatic)
 
   return (
     <div className="border">
@@ -70,22 +68,7 @@ export function ExpensesTable({
           {expenses.map((expense) => (
             <TableRow key={expense.id}>
               <TableCell className="px-4">
-                {expense.id === "partner_share" && "unitId" in owner ? (
-                  <ExpensePaidToggle
-                    workspaceId={workspaceId}
-                    owner={owner}
-                    expense={expense}
-                    disabled={!canManage}
-                    setPaid={setPartnerSharePaidAction.bind(null, workspaceId, owner.unitId, expense.date.slice(0, 7))}
-                  />
-                ) : (
-                  <ExpensePaidToggle
-                    workspaceId={workspaceId}
-                    owner={owner}
-                    expense={expense}
-                    disabled={!canManage || !!expense.automatic}
-                  />
-                )}
+                <ExpensePaidToggle workspaceId={workspaceId} owner={owner} expense={expense} disabled={!canManage} />
               </TableCell>
               <TableCell className="px-4 tabular-nums">{dayFormat.format(toDate(expense.date))}</TableCell>
               <TableCell className="max-w-0 px-4 font-medium">
@@ -108,9 +91,7 @@ export function ExpensesTable({
               <TableCell className="px-4 text-right tabular-nums">{money(expense.amountCents)}</TableCell>
               {canManage && (
                 <TableCell className="px-4 text-right">
-                  {!expense.automatic && (
-                    <ExpenseActions workspaceId={workspaceId} owner={owner} groups={registeredGroups} expense={expense} />
-                  )}
+                  <ExpenseActions workspaceId={workspaceId} owner={owner} groups={groups} expense={expense} />
                 </TableCell>
               )}
             </TableRow>

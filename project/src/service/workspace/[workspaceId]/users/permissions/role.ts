@@ -26,13 +26,16 @@ function parseName(input: unknown): { name: string } | { error: NameError } {
   return { name: trimmed };
 }
 
-export type CreateRoleResult = { ok: true; roleId: string } | { ok: false; error: ActorError | NameError };
+export type CreateRoleResult =
+  | { ok: true; roleId: string }
+  | { ok: false; error: ActorError | NameError | "role_not_found" };
 
 export async function createRole(
   input: unknown,
   ctx: { actor: Actor | null },
   deps: {
     isNameTaken: (name: string) => Promise<boolean>;
+    findBaseRole: (roleId: string) => Promise<RoleSettings | null>;
     create: (data: { name: string } & RoleSettings) => Promise<{ id: string }>;
   },
 ): Promise<CreateRoleResult> {
@@ -40,14 +43,18 @@ export async function createRole(
   if (actorError) return { ok: false, error: actorError };
   const parsed = parseName(input);
   if ("error" in parsed) return { ok: false, error: parsed.error };
+  const baseRoleId = (input as Record<string, unknown>).baseRoleId;
+  if (baseRoleId != null && typeof baseRoleId !== "string") return { ok: false, error: "invalid_input" };
   if (await deps.isNameTaken(parsed.name)) return { ok: false, error: "name_taken" };
 
-  // Começa vendo tudo e sem poder alterar nada; o administrador ajusta na matriz.
-  const role = await deps.create({
-    name: parsed.name,
-    permissions: [],
-    pages: { workspace: [...WORKSPACE_PAGES], unit: [...UNIT_PAGES] },
-  });
+  let settings: RoleSettings = { permissions: [], pages: { workspace: ["home"], unit: [] } };
+  if (baseRoleId) {
+    const base = await deps.findBaseRole(baseRoleId);
+    if (!base) return { ok: false, error: "role_not_found" };
+    settings = { permissions: base.permissions, pages: base.pages };
+  }
+
+  const role = await deps.create({ name: parsed.name, ...settings });
   return { ok: true, roleId: role.id };
 }
 

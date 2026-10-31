@@ -12,11 +12,6 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 
 type Group = { id: string; name: string; icon: ExpenseGroupIcon | null }
 
-// O repasse usa a cor do tema; cada grupo, a cor do próprio ícone.
-const STAFF: Record<Exclude<CostRow<Group>["kind"], "group">, { name: string; color: string }> = {
-  partner_share: { name: "Repasse", color: "var(--chart-1)" },
-}
-
 const percentFormat = new Intl.NumberFormat("pt-BR", { style: "percent", maximumFractionDigits: 1 })
 
 function money(cents: number) {
@@ -26,12 +21,8 @@ function money(cents: number) {
 type Datum = { key: string; name: string; cents: number; share: number; fill: string }
 
 function toDatum(row: CostRow<Group>): Datum {
-  if (row.kind === "group") {
-    const { id, name, icon } = row.group
-    return { key: id, name, cents: row.cents, share: row.share, fill: icon?.color ?? "var(--muted-foreground)" }
-  }
-  const { name, color } = STAFF[row.kind]
-  return { key: row.kind, name, cents: row.cents, share: row.share, fill: color }
+  const { id, name, icon } = row.group
+  return { key: id, name, cents: row.cents, share: row.share, fill: icon?.color ?? "var(--muted-foreground)" }
 }
 
 // Valor e fatia do total na dica, com a cor do item.

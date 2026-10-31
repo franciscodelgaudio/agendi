@@ -15,9 +15,11 @@ const OIL_ID = "64b7f0c2a1b2c3d4e5f60761";
 const OTHER_SERVICE_ID = "64b7f0c2a1b2c3d4e5f60739";
 const SINGLE_ID = "64b7f0c2a1b2c3d4e5f60781";
 const COUPLE_ID = "64b7f0c2a1b2c3d4e5f60782";
-const SINGLE = { id: SINGLE_ID, name: "Sala Single", beds: 1 };
-const COUPLE = { id: COUPLE_ID, name: "Sala Casal", beds: 2 };
-const ROOMS = [SINGLE, COUPLE];
+const INACTIVE_ID = "64b7f0c2a1b2c3d4e5f60784";
+const SINGLE = { id: SINGLE_ID, name: "Sala Single", active: true };
+const COUPLE = { id: COUPLE_ID, name: "Sala Casal", active: true };
+const INACTIVE = { id: INACTIVE_ID, name: "Sala Antiga", active: false };
+const STATIONS = [SINGLE, COUPLE, INACTIVE];
 
 // Horário de 24/09/2026 em Brasília ("14:30") como Date em UTC.
 function at(time: string) {
@@ -30,7 +32,7 @@ const validInput = {
   room: "310",
   startsAt: "2026-09-24T16:00",
   durationMinutes: "45",
-  treatmentRoomId: COUPLE_ID,
+  stationId: COUPLE_ID,
   color: "#7c3aed",
 };
 
@@ -39,11 +41,11 @@ type RegisteredBooking = { therapistId: string | null; serviceId: string; durati
 describe("correctRegisteredBooking", () => {
   function makeDeps({
     booking = { therapistId: ANA_ID, serviceId: CANDLE_ID, durationMinutes: 60, serviceCount: 1 } as RegisteredBooking | null,
-    treatmentRoomIds = [] as string[],
+    stationIds = [] as string[],
     serviceFound = true,
     busy = false,
     blocked = false,
-    roomBookings = [] as { startsAt: Date; endsAt: Date }[],
+    stationBookings = [] as { startsAt: Date; endsAt: Date }[],
     found = true,
   } = {}) {
     return {
@@ -51,12 +53,12 @@ describe("correctRegisteredBooking", () => {
       findBooking: vi.fn().mockResolvedValue(booking),
       // Serviço do agendamento, para os espaços permitidos; null se foi removido da unidade.
       findService: vi.fn(async (id: string) =>
-        serviceFound ? { id, name: "Massagem Candle", requiresTherapist: true, treatmentRoomIds } : null,
+        serviceFound ? { id, name: "Massagem Candle", requiresTherapist: true, stationIds } : null,
       ),
-      findTreatmentRoom: vi.fn(async (id: string) => ROOMS.find((room) => room.id === id) ?? null),
+      findStation: vi.fn(async (id: string) => STATIONS.find((station) => station.id === id) ?? null),
       hasConflict: vi.fn().mockResolvedValue(busy),
       isBlocked: vi.fn().mockResolvedValue(blocked),
-      findRoomBookings: vi.fn().mockResolvedValue(roomBookings),
+      findStationBookings: vi.fn().mockResolvedValue(stationBookings),
       update: vi.fn().mockResolvedValue(found),
     };
   }
@@ -74,7 +76,7 @@ describe("correctRegisteredBooking", () => {
         guest: { name: "Maria Souza", room: "310" },
         startsAt: at("16:00"),
         endsAt: at("16:45"),
-        treatmentRoom: { roomId: COUPLE_ID, roomName: "Sala Casal" },
+        station: { stationId: COUPLE_ID, stationName: "Sala Casal" },
         color: "#7c3aed",
       },
       { performedAt: at("16:00"), guest: { name: "Maria Souza", room: "310" }, durationMinutes: 45 },
@@ -91,7 +93,7 @@ describe("correctRegisteredBooking", () => {
     );
 
     const [, fields] = deps.update.mock.calls[0];
-    expect(Object.keys(fields).sort()).toEqual(["color", "endsAt", "guest", "startsAt", "treatmentRoom"]);
+    expect(Object.keys(fields).sort()).toEqual(["color", "endsAt", "guest", "startsAt", "station"]);
     expect(deps.findService).toHaveBeenCalledWith(CANDLE_ID);
   });
 
@@ -107,8 +109,8 @@ describe("correctRegisteredBooking", () => {
       endsAt: at("16:45"),
       excludeId: BOOKING_ID,
     });
-    expect(deps.findRoomBookings).toHaveBeenCalledWith({
-      treatmentRoomId: COUPLE_ID,
+    expect(deps.findStationBookings).toHaveBeenCalledWith({
+      stationId: COUPLE_ID,
       startsAt: at("16:00"),
       endsAt: at("16:45"),
       excludeId: BOOKING_ID,
@@ -136,7 +138,7 @@ describe("correctRegisteredBooking", () => {
 
     expect(result).toEqual({ ok: false, error: "duration_locked" });
     expect(deps.hasConflict).not.toHaveBeenCalled();
-    expect(deps.findRoomBookings).not.toHaveBeenCalled();
+    expect(deps.findStationBookings).not.toHaveBeenCalled();
     expect(deps.update).not.toHaveBeenCalled();
   });
 
@@ -165,7 +167,7 @@ describe("correctRegisteredBooking", () => {
     expect(result).toEqual({ ok: true });
     expect(deps.isBlocked).not.toHaveBeenCalled();
     expect(deps.hasConflict).not.toHaveBeenCalled();
-    expect(deps.findRoomBookings).toHaveBeenCalled();
+    expect(deps.findStationBookings).toHaveBeenCalled();
   });
 
   it("retorna booking_not_found sem checar nem salvar quando o agendamento não existe ou não virou atendimento", async () => {
@@ -200,7 +202,7 @@ describe("correctRegisteredBooking", () => {
     [{ room: "a".repeat(21) }, "room_too_long"],
     [{ startsAt: "24/09/2026" }, "invalid_starts_at"],
     [{ durationMinutes: "4" }, "invalid_duration"],
-    [{ treatmentRoomId: " " }, "invalid_treatment_room"],
+    [{ stationId: " " }, "invalid_station"],
     [{ color: "#123456" }, "invalid_color"],
   ])("valida o formulário: %j retorna %s sem salvar", async (change, error) => {
     const deps = makeDeps();
@@ -211,25 +213,25 @@ describe("correctRegisteredBooking", () => {
     expect(deps.update).not.toHaveBeenCalled();
   });
 
-  it("retorna treatment_room_not_found sem salvar quando o espaço não é da unidade", async () => {
+  it("retorna station_not_found sem salvar quando o espaço não é da unidade", async () => {
     const deps = makeDeps();
 
     const result = await correctRegisteredBooking(
-      { ...validInput, treatmentRoomId: "64b7f0c2a1b2c3d4e5f60789" },
+      { ...validInput, stationId: "64b7f0c2a1b2c3d4e5f60789" },
       BOOKING_ID,
       deps,
     );
 
-    expect(result).toEqual({ ok: false, error: "treatment_room_not_found" });
+    expect(result).toEqual({ ok: false, error: "station_not_found" });
     expect(deps.update).not.toHaveBeenCalled();
   });
 
-  it("retorna treatment_room_not_allowed sem salvar quando o serviço do agendamento não usa o espaço", async () => {
-    const deps = makeDeps({ treatmentRoomIds: [SINGLE_ID] });
+  it("retorna station_not_allowed sem salvar quando o serviço do agendamento não usa o espaço", async () => {
+    const deps = makeDeps({ stationIds: [SINGLE_ID] });
 
     const result = await correctRegisteredBooking(validInput, BOOKING_ID, deps);
 
-    expect(result).toEqual({ ok: false, error: "treatment_room_not_allowed" });
+    expect(result).toEqual({ ok: false, error: "station_not_allowed" });
     expect(deps.update).not.toHaveBeenCalled();
   });
 
@@ -257,17 +259,23 @@ describe("correctRegisteredBooking", () => {
     expect(deps.update).not.toHaveBeenCalled();
   });
 
-  it("retorna room_full sem salvar quando o espaço está lotado no horário", async () => {
-    const busyRoom = [
-      { startsAt: at("15:30"), endsAt: at("17:00") },
-      { startsAt: at("16:00"), endsAt: at("16:30") },
-    ];
-    const deps = makeDeps({ roomBookings: busyRoom });
+  it("retorna station_busy sem salvar quando a estação está ocupada no horário", async () => {
+    const deps = makeDeps({ stationBookings: [{ startsAt: at("15:30"), endsAt: at("17:00") }] });
 
     const result = await correctRegisteredBooking(validInput, BOOKING_ID, deps);
 
-    expect(result).toEqual({ ok: false, error: "room_full" });
+    expect(result).toEqual({ ok: false, error: "station_busy" });
     expect(deps.update).not.toHaveBeenCalled();
+  });
+
+  // O atendimento já aconteceu: a correção vale mesmo numa estação desativada depois.
+  it("corrige mesmo quando a estação escolhida está desativada", async () => {
+    const deps = makeDeps();
+
+    const result = await correctRegisteredBooking({ ...validInput, stationId: INACTIVE_ID }, BOOKING_ID, deps);
+
+    expect(result).toEqual({ ok: true });
+    expect(deps.update.mock.calls[0][1].station).toEqual({ stationId: INACTIVE_ID, stationName: "Sala Antiga" });
   });
 });
 
@@ -278,12 +286,12 @@ describe("rescheduleBooking de agendamento registrado", () => {
     return {
       findBooking: vi.fn().mockResolvedValue({
         therapistId: ANA_ID,
-        treatmentRoom: { roomId: SINGLE_ID, beds: 1 },
+        station: { stationId: SINGLE_ID, active: true },
         registered,
       }),
       hasConflict: vi.fn().mockResolvedValue(false),
       isBlocked: vi.fn().mockResolvedValue(false),
-      findRoomBookings: vi.fn().mockResolvedValue([]),
+      findStationBookings: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue(true),
     };
   }
@@ -329,7 +337,7 @@ describe("rescheduleBooking de agendamento registrado", () => {
     expect(result).toEqual({ ok: false, error: "duration_locked" });
     expect(deps.isBlocked).not.toHaveBeenCalled();
     expect(deps.hasConflict).not.toHaveBeenCalled();
-    expect(deps.findRoomBookings).not.toHaveBeenCalled();
+    expect(deps.findStationBookings).not.toHaveBeenCalled();
     expect(deps.update).not.toHaveBeenCalled();
   });
 

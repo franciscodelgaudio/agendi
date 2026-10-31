@@ -52,14 +52,7 @@ export default async function WorkspaceCashFlowPage({
         as: "units",
         pipeline: [
           { $sort: { name: 1, _id: 1 } },
-          {
-            $project: {
-              _id: 0,
-              id: { $toString: "$_id" },
-              name: 1,
-              revenueShare: { $ifNull: ["$revenueShare", null] },
-            },
-          },
+          { $project: { _id: 0, id: { $toString: "$_id" }, name: 1 } },
         ],
       },
     },
@@ -102,7 +95,6 @@ export default async function WorkspaceCashFlowPage({
     : null
   const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
   const costs = summarizeCosts(
-    mergeCashFlowSummaries(costBuckets, monthFlows.map((flow) => flow.summary)).total.real,
     mergeGroupsByName(monthFlows.flatMap((flow) => flow.groups)).map(({ iconId, ...group }) => ({
       ...group,
       icon: (iconId && iconsById.get(iconId)) || null,
@@ -145,7 +137,6 @@ export default async function WorkspaceCashFlowPage({
       <CashFlowTable
         view={query.view}
         summary={summary}
-        hasPartnerShare={workspace.units.some((unit) => unit.revenueShare)}
         hasExpenses={flows.some((flow) => flow.hasExpenses)}
         today={today}
       />

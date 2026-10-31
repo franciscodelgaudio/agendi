@@ -1,48 +1,71 @@
 import { describe, it, expect } from "vitest";
+import { Types } from "mongoose";
 import { memberAttendsStages, therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist";
 
 const attendsRoleCond = {
   $or: [{ $eq: ["$$this.admin", true] }, { $in: ["attends", { $ifNull: ["$$this.permissions", []] }] }],
 };
 
+const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
+
 describe("therapistOptionsStages", () => {
-  it("monta o campo therapists com os membros cuja role do workspace é admin ou realiza atendimentos", () => {
-    expect(therapistOptionsStages()).toEqual([
-      {
-        $set: {
-          therapistRoleIds: {
-            $map: {
-              input: { $filter: { input: { $ifNull: ["$roles", []] }, cond: attendsRoleCond } },
-              in: "$$this._id",
-            },
+  // Membros que atendem, com as unidades de que fazem parte (unitIds), para filtrar por unidade.
+  const stages = (memberFilter: object[]) => [
+    {
+      $set: {
+        therapistRoleIds: {
+          $map: {
+            input: { $filter: { input: { $ifNull: ["$roles", []] }, cond: attendsRoleCond } },
+            in: "$$this._id",
           },
         },
       },
-      {
-        $lookup: {
-          from: "workspace_members",
-          localField: "_id",
-          foreignField: "workspaceId",
-          let: { roleIds: "$therapistRoleIds" },
-          as: "therapists",
-          pipeline: [
-            { $match: { $expr: { $in: ["$roleId", "$$roleIds"] } } },
-            { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
-            { $unwind: "$user" },
-            {
-              $project: {
-                _id: 0,
-                id: { $toString: "$userId" },
-                name: { $ifNull: ["$user.name", "$user.email"] },
-                image: { $ifNull: ["$user.avatarUrl", null] },
-              },
+    },
+    {
+      $lookup: {
+        from: "workspace_members",
+        localField: "_id",
+        foreignField: "workspaceId",
+        let: { roleIds: "$therapistRoleIds" },
+        as: "therapists",
+        pipeline: [
+          { $match: { $expr: { $in: ["$roleId", "$$roleIds"] } } },
+          {
+            $lookup: {
+              from: "units",
+              localField: "_id",
+              foreignField: "workspaceMemberIds",
+              as: "memberUnits",
+              pipeline: [{ $project: { _id: 1 } }],
             },
-            { $sort: { name: 1, id: 1 } },
-          ],
-        },
+          },
+          ...memberFilter,
+          { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
+          { $unwind: "$user" },
+          {
+            $project: {
+              _id: 0,
+              id: { $toString: "$userId" },
+              name: { $ifNull: ["$user.name", "$user.email"] },
+              image: { $ifNull: ["$user.avatarUrl", null] },
+              unitIds: { $map: { input: "$memberUnits", in: { $toString: "$$this._id" } } },
+            },
+          },
+          { $sort: { name: 1, id: 1 } },
+        ],
       },
-      { $unset: "therapistRoleIds" },
-    ]);
+    },
+    { $unset: "therapistRoleIds" },
+  ];
+
+  it("monta o campo therapists com os membros cuja role do workspace é admin ou realiza atendimentos", () => {
+    expect(therapistOptionsStages()).toEqual(stages([]));
+  });
+
+  it("com a unidade, deixa só os membros dela", () => {
+    expect(therapistOptionsStages(UNIT_ID)).toEqual(
+      stages([{ $match: { "memberUnits._id": new Types.ObjectId(UNIT_ID) } }]),
+    );
   });
 });
 

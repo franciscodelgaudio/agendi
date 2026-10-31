@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { UNIT_PAGES, WORKSPACE_PAGES } from "@/service/workspace/[workspaceId]/page-access";
+import { WORKSPACE_PAGES } from "@/service/workspace/[workspaceId]/page-access";
 import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
 import { createRole, deleteRole, renameRole, updateRolePermissions } from "@/service/workspace/[workspaceId]/users/permissions/role";
 
@@ -14,23 +14,62 @@ describe("createRole", () => {
   function makeDeps(overrides: Partial<Parameters<typeof createRole>[2]> = {}) {
     const deps = {
       isNameTaken: vi.fn().mockResolvedValue(false),
+      findBaseRole: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue({ id: ROLE_ID }),
     };
     return { ...deps, ...overrides } as typeof deps;
   }
 
-  it("cria a role sem permissões de ação e com todas as páginas liberadas", async () => {
+  it.each([
+    ["sem ponto de partida", { name: "  Terapeuta  " }],
+    ["com ponto de partida nulo", { name: "  Terapeuta  ", baseRoleId: null }],
+    ["com ponto de partida vazio", { name: "  Terapeuta  ", baseRoleId: "" }],
+  ])("%s, cria a role só com a página Início e sem ações", async (_label, input) => {
     const deps = makeDeps();
 
-    const result = await createRole({ name: "  Terapeuta  " }, { actor: ADMIN }, deps);
+    const result = await createRole(input, { actor: ADMIN }, deps);
 
     expect(result).toEqual({ ok: true, roleId: ROLE_ID });
     expect(deps.isNameTaken).toHaveBeenCalledWith("Terapeuta");
+    expect(deps.findBaseRole).not.toHaveBeenCalled();
     expect(deps.create).toHaveBeenCalledWith({
       name: "Terapeuta",
       permissions: [],
-      pages: { workspace: [...WORKSPACE_PAGES], unit: [...UNIT_PAGES] },
+      pages: { workspace: ["home"], unit: [] },
     });
+  });
+
+  it("com ponto de partida, copia as permissões e as páginas da role escolhida", async () => {
+    const base = {
+      permissions: ["bookings.manage", "attends"],
+      pages: { workspace: ["home", "calendar"], unit: ["calendar", "appointments"] },
+    };
+    const deps = makeDeps({ findBaseRole: vi.fn().mockResolvedValue(base) });
+
+    const result = await createRole({ name: "Esteticista", baseRoleId: OTHER_ROLE_ID }, { actor: ADMIN }, deps);
+
+    expect(result).toEqual({ ok: true, roleId: ROLE_ID });
+    expect(deps.findBaseRole).toHaveBeenCalledWith(OTHER_ROLE_ID);
+    expect(deps.create).toHaveBeenCalledWith({ name: "Esteticista", ...base });
+  });
+
+  it("retorna role_not_found sem criar quando a role de ponto de partida não existe (ou não é do workspace)", async () => {
+    const deps = makeDeps();
+
+    const result = await createRole({ name: "Esteticista", baseRoleId: OTHER_ROLE_ID }, { actor: ADMIN }, deps);
+
+    expect(result).toEqual({ ok: false, error: "role_not_found" });
+    expect(deps.create).not.toHaveBeenCalled();
+  });
+
+  it("retorna invalid_input sem criar quando o ponto de partida não é string", async () => {
+    const deps = makeDeps();
+
+    const result = await createRole({ name: "Esteticista", baseRoleId: 1 }, { actor: ADMIN }, deps);
+
+    expect(result).toEqual({ ok: false, error: "invalid_input" });
+    expect(deps.findBaseRole).not.toHaveBeenCalled();
+    expect(deps.create).not.toHaveBeenCalled();
   });
 
   it.each([

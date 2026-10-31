@@ -1,42 +1,55 @@
 "use client"
 
-import { useState } from "react"
-import { Field, FieldLabel } from "@/components/ui/field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export type RoleOption = { id: string; name: string; admin: boolean }
 
 export type RoleChoices = { roles: RoleOption[]; allowAdmin: boolean }
 
-export function RoleField({
-  idPrefix,
+export function RoleSelect({
+  id,
   choices,
-  defaultValue,
+  value,
+  onValueChange,
+  disabled,
+  lockAdmin,
+  className,
+  "aria-label": ariaLabel,
 }: {
-  idPrefix: string
+  id?: string
   choices: RoleChoices
-  defaultValue?: string
+  value: string | null
+  onValueChange: (value: string) => void
+  disabled?: boolean
+  lockAdmin?: boolean
+  className?: string
+  "aria-label"?: string
 }) {
-  const roleItems = choices.roles
-    .filter((role) => choices.allowAdmin || !role.admin)
-    .map((role) => ({ value: role.id, label: role.name }))
-  const [initialValue] = useState(defaultValue ?? null)
+  const items = choices.roles.map((role) => ({
+    value: role.id,
+    label: role.name,
+    disabled: (role.admin && !choices.allowAdmin) || (!!lockAdmin && !role.admin),
+  }))
 
   return (
-    <Field>
-      <FieldLabel htmlFor={`${idPrefix}-role`}>Função</FieldLabel>
-      <Select name="roleId" items={roleItems} defaultValue={initialValue} required>
-        <SelectTrigger id={`${idPrefix}-role`} className="w-full">
-          <SelectValue placeholder="Escolha uma função" />
-        </SelectTrigger>
-        <SelectContent>
-          {roleItems.map((item) => (
-            <SelectItem key={item.value} value={item.value}>
-              {item.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </Field>
+    <Select
+      name="roleId"
+      items={items}
+      value={value}
+      onValueChange={(next) => onValueChange(next as string)}
+      disabled={disabled}
+      required
+    >
+      <SelectTrigger id={id} aria-label={ariaLabel} className={className ?? "w-full"}>
+        <SelectValue placeholder="Escolha uma função" />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value} disabled={item.disabled}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }

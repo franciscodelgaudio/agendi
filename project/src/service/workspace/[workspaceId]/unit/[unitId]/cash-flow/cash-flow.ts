@@ -1,7 +1,6 @@
 import type { PipelineStage } from "mongoose";
 import { parseDay } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-list";
 import { groupLimitForMonth, type GroupLimits } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense";
-import { calculatePartnerShareCents, type RevenueShare, type RevenueSharePeriod } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share";
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone";
 import { first, type SearchParams } from "@/service/workspace/[workspaceId]/unit/unit-list";
 
@@ -26,7 +25,7 @@ export type DayTotal = {
 };
 type TherapistDayTotal = DayTotal & { therapistId: string; therapistName: string };
 
-export type CashFlowAmounts = { grossCents: number; partnerShareCents: number; netCents: number };
+export type CashFlowAmounts = { grossCents: number; netCents: number };
 export type CashFlowBucket = DayRange & { real: CashFlowAmounts; forecast: CashFlowAmounts };
 export type CashFlowSummary = { buckets: CashFlowBucket[]; total: { real: CashFlowAmounts; forecast: CashFlowAmounts } };
 export type ServiceTotal = { serviceId: string; serviceName: string; count: number; cents: number };
@@ -117,25 +116,8 @@ export function cashFlowBuckets({ view, date }: CashFlowQuery): DayRange[] {
   return buckets;
 }
 
-// Período de repasse que contém o dia. Quinzenas: 1–15 e 16–fim do mês.
-function sharePeriodOf(date: string, period: RevenueSharePeriod): DayRange {
-  const [year, month, day] = parseDay(date)!;
-  if (period === "weekly") {
-    const monday = weekStart(date);
-    return { from: monday, to: addDays(monday, 6) };
-  }
-  if (period === "biweekly" && day <= 15) return { from: utcDay(year, month, 1), to: utcDay(year, month, 15) };
-  if (period === "biweekly") return { from: utcDay(year, month, 16), to: utcDay(year, month + 1, 0) };
-  return { from: utcDay(year, month, 1), to: utcDay(year, month + 1, 0) };
-}
-
-// Dias a buscar no banco: os exibidos mais o resto dos períodos de repasse das pontas,
-// porque a faixa do repasse depende do faturamento do período inteiro.
-export function cashFlowFetchRange(buckets: DayRange[], period: RevenueSharePeriod | null): DayRange {
-  const from = buckets[0].from;
-  const to = buckets.at(-1)!.to;
-  if (!period) return { from, to };
-  return { from: sharePeriodOf(from, period).from, to: sharePeriodOf(to, period).to };
+export function cashFlowFetchRange(buckets: DayRange[]): DayRange {
+  return { from: buckets[0].from, to: buckets.at(-1)!.to };
 }
 
 // Início e fim (exclusivo) do intervalo em Brasília, em UTC.
@@ -285,25 +267,6 @@ export function summarizeServices(appointments: ServiceTotal[], bookings: Servic
   );
 }
 
-// Repasse (sem arredondar) de cada dia: calculado sobre o período de repasse inteiro
-// e rateado pelo faturamento de cada dia.
-export function partnerShareByDay(totals: Map<string, number>, revenueShare: RevenueShare | null) {
-  const shares = new Map<string, number>();
-  if (!revenueShare) return shares;
-
-  const periodRevenue = new Map<string, number>();
-  for (const [date, cents] of totals) {
-    const key = sharePeriodOf(date, revenueShare.period).from;
-    periodRevenue.set(key, (periodRevenue.get(key) ?? 0) + cents);
-  }
-  for (const [date, cents] of totals) {
-    if (!cents) continue;
-    const revenue = periodRevenue.get(sharePeriodOf(date, revenueShare.period).from)!;
-    shares.set(date, (calculatePartnerShareCents(revenue, revenueShare) * cents) / revenue);
-  }
-  return shares;
-}
-
 // Faturamento de cada dia, somando os profissionais.
 function sumTotals(...lists: DayTotal[][]) {
   const totals = new Map<string, number>();
@@ -311,45 +274,28 @@ function sumTotals(...lists: DayTotal[][]) {
   return totals;
 }
 
-function bucketAmounts({ from, to }: DayRange, totals: Map<string, number>, shares: Map<string, number>): CashFlowAmounts {
+function bucketAmounts({ from, to }: DayRange, totals: Map<string, number>): CashFlowAmounts {
   let grossCents = 0;
-  let share = 0;
   for (const [date, cents] of totals) {
-    if (date < from || date > to) continue;
-    grossCents += cents;
-    share += shares.get(date) ?? 0;
+    if (date >= from && date <= to) grossCents += cents;
   }
-  const partnerShareCents = Math.round(share);
-  return { grossCents, partnerShareCents, netCents: grossCents - partnerShareCents };
+  return { grossCents, netCents: grossCents };
 }
 
 function addAmounts(a: CashFlowAmounts, b: CashFlowAmounts): CashFlowAmounts {
-  return {
-    grossCents: a.grossCents + b.grossCents,
-    partnerShareCents: a.partnerShareCents + b.partnerShareCents,
-    netCents: a.netCents + b.netCents,
-  };
+  return { grossCents: a.grossCents + b.grossCents, netCents: a.netCents + b.netCents };
 }
 
-// Real: atendimentos. Previsto: atendimentos mais agendamentos futuros. Os dias fora dos
-// intervalos só servem para o repasse; o total é a soma dos intervalos já arredondados.
-// O repasse é calculado sobre o bruto e sai do líquido.
-export function summarizeCashFlow(
-  buckets: DayRange[],
-  appointments: DayTotal[],
-  bookings: DayTotal[],
-  revenueShare: RevenueShare | null,
-): CashFlowSummary {
+// Real: atendimentos. Previsto: atendimentos mais agendamentos futuros.
+export function summarizeCashFlow(buckets: DayRange[], appointments: DayTotal[], bookings: DayTotal[]): CashFlowSummary {
   const real = sumTotals(appointments);
   const forecast = sumTotals(appointments, bookings);
-  const realShares = partnerShareByDay(real, revenueShare);
-  const forecastShares = partnerShareByDay(forecast, revenueShare);
 
-  const zero = { grossCents: 0, partnerShareCents: 0, netCents: 0 };
+  const zero = { grossCents: 0, netCents: 0 };
   const rows = buckets.map((bucket) => ({
     ...bucket,
-    real: bucketAmounts(bucket, real, realShares),
-    forecast: bucketAmounts(bucket, forecast, forecastShares),
+    real: bucketAmounts(bucket, real),
+    forecast: bucketAmounts(bucket, forecast),
   }));
   return {
     buckets: rows,
@@ -411,7 +357,7 @@ function withExpenses(amounts: CashFlowAmounts, expenseCents: number): ExpenseCa
   return { ...amounts, expenseCents, netCents: amounts.netCents - expenseCents };
 }
 
-const ZERO_EXPENSE_AMOUNTS = { grossCents: 0, partnerShareCents: 0, expenseCents: 0, netCents: 0 };
+const ZERO_EXPENSE_AMOUNTS = { grossCents: 0, expenseCents: 0, netCents: 0 };
 
 function addExpenseAmounts(a: ExpenseCashFlowAmounts, b: ExpenseCashFlowAmounts): ExpenseCashFlowAmounts {
   return {
@@ -445,22 +391,17 @@ export function applyExpenses(summary: CashFlowSummary, expenses: ExpenseDayCent
   return expenseSummaryOf(buckets);
 }
 
-export type CostRow<T> = ({ kind: "partner_share" } | { kind: "group"; group: T }) & {
+export type CostRow<T> = {
+  group: T;
   cents: number;
   // Fração do total, de 0 a 1.
   share: number;
 };
 
-// Para onde foi o dinheiro: repasse e cada grupo de despesa, do maior para o menor.
-// O sort é estável, então no empate fica a ordem de montagem (repasse, grupos).
-export function summarizeCosts<T extends { paidCents: number }>(
-  { partnerShareCents }: Pick<CashFlowAmounts, "partnerShareCents">,
-  groups: T[],
-): { totalCents: number; rows: CostRow<T>[] } {
-  const items = [
-    { kind: "partner_share" as const, cents: partnerShareCents },
-    ...groups.map((group) => ({ kind: "group" as const, group, cents: group.paidCents })),
-  ].filter((item) => item.cents > 0);
+// Para onde foi o dinheiro: cada grupo de despesa, do maior para o menor. O sort é estável,
+// então no empate fica a ordem recebida.
+export function summarizeCosts<T extends { paidCents: number }>(groups: T[]): { totalCents: number; rows: CostRow<T>[] } {
+  const items = groups.map((group) => ({ group, cents: group.paidCents })).filter((item) => item.cents > 0);
   const totalCents = items.reduce((sum, item) => sum + item.cents, 0);
   return {
     totalCents,

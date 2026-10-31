@@ -31,7 +31,7 @@ export default async function CashFlowPage({
   await requirePage(workspaceId, user.id, { unit: "cash_flow", unitId })
   const data = await loadCashFlowSummaryScreen(workspaceId, user.id, unitId, query.date, now, search.costs)
   if (!data) notFound()
-  const { today, shown, revenueShare, wallet, openingBalance, balanceCents, summary, columns, costMonth, costs, curve } =
+  const { today, shown, wallet, openingBalance, balanceCents, summary, columns, costMonth, costs, curve } =
     data
   const therapists = therapistListPage(data.therapists, { ...filters, page })
 
@@ -91,7 +91,6 @@ export default async function CashFlowPage({
       <CashFlowTable
         view={query.view}
         summary={summary}
-        hasPartnerShare={!!revenueShare}
         hasExpenses={columns.expenses}
         today={today}
       />

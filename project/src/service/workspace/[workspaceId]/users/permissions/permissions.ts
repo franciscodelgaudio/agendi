@@ -7,6 +7,7 @@ export const PERMISSIONS = [
   "services.manage",
   "bookings.manage",
   "appointments.manage",
+  "customers.manage",
   "stock.manage",
   "stock.transfer",
   "cash_flow.manage",

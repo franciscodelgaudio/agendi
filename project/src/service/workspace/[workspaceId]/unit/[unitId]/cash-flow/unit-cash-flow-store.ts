@@ -14,7 +14,6 @@ import {
   type ExpenseGroupTotal,
   type GroupLimits,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense";
-import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share";
 import { Appointment } from "@/models/Appointment";
 import { Expense } from "@/models/Expense";
 import { ExpenseGroup } from "@/models/ExpenseGroup";
@@ -30,31 +29,25 @@ export function groupLimitsOf(group: {
   };
 }
 
-export type CashFlowUnit = { id: string; revenueShare: RevenueShare | null };
+export type CashFlowUnit = { id: string };
 
 // Líquido real da unidade nos dias do saldo da carteira (até hoje), com as mesmas regras do caixa.
 export async function loadUnitNet(unit: CashFlowUnit, range: DayRange) {
-  const { revenueShare } = unit;
   const unitMatch = { $match: { unitId: new Types.ObjectId(unit.id) } };
   const [appointments, expenses] = await Promise.all([
-    Appointment.aggregate<DayTotal>([
-      unitMatch,
-      ...dailyAppointmentTotalsPipeline(cashFlowFetchRange([range], revenueShare?.period ?? null)),
-    ]),
+    Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
     Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(range)]),
   ]);
-  return applyExpenses(summarizeCashFlow([range], appointments, [], revenueShare), expenses).total.real.netCents;
+  return applyExpenses(summarizeCashFlow([range], appointments, []), expenses).total.real.netCents;
 }
 
-// Caixa de uma unidade nos intervalos exibidos, com as regras dela (repasse e despesas). O
+// Caixa de uma unidade nos intervalos exibidos, com as despesas dela. O
 // acesso à unidade é verificado por quem chama.
 export async function loadUnitCashFlow(unit: CashFlowUnit, buckets: DayRange[]) {
-  const { revenueShare } = unit;
-  const shown = { from: buckets[0].from, to: buckets.at(-1)!.to };
-  const range = cashFlowFetchRange(buckets, revenueShare?.period ?? null);
+  const shown = cashFlowFetchRange(buckets);
   const unitMatch = { $match: { unitId: new Types.ObjectId(unit.id) } };
   const [appointments, expenses, groups, groupTotals] = await Promise.all([
-    Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
+    Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(shown)]),
     Expense.aggregate<ExpenseDayTotal>([unitMatch, ...dailyExpenseTotalsPipeline(shown)]),
     ExpenseGroup.find({ unitId: new Types.ObjectId(unit.id) })
       .select({ name: 1, iconId: 1, monthlyLimitCents: 1, limitChanges: 1 })
@@ -62,7 +55,7 @@ export async function loadUnitCashFlow(unit: CashFlowUnit, buckets: DayRange[]) 
       .lean(),
     Expense.aggregate<ExpenseGroupTotal>([unitMatch, ...expenseGroupTotalsPipeline(shown)]),
   ]);
-  const summary = applyExpenses(summarizeCashFlow(buckets, appointments, [], revenueShare), expenses);
+  const summary = applyExpenses(summarizeCashFlow(buckets, appointments, []), expenses);
   // Mesmos valores reais da tabela: das despesas, só as pagas.
   const paidByGroup = new Map(groupTotals.map((total) => [total.groupId, total.paidCents]));
 

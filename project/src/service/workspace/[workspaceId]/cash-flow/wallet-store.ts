@@ -1,6 +1,5 @@
 import { Types } from "mongoose";
 import { openingBalanceRange, type OpeningBalance } from "@/service/workspace/[workspaceId]/cash-flow/opening-balance";
-import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share";
 import { groupLimitsOf, loadUnitNet } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store";
 import { walletBalance } from "@/service/workspace/[workspaceId]/cash-flow/wallet";
 import {
@@ -34,14 +33,9 @@ export async function loadWallets(workspaceId: string, today: string, unitId?: s
     Wallet.find({ workspaceId: workspace, ...(unitId && { "units.unitId": new Types.ObjectId(unitId) }) })
       .sort({ name: 1, _id: 1 })
       .lean(),
-    Unit.find({ workspaceId: workspace }).select({ name: 1, revenueShare: 1 }).lean(),
+    Unit.find({ workspaceId: workspace }).select({ name: 1 }).lean(),
   ]);
-  const unitsById = new Map(
-    units.map((unit) => [
-      unit._id.toString(),
-      { name: unit.name, revenueShare: (unit.revenueShare ?? null) as RevenueShare | null },
-    ]),
-  );
+  const unitsById = new Map(units.map((unit) => [unit._id.toString(), { name: unit.name }]));
 
   return Promise.all(
     wallets.map(async (wallet) => {
@@ -53,9 +47,7 @@ export async function loadWallets(workspaceId: string, today: string, unitId?: s
       const range = openingBalanceRange(openingBalance, today);
       const [nets, walletExpenseCents] = await Promise.all([
         Promise.all(
-          walletUnits.map(({ unitId }) =>
-            range ? loadUnitNet({ id: unitId, ...unitsById.get(unitId)! }, range) : 0,
-          ),
+          walletUnits.map(({ unitId }) => (range ? loadUnitNet({ id: unitId }, range) : 0)),
         ),
         range ? walletPaidExpenses(wallet._id, range) : 0,
       ]);

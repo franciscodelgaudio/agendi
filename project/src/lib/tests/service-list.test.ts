@@ -53,7 +53,7 @@ describe("serviceListPipeline", () => {
       productIds: { $map: { input: "$productIds", as: "id", in: { $toString: "$$id" } } },
       // Serviço cadastrado antes desses campos exige profissional e aceita qualquer espaço.
       requiresTherapist: { $ifNull: ["$requiresTherapist", true] },
-      treatmentRoomIds: { $map: { input: { $ifNull: ["$treatmentRoomIds", []] }, as: "id", in: { $toString: "$$id" } } },
+      stationIds: { $map: { input: { $ifNull: ["$stationIds", []] }, as: "id", in: { $toString: "$$id" } } },
     },
   };
 

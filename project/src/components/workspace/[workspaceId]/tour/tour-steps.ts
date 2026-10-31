@@ -31,7 +31,7 @@ export type TourStep = {
   show?: (access: TourAccess) => boolean
 }
 
-export type TourId = "start" | "general" | "service" | "uras" | "settings"
+export type TourId = "start" | "general" | "settings"
 
 export type Tour = {
   id: TourId
@@ -43,7 +43,6 @@ export type Tour = {
 
 const workspacePage = (page: WorkspacePage) => (access: TourAccess) => access.pages.workspace.includes(page)
 const unitPage = (page: UnitPage) => (access: TourAccess) => access.pages.unit.includes(page)
-const allows = (permission: Permission) => (access: TourAccess) => can(access.actor, permission)
 const managesUnits = (access: TourAccess) => can(access.actor, "units.manage") && access.pages.workspace.includes("units")
 const managesUnitPage = (page: UnitPage, permission: Permission) => (access: TourAccess) =>
   can(access.actor, permission) && access.pages.unit.includes(page)
@@ -224,7 +223,7 @@ const general: Tour = {
       id: "unit-tab-cash_flow",
       target: "unit-tab-cash_flow",
       title: "Caixa da unidade",
-      body: "Entradas, despesas por grupo, repasse ao parceiro, comissões e o líquido só desta unidade.",
+      body: "Entradas, despesas por grupo e o líquido só desta unidade.",
       show: unitPage("cash_flow"),
     },
     {
@@ -233,65 +232,6 @@ const general: Tour = {
       title: "Estoque",
       body: "Os produtos da unidade, as compras e o consumo, que sai sozinho a cada atendimento.",
       show: unitPage("stock"),
-    },
-  ],
-}
-
-const service: Tour = {
-  id: "service",
-  title: "Atendimento",
-  show: (access) => can(access.actor, "inbox.use") || can(access.actor, "channels.manage"),
-  steps: [
-    {
-      id: "nav-inbox",
-      target: "nav-inbox",
-      sidebar: true,
-      side: "right",
-      title: "Conversas",
-      body: "As mensagens dos clientes chegam aqui para a equipe responder.",
-      show: allows("inbox.use"),
-    },
-    {
-      id: "nav-channels",
-      target: "nav-channels",
-      action: "click",
-      href: "/channels",
-      sidebar: true,
-      side: "right",
-      title: "Canais",
-      body: "Clique em Canais.",
-      show: allows("channels.manage"),
-    },
-    {
-      id: "create-channel",
-      target: "create-channel",
-      title: "Conecte um canal",
-      body: "Ligue um número do WhatsApp Business ou uma conta do Instagram ao workspace.",
-      show: allows("channels.manage"),
-    },
-  ],
-}
-
-const uras: Tour = {
-  id: "uras",
-  title: "URAs",
-  show: allows("uras.manage"),
-  steps: [
-    {
-      id: "nav-uras",
-      target: "nav-uras",
-      action: "click",
-      href: "/uras",
-      sidebar: true,
-      side: "right",
-      title: "URAs",
-      body: "Clique em URAs.",
-    },
-    {
-      id: "create-ura",
-      target: "create-ura",
-      title: "Atendimento automático",
-      body: "Monte fluxos para os canais: menus, perguntas e agendamento direto pela conversa.",
     },
   ],
 }
@@ -325,15 +265,7 @@ const settings: Tour = {
       body: "Crie as funções e escolha o que cada uma enxerga e pode fazer.",
       show: (access) => access.actor.admin && access.pages.workspace.includes("users"),
     },
-    {
-      id: "nav-tickets",
-      target: "nav-tickets",
-      sidebar: true,
-      side: "right",
-      title: "Tickets",
-      body: "Relate bugs e peça melhorias ao time do Agendi.",
-    },
   ],
 }
 
-export const TOURS: Tour[] = [start, general, service, uras, settings]
+export const TOURS: Tour[] = [start, general, settings]

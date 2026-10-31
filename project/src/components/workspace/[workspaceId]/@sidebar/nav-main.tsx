@@ -6,13 +6,9 @@ import {
   MapPinIcon,
   CalendarIcon,
   HomeIcon,
-  LifeBuoyIcon,
-  MessagesSquareIcon,
   ArchiveIcon,
-  RadioTowerIcon,
   UsersIcon,
   WalletIcon,
-  WorkflowIcon,
   type LucideIcon,
 } from "lucide-react"
 import {
@@ -23,7 +19,6 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { WORKSPACE_PAGE_PATHS, type WorkspacePage } from "@/service/workspace/[workspaceId]/page-access"
-import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 
 // tour: marca do item para o tutorial destacá-lo.
 type NavItem = { title: string; href: string; icon: LucideIcon; tour: string }
@@ -33,9 +28,8 @@ export function isNavItemActive(pathname: string, href: string, base: string) {
   return pathname === href || (href !== base && pathname.startsWith(`${href}/`))
 }
 
-// pages: páginas do sistema liberadas para a role do usuário; Conversas, Canais e URAs
-// seguem as permissões dela (actor). Tickets é de todos.
-export function NavMain({ workspaceId, pages, actor }: { workspaceId: string; pages: WorkspacePage[]; actor: Actor }) {
+// pages: páginas do sistema liberadas para a role do usuário.
+export function NavMain({ workspaceId, pages }: { workspaceId: string; pages: WorkspacePage[] }) {
   const pathname = usePathname()
   const base = `/workspace/${workspaceId}`
   const item = (page: WorkspacePage, title: string, icon: LucideIcon) =>
@@ -51,21 +45,7 @@ export function NavMain({ workspaceId, pages, actor }: { workspaceId: string; pa
         ...item("stock", "Estoque", ArchiveIcon),
       ],
     },
-    {
-      label: "Atendimento",
-      items: [
-        ...(can(actor, "inbox.use") ? [{ title: "Conversas", href: `${base}/inbox`, icon: MessagesSquareIcon, tour: "nav-inbox" }] : []),
-        ...(can(actor, "channels.manage") ? [{ title: "Canais", href: `${base}/channels`, icon: RadioTowerIcon, tour: "nav-channels" }] : []),
-        ...(can(actor, "uras.manage") ? [{ title: "URAs", href: `${base}/uras`, icon: WorkflowIcon, tour: "nav-uras" }] : []),
-      ],
-    },
-    {
-      label: "Configurações",
-      items: [
-        ...item("users", "Usuários", UsersIcon),
-        { title: "Tickets", href: `${base}/tickets`, icon: LifeBuoyIcon, tour: "nav-tickets" },
-      ],
-    },
+    { label: "Configurações", items: item("users", "Usuários", UsersIcon) },
   ]
 
   return groups.filter((group) => group.items.length > 0).map((group, i) => (

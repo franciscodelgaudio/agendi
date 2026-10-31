@@ -49,13 +49,11 @@ export default async function ExpensesPage({
     )
     redirect(`${pathname}?${params}`)
   }
-  // Equipe e repasse são automáticos: não recebem lançamentos.
-  const registeredGroups = groups.filter((group) => !group.automatic)
-  const create = canManage && registeredGroups.length > 0 && (
+  const create = canManage && groups.length > 0 && (
     <CreateExpenseSheet
       workspaceId={workspaceId}
       owner={{ unitId }}
-      groups={registeredGroups}
+      groups={groups}
       defaultDate={isCurrent ? today : month.from}
     />
   )

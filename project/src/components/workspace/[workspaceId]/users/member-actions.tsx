@@ -1,7 +1,18 @@
 "use client"
 
 import { useActionState, useState, useTransition } from "react"
-import { EllipsisIcon, PencilIcon, UserMinusIcon } from "lucide-react"
+import {
+  CircleCheckIcon,
+  EllipsisVerticalIcon,
+  LockIcon,
+  MailIcon,
+  MailXIcon,
+  PencilIcon,
+  ShieldCheckIcon,
+  UserIcon,
+  UserMinusIcon,
+} from "lucide-react"
+import { toast } from "sonner"
 import {
   cancelInviteAction,
   removeMemberAction,
@@ -17,8 +28,11 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
+  AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Avatar, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -27,10 +41,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { FieldDescription, FieldError, FieldGroup } from "@/components/ui/field"
-import { RoleField, type RoleChoices } from "@/components/workspace/[workspaceId]/users/member-fields"
+import { Field, FieldError, FieldLabel } from "@/components/ui/field"
+import { InitialFallback } from "@/components/shared/initial-fallback"
+import { RoleSelect, type RoleChoices } from "@/components/workspace/[workspaceId]/users/member-fields"
+import { INVITE_STATUS_LABELS } from "@/components/workspace/[workspaceId]/users/user-labels"
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -38,30 +55,54 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 
-type Member = { id: string; email: string; name: string | null; roleId: string; pending: boolean }
+export type ManagedMember = {
+  id: string
+  email: string
+  name: string | null
+  image: string | null
+  roleId: string
+  status: "active" | "pending" | "expired"
+  locked: boolean
+  lastAdmin: boolean
+}
 
 export function MemberActions({
   workspaceId,
+  workspaceName,
   member,
   choices,
 }: {
   workspaceId: string
-  member: Member
+  workspaceName: string
+  member: ManagedMember
   choices: RoleChoices
 }) {
   const [editOpen, setEditOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const [editKey, setEditKey] = useState(0)
+  const [cancelling, startCancel] = useTransition()
   const label = member.name ?? member.email
+  const invite = member.status !== "active"
+
+  function cancelInvite() {
+    startCancel(async () => {
+      const result = await cancelInviteAction(workspaceId, member.id)
+      if (result.error) toast.error(result.error)
+      else toast.success("Convite cancelado.")
+    })
+  }
 
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Ações de ${label}`} />}>
-          <EllipsisIcon />
+        <DropdownMenuTrigger
+          render={<Button variant="ghost" size="icon-sm" aria-label={`Ações de ${label}`} loading={cancelling} />}
+        >
+          <EllipsisVerticalIcon />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuContent align="end" className="w-auto min-w-44">
           <DropdownMenuItem
+            className="whitespace-nowrap"
             onClick={() => {
               setEditKey((k) => k + 1)
               setEditOpen(true)
@@ -71,16 +112,33 @@ export function MemberActions({
             Editar
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => setRemoveOpen(true)}>
-            <UserMinusIcon />
-            {member.pending ? "Cancelar convite" : "Remover"}
-          </DropdownMenuItem>
+          {invite ? (
+            <DropdownMenuItem
+              variant="destructive"
+              className="whitespace-nowrap"
+              disabled={member.locked}
+              onClick={cancelInvite}
+            >
+              <MailXIcon />
+              Cancelar convite
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              variant="destructive"
+              className="whitespace-nowrap"
+              disabled={member.locked || member.lastAdmin}
+              onClick={() => setRemoveOpen(true)}
+            >
+              <UserMinusIcon />
+              Remover
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
       <Sheet open={editOpen} onOpenChange={setEditOpen}>
         <SheetContent>
-          <EditMemberForm
+          <ManageMemberForm
             key={editKey}
             workspaceId={workspaceId}
             member={member}
@@ -90,54 +148,122 @@ export function MemberActions({
         </SheetContent>
       </Sheet>
 
-      <RemoveMemberDialog
-        workspaceId={workspaceId}
-        member={member}
-        open={removeOpen}
-        onOpenChange={setRemoveOpen}
-      />
+      {!invite && (
+        <RemoveMemberDialog
+          workspaceId={workspaceId}
+          workspaceName={workspaceName}
+          member={member}
+          open={removeOpen}
+          onOpenChange={setRemoveOpen}
+        />
+      )}
     </>
   )
 }
 
-function EditMemberForm({
+function SectionLabel({ icon: Icon, children }: { icon: React.ComponentType<{ className?: string }>; children: string }) {
+  return (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <Icon className="size-4" />
+      <span className="whitespace-nowrap">{children}</span>
+      <span className="h-px flex-1 bg-border" />
+    </div>
+  )
+}
+
+function ManageMemberForm({
   workspaceId,
   member,
   choices,
   onDone,
 }: {
   workspaceId: string
-  member: Member
+  member: ManagedMember
   choices: RoleChoices
   onDone: () => void
 }) {
+  const invite = member.status !== "active"
+  const [roleId, setRoleId] = useState<string | null>(member.roleId)
   const [state, formAction, pending] = useActionState(
     async (prev: MemberFormState, formData: FormData) => {
-      const update = member.pending ? updateInviteAction : updateMemberAction
+      const update = invite ? updateInviteAction : updateMemberAction
       const next = await update(workspaceId, member.id, prev, formData)
-      if (!next.error) onDone()
+      if (!next.error) {
+        toast.success(invite ? "Convite atualizado." : "Usuário atualizado.")
+        onDone()
+      }
       return next
     },
     { error: null },
   )
 
+  const role = choices.roles.find((item) => item.id === roleId)
+  const displayName = member.name ?? member.email
+  const note = member.locked
+    ? "Só um admin pode alterar outro admin."
+    : member.lastAdmin
+      ? "Último admin do workspace. Promova outra pessoa antes de mudar este nível."
+      : null
+
   return (
     <form action={formAction} className="flex min-h-0 flex-1 flex-col">
       <SheetHeader>
-        <SheetTitle>{member.pending ? "Editar convite" : "Editar usuário"}</SheetTitle>
-        <SheetDescription>{member.name ?? member.email}</SheetDescription>
+        <SheetTitle>{invite ? "Gerenciar convite" : "Gerenciar usuário"}</SheetTitle>
+        <SheetDescription>Visualize as informações do usuário e gerencie as permissões dele.</SheetDescription>
       </SheetHeader>
-      <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4">
         {state.error && <FieldError>{state.error}</FieldError>}
-        <RoleField idPrefix={`edit-member-${member.id}`} choices={choices} defaultValue={member.roleId} />
-        {!member.pending && (
-          <FieldDescription>O nome e o email são da conta da pessoa e só ela pode alterá-los.</FieldDescription>
+        <SectionLabel icon={UserIcon}>Informações do usuário</SectionLabel>
+        <div className="flex items-center gap-4 bg-muted p-4">
+          <Avatar className="size-18">
+            {member.image && <AvatarImage src={member.image} alt={displayName} />}
+            <InitialFallback name={displayName} className="text-2xl" />
+          </Avatar>
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <span className={member.name ? "truncate font-medium" : "truncate text-muted-foreground"}>
+              {member.name ?? "—"}
+            </span>
+            <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground">
+              <MailIcon className="size-3.5 shrink-0" />
+              <span className="truncate">{member.email}</span>
+            </span>
+            <span className="flex flex-wrap gap-1.5">
+              {role && <Badge variant={role.admin ? "default" : "secondary"}>{role.name}</Badge>}
+              {invite && <Badge variant="outline">{INVITE_STATUS_LABELS[member.status as keyof typeof INVITE_STATUS_LABELS]}</Badge>}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-3 bg-muted px-4 py-3 text-sm">
+          <span className="font-medium whitespace-nowrap">{invite ? "ID do convite" : "ID do usuário"}</span>
+          <span className="truncate font-mono text-[13px] text-muted-foreground">{member.id}</span>
+        </div>
+        <SectionLabel icon={ShieldCheckIcon}>Permissões</SectionLabel>
+        <Field>
+          <FieldLabel htmlFor={`manage-member-${member.id}-role`}>
+            Nível de permissão <span className="text-destructive">*</span>
+          </FieldLabel>
+          <RoleSelect
+            id={`manage-member-${member.id}-role`}
+            choices={choices}
+            value={roleId}
+            onValueChange={setRoleId}
+            disabled={member.locked}
+            lockAdmin={member.lastAdmin}
+          />
+        </Field>
+        {note && (
+          <div className="flex items-start gap-2 text-[13px] text-pretty text-muted-foreground">
+            <LockIcon className="mt-0.5 size-3.5 shrink-0" />
+            <span>{note}</span>
+          </div>
         )}
-      </FieldGroup>
+      </div>
       <SheetFooter>
-        <Button type="submit" loading={pending}>
-          {pending ? "Salvando..." : "Salvar"}
+        <Button type="submit" loading={pending} disabled={member.locked || !roleId || roleId === member.roleId}>
+          {!pending && <CircleCheckIcon data-icon="inline-start" />}
+          {pending ? "Salvando..." : "Salvar alterações"}
         </Button>
+        <SheetClose render={<Button type="button" variant="outline" />}>Fechar</SheetClose>
       </SheetFooter>
     </form>
   )
@@ -145,12 +271,14 @@ function EditMemberForm({
 
 function RemoveMemberDialog({
   workspaceId,
+  workspaceName,
   member,
   open,
   onOpenChange,
 }: {
   workspaceId: string
-  member: Member
+  workspaceName: string
+  member: ManagedMember
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -159,10 +287,12 @@ function RemoveMemberDialog({
 
   function handleRemove() {
     startTransition(async () => {
-      const remove = member.pending ? cancelInviteAction : removeMemberAction
-      const result = await remove(workspaceId, member.id)
+      const result = await removeMemberAction(workspaceId, member.id)
       setError(result.error)
-      if (!result.error) onOpenChange(false)
+      if (!result.error) {
+        toast.success("Membro removido do workspace.")
+        onOpenChange(false)
+      }
     })
   }
 
@@ -176,25 +306,20 @@ function RemoveMemberDialog({
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{member.pending ? "Cancelar convite?" : "Remover usuário?"}</AlertDialogTitle>
+          <AlertDialogMedia>
+            <UserMinusIcon />
+          </AlertDialogMedia>
+          <AlertDialogTitle>Remover do workspace?</AlertDialogTitle>
           <AlertDialogDescription>
-            {member.pending ? (
-              <>
-                O convite para <strong>{member.email}</strong> deixará de funcionar.
-              </>
-            ) : (
-              <>
-                <strong>{member.name ?? member.email}</strong> perderá o acesso a este workspace. A conta dela
-                não é excluída.
-              </>
-            )}
+            <strong>{member.name ?? member.email}</strong> perde o acesso ao {workspaceName}. A conta continua
+            existindo e pode receber um novo convite depois.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error && <FieldError>{error}</FieldError>}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={pending}>Voltar</AlertDialogCancel>
+          <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
           <Button variant="destructive" onClick={handleRemove} loading={pending}>
-            {pending ? "Removendo..." : member.pending ? "Cancelar convite" : "Remover"}
+            {pending ? "Removendo..." : "Remover"}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

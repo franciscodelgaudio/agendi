@@ -82,19 +82,16 @@ export type CashFlowReportInput = {
   balanceCents: number | null;
   openingBalance: OpeningBalance | null;
   summary: ExpenseCashFlowSummary;
-  // Deduções com colunas na tela; sem nenhuma, só o bruto.
-  columns: { partnerShare: boolean; expenses: boolean };
+  // Sem despesas, só o bruto.
+  columns: { expenses: boolean };
   curve: CostCurvePoint[];
   costs: { totalCents: number; rows: CostRow<{ name: string }>[] };
   // Todas as encontradas (sem paginar), na ordem da tela.
   therapists: { rows: TherapistSummary[]; sums: { real: TherapistAmounts } };
 };
 
-const STAFF_COST_NAMES = { partner_share: "Repasse" } as const;
-
 function flowTable(view: CashFlowView, summary: ExpenseCashFlowSummary, columns: CashFlowReportInput["columns"]): ReportTable {
   const deductions = [
-    { on: columns.partnerShare, label: "Repasse", key: "partnerShareCents" },
     { on: columns.expenses, label: "Despesas", key: "expenseCents" },
   ].filter((deduction) => deduction.on) as { label: string; key: keyof ExpenseCashFlowAmounts }[];
   const detailed = deductions.length > 0;
@@ -143,11 +140,7 @@ export function cashFlowReport(input: CashFlowReportInput): Report {
     tables.push({
       title: "Gastos por grupo",
       columns: [text("Grupo"), money("Valor"), { label: "%", kind: "percent" }],
-      rows: costs.rows.map((row) => [
-        row.kind === "group" ? row.group.name : STAFF_COST_NAMES[row.kind],
-        row.cents,
-        row.share,
-      ]),
+      rows: costs.rows.map((row) => [row.group.name, row.cents, row.share]),
       total: ["Total", costs.totalCents, 1],
     });
   }
