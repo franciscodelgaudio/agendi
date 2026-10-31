@@ -58,7 +58,6 @@ export default async function WorkspaceCashFlowPage({
               id: { $toString: "$_id" },
               name: 1,
               revenueShare: { $ifNull: ["$revenueShare", null] },
-              createdAt: 1,
             },
           },
         ],
@@ -75,8 +74,8 @@ export default async function WorkspaceCashFlowPage({
   const costMonth = { from: costBuckets[0].from, to: costBuckets.at(-1)!.to }
   const [icons, unitFlows, unitMonthFlows, wallets, walletFlows, walletMonthFlows] = await Promise.all([
     loadExpenseGroupIcons(),
-    Promise.all(workspace.units.map((unit) => loadUnitCashFlow(workspace.id, unit, buckets, today))),
-    Promise.all(workspace.units.map((unit) => loadUnitCashFlow(workspace.id, unit, costBuckets, today))),
+    Promise.all(workspace.units.map((unit) => loadUnitCashFlow(unit, buckets))),
+    Promise.all(workspace.units.map((unit) => loadUnitCashFlow(unit, costBuckets))),
     loadWallets(workspace.id, today),
     loadWalletCashFlows(workspace.id, buckets),
     loadWalletCashFlows(workspace.id, costBuckets),
@@ -147,8 +146,6 @@ export default async function WorkspaceCashFlowPage({
         view={query.view}
         summary={summary}
         hasPartnerShare={workspace.units.some((unit) => unit.revenueShare)}
-        hasCommission={unitFlows.some((flow) => flow.hasCommission)}
-        hasSalary={unitFlows.some((flow) => flow.hasSalary)}
         hasExpenses={flows.some((flow) => flow.hasExpenses)}
         today={today}
       />

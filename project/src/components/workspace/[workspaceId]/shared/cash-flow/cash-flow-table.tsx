@@ -36,15 +36,13 @@ function money(cents: number) {
 type Props = {
   view: CashFlowView
   summary: ExpenseCashFlowSummary
-  // Sem repasse (espaço próprio), comissão, salário nem despesas, bruto e líquido são iguais e só o bruto aparece.
+  // Sem repasse (espaço próprio) nem despesas, bruto e líquido são iguais e só o bruto aparece.
   hasPartnerShare: boolean
-  hasCommission: boolean
-  hasSalary: boolean
   hasExpenses: boolean
   today: string
 }
 
-type Columns = { partnerShare: boolean; commission: boolean; salary: boolean; expenses: boolean }
+type Columns = { partnerShare: boolean; expenses: boolean }
 
 // Com a tabela estreita, somem as deduções e ficam só bruto e líquido.
 const DEDUCTION = "@max-2xl:hidden"
@@ -58,13 +56,11 @@ function Deduction({ cents, className }: { cents: number; className: string }) {
 }
 
 function AmountCells({ amounts, columns }: { amounts: ExpenseCashFlowAmounts; columns: Columns }) {
-  const detailed = columns.partnerShare || columns.commission || columns.salary || columns.expenses
+  const detailed = columns.partnerShare || columns.expenses
   return (
     <>
       <TableCell className="px-4 text-right tabular-nums">{money(amounts.grossCents)}</TableCell>
       {columns.partnerShare && <Deduction cents={amounts.partnerShareCents} className={DEDUCTION} />}
-      {columns.commission && <Deduction cents={amounts.commissionCents} className={DEDUCTION} />}
-      {columns.salary && <Deduction cents={amounts.salaryCents} className={DEDUCTION} />}
       {columns.expenses && <Deduction cents={amounts.expenseCents} className={DEDUCTION} />}
       {detailed && <TableCell className="px-4 text-right font-medium tabular-nums">{money(amounts.netCents)}</TableCell>}
     </>
@@ -72,9 +68,9 @@ function AmountCells({ amounts, columns }: { amounts: ExpenseCashFlowAmounts; co
 }
 
 // Atendimentos registrados e despesas pagas.
-export function CashFlowTable({ view, summary, hasPartnerShare, hasCommission, hasSalary, hasExpenses, today }: Props) {
-  const columns = { partnerShare: hasPartnerShare, commission: hasCommission, salary: hasSalary, expenses: hasExpenses }
-  const detailed = hasPartnerShare || hasCommission || hasSalary || hasExpenses
+export function CashFlowTable({ view, summary, hasPartnerShare, hasExpenses, today }: Props) {
+  const columns = { partnerShare: hasPartnerShare, expenses: hasExpenses }
+  const detailed = hasPartnerShare || hasExpenses
   const deduction = cn("px-4 text-right", DEDUCTION)
 
   return (
@@ -87,8 +83,6 @@ export function CashFlowTable({ view, summary, hasPartnerShare, hasCommission, h
               <>
                 <TableHead className="px-4 text-right">Bruto</TableHead>
                 {hasPartnerShare && <TableHead className={deduction}>Repasse</TableHead>}
-                {hasCommission && <TableHead className={deduction}>Comissão</TableHead>}
-                {hasSalary && <TableHead className={deduction}>Salário e bônus</TableHead>}
                 {hasExpenses && <TableHead className={deduction}>Despesas</TableHead>}
                 <TableHead className="px-4 text-right">Líquido</TableHead>
               </>

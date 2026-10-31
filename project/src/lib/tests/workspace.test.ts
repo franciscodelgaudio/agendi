@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { updateWorkspace } from "@/service/workspace/workspace";
+import { createWorkspace, updateWorkspace } from "@/service/workspace/workspace";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
+const USER_ID = "64b7f0c2a1b2c3d4e5f60719";
 
 describe("updateWorkspace", () => {
   function makeUpdate(found = true) {
@@ -12,7 +13,7 @@ describe("updateWorkspace", () => {
     const update = makeUpdate();
 
     const result = await updateWorkspace(
-      { name: "Spa Central", avatarUrl: "https://cdn.example.com/logo.png" },
+      { name: "Spa Central", imageUrl: "https://cdn.example.com/logo.png" },
       WORKSPACE_ID,
       update,
     );
@@ -20,7 +21,7 @@ describe("updateWorkspace", () => {
     expect(result).toEqual({ ok: true });
     expect(update).toHaveBeenCalledWith(WORKSPACE_ID, {
       name: "Spa Central",
-      avatarUrl: "https://cdn.example.com/logo.png",
+      imageUrl: "https://cdn.example.com/logo.png",
     });
   });
 
@@ -28,24 +29,24 @@ describe("updateWorkspace", () => {
     const update = makeUpdate();
 
     await updateWorkspace(
-      { name: "  Spa Central  ", avatarUrl: "  https://cdn.example.com/logo.png  " },
+      { name: "  Spa Central  ", imageUrl: "  https://cdn.example.com/logo.png  " },
       WORKSPACE_ID,
       update,
     );
 
     expect(update).toHaveBeenCalledWith(WORKSPACE_ID, {
       name: "Spa Central",
-      avatarUrl: "https://cdn.example.com/logo.png",
+      imageUrl: "https://cdn.example.com/logo.png",
     });
   });
 
-  it.each([undefined, null, "", "   "])("salva a imagem como null quando ela vem vazia (%j)", async (avatarUrl) => {
+  it.each([undefined, null, "", "   "])("salva a imagem como null quando ela vem vazia (%j)", async (imageUrl) => {
     const update = makeUpdate();
 
-    const result = await updateWorkspace({ name: "Spa Central", avatarUrl }, WORKSPACE_ID, update);
+    const result = await updateWorkspace({ name: "Spa Central", imageUrl }, WORKSPACE_ID, update);
 
     expect(result).toEqual({ ok: true });
-    expect(update).toHaveBeenCalledWith(WORKSPACE_ID, { name: "Spa Central", avatarUrl: null });
+    expect(update).toHaveBeenCalledWith(WORKSPACE_ID, { name: "Spa Central", imageUrl: null });
   });
 
   it("aceita nome com exatamente 80 caracteres", async () => {
@@ -60,12 +61,12 @@ describe("updateWorkspace", () => {
     ["nome ausente", {}, "invalid_input"],
     ["nome não é string", { name: 123 }, "invalid_input"],
     ["input nulo", null, "invalid_input"],
-    ["imagem não é string", { name: "Spa Central", avatarUrl: 123 }, "invalid_input"],
+    ["imagem não é string", { name: "Spa Central", imageUrl: 123 }, "invalid_input"],
     ["nome vazio", { name: "" }, "invalid_name"],
     ["nome só com espaços", { name: "   " }, "invalid_name"],
     ["nome com mais de 80 caracteres", { name: "a".repeat(81) }, "name_too_long"],
-    ["imagem não é URL", { name: "Spa Central", avatarUrl: "logo.png" }, "invalid_avatar_url"],
-    ["imagem não é http(s)", { name: "Spa Central", avatarUrl: "javascript:alert(1)" }, "invalid_avatar_url"],
+    ["imagem não é URL", { name: "Spa Central", imageUrl: "logo.png" }, "invalid_image_url"],
+    ["imagem não é http(s)", { name: "Spa Central", imageUrl: "javascript:alert(1)" }, "invalid_image_url"],
   ])("retorna erro sem salvar quando %s", async (_label, input, error) => {
     const update = makeUpdate();
 
@@ -93,5 +94,44 @@ describe("updateWorkspace", () => {
     const result = await updateWorkspace({ name: "Spa Central" }, WORKSPACE_ID, update);
 
     expect(result).toEqual({ ok: false, error: "workspace_not_found" });
+  });
+});
+
+describe("createWorkspace", () => {
+  function makeInsert() {
+    return vi.fn().mockResolvedValue({ id: WORKSPACE_ID });
+  }
+
+  it("cria o workspace com o nome sem espaços nas pontas para o usuário e devolve o id", async () => {
+    const insert = makeInsert();
+
+    const result = await createWorkspace({ name: "  Spa Central  " }, USER_ID, insert);
+
+    expect(result).toEqual({ ok: true, workspaceId: WORKSPACE_ID });
+    expect(insert).toHaveBeenCalledWith({ name: "Spa Central", userId: USER_ID });
+  });
+
+  it("aceita nome com exatamente 80 caracteres", async () => {
+    const insert = makeInsert();
+
+    const result = await createWorkspace({ name: "a".repeat(80) }, USER_ID, insert);
+
+    expect(result).toEqual({ ok: true, workspaceId: WORKSPACE_ID });
+  });
+
+  it.each([
+    ["nome ausente", {}, "invalid_input"],
+    ["nome não é string", { name: 123 }, "invalid_input"],
+    ["input nulo", null, "invalid_input"],
+    ["nome vazio", { name: "" }, "invalid_name"],
+    ["nome só com espaços", { name: "   " }, "invalid_name"],
+    ["nome com mais de 80 caracteres", { name: "a".repeat(81) }, "name_too_long"],
+  ])("retorna erro sem criar quando %s", async (_label, input, error) => {
+    const insert = makeInsert();
+
+    const result = await createWorkspace(input, USER_ID, insert);
+
+    expect(result).toEqual({ ok: false, error });
+    expect(insert).not.toHaveBeenCalled();
   });
 });

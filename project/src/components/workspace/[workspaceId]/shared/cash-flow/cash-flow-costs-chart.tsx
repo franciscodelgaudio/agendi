@@ -12,11 +12,9 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 
 type Group = { id: string; name: string; icon: ExpenseGroupIcon | null }
 
-// Repasse e equipe usam as cores do tema; cada grupo, a cor do próprio ícone.
+// O repasse usa a cor do tema; cada grupo, a cor do próprio ícone.
 const STAFF: Record<Exclude<CostRow<Group>["kind"], "group">, { name: string; color: string }> = {
   partner_share: { name: "Repasse", color: "var(--chart-1)" },
-  commission: { name: "Comissões", color: "var(--chart-2)" },
-  salary: { name: "Salário e bônus", color: "var(--chart-4)" },
 }
 
 const percentFormat = new Intl.NumberFormat("pt-BR", { style: "percent", maximumFractionDigits: 1 })

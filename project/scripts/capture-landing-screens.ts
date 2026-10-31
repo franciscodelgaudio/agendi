@@ -260,13 +260,6 @@ async function seed(db: Db, now: Date): Promise<SeedResult> {
   await db.collection("workspaces").insertOne({
     _id: workspaceId,
     name: "Studio Aurora",
-    userId: ownerId,
-    subscription: {
-      planId: "padrao",
-      status: "active",
-      paidAt: now,
-      currentPeriodEnd: new Date(now.getTime() + 30 * DAY_MS),
-    },
     ...stamp,
   })
 
@@ -559,8 +552,8 @@ async function seed(db: Db, now: Date): Promise<SeedResult> {
 
   // Funções: quem atende e quem recebe os clientes; a dona é administradora (acesso total).
   const allPages = {
-    workspace: ["home", "units", "calendar", "cash_flow", "team", "stock", "users"],
-    unit: ["overview", "services", "calendar", "appointments", "stock", "team", "cash_flow"],
+    workspace: ["home", "units", "calendar", "cash_flow", "stock", "users"],
+    unit: ["overview", "services", "calendar", "appointments", "stock", "cash_flow"],
   }
   const therapistRoleId = new ObjectId()
   const receptionistRoleId = new ObjectId()
@@ -583,24 +576,15 @@ async function seed(db: Db, now: Date): Promise<SeedResult> {
     },
   ])
 
-  // Equipe: profissionais com comissão, uma com salário fixo, e a recepcionista com salário.
   const memberStamp = { acceptedAt: new Date(`${year}-01-02T12:00:00Z`), ...stamp }
   await db.collection("workspace_members").insertMany([
-    { workspaceId, email: DEMO_EMAIL, admin: true, roleId: null, userId: ownerId, units: [], ...memberStamp },
+    { workspaceId, email: DEMO_EMAIL, admin: true, roleId: null, userId: ownerId, ...memberStamp },
     ...THERAPISTS.map((t) => ({
       workspaceId,
       email: t.email,
       admin: false,
       roleId: therapistRoleId,
       userId: people.get(t.key)!.id,
-      units: t.units.map((u) => ({
-        unitId: new ObjectId(unitIds[u]),
-        commissionPercent: t.key === "renata" ? 30 : 40,
-        salaryCents: t.key === "renata" ? 180000 : null,
-        bonuses: [],
-        startDate: yearStart,
-        payDay: 5,
-      })),
       ...memberStamp,
     })),
     {
@@ -609,16 +593,6 @@ async function seed(db: Db, now: Date): Promise<SeedResult> {
       admin: false,
       roleId: receptionistRoleId,
       userId: receptionistId,
-      units: [
-        {
-          unitId: new ObjectId(unitIds.centro),
-          commissionPercent: null,
-          salaryCents: 240000,
-          bonuses: [{ description: "Vale-transporte", amountCents: 22000 }],
-          startDate: yearStart,
-          payDay: 5,
-        },
-      ],
       ...memberStamp,
     },
   ])

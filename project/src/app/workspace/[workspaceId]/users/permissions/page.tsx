@@ -16,18 +16,22 @@ export default async function PermissionsPage({ params }: PageProps<"/workspace/
   const [workspace] = await Workspace.aggregate<{ actor: Actor; roles: RoleView[] }>([
     ...access,
     {
-      $lookup: {
-        from: "roles",
-        localField: "_id",
-        foreignField: "workspaceId",
-        as: "roles",
-        pipeline: [
-          { $sort: { name: 1 } },
-          { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, permissions: 1, pages: 1 } },
-        ],
+      $project: {
+        _id: 0,
+        actor: 1,
+        roles: {
+          $map: {
+            input: {
+              $sortArray: {
+                input: { $filter: { input: { $ifNull: ["$roles", []] }, cond: { $ne: ["$$this.admin", true] } } },
+                sortBy: { name: 1 },
+              },
+            },
+            in: { id: { $toString: "$$this._id" }, name: "$$this.name", permissions: "$$this.permissions", pages: "$$this.pages" },
+          },
+        },
       },
     },
-    { $project: { _id: 0, actor: 1, roles: 1 } },
   ])
   if (!workspace) notFound()
   // Só administradores definem funções e permissões; os demais voltam para a lista.

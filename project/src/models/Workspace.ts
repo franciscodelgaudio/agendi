@@ -1,18 +1,7 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 import { connectOnUse } from "@/service/_shared/database/mongoose";
-import { PLAN_IDS } from "@/service/subscribe/plans";
 import { UNIT_PAGES, WORKSPACE_PAGES } from "@/service/workspace/[workspaceId]/page-access";
 import { PERMISSIONS } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
-
-const subscriptionSchema = new Schema(
-  {
-    planId: { type: String, enum: PLAN_IDS, required: true },
-    status: { type: String, enum: ["active"], required: true },
-    paidAt: { type: Date, required: true },
-    currentPeriodEnd: { type: Date, required: true },
-  },
-  { _id: false },
-);
 
 const roleSchema = new Schema({
   name: { type: String, required: true, trim: true },
@@ -27,11 +16,8 @@ const roleSchema = new Schema({
 const workspaceSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
-    avatarUrl: { type: String, trim: true },
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    imageUrl: { type: String, trim: true },
     roles: { type: [roleSchema], default: [] },
-    subscription: { type: subscriptionSchema, default: null },
-    ageniaModel: { type: String },
   },
   { collection: "workspaces", timestamps: true },
 );

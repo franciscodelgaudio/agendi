@@ -31,7 +31,7 @@ export default async function ExpensesPage({
   const { page, ...filters } = parseExpenseListQuery(search)
   const user = await requireUser()
   await requirePage(workspaceId, user.id, { unit: "cash_flow", unitId })
-  const data = await loadExpensesScreen(workspaceId, user.id, unitId, query, now)
+  const data = await loadExpensesScreen(workspaceId, user.id, unitId, query)
   if (!data) notFound()
   const { month, groups, expenses } = data
   const canManage = can(data.actor, "cash_flow.manage")

@@ -28,13 +28,11 @@ const permissionLabels: Record<Permission, string> = {
   "stock.manage": "Gerenciar estoque",
   "stock.transfer": "Transferir produtos entre as unidades de um estoque",
   "cash_flow.manage": "Gerenciar despesas e grupos do caixa",
-  "team.manage": "Gerenciar a equipe e a remuneração",
   "users.manage": "Convidar, editar e remover usuários",
   "inbox.use": "Usar as Conversas",
   "channels.manage": "Gerenciar canais",
   "uras.manage": "Gerenciar URAs",
-  "agenia.use": "Usar a AgenIA e ver os custos de IA",
-  "workspace.manage": "Editar o workspace (nome, imagem e modelo da AgenIA)",
+  "workspace.manage": "Editar o workspace (nome e imagem)",
   attends: "Realiza atendimentos (aparece como profissional e ganha comissão sobre os próprios serviços)",
 }
 
@@ -43,7 +41,6 @@ const workspacePageLabels: Record<WorkspacePage, string> = {
   units: "Unidades",
   calendar: "Agenda",
   cash_flow: "Caixa",
-  team: "Equipe",
   stock: "Estoque",
   users: "Usuários",
 }
@@ -54,7 +51,6 @@ const unitPageLabels: Record<UnitPage, string> = {
   calendar: "Agenda",
   appointments: "Atendimentos",
   stock: "Estoque",
-  team: "Equipe",
   cash_flow: "Caixa",
 }
 

@@ -1,38 +1,86 @@
 import { describe, it, expect } from "vitest";
-import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist";
+import { memberAttendsStages, therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist";
+
+const attendsRoleCond = {
+  $or: [{ $eq: ["$$this.admin", true] }, { $in: ["attends", { $ifNull: ["$$this.permissions", []] }] }],
+};
 
 describe("therapistOptionsStages", () => {
-  // Aplicadas sobre o documento do workspace: quem pode atender são os membros que
-  // aceitaram o convite e são administradores ou têm uma role com "Realiza atendimentos",
-  // por nome. O id é sempre o do usuário, o nome cai para o email quando não há e a foto
-  // (image) vem como null quando o usuário não tem.
-  it("monta o campo therapists com administradores e quem realiza atendimentos (com foto)", () => {
+  it("monta o campo therapists com os membros cuja role do workspace é admin ou realiza atendimentos", () => {
     expect(therapistOptionsStages()).toEqual([
+      {
+        $set: {
+          therapistRoleIds: {
+            $map: {
+              input: { $filter: { input: { $ifNull: ["$roles", []] }, cond: attendsRoleCond } },
+              in: "$$this._id",
+            },
+          },
+        },
+      },
       {
         $lookup: {
           from: "workspace_members",
           localField: "_id",
           foreignField: "workspaceId",
+          let: { roleIds: "$therapistRoleIds" },
           as: "therapists",
           pipeline: [
-            { $match: { userId: { $ne: null } } },
-            { $lookup: { from: "roles", localField: "roleId", foreignField: "_id", as: "role" } },
-            { $match: { $or: [{ admin: true }, { "role.permissions": "attends" }] } },
+            { $match: { $expr: { $in: ["$roleId", "$$roleIds"] } } },
             { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
-            // Membro cujo usuário não existe mais fica de fora (sem nome, não tem como aparecer).
             { $unwind: "$user" },
             {
               $project: {
                 _id: 0,
                 id: { $toString: "$userId" },
                 name: { $ifNull: ["$user.name", "$user.email"] },
-                image: { $ifNull: ["$user.image", null] },
+                image: { $ifNull: ["$user.avatarUrl", null] },
               },
             },
             { $sort: { name: 1, id: 1 } },
           ],
         },
       },
+      { $unset: "therapistRoleIds" },
+    ]);
+  });
+});
+
+describe("memberAttendsStages", () => {
+  it("marca attends no membro quando a role dele no workspace é admin ou realiza atendimentos", () => {
+    expect(memberAttendsStages()).toEqual([
+      {
+        $lookup: {
+          from: "workspaces",
+          localField: "workspaceId",
+          foreignField: "_id",
+          as: "attendsWorkspace",
+          pipeline: [{ $project: { _id: 0, roles: 1 } }],
+        },
+      },
+      {
+        $set: {
+          attendsRole: {
+            $first: {
+              $filter: {
+                input: { $ifNull: [{ $first: "$attendsWorkspace.roles" }, []] },
+                cond: { $eq: ["$$this._id", "$roleId"] },
+              },
+            },
+          },
+        },
+      },
+      {
+        $set: {
+          attends: {
+            $or: [
+              { $eq: ["$attendsRole.admin", true] },
+              { $in: ["attends", { $ifNull: ["$attendsRole.permissions", []] }] },
+            ],
+          },
+        },
+      },
+      { $unset: ["attendsWorkspace", "attendsRole"] },
     ]);
   });
 });

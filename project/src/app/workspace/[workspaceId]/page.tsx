@@ -3,7 +3,6 @@ import { Types } from "mongoose"
 import { CalendarCheckIcon, CalendarXIcon, PiggyBankIcon, LeafIcon, StoreIcon, TrendingUpIcon } from "lucide-react"
 import {
   applyExpenses,
-  applyStaffCosts,
   cashFlowBuckets,
   cashFlowFetchRange,
   costCurve,
@@ -14,21 +13,19 @@ import {
   serviceBookingForecastPipeline,
   summarizeCashFlow,
   summarizeServices,
-  teamPayRates,
+  type CashFlowAmounts,
   type DayRange,
   type DayTotal,
   type ServiceTotal,
-  type StaffCashFlowAmounts,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow"
 import { dailyExpenseTotalsPipeline, type ExpenseDayTotal } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
-import { findTeamPayMembers, groupLimitsOf } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
+import { groupLimitsOf } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
 import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
-import { teamCandidatesLookup, type TeamCandidate } from "@/service/workspace/[workspaceId]/team/unit-team"
 import { Appointment } from "@/models/Appointment"
 import { Booking } from "@/models/Booking"
 import { Expense } from "@/models/Expense"
@@ -54,16 +51,14 @@ function toDate(day: string) {
   return new Date(Date.UTC(year, month - 1, date))
 }
 
-const ZERO: StaffCashFlowAmounts = { grossCents: 0, partnerShareCents: 0, commissionCents: 0, salaryCents: 0, netCents: 0 }
+const ZERO: CashFlowAmounts = { grossCents: 0, partnerShareCents: 0, netCents: 0 }
 
-// Soma dos valores já calculados por unidade (cada uma com seu repasse, comissões e salários).
-function sumAmounts(list: StaffCashFlowAmounts[]): StaffCashFlowAmounts {
+// Soma dos valores já calculados por unidade (cada uma com seu repasse).
+function sumAmounts(list: CashFlowAmounts[]): CashFlowAmounts {
   return list.reduce(
     (sum, amounts) => ({
       grossCents: sum.grossCents + amounts.grossCents,
       partnerShareCents: sum.partnerShareCents + amounts.partnerShareCents,
-      commissionCents: sum.commissionCents + amounts.commissionCents,
-      salaryCents: sum.salaryCents + amounts.salaryCents,
       netCents: sum.netCents + amounts.netCents,
     }),
     ZERO,
@@ -75,7 +70,6 @@ type UnitInfo = {
   name: string
   avatarUrl: string | null
   revenueShare: RevenueShare | null
-  createdAt: Date
 }
 
 // Página inicial: visão geral de todas as unidades do workspace.
@@ -93,7 +87,6 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     actor: Actor
     units: UnitInfo[]
     therapists: TherapistOption[]
-    team: TeamCandidate[]
   }>([
     ...access,
     {
@@ -111,25 +104,22 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
               name: 1,
               avatarUrl: { $ifNull: ["$avatarUrl", null] },
               revenueShare: { $ifNull: ["$revenueShare", null] },
-              createdAt: 1,
             },
           },
         ],
       },
     },
     ...therapistOptionsStages(),
-    teamCandidatesLookup(),
-    { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, actor: 1, units: 1, therapists: 1, team: 1 } },
+    { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, actor: 1, units: 1, therapists: 1 } },
   ])
   if (!workspace) notFound()
   const { units } = workspace
   const canManage = can(workspace.actor, "units.manage")
-  const team = { candidates: workspace.team, canEdit: can(workspace.actor, "team.manage") }
 
   if (units.length === 0) {
     return (
       <div className="flex flex-1 flex-col p-4">
-        <UnitsEmpty workspaceId={workspace.id} canManage={canManage} team={team} />
+        <UnitsEmpty workspaceId={workspace.id} canManage={canManage} />
       </div>
     )
   }
@@ -147,7 +137,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
 
   // O repasse depende do faturamento de cada unidade, então o caixa é calculado unidade a
   // unidade (com o resto dos períodos de repasse das pontas) e só depois somado.
-  const [perUnit, members, todayBookings] = await Promise.all([
+  const [perUnit, todayBookings] = await Promise.all([
     Promise.all(
       units.map(async (unit) => {
         const range = cashFlowFetchRange(yearBuckets, unit.revenueShare?.period ?? null)
@@ -170,8 +160,6 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         }
       }),
     ),
-    // Remuneração da equipe em cada unidade (administradores não têm).
-    findTeamPayMembers(workspace.id),
     Booking.find({ unitId: { $in: unitIds }, startsAt: { $gte: todayStart, $lt: todayEnd } })
       .sort({ startsAt: 1 })
       .select({ unitId: 1, startsAt: 1, endsAt: 1, guest: 1, service: 1, therapistId: 1, therapistName: 1, appointmentId: 1 })
@@ -179,23 +167,12 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
   ])
 
   const unitSummaries = perUnit.map(({ unit, appointments, bookings, expenses, services, groupLimits }) => {
-    const { commissionRates, ...staffCosts } = teamPayRates(members, unit.id)
-    const summarize = (buckets: DayRange[]) =>
-      applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, unit.revenueShare, commissionRates), {
-        ...staffCosts,
-        today,
-        since: parseCashFlowQuery({}, unit.createdAt).date,
-      })
+    const summarize = (buckets: DayRange[]) => summarizeCashFlow(buckets, appointments, bookings, unit.revenueShare)
     const done = services.reduce((sum, service) => sum + service.real.count, 0)
     const all = services.reduce((sum, service) => sum + service.forecast.count, 0)
     return {
       unit,
-      hasDeductions:
-        !!unit.revenueShare ||
-        Object.keys(commissionRates).length > 0 ||
-        staffCosts.grossCommissionPercent > 0 ||
-        staffCosts.netCommissionPercent > 0 ||
-        staffCosts.salaries.length > 0,
+      hasDeductions: !!unit.revenueShare,
       month: summarize(monthBuckets).total,
       year: { buckets: applyExpenses(summarize(yearBuckets), expenses).buckets, groups: groupLimits },
       services: { done, scheduled: all - done },
@@ -212,7 +189,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
   const servicesDone = unitSummaries.reduce((sum, summary) => sum + summary.services.done, 0)
   const servicesScheduled = unitSummaries.reduce((sum, summary) => sum + summary.services.scheduled, 0)
   const hasDeductions = unitSummaries.some((summary) => summary.hasDeductions)
-  const deductionsCents = monthTotal.real.partnerShareCents + monthTotal.real.commissionCents + monthTotal.real.salaryCents
+  const deductionsCents = monthTotal.real.partnerShareCents
 
   const unitRanking = [...unitSummaries].sort(
     (a, b) => b.month.forecast.grossCents - a.month.forecast.grossCents || a.unit.name.localeCompare(b.unit.name, "pt-BR"),
@@ -245,7 +222,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
             {todayFormat.format(toDate(today))} · {plural(units.length, "unidade", "unidades")}
           </span>
         </div>
-        {canManage && <CreateUnitSheet workspaceId={workspace.id} team={team} />}
+        {canManage && <CreateUnitSheet workspaceId={workspace.id} />}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -261,7 +238,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
           label="Líquido do mês"
           value={money(monthTotal.real.netCents)}
           detail={
-            hasDeductions ? `${money(deductionsCents)} em repasse, comissões e salários` : "Sem repasse, comissões nem salários"
+            hasDeductions ? `${money(deductionsCents)} em repasse` : "Sem repasse"
           }
         />
         <StatTile

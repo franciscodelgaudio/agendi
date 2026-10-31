@@ -30,7 +30,7 @@ describe("visiblePages", () => {
 
 describe("WORKSPACE_PAGES", () => {
   it("tem o estoque de todas as unidades depois da equipe, em /stock", () => {
-    expect(WORKSPACE_PAGES).toEqual(["home", "units", "calendar", "cash_flow", "team", "stock", "users"]);
+    expect(WORKSPACE_PAGES).toEqual(["home", "units", "calendar", "cash_flow", "stock", "users"]);
     expect(WORKSPACE_PAGE_PATHS.stock).toBe("/stock");
   });
 });

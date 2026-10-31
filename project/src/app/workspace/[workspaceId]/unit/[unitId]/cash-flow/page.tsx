@@ -92,8 +92,6 @@ export default async function CashFlowPage({
         view={query.view}
         summary={summary}
         hasPartnerShare={!!revenueShare}
-        hasCommission={columns.commission}
-        hasSalary={columns.salary}
         hasExpenses={columns.expenses}
         today={today}
       />

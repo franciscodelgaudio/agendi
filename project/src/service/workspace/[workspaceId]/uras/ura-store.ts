@@ -13,7 +13,7 @@ import { scheduleTimer } from "@/service/workspace/[workspaceId]/uras/ura-queue"
 import type { RunnerConversation, RunnerDeps, RunnerSession, SessionEndReason } from "@/service/workspace/[workspaceId]/uras/ura-runner"
 import { availableSlots } from "@/service/workspace/[workspaceId]/uras/ura-slots"
 import type { TriggerUra } from "@/service/workspace/[workspaceId]/uras/ura-trigger"
-import { memberAttendsStages } from "@/service/workspace/[workspaceId]/team/unit-team"
+import { memberAttendsStages } from "@/service/workspace/[workspaceId]/team/therapist"
 import { toBrt } from "@/service/workspace/[workspaceId]/uras/ura-variables"
 import type { Outgoing, WalkDeps } from "@/service/workspace/[workspaceId]/uras/ura-walk"
 import { Booking } from "@/models/Booking"
@@ -150,23 +150,29 @@ async function sendUraMessage(conversation: RunnerConversation, outgoing: Outgoi
   await Message.updateOne({ _id: message.id, status: "pending" }, { $set: { status: "sent", externalMessageId } })
 }
 
-// Quem atende na unidade: membros ligados a ela cuja role realiza atendimentos, por nome, e
-// os administradores (que não são ligados às unidades) por último.
-async function unitTherapists(workspaceId: string, unitId: string) {
-  const members = await WorkspaceMember.aggregate<{ userId: Types.ObjectId; admin?: boolean }>([
-    { $match: { workspaceId: new Types.ObjectId(workspaceId), userId: { $ne: null } } },
+async function firstAdminUserId(workspaceId: string) {
+  const workspace = await Workspace.findById(workspaceId).select({ roles: 1 }).lean()
+  const adminRoleIds = (workspace?.roles ?? []).filter((role) => role.admin).map((role) => role._id)
+  const member = await WorkspaceMember.findOne({ workspaceId, roleId: { $in: adminRoleIds } })
+    .sort({ createdAt: 1 })
+    .select({ userId: 1 })
+    .lean()
+  return member?.userId ?? null
+}
+
+async function workspaceTherapists(workspaceId: string) {
+  const members = await WorkspaceMember.aggregate<{ userId: Types.ObjectId }>([
+    { $match: { workspaceId: new Types.ObjectId(workspaceId) } },
     ...memberAttendsStages(),
-    { $match: { $or: [{ admin: true }, { attends: true, "units.unitId": new Types.ObjectId(unitId) }] } },
-    { $project: { _id: 0, userId: 1, admin: 1 } },
+    { $match: { attends: true } },
+    { $project: { _id: 0, userId: 1 } },
   ])
-  const adminIds = new Set(members.filter((member) => member.admin).map((member) => member.userId.toString()))
   const users = await User.find({ _id: { $in: members.map((member) => member.userId) } })
     .select({ name: 1, email: 1 })
     .lean()
-  const named = users
+  return users
     .map((user) => ({ id: user._id.toString(), name: user.name ?? user.email }))
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
-  return [...named.filter((user) => !adminIds.has(user.id)), ...named.filter((user) => adminIds.has(user.id))]
 }
 
 // "2026-09-29T09:00" em Brasília, formato do formulário que lib/booking espera.
@@ -195,7 +201,7 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
       ])
       if (!unit || !service) return []
       const { requiresTherapist, treatmentRoomIds } = serviceRules(service)
-      const therapists = requiresTherapist ? await unitTherapists(workspaceId, unitId) : []
+      const therapists = requiresTherapist ? await workspaceTherapists(workspaceId) : []
       const unitIds = await Unit.find({ workspaceId }).distinct("_id")
       const until = new Date(from.getTime() + (days + 1) * DAY_MS)
       const bookings = await Booking.find({
@@ -245,12 +251,12 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
 
     // Passa pelas mesmas validações do agendamento feito na tela (conflito, sala cheia).
     createBooking: async ({ unitId, serviceId, therapistId, roomId, startsAt, guestName, guestRoom }) => {
-      const [unit, service, workspace] = await Promise.all([
+      const [unit, service, adminUserId] = await Promise.all([
         unitOf(unitId),
         isObjectIdOrHexString(serviceId) ? Service.findOne({ _id: serviceId, unitId }).lean() : null,
-        Workspace.findById(workspaceId).select({ userId: 1 }).lean(),
+        firstAdminUserId(workspaceId),
       ])
-      if (!unit || !service || !workspace) return { ok: false }
+      if (!unit || !service || !adminUserId) return { ok: false }
       const unitIds = await Unit.find({ workspaceId }).distinct("_id")
       const result = await createBooking(
         {
@@ -267,9 +273,8 @@ export function uraWalkDeps(workspaceId: string): WalkDeps {
         unitId,
         {
           ...bookingLookups({ workspaceId, unitId }, unitIds),
-          // Agendamento feito pela URA fica em nome de quem criou o workspace.
           insert: async (data) => {
-            const booking = await Booking.create({ ...data, createdBy: workspace.userId })
+            const booking = await Booking.create({ ...data, createdBy: adminUserId })
             return { id: booking._id.toString() }
           },
         },

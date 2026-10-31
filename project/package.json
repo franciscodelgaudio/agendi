@@ -17,18 +17,15 @@
     "capture:landing": "tsx scripts/capture-landing-screens.ts",
     "migrate:owners": "tsx scripts/migrate-owners-to-admins.ts",
     "migrate:wallets": "tsx scripts/migrate-unit-balances-to-wallets.ts",
-    "migrate:expense-group-owners": "tsx scripts/migrate-expense-group-owner-index.ts"
+    "migrate:expense-group-owners": "tsx scripts/migrate-expense-group-owner-index.ts",
+    "migrate:roles": "tsx scripts/migrate-roles-into-workspaces.ts"
   },
   "dependencies": {
-    "@ai-sdk/google": "^4.0.85",
-    "@ai-sdk/groq": "^4.0.52",
-    "@ai-sdk/react": "^4.0.122",
     "@auth/mongodb-adapter": "^3.11.3",
     "@base-ui/react": "^1.8.0",
     "@fullcalendar/react": "^7.1.0",
     "@vercel/analytics": "^2.0.1",
     "@xyflow/react": "^12.12.0",
-    "ai": "^7.0.119",
     "aws4fetch": "^1.0.20",
     "bcryptjs": "^3.0.3",
     "bullmq": "^6.3.9",

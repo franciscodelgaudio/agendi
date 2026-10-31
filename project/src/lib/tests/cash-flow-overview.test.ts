@@ -6,10 +6,10 @@ const WEEK_1 = { from: "2026-09-01", to: "2026-09-06" };
 const WEEK_2 = { from: "2026-09-07", to: "2026-09-13" };
 
 const amounts = (grossCents: number, extra: Partial<ExpenseCashFlowAmounts> = {}): ExpenseCashFlowAmounts => {
-  const base = { grossCents, partnerShareCents: 0, commissionCents: 0, salaryCents: 0, expenseCents: 0, ...extra };
+  const base = { grossCents, partnerShareCents: 0, expenseCents: 0, ...extra };
   return {
     ...base,
-    netCents: base.grossCents - base.partnerShareCents - base.commissionCents - base.salaryCents - base.expenseCents,
+    netCents: base.grossCents - base.partnerShareCents - base.expenseCents,
   };
 };
 const ZERO = amounts(0);
@@ -25,11 +25,11 @@ describe("mergeCashFlowSummaries", () => {
     };
     const b = {
       buckets: [
-        { ...WEEK_1, real: amounts(500, { commissionCents: 50, salaryCents: 30 }), forecast: amounts(500, { expenseCents: 80 }) },
+        { ...WEEK_1, real: amounts(500, { partnerShareCents: 80 }), forecast: amounts(500, { expenseCents: 80 }) },
         { ...WEEK_2, real: amounts(300, { expenseCents: 20 }), forecast: amounts(300, { expenseCents: 20 }) },
       ],
       total: {
-        real: amounts(800, { commissionCents: 50, salaryCents: 30, expenseCents: 20 }),
+        real: amounts(800, { partnerShareCents: 80, expenseCents: 20 }),
         forecast: amounts(800, { expenseCents: 100 }),
       },
     };
@@ -38,13 +38,13 @@ describe("mergeCashFlowSummaries", () => {
       buckets: [
         {
           ...WEEK_1,
-          real: amounts(1_500, { partnerShareCents: 100, commissionCents: 50, salaryCents: 30 }),
+          real: amounts(1_500, { partnerShareCents: 180 }),
           forecast: amounts(2_000, { partnerShareCents: 150, expenseCents: 80 }),
         },
         { ...WEEK_2, real: amounts(300, { expenseCents: 20 }), forecast: amounts(500, { expenseCents: 20 }) },
       ],
       total: {
-        real: amounts(1_800, { partnerShareCents: 100, commissionCents: 50, salaryCents: 30, expenseCents: 20 }),
+        real: amounts(1_800, { partnerShareCents: 180, expenseCents: 20 }),
         forecast: amounts(2_500, { partnerShareCents: 150, expenseCents: 100 }),
       },
     });

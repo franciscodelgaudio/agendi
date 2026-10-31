@@ -1,7 +1,6 @@
 import Link from "@/components/shared/link"
 import { MapPinIcon, CalendarClockIcon, CalendarPlusIcon, SettingsIcon } from "lucide-react"
 import { UnitActions } from "@/components/workspace/[workspaceId]/unit/unit-actions"
-import type { UnitTeamOptions } from "@/components/workspace/[workspaceId]/unit/unit-fields"
 import { CodeCell, CodeHead } from "@/components/shared/record-code"
 import { SortableHead } from "@/components/shared/sortable-head"
 import { Avatar, AvatarImage } from "@/components/ui/avatar"
@@ -36,10 +35,9 @@ type Props = {
   workspaceId: string
   // Sem permissão, a coluna de ações (editar/excluir) não aparece.
   canManage: boolean
-  team: UnitTeamOptions
 }
 
-export function UnitTable({ units, query, pathname, workspaceId, canManage, team }: Props) {
+export function UnitTable({ units, query, pathname, workspaceId, canManage }: Props) {
   return (
     <div className="border">
       <Table>
@@ -107,7 +105,7 @@ export function UnitTable({ units, query, pathname, workspaceId, canManage, team
                 </TableCell>
                 {canManage && (
                   <TableCell className="relative z-10 px-4 text-right">
-                    <UnitActions workspaceId={workspaceId} unit={unit} team={team} />
+                    <UnitActions workspaceId={workspaceId} unit={unit} />
                   </TableCell>
                 )}
               </TableRow>

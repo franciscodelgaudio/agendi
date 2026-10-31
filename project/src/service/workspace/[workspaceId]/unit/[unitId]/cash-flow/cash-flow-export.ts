@@ -83,20 +83,18 @@ export type CashFlowReportInput = {
   openingBalance: OpeningBalance | null;
   summary: ExpenseCashFlowSummary;
   // Deduções com colunas na tela; sem nenhuma, só o bruto.
-  columns: { partnerShare: boolean; commission: boolean; salary: boolean; expenses: boolean };
+  columns: { partnerShare: boolean; expenses: boolean };
   curve: CostCurvePoint[];
   costs: { totalCents: number; rows: CostRow<{ name: string }>[] };
   // Todas as encontradas (sem paginar), na ordem da tela.
   therapists: { rows: TherapistSummary[]; sums: { real: TherapistAmounts } };
 };
 
-const STAFF_COST_NAMES = { partner_share: "Repasse", commission: "Comissões", salary: "Salário e bônus" } as const;
+const STAFF_COST_NAMES = { partner_share: "Repasse" } as const;
 
 function flowTable(view: CashFlowView, summary: ExpenseCashFlowSummary, columns: CashFlowReportInput["columns"]): ReportTable {
   const deductions = [
     { on: columns.partnerShare, label: "Repasse", key: "partnerShareCents" },
-    { on: columns.commission, label: "Comissão", key: "commissionCents" },
-    { on: columns.salary, label: "Salário e bônus", key: "salaryCents" },
     { on: columns.expenses, label: "Despesas", key: "expenseCents" },
   ].filter((deduction) => deduction.on) as { label: string; key: keyof ExpenseCashFlowAmounts }[];
   const detailed = deductions.length > 0;
@@ -153,24 +151,16 @@ export function cashFlowReport(input: CashFlowReportInput): Report {
       total: ["Total", costs.totalCents, 1],
     });
   }
-  const amountValues = ({ count, cents, commissionCents }: TherapistAmounts) => [count, cents, commissionCents];
+  const amountValues = ({ count, cents }: TherapistAmounts) => [count, cents];
   tables.push({
     title: "Por profissional",
-    columns: [
-      text("Código"),
-      text("Profissional"),
-      { label: "% comissão", kind: "percent" },
-      { label: "Qtd.", kind: "number" },
-      money("Bruto"),
-      money("Comissão"),
-    ],
+    columns: [text("Código"), text("Profissional"), { label: "Qtd.", kind: "number" }, money("Bruto")],
     rows: therapists.rows.map((therapist) => [
       recordCode(therapist.therapistId),
       therapist.therapistName,
-      therapist.commissionPercent === null ? null : therapist.commissionPercent / 100,
       ...amountValues(therapist.real),
     ]),
-    ...(therapists.rows.length > 0 && { total: ["Total", null, null, ...amountValues(therapists.sums.real)] }),
+    ...(therapists.rows.length > 0 && { total: ["Total", null, ...amountValues(therapists.sums.real)] }),
   });
 
   return {

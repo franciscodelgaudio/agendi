@@ -1,5 +1,5 @@
 // Sem dependências de servidor: também é importado pela landing (componente de cliente).
-// Preços em centavos, como a AbacatePay recebe.
+// Preços em centavos.
 
 export const PLAN_IDS = ["mensal", "anual"] as const
 

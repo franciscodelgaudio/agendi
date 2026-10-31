@@ -13,18 +13,11 @@ export async function getSessionUserId() {
   return id && isObjectIdOrHexString(id) ? id : null;
 }
 
-export function workspaceAccessStages(
-  workspaceId: string,
-  userId: string,
-  { now = new Date(), allowUnpaid = false }: { now?: Date; allowUnpaid?: boolean } = {},
-) {
+export function workspaceAccessStages(workspaceId: string, userId: string) {
   if (!isObjectIdOrHexString(workspaceId)) return null;
   const userObjectId = new Types.ObjectId(userId);
-  const paid = allowUnpaid
-    ? {}
-    : { "subscription.status": "active", "subscription.currentPeriodEnd": { $gt: now } };
   return [
-    { $match: { _id: new Types.ObjectId(workspaceId), ...paid } },
+    { $match: { _id: new Types.ObjectId(workspaceId) } },
     {
       $lookup: {
         from: "workspace_members",

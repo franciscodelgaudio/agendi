@@ -43,12 +43,10 @@ describe("PERMISSIONS", () => {
       "stock.manage",
       "stock.transfer",
       "cash_flow.manage",
-      "team.manage",
       "users.manage",
       "inbox.use",
       "channels.manage",
       "uras.manage",
-      "agenia.use",
       "workspace.manage",
       "attends",
     ]);

@@ -1,7 +1,6 @@
 import type { ExpenseOwner } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
 import { ExpenseActions, ExpensePaidToggle, type ExpenseGroupOption, type ExpenseRow } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense-sheets"
 import { setPartnerSharePaidAction } from "@/lib/actions/expense"
-import { PayrollActions, PayrollPaidToggle } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/payroll-sheets"
 import { ExpenseGroupIconBadge } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow/groups/expense-group-icon"
 import { currencyFormat } from "@/components/shared/service-format"
 import { SortableHead } from "@/components/shared/sortable-head"
@@ -71,14 +70,7 @@ export function ExpensesTable({
           {expenses.map((expense) => (
             <TableRow key={expense.id}>
               <TableCell className="px-4">
-                {expense.payroll && "unitId" in owner ? (
-                  <PayrollPaidToggle
-                    workspaceId={workspaceId}
-                    unitId={owner.unitId}
-                    expense={{ ...expense, payroll: expense.payroll }}
-                    disabled={!canManage}
-                  />
-                ) : expense.id === "partner_share" && "unitId" in owner ? (
+                {expense.id === "partner_share" && "unitId" in owner ? (
                   <ExpensePaidToggle
                     workspaceId={workspaceId}
                     owner={owner}
@@ -116,16 +108,8 @@ export function ExpensesTable({
               <TableCell className="px-4 text-right tabular-nums">{money(expense.amountCents)}</TableCell>
               {canManage && (
                 <TableCell className="px-4 text-right">
-                  {expense.payroll && "unitId" in owner ? (
-                    <PayrollActions
-                      workspaceId={workspaceId}
-                      unitId={owner.unitId}
-                      expense={{ ...expense, payroll: expense.payroll }}
-                    />
-                  ) : (
-                    !expense.automatic && (
-                      <ExpenseActions workspaceId={workspaceId} owner={owner} groups={registeredGroups} expense={expense} />
-                    )
+                  {!expense.automatic && (
+                    <ExpenseActions workspaceId={workspaceId} owner={owner} groups={registeredGroups} expense={expense} />
                   )}
                 </TableCell>
               )}

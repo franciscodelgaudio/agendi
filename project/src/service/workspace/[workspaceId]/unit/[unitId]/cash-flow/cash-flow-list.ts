@@ -163,9 +163,8 @@ function sumAmounts(rows: TherapistAmounts[]): TherapistAmounts {
     (total, amounts) => ({
       count: total.count + amounts.count,
       cents: total.cents + amounts.cents,
-      commissionCents: total.commissionCents + amounts.commissionCents,
     }),
-    { count: 0, cents: 0, commissionCents: 0 },
+    { count: 0, cents: 0 },
   );
 }
 

@@ -37,12 +37,10 @@ const permissionActions: Record<Permission, string> = {
   "stock.manage": "gerenciar o estoque",
   "stock.transfer": "transferir produtos entre unidades",
   "cash_flow.manage": "gerenciar o caixa",
-  "team.manage": "gerenciar a equipe",
   "users.manage": "gerenciar usuários",
   "inbox.use": "usar as Conversas",
   "channels.manage": "gerenciar canais",
   "uras.manage": "gerenciar URAs",
-  "agenia.use": "usar a AgenIA",
   "workspace.manage": "editar o workspace",
   attends: "realizar atendimentos",
 };

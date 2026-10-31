@@ -25,7 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { FieldError, FieldGroup } from "@/components/ui/field"
-import { UnitFields, type UnitTeamOptions } from "@/components/workspace/[workspaceId]/unit/unit-fields"
+import { UnitFields } from "@/components/workspace/[workspaceId]/unit/unit-fields"
 import {
   Sheet,
   SheetContent,
@@ -44,7 +44,7 @@ type Unit = {
   businessHours: BusinessHours
 }
 
-export function UnitActions({ workspaceId, unit, team }: { workspaceId: string; unit: Unit; team: UnitTeamOptions }) {
+export function UnitActions({ workspaceId, unit }: { workspaceId: string; unit: Unit }) {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   // Muda a cada abertura para remontar o formulário com os valores atuais e sem erro antigo.
@@ -82,7 +82,6 @@ export function UnitActions({ workspaceId, unit, team }: { workspaceId: string; 
             key={editKey}
             workspaceId={workspaceId}
             unit={unit}
-            team={team}
             onDone={() => setEditOpen(false)}
           />
         </SheetContent>
@@ -101,12 +100,10 @@ export function UnitActions({ workspaceId, unit, team }: { workspaceId: string; 
 function EditUnitForm({
   workspaceId,
   unit,
-  team,
   onDone,
 }: {
   workspaceId: string
   unit: Unit
-  team: UnitTeamOptions
   onDone: () => void
 }) {
   const [state, formAction, pending] = useActionState(
@@ -127,7 +124,7 @@ function EditUnitForm({
       {/* Só os campos rolam; título e botões ficam fixos. */}
       <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
         {state.error && <FieldError>{state.error}</FieldError>}
-        <UnitFields idPrefix={`edit-unit-${unit.id}`} workspaceId={workspaceId} defaultValues={unit} team={team} />
+        <UnitFields idPrefix={`edit-unit-${unit.id}`} workspaceId={workspaceId} defaultValues={unit} />
       </FieldGroup>
       <SheetFooter>
         <Button type="submit" loading={pending}>

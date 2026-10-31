@@ -5,15 +5,12 @@ import { usePathname } from "next/navigation"
 import {
   MapPinIcon,
   CalendarIcon,
-  CoinsIcon,
   HomeIcon,
   LifeBuoyIcon,
   MessagesSquareIcon,
   ArchiveIcon,
   RadioTowerIcon,
-  SparklesIcon,
   UsersIcon,
-  UsersRoundIcon,
   WalletIcon,
   WorkflowIcon,
   type LucideIcon,
@@ -27,7 +24,6 @@ import {
 } from "@/components/ui/sidebar"
 import { WORKSPACE_PAGE_PATHS, type WorkspacePage } from "@/service/workspace/[workspaceId]/page-access"
 import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
-import { useAgenia } from "@/components/workspace/[workspaceId]/agenia/agenia-provider"
 
 // tour: marca do item para o tutorial destacá-lo.
 type NavItem = { title: string; href: string; icon: LucideIcon; tour: string }
@@ -37,11 +33,10 @@ export function isNavItemActive(pathname: string, href: string, base: string) {
   return pathname === href || (href !== base && pathname.startsWith(`${href}/`))
 }
 
-// pages: páginas do sistema liberadas para a role do usuário; Conversas, Canais, URAs e
-// Custos de IA seguem as permissões dela (actor). Tickets é de todos.
+// pages: páginas do sistema liberadas para a role do usuário; Conversas, Canais e URAs
+// seguem as permissões dela (actor). Tickets é de todos.
 export function NavMain({ workspaceId, pages, actor }: { workspaceId: string; pages: WorkspacePage[]; actor: Actor }) {
   const pathname = usePathname()
-  const agenia = useAgenia()
   const base = `/workspace/${workspaceId}`
   const item = (page: WorkspacePage, title: string, icon: LucideIcon) =>
     pages.includes(page) ? [{ title, href: `${base}${WORKSPACE_PAGE_PATHS[page]}`, icon, tour: `nav-${page}` }] : []
@@ -53,7 +48,6 @@ export function NavMain({ workspaceId, pages, actor }: { workspaceId: string; pa
         ...item("units", "Unidades", MapPinIcon),
         ...item("calendar", "Agenda", CalendarIcon),
         ...item("cash_flow", "Caixa", WalletIcon),
-        ...item("team", "Equipe", UsersRoundIcon),
         ...item("stock", "Estoque", ArchiveIcon),
       ],
     },
@@ -62,16 +56,7 @@ export function NavMain({ workspaceId, pages, actor }: { workspaceId: string; pa
       items: [
         ...(can(actor, "inbox.use") ? [{ title: "Conversas", href: `${base}/inbox`, icon: MessagesSquareIcon, tour: "nav-inbox" }] : []),
         ...(can(actor, "channels.manage") ? [{ title: "Canais", href: `${base}/channels`, icon: RadioTowerIcon, tour: "nav-channels" }] : []),
-      ],
-    },
-    {
-      label: "AgenIA",
-      items: [
-        ...(agenia ? [{ title: "AgenIA", href: agenia.pageHref, icon: SparklesIcon, tour: "nav-agenia" }] : []),
         ...(can(actor, "uras.manage") ? [{ title: "URAs", href: `${base}/uras`, icon: WorkflowIcon, tour: "nav-uras" }] : []),
-        ...(can(actor, "agenia.use")
-          ? [{ title: "Custos de IA", href: `${base}/ai-costs`, icon: CoinsIcon, tour: "nav-ai-costs" }]
-          : []),
       ],
     },
     {

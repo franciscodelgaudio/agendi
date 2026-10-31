@@ -6,7 +6,6 @@ import { unitListPipeline, parseUnitListQuery } from "@/service/workspace/[works
 import type { BusinessHours } from "@/service/workspace/[workspaceId]/unit/[unitId]/business-hours"
 import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share"
 import type { TreatmentRoomOption } from "@/components/workspace/[workspaceId]/unit/treatment-room-fields"
-import { teamCandidatesLookup, type TeamCandidate } from "@/service/workspace/[workspaceId]/team/unit-team"
 import { Workspace } from "@/models/Workspace"
 import { CreateUnitSheet } from "@/components/workspace/[workspaceId]/unit/create-unit-sheet"
 import { ListSearch } from "@/components/shared/list-search"
@@ -39,7 +38,6 @@ export default async function UnitsPage({
     }[]
     unitCount: number
     actor: Actor
-    team: TeamCandidate[]
   }>([
     ...access,
     {
@@ -60,13 +58,11 @@ export default async function UnitsPage({
         pipeline: [{ $count: "n" }],
       },
     },
-    teamCandidatesLookup(),
     {
       $project: {
         _id: 0,
         units: 1,
         actor: 1,
-        team: 1,
         unitCount: { $ifNull: [{ $first: "$unitCount.n" }, 0] },
       },
     },
@@ -74,16 +70,15 @@ export default async function UnitsPage({
   if (!workspace) notFound()
   const { units, unitCount } = workspace
   const canManage = can(workspace.actor, "units.manage")
-  const team = { candidates: workspace.team, canEdit: can(workspace.actor, "team.manage") }
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-2xl font-semibold tracking-tight">Unidades</h2>
-        {canManage && unitCount > 0 && <CreateUnitSheet workspaceId={workspaceId} team={team} />}
+        {canManage && unitCount > 0 && <CreateUnitSheet workspaceId={workspaceId} />}
       </div>
       {unitCount === 0 ? (
-        <UnitsEmpty workspaceId={workspaceId} canManage={canManage} team={team} />
+        <UnitsEmpty workspaceId={workspaceId} canManage={canManage} />
       ) : (
         <>
           <ListSearch query={query} placeholder="Buscar unidade..." />
@@ -93,7 +88,6 @@ export default async function UnitsPage({
             pathname={`/workspace/${workspaceId}/unit`}
             workspaceId={workspaceId}
             canManage={canManage}
-            team={team}
           />
         </>
       )}

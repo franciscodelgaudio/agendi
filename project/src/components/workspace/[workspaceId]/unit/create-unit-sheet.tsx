@@ -6,7 +6,7 @@ import { createUnitAction, type CreateUnitState } from "@/lib/actions/unit"
 
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldError, FieldGroup } from "@/components/ui/field"
-import { UnitFields, type UnitTeamOptions } from "@/components/workspace/[workspaceId]/unit/unit-fields"
+import { UnitFields } from "@/components/workspace/[workspaceId]/unit/unit-fields"
 import { OpeningBalanceFields } from "@/components/workspace/[workspaceId]/shared/cash-flow/opening-balance-fields"
 import {
   Sheet,
@@ -18,7 +18,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 
-export function CreateUnitSheet({ workspaceId, team }: { workspaceId: string; team: UnitTeamOptions }) {
+export function CreateUnitSheet({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false)
   const [state, formAction, pending] = useActionState(
     async (prev: CreateUnitState, formData: FormData) => {
@@ -44,7 +44,7 @@ export function CreateUnitSheet({ workspaceId, team }: { workspaceId: string; te
           {/* Só os campos rolam; título e botões ficam fixos. */}
           <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
             {state.error && <FieldError>{state.error}</FieldError>}
-            <UnitFields idPrefix="create-unit" workspaceId={workspaceId} team={team} />
+            <UnitFields idPrefix="create-unit" workspaceId={workspaceId} />
             <Field>
               <OpeningBalanceFields idPrefix="create-unit" />
               <FieldDescription>

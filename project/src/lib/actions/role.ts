@@ -1,7 +1,7 @@
 "use server"
 
 import { refresh } from "next/cache"
-import { isObjectIdOrHexString } from "mongoose"
+import { isObjectIdOrHexString, Types } from "mongoose"
 import {
   createRole,
   deleteRole,
@@ -14,7 +14,8 @@ import {
 } from "@/service/workspace/[workspaceId]/users/permissions/role"
 import { getSessionUserId } from "@/service/(auth)/session"
 import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
-import { Role } from "@/models/Role"
+import { Invite } from "@/models/Invite"
+import { Workspace } from "@/models/Workspace"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 
 type RoleError =
@@ -37,9 +38,6 @@ const errorMessages: Record<RoleError, string> = {
 
 export type RoleFormState = { error: string | null }
 
-// Mesmo critério do índice único: sem diferenciar maiúsculas.
-const NAME_COLLATION = { locale: "pt", strength: 2 }
-
 type Access = Awaited<ReturnType<typeof findWorkspaceAccess>>
 
 async function findAccess(workspaceId: string): Promise<{ error: string } | { access: Access }> {
@@ -48,13 +46,21 @@ async function findAccess(workspaceId: string): Promise<{ error: string } | { ac
   return { access: await findWorkspaceAccess(workspaceId, userId) }
 }
 
-function isNameTaken(workspaceId: string, name: string, exceptRoleId?: string) {
-  const filter = { workspaceId, name, ...(exceptRoleId ? { _id: { $ne: exceptRoleId } } : {}) }
-  return Role.findOne(filter).collation(NAME_COLLATION).select({ _id: 1 }).lean().then(Boolean)
+async function listRoles(workspaceId: string) {
+  const workspace = await Workspace.findById(workspaceId).select({ roles: 1 }).lean()
+  return (workspace?.roles ?? []).filter((role) => !role.admin)
 }
 
-function roleFilter(workspaceId: string, roleId: string) {
-  return isObjectIdOrHexString(roleId) ? { _id: roleId, workspaceId } : null
+async function isNameTaken(workspaceId: string, name: string, exceptRoleId?: string) {
+  const roles = await listRoles(workspaceId)
+  return roles.some(
+    (role) => !role._id.equals(exceptRoleId ?? null) && role.name.localeCompare(name, "pt", { sensitivity: "accent" }) === 0,
+  )
+}
+
+async function findRole(workspaceId: string, roleId: string) {
+  if (!isObjectIdOrHexString(roleId)) return null
+  return (await listRoles(workspaceId)).find((role) => role._id.equals(roleId)) ?? null
 }
 
 export async function createRoleAction(workspaceId: string, _prev: RoleFormState, formData: FormData): Promise<RoleFormState> {
@@ -65,8 +71,9 @@ export async function createRoleAction(workspaceId: string, _prev: RoleFormState
   const result = await createRole({ name: formData.get("name") }, { actor: access?.actor ?? null }, {
     isNameTaken: (name) => isNameTaken(access!.id, name),
     create: async (data) => {
-      const role = await Role.create({ workspaceId: access!.id, ...data })
-      return { id: role._id.toString() }
+      const _id = new Types.ObjectId()
+      await Workspace.updateOne({ _id: access!.id }, { $push: { roles: { _id, ...data } } })
+      return { id: _id.toString() }
     },
   })
   if (!result.ok) return { error: errorMessages[result.error] }
@@ -84,16 +91,15 @@ export async function renameRoleAction(
   const found = await findAccess(workspaceId)
   if ("error" in found) return found
   const { access } = found
-  const filter = access && roleFilter(access.id, roleId)
 
-  const result = await renameRole({ name: formData.get("name") }, filter && roleId, { actor: access?.actor ?? null }, {
+  const result = await renameRole({ name: formData.get("name") }, access && roleId, { actor: access?.actor ?? null }, {
     findRole: async () => {
-      const role = await Role.findOne(filter!).select({ _id: 1 }).lean()
+      const role = await findRole(access!.id, roleId)
       return role && { id: role._id.toString() }
     },
     isNameTaken: (name, exceptRoleId) => isNameTaken(access!.id, name, exceptRoleId),
     rename: async (_id, name) => {
-      await Role.updateOne(filter!, { $set: { name } })
+      await Workspace.updateOne({ _id: access!.id, roles: { $elemMatch: { _id: roleId, admin: { $ne: true } } } }, { $set: { "roles.$.name": name } })
     },
   })
   if (!result.ok) return { error: errorMessages[result.error] }
@@ -106,11 +112,17 @@ export async function deleteRoleAction(workspaceId: string, roleId: string): Pro
   const found = await findAccess(workspaceId)
   if ("error" in found) return found
   const { access } = found
-  const filter = access && roleFilter(access.id, roleId)
 
-  const result = await deleteRole(filter && roleId, { actor: access?.actor ?? null }, {
-    countMembers: () => WorkspaceMember.countDocuments({ workspaceId: access!.id, roleId }),
-    remove: async () => (await Role.deleteOne(filter!)).deletedCount > 0,
+  const result = await deleteRole(access && isObjectIdOrHexString(roleId) ? roleId : null, { actor: access?.actor ?? null }, {
+    countMembers: async () => {
+      const [members, invites] = await Promise.all([
+        WorkspaceMember.countDocuments({ workspaceId: access!.id, roleId }),
+        Invite.countDocuments({ workspaceId: access!.id, roleId }),
+      ])
+      return members + invites
+    },
+    remove: async () =>
+      (await Workspace.updateOne({ _id: access!.id }, { $pull: { roles: { _id: roleId, admin: { $ne: true } } } })).modifiedCount > 0,
   })
   if (!result.ok) return { error: errorMessages[result.error] }
 
@@ -141,15 +153,18 @@ export async function updateRolePermissionsAction(
   )
   const result = await updateRolePermissions(input, { actor: access?.actor ?? null }, {
     listRoleIds: async () => {
-      const roles = await Role.find({ workspaceId: access!.id }).select({ _id: 1 }).lean()
+      const roles = await listRoles(access!.id)
       return roles.map((role) => role._id.toString())
     },
     save: async (settings) => {
       // bulkWrite recusa lista vazia (workspace sem roles).
       if (Object.keys(settings).length === 0) return
-      await Role.bulkWrite(
+      await Workspace.bulkWrite(
         Object.entries(settings).map(([roleId, { permissions, pages }]) => ({
-          updateOne: { filter: { _id: roleId, workspaceId: access!.id }, update: { $set: { permissions, pages } } },
+          updateOne: {
+            filter: { _id: access!.id, "roles._id": roleId },
+            update: { $set: { "roles.$.permissions": permissions, "roles.$.pages": pages } },
+          },
         })),
       )
     },

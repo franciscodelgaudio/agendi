@@ -4,8 +4,7 @@ import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { getSessionUserId } from "@/service/(auth)/session"
 import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
-import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
-import { planUnitTeam, type PlanUnitTeamError, type UnitTeamPlan } from "@/service/workspace/[workspaceId]/team/unit-team"
+import { type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { findManagedWorkspace } from "@/service/workspace/[workspaceId]/workspace-access"
 import type { TreatmentRoomInput } from "@/service/workspace/[workspaceId]/unit/[unitId]/treatment-room"
 import {
@@ -22,9 +21,8 @@ import { Stock } from "@/models/Stock"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
 import { Service } from "@/models/Service"
-import { WorkspaceMember } from "@/models/WorkspaceMember"
 
-const errorMessages: Record<CreateUnitError | UpdateUnitError | PlanUnitTeamError | "unauthenticated", string> = {
+const errorMessages: Record<CreateUnitError | UpdateUnitError | "unauthenticated", string> = {
   invalid_input: "Informe o nome da unidade.",
   invalid_name: "Informe o nome da unidade.",
   name_too_long: "O nome pode ter no máximo 80 caracteres.",
@@ -47,8 +45,6 @@ const errorMessages: Record<CreateUnitError | UpdateUnitError | PlanUnitTeamErro
   invalid_opening_balance_date: "Informe o dia do saldo em caixa.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unit_not_found: "Unidade não encontrada ou sem permissão.",
-  forbidden: "Sem permissão para alterar a equipe.",
-  invalid_team: "Escolha só usuários deste workspace.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
@@ -66,34 +62,6 @@ async function findManagedAccess(
     return { error: managed.error === "forbidden" ? forbiddenMessage("units.manage") : errorMessages[managed.error] }
   }
   return { access: managed.access }
-}
-
-// Quem vincular e desvincular, conferido antes de gravar a unidade. unitId null = unidade nova.
-// Sem permissão de gerenciar a equipe, a equipe fica como está (o formulário nem mostra o campo).
-async function planTeam(formData: FormData, workspaceId: string, actor: Actor, unitId: string | null) {
-  if (!can(actor, "team.manage")) return undefined
-  const members = await WorkspaceMember.find({ workspaceId }).select({ units: 1 }).lean()
-  return planUnitTeam(
-    formData.getAll("teamMemberId"),
-    members.map((member) => ({
-      id: member._id.toString(),
-      linked: !!unitId && member.units.some((unit) => unit.unitId.equals(unitId)),
-    })),
-    actor,
-  )
-}
-
-// Quem entra começa sem remuneração, definida depois na Equipe; quem já estava fica como está.
-async function applyTeam(workspaceId: string, unitId: string, { link, unlink }: Extract<UnitTeamPlan, { ok: true }>) {
-  const unitObjectId = new Types.ObjectId(unitId)
-  const ids = (list: string[]) => ({ _id: { $in: list.map((id) => new Types.ObjectId(id)) }, workspaceId })
-  await Promise.all([
-    link.length &&
-      WorkspaceMember.updateMany(ids(link), {
-        $push: { units: { unitId: unitObjectId, commissionPercent: null, salaryCents: null } },
-      }),
-    unlink.length && WorkspaceMember.updateMany(ids(unlink), { $pull: { units: { unitId: unitObjectId } } }),
-  ])
 }
 
 // Sala nova ganha id aqui; a que já existia mantém o seu, e com ele os agendamentos.
@@ -134,8 +102,6 @@ export async function createUnitAction(
   const managed = await findManagedAccess(workspaceId, userId)
   if ("error" in managed) return managed
   const { access } = managed
-  const team = await planTeam(formData, access.id, access.actor, null)
-  if (team && !team.ok) return { error: errorMessages[team.error] }
 
   const result = await createUnit(
     unitInput(formData),
@@ -153,7 +119,6 @@ export async function createUnitAction(
           workspaceId: data.workspaceId,
         })
       }
-      if (team) await applyTeam(data.workspaceId, id, team)
       return { id }
     },
   )
@@ -186,8 +151,6 @@ export async function updateUnitAction(
 ): Promise<UpdateUnitState> {
   const target = await resolveUnitTarget(workspaceId, unitId)
   if ("error" in target) return target
-  const team = await planTeam(formData, target.ownedId, target.actor, target.unitId)
-  if (team && !team.ok) return { error: errorMessages[team.error] }
 
   const result = await updateUnit(
     unitInput(formData),
@@ -212,7 +175,6 @@ export async function updateUnitAction(
       // Espaço removido deixa de ser permitido nos serviços da unidade.
       const keptRoomIds = treatmentRooms.flatMap((room) => (room.id ? [new Types.ObjectId(room.id)] : []))
       await Service.updateMany({ unitId: id }, { $pull: { treatmentRoomIds: { $nin: keptRoomIds } } })
-      if (team) await applyTeam(target.ownedId, id, team)
       return true
     },
     async (id, keptRoomIds) => {
@@ -244,7 +206,6 @@ export async function deleteUnitAction(workspaceId: string, unitId: string): Pro
     await Promise.all([
       Service.deleteMany({ unitId: id }),
       Appointment.deleteMany({ unitId: id }),
-      WorkspaceMember.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
       Wallet.updateMany({ "units.unitId": id }, { $pull: { units: { unitId: id } } }),
       // O estoque próprio da unidade vai junto; o compartilhado continua com as outras.
       StockItem.deleteMany({ holderId: unitObjectId }),

@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { openingBalanceRange, type OpeningBalance } from "@/service/workspace/[workspaceId]/cash-flow/opening-balance";
 import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share";
-import { findTeamPayMembers, groupLimitsOf, loadUnitNet } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store";
+import { groupLimitsOf, loadUnitNet } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store";
 import { walletBalance } from "@/service/workspace/[workspaceId]/cash-flow/wallet";
 import {
   dailyExpenseTotalsPipeline,
@@ -30,17 +30,16 @@ export type WalletView = {
 // vazia sem carteira). O acesso ao workspace é verificado por quem chama.
 export async function loadWallets(workspaceId: string, today: string, unitId?: string): Promise<WalletView[]> {
   const workspace = new Types.ObjectId(workspaceId);
-  const [wallets, units, team] = await Promise.all([
+  const [wallets, units] = await Promise.all([
     Wallet.find({ workspaceId: workspace, ...(unitId && { "units.unitId": new Types.ObjectId(unitId) }) })
       .sort({ name: 1, _id: 1 })
       .lean(),
-    Unit.find({ workspaceId: workspace }).select({ name: 1, revenueShare: 1, createdAt: 1 }).lean(),
-    findTeamPayMembers(workspaceId),
+    Unit.find({ workspaceId: workspace }).select({ name: 1, revenueShare: 1 }).lean(),
   ]);
   const unitsById = new Map(
     units.map((unit) => [
       unit._id.toString(),
-      { name: unit.name, revenueShare: (unit.revenueShare ?? null) as RevenueShare | null, createdAt: unit.createdAt },
+      { name: unit.name, revenueShare: (unit.revenueShare ?? null) as RevenueShare | null },
     ]),
   );
 
@@ -55,7 +54,7 @@ export async function loadWallets(workspaceId: string, today: string, unitId?: s
       const [nets, walletExpenseCents] = await Promise.all([
         Promise.all(
           walletUnits.map(({ unitId }) =>
-            range ? loadUnitNet({ id: unitId, ...unitsById.get(unitId)! }, range, today, team) : 0,
+            range ? loadUnitNet({ id: unitId, ...unitsById.get(unitId)! }, range) : 0,
           ),
         ),
         range ? walletPaidExpenses(wallet._id, range) : 0,

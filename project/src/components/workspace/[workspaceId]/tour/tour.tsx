@@ -13,7 +13,6 @@ import {
 import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import { LightbulbIcon, MousePointerClickIcon } from "lucide-react"
-import { completeTutorialAction } from "@/lib/actions/tutorial"
 import { TOURS, type Tour, type TourAccess, type TourId, type TourStep } from "@/components/workspace/[workspaceId]/tour/tour-steps"
 import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -34,16 +33,14 @@ export function useTour() {
 
 // Tutoriais guiados: escurecem a tela, recortam o elemento da vez e explicam numa caixa ao lado.
 // Os passos seguem o uso real do sistema (o clique no destaque navega, o formulário salva).
-// O de primeiros passos abre sozinho no primeiro acesso; os das outras áreas ficam no menu do usuário.
+// Todos ficam no menu do usuário.
 export function TourProvider({
   workspaceId,
   access,
-  autoStart,
   children,
 }: {
   workspaceId: string
   access: TourAccess
-  autoStart: boolean
   children: React.ReactNode
 }) {
   // Só os passos que a função do usuário enxerga; tutoriais sem nenhum somem.
@@ -54,10 +51,7 @@ export function TourProvider({
         .filter((tour) => tour.steps.length > 0),
     [access],
   )
-  const [current, setCurrent] = useState<{ tourId: TourId; stepId: string } | null>(() => {
-    const start = TOURS.find((tour) => tour.id === "start")
-    return autoStart && start ? { tourId: "start", stepId: start.steps[0].id } : null
-  })
+  const [current, setCurrent] = useState<{ tourId: TourId; stepId: string } | null>(null)
   const tour = current ? tours.find((tour) => tour.id === current.tourId) : undefined
   const index = tour ? tour.steps.findIndex((step) => step.id === current?.stepId) : -1
 
@@ -73,7 +67,6 @@ export function TourProvider({
   )
 
   function finish() {
-    if (current?.tourId === "start") void completeTutorialAction()
     setCurrent(null)
   }
 

@@ -238,13 +238,13 @@ describe("updateRolePermissions", () => {
     const deps = makeDeps([ROLE_ID]);
 
     await updateRolePermissions(
-      { [ROLE_ID]: { permissions: ["attends", "attends"], workspace: ["home", "home"], unit: ["team", "team"] } },
+      { [ROLE_ID]: { permissions: ["attends", "attends"], workspace: ["home", "home"], unit: ["stock", "stock"] } },
       { actor: ADMIN },
       deps,
     );
 
     expect(deps.save).toHaveBeenCalledWith({
-      [ROLE_ID]: { permissions: ["attends"], pages: { workspace: ["home"], unit: ["team"] } },
+      [ROLE_ID]: { permissions: ["attends"], pages: { workspace: ["home"], unit: ["stock"] } },
     });
   });
 
@@ -276,7 +276,7 @@ describe("updateRolePermissions", () => {
     ["role do workspace ausente", { [ROLE_ID]: input[ROLE_ID] }],
     ["role que não é do workspace", { ...input, "64b7f0c2a1b2c3d4e5f60799": other }],
     ["campo ausente", { ...input, [OTHER_ROLE_ID]: { workspace: ["home"], unit: [] } }],
-    ["lista não é array", { ...input, [OTHER_ROLE_ID]: { ...other, unit: "team" } }],
+    ["lista não é array", { ...input, [OTHER_ROLE_ID]: { ...other, unit: "stock" } }],
     ["permissão desconhecida", { ...input, [OTHER_ROLE_ID]: { ...other, permissions: ["billing.manage"] } }],
     ["página desconhecida", { ...input, [OTHER_ROLE_ID]: { ...other, workspace: ["home", "billing"] } }],
     ["página de unidade no escopo do sistema", { ...input, [OTHER_ROLE_ID]: { ...other, workspace: ["home", "appointments"] } }],

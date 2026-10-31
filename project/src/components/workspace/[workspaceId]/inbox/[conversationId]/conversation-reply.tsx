@@ -7,7 +7,6 @@ import {
   sendReplyAction,
   type MessagingActionState,
 } from "@/lib/actions/messaging"
-import { SuggestReplyButton, useConversationAgenia } from "@/components/workspace/[workspaceId]/agenia/conversation-agenia"
 import { Button } from "@/components/ui/button"
 import { FieldError } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
@@ -16,11 +15,7 @@ type Props = { workspaceId: string; conversationId: string; maxLength: number }
 
 export function ConversationReply({ workspaceId, conversationId, maxLength }: Props) {
   const formRef = useRef<HTMLFormElement>(null)
-  // Com a AgenIA, o texto fica no contexto da conversa para ela poder escrever o rascunho.
-  const agenia = useConversationAgenia()
-  const [localText, setLocalText] = useState("")
-  const text = agenia ? agenia.draft : localText
-  const setText = agenia ? agenia.setDraft : setLocalText
+  const [text, setText] = useState("")
   const [state, formAction, pending] = useActionState(
     async (prev: MessagingActionState, formData: FormData) => {
       const next = await sendReplyAction(workspaceId, conversationId, prev, formData)
@@ -34,7 +29,6 @@ export function ConversationReply({ workspaceId, conversationId, maxLength }: Pr
     <form ref={formRef} action={formAction} className="flex shrink-0 flex-col gap-2 border-t p-3">
       {state.error && <FieldError>{state.error}</FieldError>}
       <div className="flex items-end gap-2">
-        <SuggestReplyButton />
         <Textarea
           name="text"
           value={text}

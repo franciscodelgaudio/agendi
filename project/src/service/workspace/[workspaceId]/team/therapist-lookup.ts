@@ -1,5 +1,5 @@
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { memberAttendsStages } from "@/service/workspace/[workspaceId]/team/unit-team"
+import { memberAttendsStages } from "@/service/workspace/[workspaceId]/team/therapist"
 import { User } from "@/models/User"
 import { WorkspaceMember } from "@/models/WorkspaceMember"
 

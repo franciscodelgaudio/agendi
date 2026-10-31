@@ -32,7 +32,7 @@ async function WorkspaceSidebar({ workspaceId }: { workspaceId: string }) {
   const [workspace] = await Workspace.aggregate<{
     id: string
     name: string
-    avatarUrl: string | null
+    imageUrl: string | null
     actor: Actor
   }>([
     ...access,
@@ -41,7 +41,7 @@ async function WorkspaceSidebar({ workspaceId }: { workspaceId: string }) {
         _id: 0,
         id: { $toString: "$_id" },
         name: 1,
-        avatarUrl: { $ifNull: ["$avatarUrl", null] },
+        imageUrl: { $ifNull: ["$imageUrl", null] },
         actor: 1,
       },
     },

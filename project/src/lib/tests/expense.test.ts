@@ -9,7 +9,6 @@ import {
   expenseGroupMonthTotalsPipeline,
   expenseGroupYearOverview,
   groupLimitForMonth,
-  payrollExpenseRows,
   setGroupLimitFrom,
   setGroupLimitForMonth,
   setExpensePaid,
@@ -726,35 +725,18 @@ describe("expenseGroupYearOverview", () => {
 });
 
 describe("staffExpenseGroups", () => {
-  // Custos da equipe e repasse do período; bruto, líquido e despesas não entram nos grupos.
-  const amounts = (partnerShareCents: number, commissionCents: number, salaryCents: number) => ({
-    grossCents: 999_999,
-    partnerShareCents,
-    commissionCents,
-    salaryCents,
-    netCents: -1,
-  });
+  const amounts = (partnerShareCents: number) => ({ grossCents: 999_999, partnerShareCents, netCents: -1 });
 
-  it("equipe tem limite no salário com bônus e na comissão previstos, e lançado e pago no que já correu", () => {
-    const result = staffExpenseGroups({ real: amounts(300, 200, 1_500), forecast: amounts(300, 200, 3_000) });
+  it("repasse tem limite no previsto, e lançado e pago no que já correu", () => {
+    const result = staffExpenseGroups({ real: amounts(300), forecast: amounts(500) });
 
     expect(result).toEqual([
-      {
-        id: "team",
-        name: "Equipe",
-        automatic: true,
-        monthlyLimitCents: 3_200,
-        limitCents: 3_200,
-        totalCents: 1_700,
-        paidCents: 1_700,
-        overLimit: false,
-      },
       {
         id: "partner_share",
         name: "Repasse",
         automatic: true,
-        monthlyLimitCents: 300,
-        limitCents: 300,
+        monthlyLimitCents: 500,
+        limitCents: 500,
         totalCents: 300,
         paidCents: 300,
         overLimit: false,
@@ -762,20 +744,8 @@ describe("staffExpenseGroups", () => {
     ]);
   });
 
-  it("sem repasse, só aparece a equipe", () => {
-    const result = staffExpenseGroups({ real: amounts(0, 50, 0), forecast: amounts(0, 50, 0) });
-
-    expect(result.map((group) => group.id)).toEqual(["team"]);
-  });
-
-  it("sem salário, bônus nem comissão, só aparece o repasse", () => {
-    const result = staffExpenseGroups({ real: amounts(80, 0, 0), forecast: amounts(80, 0, 0) });
-
-    expect(result.map((group) => group.id)).toEqual(["partner_share"]);
-  });
-
-  it("sem custos de equipe nem repasse, não há grupos automáticos", () => {
-    expect(staffExpenseGroups({ real: amounts(0, 0, 0), forecast: amounts(0, 0, 0) })).toEqual([]);
+  it("sem repasse, não há grupos automáticos", () => {
+    expect(staffExpenseGroups({ real: amounts(0), forecast: amounts(0) })).toEqual([]);
   });
 });
 
@@ -815,39 +785,10 @@ describe("monthlyDates", () => {
 });
 
 describe("staffExpenses", () => {
-  // Valores reais do mês; bruto e líquido não viram despesa.
-  const real = (partnerShareCents: number, commissionCents: number, salaryCents: number) => ({
-    grossCents: 999_999,
-    partnerShareCents,
-    commissionCents,
-    salaryCents,
-    netCents: -1,
-  });
+  const real = (partnerShareCents: number) => ({ grossCents: 999_999, partnerShareCents, netCents: -1 });
 
-  it("vira uma despesa automática por tipo, no dia dado, nos grupos equipe e repasse", () => {
-    const result = staffExpenses(real(33_600, 27_329, 20_000), "2026-10-31", true);
-
-    expect(result).toEqual([
-      {
-        id: "commission",
-        groupId: "team",
-        description: "Comissões",
-        amountCents: 27_329,
-        date: "2026-10-31",
-        paid: true,
-        series: null,
-        automatic: true,
-      },
-      {
-        id: "salary",
-        groupId: "team",
-        description: "Salários",
-        amountCents: 20_000,
-        date: "2026-10-31",
-        paid: true,
-        series: null,
-        automatic: true,
-      },
+  it("o repasse vira uma despesa automática no dia dado, no grupo do repasse", () => {
+    expect(staffExpenses(real(33_600), "2026-10-31", true)).toEqual([
       {
         id: "partner_share",
         groupId: "partner_share",
@@ -861,96 +802,13 @@ describe("staffExpenses", () => {
     ]);
   });
 
-  it("tipo sem valor no mês não aparece", () => {
-    const result = staffExpenses(real(0, 15_000, 0), "2026-10-31", true);
-
-    expect(result.map((expense) => expense.id)).toEqual(["commission"]);
+  it("sem repasse, não há despesa automática", () => {
+    expect(staffExpenses(real(0), "2026-10-31", true)).toEqual([]);
   });
 
-  it("sem custo da equipe nem repasse, não há despesa automática", () => {
-    expect(staffExpenses(real(0, 0, 0), "2026-10-31", true)).toEqual([]);
-  });
+  it("repasse não marcado fica pendente", () => {
+    const result = staffExpenses(real(33_600), "2026-10-31", false);
 
-  it("repasse não marcado fica pendente; comissões e salários seguem pagos", () => {
-    const result = staffExpenses(real(33_600, 27_329, 20_000), "2026-10-31", false);
-
-    expect(result.map(({ id, paid }) => ({ id, paid }))).toEqual([
-      { id: "commission", paid: true },
-      { id: "salary", paid: true },
-      { id: "partner_share", paid: false },
-    ]);
-  });
-});
-
-describe("payrollExpenseRows", () => {
-  // Remuneração calculada do mês inteiro de cada pessoa.
-  const JANE = { memberId: "jane", name: "Jane", salaryCents: 280_000, commissionCents: 4_000 };
-  const ANA = { memberId: "ana", name: "Ana", salaryCents: 0, commissionCents: 7_840 };
-  const row = (kind: "salary" | "commission", person: { memberId: string; name: string }, amountCents: number, payroll: object, paid = false) => ({
-    id: `${kind}:${person.memberId}`,
-    groupId: "team",
-    description: `${kind === "salary" ? "Salário" : "Comissão"} · ${person.name}`,
-    amountCents,
-    date: "2026-10-31",
-    paid,
-    series: null,
-    automatic: true,
-    payroll: { memberId: person.memberId, ...payroll },
-  });
-
-  it("sem registro: salário e comissão calculados, pendentes, no dia dado", () => {
-    const result = payrollExpenseRows([JANE], [], "2026-10-31");
-
-    const payroll = { salaryCents: 280_000, commissionCents: 4_000, paidOn: null, recorded: false };
-    expect(result).toEqual([row("salary", JANE, 280_000, payroll), row("commission", JANE, 4_000, payroll)]);
-  });
-
-  it("pago: os valores do registro trocam os calculados e as duas linhas ficam pagas", () => {
-    const payment = { memberId: "jane", salaryCents: 300_000, commissionCents: 5_000, paidOn: "2026-11-12" };
-
-    const result = payrollExpenseRows([JANE], [payment], "2026-10-31");
-
-    const payroll = { salaryCents: 300_000, commissionCents: 5_000, paidOn: "2026-11-12", recorded: true };
-    expect(result).toEqual([row("salary", JANE, 300_000, payroll, true), row("commission", JANE, 5_000, payroll, true)]);
-  });
-
-  it("ajuste sem data: valores do registro, ainda pendentes", () => {
-    const payment = { memberId: "jane", salaryCents: 250_000, commissionCents: 4_000, paidOn: null };
-
-    const result = payrollExpenseRows([JANE], [payment], "2026-10-31");
-
-    expect(result.map(({ amountCents, paid }) => ({ amountCents, paid }))).toEqual([
-      { amountCents: 250_000, paid: false },
-      { amountCents: 4_000, paid: false },
-    ]);
-    expect(result[0].payroll).toEqual({ memberId: "jane", salaryCents: 250_000, commissionCents: 4_000, paidOn: null, recorded: true });
-  });
-
-  it("linha sem valor não aparece, mesmo com registro", () => {
-    const payment = { memberId: "jane", salaryCents: 280_000, commissionCents: 0, paidOn: "2026-11-12" };
-
-    const result = payrollExpenseRows([ANA, JANE], [payment], "2026-10-31");
-
-    expect(result.map((expense) => expense.id)).toEqual(["commission:ana", "salary:jane"]);
-  });
-
-  it("ordena pelo nome e, de cada pessoa, salário antes da comissão", () => {
-    const bia = { memberId: "bia", name: "Bia", salaryCents: 100_000, commissionCents: 1_000 };
-
-    const result = payrollExpenseRows([JANE, bia, ANA], [], "2026-10-31");
-
-    expect(result.map((expense) => expense.id)).toEqual([
-      "commission:ana",
-      "salary:bia",
-      "commission:bia",
-      "salary:jane",
-      "commission:jane",
-    ]);
-  });
-
-  it("registro de quem não está na lista é ignorado", () => {
-    const payment = { memberId: "lia", salaryCents: 100_000, commissionCents: 0, paidOn: "2026-11-12" };
-
-    expect(payrollExpenseRows([], [payment], "2026-10-31")).toEqual([]);
+    expect(result.map(({ id, paid }) => ({ id, paid }))).toEqual([{ id: "partner_share", paid: false }]);
   });
 });

@@ -3,7 +3,6 @@ import { isObjectIdOrHexString, Types } from "mongoose"
 import { CalendarCheckIcon, CalendarXIcon, PiggyBankIcon, LeafIcon, TrendingUpIcon } from "lucide-react"
 import {
   applyExpenses,
-  applyStaffCosts,
   cashFlowBuckets,
   cashFlowFetchRange,
   costCurve,
@@ -14,13 +13,12 @@ import {
   serviceBookingForecastPipeline,
   summarizeCashFlow,
   summarizeServices,
-  teamPayRates,
   type DayRange,
   type DayTotal,
   type ServiceTotal,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow"
 import { dailyExpenseTotalsPipeline, type ExpenseDayTotal } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/expenses/expense"
-import { findTeamPayMembers, groupLimitsOf } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
+import { groupLimitsOf } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
 import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
@@ -62,7 +60,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
   const [workspace] = await Workspace.aggregate<{
     id: string
     therapists: TherapistOption[]
-    unit: { revenueShare: RevenueShare | null; createdAt: Date } | null
+    unit: { revenueShare: RevenueShare | null } | null
   }>([
     ...access,
     {
@@ -73,7 +71,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
         as: "unit",
         pipeline: [
           { $match: { _id: new Types.ObjectId(unitId) } },
-          { $project: { _id: 0, revenueShare: { $ifNull: ["$revenueShare", null] }, createdAt: 1 } },
+          { $project: { _id: 0, revenueShare: { $ifNull: ["$revenueShare", null] } } },
         ],
       },
     },
@@ -88,7 +86,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
     },
   ])
   if (!workspace?.unit) notFound()
-  const { revenueShare, createdAt } = workspace.unit
+  const { revenueShare } = workspace.unit
 
   // Mês corrente para os indicadores; ano corrente para a curva de custos, numa busca só com o
   // resto dos períodos de repasse das pontas.
@@ -104,13 +102,11 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
 
   const unitObjectId = new Types.ObjectId(unitId)
   const unitMatch = { $match: { unitId: unitObjectId } }
-  const [appointments, bookings, serviceAppointments, serviceBookings, team, todayBookings, expenses, groups] = await Promise.all([
+  const [appointments, bookings, serviceAppointments, serviceBookings, todayBookings, expenses, groups] = await Promise.all([
     Appointment.aggregate<DayTotal>([unitMatch, ...dailyAppointmentTotalsPipeline(range)]),
     Booking.aggregate<DayTotal>([unitMatch, ...dailyBookingForecastPipeline(range, now)]),
     Appointment.aggregate<ServiceTotal>([unitMatch, ...serviceAppointmentTotalsPipeline(month)]),
     Booking.aggregate<ServiceTotal>([unitMatch, ...serviceBookingForecastPipeline(month, now)]),
-    // Remuneração da equipe vinculada a esta unidade (administradores não têm).
-    findTeamPayMembers(workspace.id, unitId),
     Booking.find({ unitId: unitObjectId, startsAt: { $gte: todayStart, $lt: todayEnd } })
       .sort({ startsAt: 1 })
       .select({ startsAt: 1, endsAt: 1, guest: 1, service: 1, therapistId: 1, therapistName: 1, appointmentId: 1 })
@@ -119,13 +115,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
     ExpenseGroup.find({ unitId: unitObjectId }).select({ monthlyLimitCents: 1, limitChanges: 1 }).lean(),
   ])
 
-  const { commissionRates, ...staffCosts } = teamPayRates(team, unitId)
-  const summarize = (buckets: DayRange[]) =>
-    applyStaffCosts(summarizeCashFlow(buckets, appointments, bookings, revenueShare, commissionRates), {
-      ...staffCosts,
-      today,
-      since: parseCashFlowQuery({}, createdAt).date,
-    })
+  const summarize = (buckets: DayRange[]) => summarizeCashFlow(buckets, appointments, bookings, revenueShare)
   const monthTotal = summarize(monthBuckets).total
   const curve = costCurve([
     { buckets: applyExpenses(summarize(yearBuckets), expenses).buckets, groups: groups.map(groupLimitsOf) },
@@ -136,13 +126,8 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
 
   const servicesDone = services.reduce((sum, service) => sum + service.real.count, 0)
   const servicesScheduled = services.reduce((sum, service) => sum + service.forecast.count, 0) - servicesDone
-  const hasDeductions =
-    !!revenueShare ||
-    Object.keys(commissionRates).length > 0 ||
-    staffCosts.grossCommissionPercent > 0 ||
-    staffCosts.netCommissionPercent > 0 ||
-    staffCosts.salaries.length > 0
-  const deductionsCents = monthTotal.real.partnerShareCents + monthTotal.real.commissionCents + monthTotal.real.salaryCents
+  const hasDeductions = !!revenueShare
+  const deductionsCents = monthTotal.real.partnerShareCents
 
   const schedule: TodayBooking[] = todayBookings.map((booking) => ({
     id: booking._id.toString(),
@@ -180,7 +165,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
           label="Líquido do mês"
           value={money(monthTotal.real.netCents)}
           detail={
-            hasDeductions ? `${money(deductionsCents)} em repasse, comissões e salários` : "Sem repasse, comissões nem salários"
+            hasDeductions ? `${money(deductionsCents)} em repasse` : "Sem repasse"
           }
         />
         <StatTile

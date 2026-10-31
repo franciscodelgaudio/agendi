@@ -11,7 +11,6 @@ rotas de API e workers podem importar o mesmo serviço sem duplicar consultas.
 Exemplos:
 
 - `workspace/[workspaceId]/uras/ura-store.ts`: persistência e execução das URAs.
-- `workspace/[workspaceId]/agenia/`: modelo, contexto e histórico da AgenIA.
 - `workspace/[workspaceId]/stock/products/product-lookup.ts`: consultas de produtos.
 - `workspace/[workspaceId]/unit/[unitId]/calendar/booking-store.ts`: consultas de agendamentos.
 - `workspace/[workspaceId]/unit/[unitId]/cash-flow/`: consultas das abas do caixa da unidade.

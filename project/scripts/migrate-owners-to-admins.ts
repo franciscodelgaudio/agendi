@@ -52,7 +52,7 @@ async function main() {
             updatedAt: now,
           },
           $unset: { tokenHash: "", expiresAt: "" },
-          $setOnInsert: { units: [], acceptedAt: now, createdAt: now },
+          $setOnInsert: { acceptedAt: now, createdAt: now },
         },
         { upsert: true },
       )

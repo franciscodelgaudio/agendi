@@ -31,7 +31,7 @@ export type TourStep = {
   show?: (access: TourAccess) => boolean
 }
 
-export type TourId = "start" | "general" | "service" | "agenia" | "settings"
+export type TourId = "start" | "general" | "service" | "uras" | "settings"
 
 export type Tour = {
   id: TourId
@@ -189,7 +189,7 @@ const general: Tour = {
   id: "general",
   title: "Geral",
   show: (access) =>
-    (["calendar", "cash_flow", "team"] as const).some((page) => access.pages.workspace.includes(page)) ||
+    (["calendar", "cash_flow"] as const).some((page) => access.pages.workspace.includes(page)) ||
     access.pages.unit.includes("stock"),
   steps: [
     {
@@ -218,25 +218,6 @@ const general: Tour = {
       title: "Períodos",
       body: "Veja a semana, o mês ou o ano e navegue entre os períodos. O previsto vem dos agendamentos; o realizado, dos atendimentos.",
       show: workspacePage("cash_flow"),
-    },
-    {
-      id: "nav-team",
-      target: "nav-team",
-      action: "click",
-      href: "/team",
-      sidebar: true,
-      side: "right",
-      title: "Equipe",
-      body: "Clique em Equipe.",
-      show: workspacePage("team"),
-    },
-    {
-      id: "team-table",
-      target: "team-table",
-      side: "top",
-      title: "Quem atende",
-      body: "Todas as pessoas do workspace, as unidades em que atendem e como recebem: comissão ou salário.",
-      show: workspacePage("team"),
     },
     ...openUnit,
     {
@@ -291,36 +272,11 @@ const service: Tour = {
   ],
 }
 
-// A AgenIA e os custos de IA são de quem tem a permissão da AgenIA; as URAs, de quem as gerencia.
-const agenia: Tour = {
-  id: "agenia",
-  title: "AgenIA",
-  show: allows("agenia.use"),
+const uras: Tour = {
+  id: "uras",
+  title: "URAs",
+  show: allows("uras.manage"),
   steps: [
-    {
-      id: "agenia-button",
-      target: "agenia-button",
-      side: "left",
-      title: "AgenIA",
-      body: "Sua assistente em qualquer página: consulta agenda, caixa, estoque e conversas, e usa a página aberta como contexto.",
-    },
-    {
-      id: "nav-agenia",
-      target: "nav-agenia",
-      action: "click",
-      href: "/agenia",
-      sidebar: true,
-      side: "right",
-      title: "Tela cheia",
-      body: "A mesma conversa também tem uma página própria. Clique em AgenIA.",
-    },
-    {
-      id: "agenia-chat",
-      target: "agenia-chat",
-      side: "left",
-      title: "Converse com a AgenIA",
-      body: "Pergunte ou peça o que precisar. Antes de mudar algo no sistema, ela pede sua autorização.",
-    },
     {
       id: "nav-uras",
       target: "nav-uras",
@@ -330,31 +286,12 @@ const agenia: Tour = {
       side: "right",
       title: "URAs",
       body: "Clique em URAs.",
-      show: allows("uras.manage"),
     },
     {
       id: "create-ura",
       target: "create-ura",
       title: "Atendimento automático",
-      body: "Monte fluxos para os canais: menus, perguntas e agendamento direto pela conversa. No editor, a AgenIA monta e ajusta o fluxo com você.",
-      show: allows("uras.manage"),
-    },
-    {
-      id: "nav-ai-costs",
-      target: "nav-ai-costs",
-      action: "click",
-      href: "/ai-costs",
-      sidebar: true,
-      side: "right",
-      title: "Custos de IA",
-      body: "Clique em Custos de IA.",
-    },
-    {
-      id: "agenia-model",
-      target: "agenia-model",
-      title: "Modelo e gastos",
-      body: "Escolha o modelo que a AgenIA usa e acompanhe quanto ela custou em cada período.",
-      show: allows("workspace.manage"),
+      body: "Monte fluxos para os canais: menus, perguntas e agendamento direto pela conversa.",
     },
   ],
 }
@@ -399,4 +336,4 @@ const settings: Tour = {
   ],
 }
 
-export const TOURS: Tour[] = [start, general, service, agenia, settings]
+export const TOURS: Tour[] = [start, general, service, uras, settings]

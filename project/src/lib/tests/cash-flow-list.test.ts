@@ -337,25 +337,15 @@ describe("expenseGroupListPage", () => {
 
 const THERAPIST_BASE = { q: "", sort: "real", dir: "desc", page: 1 } as const;
 
-function therapist(
-  id: string,
-  therapistName: string,
-  real: number,
-  forecast: number,
-  commissionPercent: number | null = null,
-): TherapistSummary {
-  const amounts = (cents: number) => ({
-    count: cents / 1000,
-    cents,
-    commissionCents: Math.round((cents * (commissionPercent ?? 0)) / 100),
-  });
-  return { therapistId: id, therapistName, commissionPercent, real: amounts(real), forecast: amounts(forecast) };
+function therapist(id: string, therapistName: string, real: number, forecast: number): TherapistSummary {
+  const amounts = (cents: number) => ({ count: cents / 1000, cents });
+  return { therapistId: id, therapistName, real: amounts(real), forecast: amounts(forecast) };
 }
 
 // Na ordem do resumo: pelo previsto, decrescente (diferente da ordem pelo real).
-const BIA = therapist("bia", "Bia", 20000, 50000, 40);
+const BIA = therapist("bia", "Bia", 20000, 50000);
 const ANA_T = therapist("ana", "Ana", 30000, 40000);
-const CAIO = therapist("caio", "caio", 10000, 10000, 50);
+const CAIO = therapist("caio", "caio", 10000, 10000);
 const THERAPISTS = [BIA, ANA_T, CAIO];
 
 const therapistIds = (rows: TherapistSummary[]) => rows.map((row) => row.therapistId);
@@ -397,15 +387,15 @@ describe("parseTherapistListQuery", () => {
 });
 
 describe("therapistListPage", () => {
-  const sums = (real: [number, number, number]) => ({
-    real: { count: real[0], cents: real[1], commissionCents: real[2] },
+  const sums = (real: [number, number]) => ({
+    real: { count: real[0], cents: real[1] },
   });
 
   it("sem busca, ordena pelo bruto real decrescente e soma o real de todas", () => {
     expect(therapistListPage(THERAPISTS, THERAPIST_BASE)).toEqual({
       rows: [ANA_T, BIA, CAIO],
       total: 3,
-      sums: sums([60, 60000, 13000]),
+      sums: sums([60, 60000]),
     });
   });
 
@@ -433,7 +423,7 @@ describe("therapistListPage", () => {
     expect(therapistListPage([...THERAPISTS, joao], { ...THERAPIST_BASE, q: "JOAO" })).toEqual({
       rows: [joao],
       total: 1,
-      sums: sums([1, 1000, 0]),
+      sums: sums([1, 1000]),
     });
   });
 
@@ -441,7 +431,7 @@ describe("therapistListPage", () => {
     const many = Array.from({ length: 21 }, (_, i) => therapist(`t${String(i).padStart(2, "0")}`, `T${i}`, 1000, 1000));
     const page2 = therapistListPage(many, { ...THERAPIST_BASE, page: 2 });
     expect(therapistIds(therapistListPage(many, THERAPIST_BASE).rows)).toEqual(therapistIds(many.slice(0, 20)));
-    expect(page2).toEqual({ rows: many.slice(20), total: 21, sums: sums([21, 21000, 0]) });
+    expect(page2).toEqual({ rows: many.slice(20), total: 21, sums: sums([21, 21000]) });
   });
 
   it("não altera a lista recebida", () => {

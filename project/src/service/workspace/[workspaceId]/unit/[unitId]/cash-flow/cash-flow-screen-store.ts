@@ -15,7 +15,6 @@ import {
   expenseGroupTotalsPipeline,
   expenseGroupYearOverview,
   groupLimitForMonth,
-  payrollExpenseRows,
   staffExpenseGroups,
   staffExpenses,
   summarizeExpenseGroups,
@@ -27,11 +26,9 @@ import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/
 import type { RevenueShare } from "@/service/workspace/[workspaceId]/unit/[unitId]/revenue-share"
 import { workspaceAccessStages } from "@/service/(auth)/session"
 import {
-  findTeamPayMembers,
   groupLimitsOf,
   loadUnitCashFlow,
   loadUnitNet,
-  monthStaffPay,
   type CashFlowUnit,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
 import { loadWallets } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
@@ -98,23 +95,10 @@ export async function loadCashFlowSummaryScreen(
   const shown = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const costBuckets = cashFlowBuckets({ view: "month", date: costMonthDate(costMonthParam, shown, today) })
   const costMonth = { from: costBuckets[0].from, to: costBuckets.at(-1)!.to }
-  const unit = { id: unitId, revenueShare, createdAt }
-  const [
-    {
-      summary,
-      appointments,
-      commissionRates,
-      groupLimits,
-      hasCommission,
-      hasSalary,
-      hasExpenses,
-    },
-    month,
-    icons,
-    [wallet],
-  ] = await Promise.all([
-    loadUnitCashFlow(workspace.id, unit, buckets, today),
-    loadUnitCashFlow(workspace.id, unit, costBuckets, today),
+  const unit = { id: unitId, revenueShare }
+  const [{ summary, appointments, groupLimits, hasExpenses }, month, icons, [wallet]] = await Promise.all([
+    loadUnitCashFlow(unit, buckets),
+    loadUnitCashFlow(unit, costBuckets),
     loadExpenseGroupIcons(),
     loadWallets(workspace.id, today, unitId),
   ])
@@ -129,7 +113,7 @@ export async function loadCashFlowSummaryScreen(
   const ownShare = walletUnit?.amountCents ?? null
   const balanceCents = wallet
     ? (walletUnit?.balanceCents ?? wallet.balanceCents)
-    : await loadUnitBalance(workspace.id, unit, createdAt, today)
+    : await loadUnitBalance(unit, createdAt, today)
 
   return {
     unitName: name,
@@ -147,8 +131,8 @@ export async function loadCashFlowSummaryScreen(
         : wallet.openingBalance
       : null,
     summary,
-    columns: { partnerShare: !!revenueShare, commission: hasCommission, salary: hasSalary, expenses: hasExpenses },
-    therapists: summarizeTherapists(shown, appointments, [], commissionRates),
+    columns: { partnerShare: !!revenueShare, expenses: hasExpenses },
+    therapists: summarizeTherapists(shown, appointments, []),
     costMonth,
     costs,
     curve: costCurve([{ buckets: summary.buckets, groups: groupLimits }]),
@@ -157,28 +141,24 @@ export async function loadCashFlowSummaryScreen(
 
 // Líquido real da unidade sem carteira, do dia em que foi criada (ou da primeira despesa, se
 // lançada antes) até hoje, com as mesmas regras do caixa.
-async function loadUnitBalance(workspaceId: string, unit: CashFlowUnit, createdAt: Date, today: string) {
-  const [firstExpense, team] = await Promise.all([
-    Expense.findOne({ unitId: new Types.ObjectId(unit.id) }).sort({ date: 1 }).select({ date: 1 }).lean(),
-    findTeamPayMembers(workspaceId, unit.id),
-  ])
+async function loadUnitBalance(unit: CashFlowUnit, createdAt: Date, today: string) {
+  const firstExpense = await Expense.findOne({ unitId: new Types.ObjectId(unit.id) }).sort({ date: 1 }).select({ date: 1 }).lean()
   const created = parseCashFlowQuery({}, createdAt).date
   const from = firstExpense && firstExpense.date < created ? firstExpense.date : created
-  return from <= today ? loadUnitNet(unit, { from, to: today }, today, team) : 0
+  return from <= today ? loadUnitNet(unit, { from, to: today }) : 0
 }
 
-// Equipe e repasse entram como grupos e despesas automáticos, fora do banco (só leitura).
+// O repasse entra como grupo e despesa automáticos, fora do banco (só leitura).
 export async function loadExpensesScreen(
   workspaceId: string,
   userId: string,
   unitId: string,
   query: CashFlowQuery,
-  now: Date,
 ) {
   const access = workspaceAccessStages(workspaceId, userId)
   if (!access || !isObjectIdOrHexString(unitId)) return null
 
-  // Parte do workspace para garantir o acesso à unidade; a regra de repasse entra nos custos da equipe.
+  // Parte do workspace para garantir o acesso à unidade; a regra de repasse entra no repasse automático.
   const [workspace] = await Workspace.aggregate<{
     id: string
     actor: Actor
@@ -201,11 +181,10 @@ export async function loadExpensesScreen(
   ])
   if (!workspace?.unit) return null
 
-  const today = parseCashFlowQuery({}, now).date
   const buckets = cashFlowBuckets(query)
   const month = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const unitObjectId = new Types.ObjectId(unitId)
-  const unit = { id: unitId, revenueShare: workspace.unit.revenueShare, createdAt: workspace.unit.createdAt }
+  const unit = { id: unitId, revenueShare: workspace.unit.revenueShare }
   const [groupDocs, expenseDocs, icons, cashFlow, partnerSharePaid] = await Promise.all([
     ExpenseGroup.find({ unitId: unitObjectId })
       .sort({ name: 1 })
@@ -217,7 +196,7 @@ export async function loadExpensesScreen(
       .select({ groupId: 1, description: 1, amountCents: 1, date: 1, paidAt: 1, series: 1 })
       .lean(),
     loadExpenseGroupIcons(),
-    loadUnitCashFlow(workspace.id, unit, buckets, today),
+    loadUnitCashFlow(unit, buckets),
     PartnerSharePayment.exists({ unitId: unitObjectId, month: month.from.slice(0, 7) }),
   ])
   const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
@@ -252,17 +231,8 @@ export async function loadExpensesScreen(
         : null,
       automatic: false,
     })),
-    // No último dia do mês, depois das cadastradas: a folha de cada pessoa e o repasse.
-    ...payrollExpenseRows(
-      monthStaffPay(unit, cashFlow.team, cashFlow.appointments, month.from.slice(0, 7), today).map((pay) => ({
-        memberId: pay.memberId,
-        name: cashFlow.team.find((member) => member.memberId.toString() === pay.memberId)!.name,
-        ...pay.forecast,
-      })),
-      cashFlow.payrollRecords,
-      month.to,
-    ),
-    ...staffExpenses({ ...cashFlow.summary.total.real, commissionCents: 0, salaryCents: 0 }, month.to, !!partnerSharePaid),
+    // No último dia do mês, depois das cadastradas: o repasse.
+    ...staffExpenses(cashFlow.summary.total.real, month.to, !!partnerSharePaid),
   ]
 
   return { unitName: workspace.unit.name, actor: workspace.actor, month, groups, expenses }
@@ -270,11 +240,10 @@ export async function loadExpensesScreen(
 
 // Ícones dos grupos automáticos, fora do catálogo.
 const STAFF_GROUP_ICONS = {
-  team: { id: "team", key: "users", name: "Equipe", color: "#7c3aed" },
   partner_share: { id: "partner_share", key: "handshake", name: "Repasse", color: "#1f5a4e" },
 }
 
-// O limite é de cada mês: no ano, soma os 12. Equipe e repasse entram como grupos automáticos.
+// O limite é de cada mês: no ano, soma os 12. O repasse entra como grupo automático.
 // No ano, também vem o mês a mês de cada grupo cadastrado.
 export async function loadExpenseGroupsScreen(
   workspaceId: string,
@@ -286,7 +255,7 @@ export async function loadExpenseGroupsScreen(
   const access = workspaceAccessStages(workspaceId, userId)
   if (!access || !isObjectIdOrHexString(unitId)) return null
 
-  // Parte do workspace para garantir o acesso à unidade; a regra de repasse entra nos custos da equipe.
+  // Parte do workspace para garantir o acesso à unidade; a regra de repasse entra no repasse automático.
   const [workspace] = await Workspace.aggregate<{
     id: string
     actor: Actor
@@ -313,7 +282,7 @@ export async function loadExpenseGroupsScreen(
   const buckets = cashFlowBuckets(query)
   const period = { from: buckets[0].from, to: buckets.at(-1)!.to }
   const unitObjectId = new Types.ObjectId(unitId)
-  const unit = { id: unitId, revenueShare: workspace.unit.revenueShare, createdAt: workspace.unit.createdAt }
+  const unit = { id: unitId, revenueShare: workspace.unit.revenueShare }
   const year = query.date.slice(0, 4)
   const yearRange = { from: `${year}-01-01`, to: `${year}-12-31` }
   const yearMonths = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`)
@@ -330,7 +299,7 @@ export async function loadExpenseGroupsScreen(
         ])
       : [],
     loadExpenseGroupIcons(),
-    loadUnitCashFlow(workspace.id, unit, buckets, today),
+    loadUnitCashFlow(unit, buckets),
   ])
   const iconsById = new Map(icons.map((icon) => [icon.id, icon]))
   const infos = groups.map((group) => ({

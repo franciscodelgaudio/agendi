@@ -1,6 +1,6 @@
 import type { PipelineStage } from "mongoose";
 import { parseDay } from "@/service/workspace/[workspaceId]/unit/[unitId]/appointments/appointment-list";
-import type { DayRange, ExpenseDayCents, StaffCashFlowAmounts } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
+import type { CashFlowAmounts, DayRange, ExpenseDayCents } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow";
 import { parsePriceCents } from "@/service/workspace/[workspaceId]/unit/[unitId]/services/service";
 
 const MAX_DESCRIPTION_LENGTH = 80;
@@ -378,82 +378,38 @@ export function expenseGroupYearOverview(
   return { groups: sorted.map(({ id, name }) => ({ id, name })), rows, total };
 }
 
-type StaffAmounts = Pick<StaffCashFlowAmounts, "partnerShareCents" | "commissionCents" | "salaryCents">;
+type StaffAmounts = Pick<CashFlowAmounts, "partnerShareCents">;
 
-// Grupos automáticos do período, fora do banco: equipe (salários com bônus e comissões) e
-// repasse. O limite é o previsto; lançado e pago são o que já correu. Sem custo, o grupo não aparece.
+// Grupo automático do período, fora do banco: repasse. O limite é o previsto; lançado e pago
+// são o que já correu. Sem repasse, o grupo não aparece.
 export function staffExpenseGroups({ real, forecast }: { real: StaffAmounts; forecast: StaffAmounts }) {
-  const group = (id: "team" | "partner_share", name: string, limitCents: number, spentCents: number) => ({
-    id,
-    name,
-    automatic: true as const,
-    monthlyLimitCents: limitCents,
-    limitCents,
-    totalCents: spentCents,
-    paidCents: spentCents,
-    overLimit: false,
-  });
   return [
-    group("team", "Equipe", forecast.commissionCents + forecast.salaryCents, real.commissionCents + real.salaryCents),
-    group("partner_share", "Repasse", forecast.partnerShareCents, real.partnerShareCents),
+    {
+      id: "partner_share" as const,
+      name: "Repasse",
+      automatic: true as const,
+      monthlyLimitCents: forecast.partnerShareCents,
+      limitCents: forecast.partnerShareCents,
+      totalCents: real.partnerShareCents,
+      paidCents: real.partnerShareCents,
+      overLimit: false,
+    },
   ].filter((row) => row.limitCents > 0);
 }
 
-// Despesas automáticas do mês, fora do banco: o que já correu de comissões, salários e repasse,
-// no dia dado. Comissões e salários são pagas; o repasse, só se marcado (partnerSharePaid).
-// Tipo sem valor não aparece.
+// Despesa automática do mês, fora do banco: o repasse que já correu, no dia dado, pago só se
+// marcado (partnerSharePaid). Sem valor, não aparece.
 export function staffExpenses(real: StaffAmounts, date: string, partnerSharePaid: boolean) {
-  const expense = (
-    id: "commission" | "salary" | "partner_share",
-    groupId: "team" | "partner_share",
-    description: string,
-    amountCents: number,
-  ) => ({
-    id,
-    groupId,
-    description,
-    amountCents,
-    date,
-    paid: id !== "partner_share" || partnerSharePaid,
-    series: null,
-    automatic: true as const,
-  });
   return [
-    expense("commission", "team", "Comissões", real.commissionCents),
-    expense("salary", "team", "Salários", real.salaryCents),
-    expense("partner_share", "partner_share", "Repasse", real.partnerShareCents),
+    {
+      id: "partner_share" as const,
+      groupId: "partner_share" as const,
+      description: "Repasse",
+      amountCents: real.partnerShareCents,
+      date,
+      paid: partnerSharePaid,
+      series: null,
+      automatic: true as const,
+    },
   ].filter((row) => row.amountCents > 0);
-}
-
-// Remuneração calculada do mês inteiro de uma pessoa e o registro da folha dela no mês, se houver.
-export type PayrollPerson = { memberId: string; name: string; salaryCents: number; commissionCents: number };
-export type PayrollRecord = { memberId: string; salaryCents: number; commissionCents: number; paidOn: string | null };
-
-// Salário e comissão de cada pessoa no mês, no grupo da equipe e no dia dado: com registro, os
-// valores dele (pagas se tiver o dia do pagamento); sem, os calculados, pendentes. Linha sem valor
-// não aparece. payroll leva os valores para editar o registro.
-export function payrollExpenseRows(people: PayrollPerson[], records: PayrollRecord[], date: string) {
-  const byMember = new Map(records.map((record) => [record.memberId, record]));
-  return [...people]
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
-    .flatMap((person) => {
-      const record = byMember.get(person.memberId);
-      const { salaryCents, commissionCents } = record ?? person;
-      const paidOn = record?.paidOn ?? null;
-      const payroll = { memberId: person.memberId, salaryCents, commissionCents, paidOn, recorded: !!record };
-      const row = (kind: "salary" | "commission", label: string, amountCents: number) => ({
-        id: `${kind}:${person.memberId}`,
-        groupId: "team" as const,
-        description: `${label} · ${person.name}`,
-        amountCents,
-        date,
-        paid: !!paidOn,
-        series: null,
-        automatic: true as const,
-        payroll,
-      });
-      return [row("salary", "Salário", salaryCents), row("commission", "Comissão", commissionCents)].filter(
-        (expense) => expense.amountCents > 0,
-      );
-    });
 }

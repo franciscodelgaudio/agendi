@@ -11,8 +11,6 @@ import {
 const ZERO: ExpenseCashFlowAmounts = {
   grossCents: 0,
   partnerShareCents: 0,
-  commissionCents: 0,
-  salaryCents: 0,
   expenseCents: 0,
   netCents: 0,
 };
@@ -21,8 +19,6 @@ function add(a: ExpenseCashFlowAmounts, b: ExpenseCashFlowAmounts): ExpenseCashF
   return {
     grossCents: a.grossCents + b.grossCents,
     partnerShareCents: a.partnerShareCents + b.partnerShareCents,
-    commissionCents: a.commissionCents + b.commissionCents,
-    salaryCents: a.salaryCents + b.salaryCents,
     expenseCents: a.expenseCents + b.expenseCents,
     netCents: a.netCents + b.netCents,
   };
@@ -61,9 +57,9 @@ export function sumBalances(balances: (number | null)[]): number | null {
 }
 
 // Despesas da carteira nos mesmos intervalos do caixa das unidades, para somar com elas: só
-// despesa, sem receita nem equipe.
+// despesa, sem receita nem repasse.
 export function walletExpenseSummary(buckets: DayRange[], expenses: ExpenseDayCents[]): ExpenseCashFlowSummary {
-  const zero = { grossCents: 0, partnerShareCents: 0, commissionCents: 0, salaryCents: 0, netCents: 0 };
+  const zero = { grossCents: 0, partnerShareCents: 0, netCents: 0 };
   return applyExpenses(
     { buckets: buckets.map((bucket) => ({ ...bucket, real: zero, forecast: zero })), total: { real: zero, forecast: zero } },
     expenses,

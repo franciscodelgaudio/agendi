@@ -14,8 +14,6 @@ function amounts(overrides: Partial<ExpenseCashFlowAmounts> = {}): ExpenseCashFl
   return {
     grossCents: 0,
     partnerShareCents: 0,
-    commissionCents: 0,
-    salaryCents: 0,
     expenseCents: 0,
     netCents: 0,
     ...overrides,
@@ -42,8 +40,8 @@ describe("parseExportFormat", () => {
 const SEPT = { from: "2026-09-01", to: "2026-09-30" };
 
 function cashFlowInput(overrides: Partial<CashFlowReportInput> = {}): CashFlowReportInput {
-  const week1 = amounts({ grossCents: 100000, commissionCents: 30000, expenseCents: 20000, netCents: 50000 });
-  const week2 = amounts({ grossCents: 50000, commissionCents: 15000, netCents: 35000 });
+  const week1 = amounts({ grossCents: 100000, partnerShareCents: 30000, expenseCents: 20000, netCents: 50000 });
+  const week2 = amounts({ grossCents: 50000, partnerShareCents: 15000, netCents: 35000 });
   return {
     unitName: "Centro",
     query: { view: "month", date: "2026-09-24" },
@@ -56,11 +54,11 @@ function cashFlowInput(overrides: Partial<CashFlowReportInput> = {}): CashFlowRe
         { from: "2026-09-07", to: "2026-09-07", real: week2, forecast: amounts() },
       ],
       total: {
-        real: amounts({ grossCents: 150000, commissionCents: 45000, expenseCents: 20000, netCents: 85000 }),
+        real: amounts({ grossCents: 150000, partnerShareCents: 45000, expenseCents: 20000, netCents: 85000 }),
         forecast: amounts(),
       },
     },
-    columns: { partnerShare: false, commission: true, salary: false, expenses: true },
+    columns: { partnerShare: true, expenses: true },
     curve: [
       {
         from: "2026-08-01",
@@ -82,7 +80,7 @@ function cashFlowInput(overrides: Partial<CashFlowReportInput> = {}): CashFlowRe
     costs: {
       totalCents: 65000,
       rows: [
-        { kind: "commission", cents: 45000, share: 45000 / 65000 },
+        { kind: "partner_share", cents: 45000, share: 45000 / 65000 },
         { kind: "group", group: { name: "Aluguel" }, cents: 20000, share: 20000 / 65000 },
       ],
     },
@@ -91,19 +89,17 @@ function cashFlowInput(overrides: Partial<CashFlowReportInput> = {}): CashFlowRe
         {
           therapistId: "665f00000000000000abcde",
           therapistName: "Ana",
-          commissionPercent: 30,
-          real: { count: 4, cents: 100000, commissionCents: 30000 },
-          forecast: { count: 0, cents: 0, commissionCents: 0 },
+          real: { count: 4, cents: 100000 },
+          forecast: { count: 0, cents: 0 },
         },
         {
           therapistId: "665f00000000000000fghij",
           therapistName: "Dono",
-          commissionPercent: null,
-          real: { count: 2, cents: 50000, commissionCents: 0 },
-          forecast: { count: 0, cents: 0, commissionCents: 0 },
+          real: { count: 2, cents: 50000 },
+          forecast: { count: 0, cents: 0 },
         },
       ],
-      sums: { real: { count: 6, cents: 150000, commissionCents: 30000 } },
+      sums: { real: { count: 6, cents: 150000 } },
     },
     ...overrides,
   };
@@ -146,7 +142,7 @@ describe("cashFlowReport", () => {
     expect(flow.columns).toEqual([
       { label: "Período", kind: "text" },
       { label: "Bruto", kind: "money" },
-      { label: "Comissão", kind: "money" },
+      { label: "Repasse", kind: "money" },
       { label: "Despesas", kind: "money" },
       { label: "Líquido", kind: "money" },
     ]);
@@ -158,7 +154,7 @@ describe("cashFlowReport", () => {
   });
 
   it("sem nenhuma dedução, a tabela do fluxo tem só o bruto", () => {
-    const columns = { partnerShare: false, commission: false, salary: false, expenses: false };
+    const columns = { partnerShare: false, expenses: false };
     const [flow] = cashFlowReport(cashFlowInput({ columns })).tables;
     expect(flow.columns).toEqual([
       { label: "Período", kind: "text" },
@@ -171,18 +167,10 @@ describe("cashFlowReport", () => {
     expect(flow.total).toEqual(["Total", 150000]);
   });
 
-  it("com todas as deduções, segue a ordem da tela: repasse, comissão, salário e despesas", () => {
-    const columns = { partnerShare: true, commission: true, salary: true, expenses: true };
+  it("com todas as deduções, segue a ordem da tela: repasse e despesas", () => {
+    const columns = { partnerShare: true, expenses: true };
     const [flow] = cashFlowReport(cashFlowInput({ columns })).tables;
-    expect(flow.columns.map((column) => column.label)).toEqual([
-      "Período",
-      "Bruto",
-      "Repasse",
-      "Comissão",
-      "Salário e bônus",
-      "Despesas",
-      "Líquido",
-    ]);
+    expect(flow.columns.map((column) => column.label)).toEqual(["Período", "Bruto", "Repasse", "Despesas", "Líquido"]);
   });
 
   it("na semana, o intervalo é o dia da semana; no ano, o mês com inicial maiúscula", () => {
@@ -219,25 +207,17 @@ describe("cashFlowReport", () => {
       { label: "%", kind: "percent" },
     ]);
     expect(costs.rows).toEqual([
-      ["Comissões", 45000, 45000 / 65000],
+      ["Repasse", 45000, 45000 / 65000],
       ["Aluguel", 20000, 20000 / 65000],
     ]);
     expect(costs.total).toEqual(["Total", 65000, 1]);
   });
 
-  it("usa os nomes da tela para repasse e salário", () => {
+  it("usa o nome da tela para o repasse", () => {
     const costs = cashFlowReport(
-      cashFlowInput({
-        costs: {
-          totalCents: 200,
-          rows: [
-            { kind: "partner_share", cents: 100, share: 0.5 },
-            { kind: "salary", cents: 100, share: 0.5 },
-          ],
-        },
-      }),
+      cashFlowInput({ costs: { totalCents: 100, rows: [{ kind: "partner_share", cents: 100, share: 1 }] } }),
     ).tables[2];
-    expect(costs.rows.map((row) => row[0])).toEqual(["Repasse", "Salário e bônus"]);
+    expect(costs.rows.map((row) => row[0])).toEqual(["Repasse"]);
   });
 
   it("sem gastos, a tabela de gastos por grupo some", () => {
@@ -245,27 +225,25 @@ describe("cashFlowReport", () => {
     expect(report.tables.map((table) => table.title)).toEqual(["Fluxo de caixa", "Custo por mês", "Por profissional"]);
   });
 
-  it("por profissional tem código, nome, percentual (vazio sem comissão), quantidade, bruto e comissão", () => {
+  it("por profissional tem código, nome, quantidade e bruto", () => {
     const therapists = cashFlowReport(cashFlowInput()).tables[3];
     expect(therapists.title).toBe("Por profissional");
     expect(therapists.columns).toEqual([
       { label: "Código", kind: "text" },
       { label: "Profissional", kind: "text" },
-      { label: "% comissão", kind: "percent" },
       { label: "Qtd.", kind: "number" },
       { label: "Bruto", kind: "money" },
-      { label: "Comissão", kind: "money" },
     ]);
     expect(therapists.rows).toEqual([
-      ["…abcde", "Ana", 0.3, 4, 100000, 30000],
-      ["…fghij", "Dono", null, 2, 50000, 0],
+      ["…abcde", "Ana", 4, 100000],
+      ["…fghij", "Dono", 2, 50000],
     ]);
-    expect(therapists.total).toEqual(["Total", null, null, 6, 150000, 30000]);
+    expect(therapists.total).toEqual(["Total", null, 6, 150000]);
   });
 
   it("sem profissionais, a tabela vem vazia e sem total", () => {
     const report = cashFlowReport(
-      cashFlowInput({ therapists: { rows: [], sums: { real: { count: 0, cents: 0, commissionCents: 0 } } } }),
+      cashFlowInput({ therapists: { rows: [], sums: { real: { count: 0, cents: 0 } } } }),
     );
     const therapists = report.tables.at(-1)!;
     expect(therapists.rows).toEqual([]);
