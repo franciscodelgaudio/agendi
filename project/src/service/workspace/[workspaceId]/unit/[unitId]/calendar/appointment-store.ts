@@ -3,7 +3,6 @@ import { findWorkspaceTherapists } from "@/service/workspace/[workspaceId]/team/
 import { Appointment } from "@/models/Appointment"
 import { Customer } from "@/models/Customer"
 import { Service } from "@/models/Service"
-import { TherapistBlock } from "@/models/TherapistBlock"
 import { Unit } from "@/models/Unit"
 
 const ACTIVE = { $ne: "cancelled" as const }
@@ -30,19 +29,6 @@ export function conflictChecker(workspaceId: string) {
       ...(excludeId && { _id: { $ne: excludeId } }),
     })
     return conflict !== null
-  }
-}
-
-export function blockChecker(workspaceId: string) {
-  return async ({ workspaceMemberId, startsAt, endsAt }: { workspaceMemberId: string; startsAt: Date; endsAt: Date }) => {
-    if (!isObjectIdOrHexString(workspaceMemberId)) return false
-    const block = await TherapistBlock.exists({
-      workspaceId,
-      therapistId: workspaceMemberId,
-      startsAt: { $lt: endsAt },
-      endsAt: { $gt: startsAt },
-    })
-    return block !== null
   }
 }
 
@@ -96,7 +82,6 @@ export function appointmentLookups(unit: { workspaceId: string; unitId: string }
     findMember: async (id: string) => (await findWorkspaceTherapists(unit.workspaceId, [id], unit.unitId))[0] ?? null,
     findStation: (id: string) => findUnitStation(unit.unitId, id),
     hasConflict: conflictChecker(unit.workspaceId),
-    isBlocked: blockChecker(unit.workspaceId),
     findStationAppointments: stationAppointmentsFinder(unit.unitId),
   }
 }

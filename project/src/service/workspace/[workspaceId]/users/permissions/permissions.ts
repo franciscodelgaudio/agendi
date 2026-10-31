@@ -12,8 +12,6 @@ export const PERMISSIONS = [
   "stock.transfer",
   "cash_flow.manage",
   "users.manage",
-  "inbox.use",
-  "channels.manage",
   "workspace.manage",
   "attends",
 ] as const;

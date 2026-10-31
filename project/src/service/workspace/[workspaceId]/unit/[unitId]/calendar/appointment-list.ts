@@ -137,35 +137,6 @@ export function calendarPipeline(range: CalendarRange): PipelineStage.FacetPipel
   return [{ $match: match }, { $sort: { startsAt: 1, _id: 1 } }, ...APPOINTMENT_VIEW];
 }
 
-export type TherapistBlockRow = {
-  id: string;
-  therapistId: string;
-  therapistName: string;
-  startsAt: string;
-  endsAt: string;
-  reason: string | null;
-};
-
-export function therapistBlockListPipeline(range: CalendarRange): PipelineStage.FacetPipelineStage[] {
-  const match: Record<string, unknown> = rangeMatch(range);
-  if (range.member) match.therapistId = new Types.ObjectId(range.member);
-  return [
-    { $match: match },
-    { $sort: { startsAt: 1, _id: 1 } },
-    {
-      $project: {
-        _id: 0,
-        id: { $toString: "$_id" },
-        therapistId: { $toString: "$therapistId" },
-        therapistName: 1,
-        startsAt: brtDateTime("$startsAt"),
-        endsAt: brtDateTime("$endsAt"),
-        reason: { $ifNull: ["$reason", null] },
-      },
-    },
-  ];
-}
-
 export const APPOINTMENT_PAGE_SIZE = 20;
 const SORT_FIELDS = { startsAt: "startsAt", customer: "customerName", name: "name" } as const;
 

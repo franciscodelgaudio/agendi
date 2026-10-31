@@ -7,7 +7,6 @@ import {
   calendarPipeline,
   parseAppointmentListQuery,
   parseCalendarRange,
-  therapistBlockListPipeline,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list";
 
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
@@ -132,32 +131,6 @@ describe("calendarPipeline", () => {
       },
       { $sort: { startsAt: 1, _id: 1 } },
       ...APPOINTMENT_VIEW,
-    ]);
-  });
-});
-
-describe("therapistBlockListPipeline", () => {
-  it("traz as travas que cruzam o intervalo, da profissional filtrada", () => {
-    expect(therapistBlockListPipeline({ start: "2026-09-21", end: "2026-09-28", unit: "", member: ANA_ID })).toEqual([
-      {
-        $match: {
-          startsAt: { $lt: new Date("2026-09-28T03:00:00.000Z") },
-          endsAt: { $gt: new Date("2026-09-21T03:00:00.000Z") },
-          therapistId: new Types.ObjectId(ANA_ID),
-        },
-      },
-      { $sort: { startsAt: 1, _id: 1 } },
-      {
-        $project: {
-          _id: 0,
-          id: { $toString: "$_id" },
-          therapistId: { $toString: "$therapistId" },
-          therapistName: 1,
-          startsAt: brt("$startsAt"),
-          endsAt: brt("$endsAt"),
-          reason: { $ifNull: ["$reason", null] },
-        },
-      },
     ]);
   });
 });

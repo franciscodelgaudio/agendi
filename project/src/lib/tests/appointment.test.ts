@@ -45,7 +45,6 @@ function makeLookups({
   member = ANA as typeof ANA | null,
   station = STATION as typeof STATION | null,
   busy = false,
-  blocked = false,
   stationAppointments = [] as readonly { startsAt: Date; endsAt: Date }[],
 } = {}) {
   return {
@@ -54,7 +53,6 @@ function makeLookups({
     findMember: vi.fn(async (id: string) => (member?.id === id ? member : null)),
     findStation: vi.fn(async (id: string) => (station?.id === id ? station : null)),
     hasConflict: vi.fn(async () => busy),
-    isBlocked: vi.fn(async () => blocked),
     findStationAppointments: vi.fn(async () => stationAppointments),
   };
 }
@@ -107,13 +105,12 @@ describe("createAppointment", () => {
     );
   });
 
-  it("confere trava e conflito da profissional e a estação no intervalo do agendamento", async () => {
+  it("confere conflito da profissional e a estação no intervalo do agendamento", async () => {
     const deps = makeDeps();
 
     await createAppointment(VALID, ctx, deps);
 
     const interval = { workspaceMemberId: ANA_ID, startsAt: at("14:30"), endsAt: at("15:30") };
-    expect(deps.isBlocked).toHaveBeenCalledWith(interval);
     expect(deps.hasConflict).toHaveBeenCalledWith(interval);
     expect(deps.findStationAppointments).toHaveBeenCalledWith({ stationId: STATION_ID, startsAt: at("14:30"), endsAt: at("15:30") });
   });
@@ -145,7 +142,6 @@ describe("createAppointment", () => {
     ["member_not_found", { member: null }],
     ["station_not_found", { station: null }],
     ["station_inactive", { station: { ...STATION, active: false } }],
-    ["member_unavailable", { blocked: true }],
     ["member_busy", { busy: true }],
     ["station_busy", { stationAppointments: [{ startsAt: at("15:00"), endsAt: at("16:00") }] }],
   ] as const)("retorna %s sem salvar", async (error, options) => {
@@ -252,14 +248,12 @@ describe("rescheduleAppointment", () => {
   function makeDeps({
     found = { status: "scheduled", workspaceMemberId: ANA_ID, station: { id: STATION_ID, active: true } } as Found | null,
     busy = false,
-    blocked = false,
     stationAppointments = [] as readonly { startsAt: Date; endsAt: Date }[],
     updated = true,
   } = {}) {
     return {
       findAppointment: vi.fn().mockResolvedValue(found),
       hasConflict: vi.fn().mockResolvedValue(busy),
-      isBlocked: vi.fn().mockResolvedValue(blocked),
       findStationAppointments: vi.fn().mockResolvedValue(stationAppointments),
       update: vi.fn().mockResolvedValue(updated),
     };
@@ -295,7 +289,6 @@ describe("rescheduleAppointment", () => {
     ["appointment_not_scheduled", { found: { status: "done", workspaceMemberId: ANA_ID, station: { id: STATION_ID, active: true } } }],
     ["station_not_found", { found: { status: "scheduled", workspaceMemberId: ANA_ID, station: null } }],
     ["station_inactive", { found: { status: "scheduled", workspaceMemberId: ANA_ID, station: { id: STATION_ID, active: false } } }],
-    ["member_unavailable", { blocked: true }],
     ["member_busy", { busy: true }],
     ["station_busy", { stationAppointments: [{ startsAt: at("16:00"), endsAt: at("17:00") }] }],
     ["appointment_not_found", { found: null }],

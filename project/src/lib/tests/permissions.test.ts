@@ -19,7 +19,6 @@ describe("can", () => {
     expect(can(actor, "bookings.manage")).toBe(true);
     expect(can(actor, "attends")).toBe(true);
     expect(can(actor, "users.manage")).toBe(false);
-    expect(can(actor, "inbox.use")).toBe(false);
   });
 
   it("membro sem permissões não pode nada", () => {
@@ -34,7 +33,7 @@ describe("can", () => {
 });
 
 describe("PERMISSIONS", () => {
-  it("cobre as áreas de gestão, as Conversas e quem realiza atendimentos", () => {
+  it("cobre as áreas de gestão e quem realiza atendimentos", () => {
     expect(PERMISSIONS).toEqual([
       "units.manage",
       "services.manage",
@@ -45,8 +44,6 @@ describe("PERMISSIONS", () => {
       "stock.transfer",
       "cash_flow.manage",
       "users.manage",
-      "inbox.use",
-      "channels.manage",
       "workspace.manage",
       "attends",
     ]);

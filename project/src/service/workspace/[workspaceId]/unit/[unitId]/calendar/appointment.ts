@@ -25,7 +25,6 @@ type StationInterval = { stationId: string; startsAt: Date; endsAt: Date; exclud
 
 type AvailabilityLookups = {
   hasConflict: (interval: MemberInterval) => Promise<boolean>;
-  isBlocked: (interval: Omit<MemberInterval, "excludeId">) => Promise<boolean>;
   findStationAppointments: (interval: StationInterval) => Promise<readonly { startsAt: Date; endsAt: Date }[]>;
 };
 
@@ -36,7 +35,7 @@ type Lookups = AvailabilityLookups & {
   findStation: (id: string) => Promise<{ id: string; active: boolean } | null>;
 };
 
-type AvailabilityError = "member_unavailable" | "member_busy" | "station_busy";
+type AvailabilityError = "member_busy" | "station_busy";
 
 export type AppointmentFieldsError =
   | "invalid_input"
@@ -68,9 +67,8 @@ export type AppointmentFields = {
 
 async function checkAvailability(
   { workspaceMemberId, stationId, startsAt, endsAt, excludeId }: MemberInterval & { stationId: string },
-  { hasConflict, isBlocked, findStationAppointments }: AvailabilityLookups,
+  { hasConflict, findStationAppointments }: AvailabilityLookups,
 ): Promise<AvailabilityError | null> {
-  if (await isBlocked({ workspaceMemberId, startsAt, endsAt })) return "member_unavailable";
   if (await hasConflict({ workspaceMemberId, startsAt, endsAt, ...(excludeId && { excludeId }) })) return "member_busy";
   const stationAppointments = await findStationAppointments({ stationId, startsAt, endsAt, ...(excludeId && { excludeId }) });
   if (stationAppointments.some((other) => other.startsAt < endsAt && other.endsAt > startsAt)) return "station_busy";

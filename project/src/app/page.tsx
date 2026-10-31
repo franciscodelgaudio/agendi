@@ -8,7 +8,6 @@ import { LandingLogo } from "@/components/shared/landing/landing-logo"
 import { PlansSection } from "@/components/shared/landing/plans-section"
 import { ScrollReveal } from "@/components/shared/landing/scroll-reveal"
 import { Tilt } from "@/components/shared/landing/tilt"
-import { submitLeadAction } from "@/lib/actions/lead"
 import { PLANS } from "@/service/subscribe/plans"
 import { cn } from "@/service/_shared/utils"
 
@@ -342,7 +341,7 @@ export default function LandingPage() {
               <H2 id="contato-title">Assine agora ou fale com a gente primeiro.</H2>
             </div>
             <div data-reveal style={stagger(1)}>
-              <ContactForm action={submitLeadAction} />
+              <ContactForm />
             </div>
           </Container>
         </section>

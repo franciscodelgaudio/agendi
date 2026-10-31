@@ -14,7 +14,7 @@ import interactionPlugin from "@fullcalendar/react/interaction"
 import ptBrLocale from "@fullcalendar/react/locales/pt-br"
 import "@fullcalendar/react/skeleton.css"
 import "@fullcalendar/react/themes/monarch/theme.css"
-import { CheckIcon, LockIcon, PlusIcon, XIcon } from "lucide-react"
+import { CheckIcon, PlusIcon, XIcon } from "lucide-react"
 import { toast } from "sonner"
 import {
   createAppointmentAction,
@@ -22,7 +22,7 @@ import {
   updateAppointmentAction,
 } from "@/lib/actions/appointment"
 import { BOOKING_COLORS } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-colors"
-import type { AppointmentRow, TherapistBlockRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list"
+import type { AppointmentRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list"
 import { createRescheduleQueue, type RescheduleTimes } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/reschedule-queue"
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
 import { Button } from "@/components/ui/button"
@@ -42,7 +42,6 @@ import {
   STATUS_LABELS,
   type AppointmentPermissions,
 } from "@/components/workspace/[workspaceId]/shared/calendar/appointment-actions"
-import { TherapistBlockForm, TherapistBlockSummary } from "@/components/workspace/[workspaceId]/shared/calendar/therapist-block-sheet"
 import {
   MissingTherapistIcon,
   TherapistAvatar,
@@ -85,8 +84,6 @@ function brtNow() {
 type SheetInput =
   | { mode: "edit"; appointment: AppointmentRow }
   | { mode: "view"; appointment: AppointmentRow }
-  | { mode: "block" }
-  | { mode: "blocked"; block: TherapistBlockRow }
 
 type SheetState = SheetInput & { key: number }
 
@@ -156,13 +153,11 @@ export function AppointmentCalendar({
         Object.entries({ start: toDay(info.start), end: toDay(info.end), unit, member }).filter(([, v]) => v),
       )
       let appointments: AppointmentRow[]
-      let blocks: TherapistBlockRow[]
       for (;;) {
         await whenIdle()
         const seen = changes.current
         const response = await fetch(`/api/workspace/${workspaceId}/appointments?${params}`)
-        const result: { appointments: AppointmentRow[]; blocks: TherapistBlockRow[] } | { error: string } =
-          await response.json()
+        const result: { appointments: AppointmentRow[] } | { error: string } = await response.json()
         if ("error" in result) {
           setError(result.error)
           throw new Error(result.error)
@@ -170,30 +165,18 @@ export function AppointmentCalendar({
         await whenIdle()
         if (changes.current === seen) {
           appointments = result.appointments
-          blocks = result.blocks
           break
         }
       }
-      const blockEvents: EventInput[] = blocks.map((block) => ({
-        id: `block-${block.id}`,
-        start: block.startsAt,
-        end: block.endsAt,
-        editable: false,
-        color: "#94a3b8",
-        className: "bg-[repeating-linear-gradient(45deg,transparent,transparent_6px,rgb(255_255_255/0.25)_6px,rgb(255_255_255/0.25)_12px)]",
-        extendedProps: { block },
+      return appointments.map((appointment) => ({
+        id: appointment.id,
+        title: `${appointment.customerName ?? "Cliente"} · ${appointment.name}`,
+        start: appointment.startsAt,
+        end: appointment.endsAt,
+        color: appointment.color ?? colors.get(appointment.workspaceMemberId) ?? "#64748b",
+        ...(appointment.status !== "scheduled" && { editable: false, className: "opacity-55" }),
+        extendedProps: { appointment },
       }))
-      return blockEvents.concat(
-        appointments.map((appointment) => ({
-          id: appointment.id,
-          title: `${appointment.customerName ?? "Cliente"} · ${appointment.name}`,
-          start: appointment.startsAt,
-          end: appointment.endsAt,
-          color: appointment.color ?? colors.get(appointment.workspaceMemberId) ?? "#64748b",
-          ...(appointment.status !== "scheduled" && { editable: false, className: "opacity-55" }),
-          extendedProps: { appointment },
-        })),
-      )
     },
     [workspaceId, unit, member, therapists],
   )
@@ -350,12 +333,6 @@ export function AppointmentCalendar({
             Novo agendamento
           </Button>
         )}
-        {canSchedule && units.length > 0 && (
-          <Button variant="outline" onClick={() => openSheet({ mode: "block" })}>
-            <LockIcon />
-            Travar agenda
-          </Button>
-        )}
       </div>
 
       {canSchedule && units.length === 0 && (
@@ -407,16 +384,6 @@ export function AppointmentCalendar({
             }}
             columnEventInnerClass={({ isShort }) => (isShort ? undefined : "h-full")}
             eventContent={({ event, timeText, view, isShort }) => {
-              const block = event.extendedProps.block as TherapistBlockRow | undefined
-              if (block) {
-                return (
-                  <div className="flex min-w-0 items-center gap-1 overflow-hidden px-1.5 py-1 text-xs leading-snug">
-                    <LockIcon className="size-3 shrink-0" aria-label="Agenda travada" />
-                    <span className="truncate font-semibold">{block.therapistName}</span>
-                    <span className="truncate opacity-85">· {block.reason ?? "Indisponível"}</span>
-                  </div>
-                )
-              }
               const appointment = event.extendedProps.appointment as AppointmentRow | undefined
               if (!appointment) {
                 return (
@@ -479,11 +446,6 @@ export function AppointmentCalendar({
             eventDrop={handleChange}
             eventResize={handleChange}
             eventClick={({ event }) => {
-              const block = event.extendedProps.block as TherapistBlockRow | undefined
-              if (block) {
-                setDraft(null)
-                return openSheet({ mode: "blocked", block })
-              }
               const appointment = event.extendedProps.appointment as AppointmentRow | undefined
               if (!appointment || (!canSchedule && !canAttend)) return
               setDraft(null)
@@ -536,24 +498,6 @@ export function AppointmentCalendar({
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent>
-          {sheet?.mode === "block" && (
-            <TherapistBlockForm
-              key={sheet.key}
-              workspaceId={workspaceId}
-              therapists={therapists}
-              defaultTherapistId={member || null}
-              defaultDay={toDay(calendarRef.current?.getApi().getDate() ?? brtNow())}
-              onDone={closeAndRefetch}
-            />
-          )}
-          {sheet?.mode === "blocked" && (
-            <TherapistBlockSummary
-              workspaceId={workspaceId}
-              block={sheet.block}
-              canManage={canSchedule}
-              onDone={closeAndRefetch}
-            />
-          )}
           {sheet?.mode === "edit" && (
             <AppointmentForm
               key={sheet.key}

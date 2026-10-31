@@ -1,15 +1,8 @@
 import { Types } from "mongoose"
-import {
-  calendarPipeline,
-  parseCalendarRange,
-  therapistBlockListPipeline,
-  type AppointmentRow,
-  type TherapistBlockRow,
-} from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list"
+import { calendarPipeline, parseCalendarRange, type AppointmentRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list"
 import { findVisiblePages } from "@/service/workspace/[workspaceId]/page-guard"
 import { getSessionUserId } from "@/service/(auth)/session"
 import { Appointment } from "@/models/Appointment"
-import { TherapistBlock } from "@/models/TherapistBlock"
 
 export async function GET(request: Request, { params }: RouteContext<"/api/workspace/[workspaceId]/appointments">) {
   const { workspaceId } = await params
@@ -23,10 +16,9 @@ export async function GET(request: Request, { params }: RouteContext<"/api/works
     return Response.json({ error: "Sem permissão para ver a agenda." }, { status: 403 })
   }
 
-  const workspaceMatch = { $match: { workspaceId: new Types.ObjectId(workspaceId) } }
-  const [appointments, blocks] = await Promise.all([
-    Appointment.aggregate<AppointmentRow>([workspaceMatch, ...calendarPipeline(range)]),
-    TherapistBlock.aggregate<TherapistBlockRow>([workspaceMatch, ...therapistBlockListPipeline(range)]),
+  const appointments = await Appointment.aggregate<AppointmentRow>([
+    { $match: { workspaceId: new Types.ObjectId(workspaceId) } },
+    ...calendarPipeline(range),
   ])
-  return Response.json({ appointments, blocks })
+  return Response.json({ appointments })
 }
