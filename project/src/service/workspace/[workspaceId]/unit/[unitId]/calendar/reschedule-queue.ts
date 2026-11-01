@@ -3,8 +3,6 @@ export type RescheduleTimes = { startsAt: string; endsAt: string };
 type Options = {
   // Rejeitar é falha de rede (tenta de novo); { error } é recusa do servidor.
   save: (id: string, times: RescheduleTimes) => Promise<{ error: string | null }>;
-  // Recusado sem outro arraste do mesmo agendamento na fila: volta ao último horário salvo.
-  revert: (id: string, times: RescheduleTimes) => void;
   onError: (error: string) => void;
   onRetry: (error: unknown) => void;
   onSaved: () => void;
@@ -17,8 +15,6 @@ type Options = {
 // na mesma sequência que o usuário viu no calendário.
 export function createRescheduleQueue(options: Options) {
   const items: { id: string; times: RescheduleTimes }[] = [];
-  // Último horário salvo de cada agendamento com remarcação na fila.
-  const confirmed = new Map<string, RescheduleTimes>();
   let running = false;
 
   async function run() {
@@ -36,24 +32,16 @@ export function createRescheduleQueue(options: Options) {
         }
       }
       items.shift();
-      const last = !items.some((item) => item.id === id);
-      if (result.error) {
-        options.onError(result.error);
-        if (last) options.revert(id, confirmed.get(id)!);
-      } else {
-        confirmed.set(id, times);
-        options.onSaved();
-      }
-      if (last) confirmed.delete(id);
+      if (result.error) options.onError(result.error);
+      else options.onSaved();
     }
     running = false;
     options.onIdle();
   }
 
   return {
-    push(id: string, previous: RescheduleTimes, next: RescheduleTimes) {
-      if (!confirmed.has(id)) confirmed.set(id, previous);
-      items.push({ id, times: next });
+    push(id: string, times: RescheduleTimes) {
+      items.push({ id, times });
       if (!running) void run();
     },
     pending: () => running,

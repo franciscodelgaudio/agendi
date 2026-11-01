@@ -1,12 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import FullCalendar, {
-  type CalendarRef,
-  type EventChangeInfo,
-  type EventInput,
-  type EventSourceFuncInfo,
-} from "@fullcalendar/react"
+import { startTransition, useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react"
+import { usePathname, useRouter } from "next/navigation"
+import FullCalendar, { type CalendarRef, type EventChangeInfo, type EventInput } from "@fullcalendar/react"
 import monarchThemePlugin from "@fullcalendar/react/themes/monarch"
 import dayGridPlugin from "@fullcalendar/react/daygrid"
 import timeGridPlugin from "@fullcalendar/react/timegrid"
@@ -22,7 +18,10 @@ import {
   updateAppointmentAction,
 } from "@/lib/actions/appointment"
 import { BOOKING_COLORS } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-colors"
-import type { AppointmentRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list"
+import type {
+  AppointmentRow,
+  CalendarQuery,
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list"
 import { createRescheduleQueue, type RescheduleTimes } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/reschedule-queue"
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
 import { Button } from "@/components/ui/button"
@@ -55,6 +54,8 @@ type Props = CalendarOptions &
   AppointmentPermissions & {
     workspaceId: string
     unitId?: string
+    query: CalendarQuery
+    appointments: AppointmentRow[]
   }
 
 const ALL = "all"
@@ -77,6 +78,13 @@ function withTimes(appointment: AppointmentRow, times: RescheduleTimes): Appoint
   return { ...appointment, ...times, durationMinutes }
 }
 
+function middleDay({ start, end }: CalendarQuery) {
+  const startMs = new Date(`${start}T00:00:00Z`).getTime()
+  return toDay(new Date((startMs + new Date(`${end}T00:00:00Z`).getTime()) / 2))
+}
+
+type Move = { id: string; times: RescheduleTimes }
+
 function brtNow() {
   return new Date(Date.now() - BRT_OFFSET_HOURS * HOUR_MS)
 }
@@ -98,91 +106,38 @@ export function AppointmentCalendar({
   therapists,
   services,
   stations,
+  query,
+  appointments,
 }: Props) {
   const calendarRef = useRef<CalendarRef>(null)
-  const [unit, setUnit] = useState(unitId ?? "")
-  const [member, setMember] = useState("")
+  const router = useRouter()
+  const pathname = usePathname()
+  const [navigating, startNavigation] = useTransition()
+  const [shown, moveShown] = useOptimistic(appointments, (current: AppointmentRow[], { id, times }: Move) =>
+    current.map((appointment) => (appointment.id === id ? withTimes(appointment, times) : appointment)),
+  )
+  const { unit, member } = query
   const [error, setError] = useState<string | null>(null)
   const [sheet, setSheet] = useState<SheetState | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [draftEl, setDraftEl] = useState<HTMLElement | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [eventsLoading, setEventsLoading] = useState(true)
-  const silentFetch = useRef(false)
-  const mounted = useRef(false)
   const [hydrated, setHydrated] = useState(false)
   useEffect(() => {
-    mounted.current = true
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHydrated(true)
-    return () => {
-      mounted.current = false
-    }
   }, [])
 
   const permissions = { canSchedule, canAttend }
   const therapistsById = new Map(therapists.map((option) => [option.id, option]))
-  const colors = new Map(therapists.map((option, i) => [option.id, BOOKING_COLORS[i % BOOKING_COLORS.length].value]))
   const canCreate = canSchedule && units.length > 0 && services.length > 0
   const options = { units: unitId ? undefined : units, therapists, services, stations }
 
-  const busy = useRef(0)
-  const changes = useRef(0)
-  const idleWaiters = useRef<(() => void)[]>([])
-
-  function whenIdle() {
-    return busy.current ? new Promise<void>((resolve) => idleWaiters.current.push(resolve)) : Promise.resolve()
-  }
-
-  function hold() {
-    busy.current += 1
-  }
-
-  function release() {
-    busy.current -= 1
-    if (busy.current > 0) return
-    const waiters = idleWaiters.current
-    idleWaiters.current = []
-    for (const resolve of waiters) resolve()
-  }
-
-  const fetchEvents = useCallback(
-    async (info: EventSourceFuncInfo): Promise<EventInput[]> => {
-      const params = new URLSearchParams(
-        Object.entries({ start: toDay(info.start), end: toDay(info.end), unit, member }).filter(([, v]) => v),
-      )
-      let appointments: AppointmentRow[]
-      for (;;) {
-        await whenIdle()
-        const seen = changes.current
-        const response = await fetch(`/api/workspace/${workspaceId}/appointments?${params}`)
-        const result: { appointments: AppointmentRow[] } | { error: string } = await response.json()
-        if ("error" in result) {
-          setError(result.error)
-          throw new Error(result.error)
-        }
-        await whenIdle()
-        if (changes.current === seen) {
-          appointments = result.appointments
-          break
-        }
-      }
-      return appointments.map((appointment) => ({
-        id: appointment.id,
-        title: `${appointment.customerName ?? "Sem cliente"} · ${appointment.name}`,
-        start: appointment.startsAt,
-        end: appointment.endsAt,
-        color: appointment.color ?? colors.get(appointment.workspaceMemberId) ?? "#64748b",
-        ...(appointment.status !== "scheduled" && { editable: false, className: "opacity-55" }),
-        extendedProps: { appointment },
-      }))
-    },
-    [workspaceId, unit, member, therapists],
-  )
-
-  function refetch() {
-    calendarRef.current?.getApi().refetchEvents()
+  function navigate(changes: Partial<Pick<CalendarQuery, "view" | "start" | "end" | "unit" | "member">>) {
+    const next = { view: query.view, start: query.start, end: query.end, unit: unitId ? "" : unit, member, ...changes }
+    const params = new URLSearchParams(Object.entries(next).filter(([, value]) => value))
+    startNavigation(() => router.replace(`${pathname}?${params}`, { scroll: false }))
   }
 
   function openSheet(next: SheetInput) {
@@ -190,9 +145,8 @@ export function AppointmentCalendar({
     setSheetOpen(true)
   }
 
-  function closeAndRefetch() {
+  function closeSheet() {
     setSheetOpen(false)
-    refetch()
   }
 
   function openCreate(startsAt: string, durationMinutes: number, fallbackAnchor: Element | null = null) {
@@ -229,18 +183,27 @@ export function AppointmentCalendar({
       },
     ]
   }, [draft])
-  const eventSources = useMemo(() => [fetchEvents, draftEvents], [fetchEvents, draftEvents])
+  const events = useMemo<EventInput[]>(() => {
+    const colors = new Map(therapists.map((option, i) => [option.id, BOOKING_COLORS[i % BOOKING_COLORS.length].value]))
+    return [
+      ...shown.map((appointment) => ({
+        id: appointment.id,
+        title: `${appointment.customerName ?? "Sem cliente"} · ${appointment.name}`,
+        start: appointment.startsAt,
+        end: appointment.endsAt,
+        color: appointment.color ?? colors.get(appointment.workspaceMemberId) ?? "#64748b",
+        ...(appointment.status !== "scheduled" && { editable: false, className: "opacity-55" }),
+        extendedProps: { appointment },
+      })),
+      ...draftEvents,
+    ]
+  }, [shown, therapists, draftEvents])
   const draftAnchor = draftEl ?? draft?.fallbackAnchor ?? null
 
-  const [queue] = useState(() =>
-    createRescheduleQueue({
+  const [{ queue, whenIdle }] = useState(() => {
+    let waiters: (() => void)[] = []
+    const queue = createRescheduleQueue({
       save: (id, times) => rescheduleAppointmentAction(workspaceId, id, times),
-      revert: (id, times) => {
-        const event = calendarRef.current?.getApi().getEventById(id)
-        if (!event) return
-        event.setDates(new Date(`${times.startsAt}:00Z`), new Date(`${times.endsAt}:00Z`))
-        event.setExtendedProp("appointment", withTimes(event.extendedProps.appointment, times))
-      },
       onError: (message) => {
         setError((current) => (current === RETRY_MESSAGE ? null : current))
         toast.error(message)
@@ -248,14 +211,15 @@ export function AppointmentCalendar({
       onRetry: () => setError(RETRY_MESSAGE),
       onSaved: () => setError((current) => (current === RETRY_MESSAGE ? null : current)),
       onIdle: () => {
-        release()
-        silentFetch.current = true
-        refetch()
+        const done = waiters
+        waiters = []
+        for (const resolve of done) resolve()
       },
       retryDelay: (attempt) => Math.min(1000 * 2 ** (attempt - 1), 15000),
       wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    }),
-  )
+    })
+    return { queue, whenIdle: () => new Promise<void>((resolve) => waiters.push(resolve)) }
+  })
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -265,17 +229,15 @@ export function AppointmentCalendar({
     return () => window.removeEventListener("beforeunload", onBeforeUnload)
   }, [queue])
 
-  function handleChange({ event, oldEvent }: EventChangeInfo) {
+  function handleChange({ event }: EventChangeInfo) {
     setError(null)
-    changes.current += 1
     const times = { startsAt: toWallTime(event.start!), endsAt: toWallTime(event.end!) }
-    event.setExtendedProp("appointment", withTimes(event.extendedProps.appointment, times))
-    if (!queue.pending()) hold()
-    queue.push(event.id, { startsAt: toWallTime(oldEvent.start!), endsAt: toWallTime(oldEvent.end!) }, times)
-  }
-
-  function handleInteractionStop() {
-    queueMicrotask(release)
+    startTransition(async () => {
+      moveShown({ id: event.id, times })
+      const idle = whenIdle()
+      queue.push(event.id, times)
+      await idle
+    })
   }
 
   const memberAvatar = (appointment: AppointmentRow, className: string) => {
@@ -317,8 +279,15 @@ export function AppointmentCalendar({
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
-          {!unitId && filterSelect("Filtrar por unidade", "Todas as unidades", unit, setUnit, units)}
-          {filterSelect("Filtrar por profissional", "Todas as profissionais", member, setMember, therapists, true)}
+          {!unitId && filterSelect("Filtrar por unidade", "Todas as unidades", unit, (next) => navigate({ unit: next }), units)}
+          {filterSelect(
+            "Filtrar por profissional",
+            "Todas as profissionais",
+            member,
+            (next) => navigate({ member: next }),
+            therapists,
+            true,
+          )}
         </div>
         {canCreate && (
           <Button
@@ -343,7 +312,7 @@ export function AppointmentCalendar({
       )}
       {error && <FieldError>{error}</FieldError>}
 
-      <div className="booking-calendar" aria-busy={eventsLoading} {...{ [KEEPS_DRAFT]: "" }}>
+      <div className="booking-calendar" aria-busy={navigating} {...{ [KEEPS_DRAFT]: "" }}>
         {hydrated && (
           <FullCalendar
             ref={calendarRef}
@@ -351,7 +320,9 @@ export function AppointmentCalendar({
             locale={ptBrLocale}
             timeZone="UTC"
             now={brtNow}
-            initialView="timeGridWeek"
+            initialView={query.view}
+            initialDate={middleDay(query)}
+            firstDay={0}
             headerToolbar={{ start: "prev,next today", center: "title", end: "dayGridMonth,timeGridWeek,timeGridDay" }}
             height="auto"
             allDaySlot={false}
@@ -362,19 +333,16 @@ export function AppointmentCalendar({
             slotHeaderInnerClass="text-xs!"
             nowIndicator
             dayMaxEvents
-            eventSources={eventSources}
-            loading={(isLoading) => {
-              if (!isLoading) silentFetch.current = false
-              else if (silentFetch.current) return
-              if (mounted.current) queueMicrotask(() => setEventsLoading(isLoading))
-            }}
+            events={events}
             eventDidMount={({ event, el }) => {
               if (event.extendedProps.draft) setDraftEl(el)
             }}
             eventWillUnmount={({ event, el }) => {
               if (event.extendedProps.draft) setDraftEl((current) => (current === el ? null : current))
             }}
-            datesSet={({ start, end }) => {
+            datesSet={({ start, end, view }) => {
+              const range = { view: view.type as CalendarQuery["view"], start: toDay(start), end: toDay(end) }
+              if (range.view !== query.view || range.start !== query.start || range.end !== query.end) navigate(range)
               if (!draft) return
               setDraft((current) =>
                 current && current.values.startsAt >= toWallTime(start) && current.values.startsAt < toWallTime(end)
@@ -439,10 +407,6 @@ export function AppointmentCalendar({
               else openCreate(toWallTime(info.start), Math.round((info.end.getTime() - info.start.getTime()) / 60000))
             }}
             editable={canSchedule}
-            eventDragStart={hold}
-            eventDragStop={handleInteractionStop}
-            eventResizeStart={hold}
-            eventResizeStop={handleInteractionStop}
             eventDrop={handleChange}
             eventResize={handleChange}
             eventClick={({ event }) => {
@@ -482,10 +446,7 @@ export function AppointmentCalendar({
               variant="popover"
               defaultValues={draft.values}
               action={(prev, formData) => createAppointmentAction(workspaceId, prev, formData)}
-              onDone={() => {
-                setDraft(null)
-                refetch()
-              }}
+              onDone={() => setDraft(null)}
             />
           )}
           <PopoverClose render={<Button variant="ghost" size="icon-sm" className="absolute top-3 right-3" />}>
@@ -505,14 +466,14 @@ export function AppointmentCalendar({
               mode="edit"
               defaultValues={appointmentFormValues(sheet.appointment)}
               action={(prev, formData) => updateAppointmentAction(workspaceId, sheet.appointment.id, prev, formData)}
-              onDone={closeAndRefetch}
+              onDone={closeSheet}
               footer={
                 <>
                   <StatusButtons
                     workspaceId={workspaceId}
                     appointment={sheet.appointment}
                     permissions={permissions}
-                    onDone={closeAndRefetch}
+                    onDone={closeSheet}
                   />
                   <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>
                     Excluir
@@ -549,7 +510,7 @@ export function AppointmentCalendar({
                   workspaceId={workspaceId}
                   appointment={sheet.appointment}
                   permissions={permissions}
-                  onDone={closeAndRefetch}
+                  onDone={closeSheet}
                 />
                 {canSchedule && (
                   <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>
@@ -568,7 +529,7 @@ export function AppointmentCalendar({
           appointment={viewed}
           open={deleteOpen}
           onOpenChange={setDeleteOpen}
-          onDone={closeAndRefetch}
+          onDone={closeSheet}
         />
       )}
     </div>
