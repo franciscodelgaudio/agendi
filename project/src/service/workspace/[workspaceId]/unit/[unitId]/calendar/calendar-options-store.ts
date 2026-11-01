@@ -1,5 +1,12 @@
 import { Types } from "mongoose"
 import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
+import {
+  calendarPipeline,
+  parseCalendarQuery,
+  type AppointmentRow,
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list"
+import type { SearchParams } from "@/service/workspace/[workspaceId]/unit/unit-list"
+import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
 import { Appointment } from "@/models/Appointment"
 import { Service } from "@/models/Service"
 import { Unit } from "@/models/Unit"
@@ -10,6 +17,18 @@ export type CalendarOptionsData = {
   services: { id: string; unitId: string; name: string; durationMinutes: number; priceCents: number }[]
   stations: { id: string; unitId: string; name: string }[]
   therapists: { id: string; name: string; image: string | null; unitIds?: string[] }[]
+}
+
+const HOUR_MS = 60 * 60 * 1000
+
+export async function loadCalendarAppointments(workspaceId: string, params: SearchParams, unitId?: string) {
+  const today = new Date(Date.now() - BRT_OFFSET_HOURS * HOUR_MS).toISOString().slice(0, 10)
+  const query = parseCalendarQuery(unitId ? { ...params, unit: unitId } : params, today)
+  const appointments = await Appointment.aggregate<AppointmentRow>([
+    { $match: { workspaceId: new Types.ObjectId(workspaceId) } },
+    ...calendarPipeline(query),
+  ])
+  return { query, appointments }
 }
 
 export async function loadCalendarOptions(workspaceId: string, unitId?: string): Promise<CalendarOptionsData> {
@@ -65,7 +84,7 @@ export async function loadDayAppointments(unitIds: Types.ObjectId[], start: Date
   return Appointment.aggregate<DayAppointment>([
     { $match: { unitId: { $in: unitIds }, status: { $ne: "cancelled" }, startsAt: { $gte: start, $lt: end } } },
     { $sort: { startsAt: 1, _id: 1 } },
-    { $lookup: { from: "customers", localField: "customerId", foreignField: "_id", as: "customer" } },
+    { $lookup: { from: "customers", localField: "customer.customerId", foreignField: "_id", as: "registeredCustomer" } },
     {
       $lookup: {
         from: "workspace_members",
@@ -85,7 +104,7 @@ export async function loadDayAppointments(unitIds: Types.ObjectId[], start: Date
         unitId: { $toString: "$unitId" },
         startsAt: 1,
         endsAt: 1,
-        customerName: { $ifNull: [{ $first: "$customer.name" }, "Cliente excluído"] },
+        customerName: { $ifNull: [{ $first: "$registeredCustomer.name" }, "$customer.name", "Sem cliente"] },
         serviceName: "$name",
         therapistId: { $toString: "$workspaceMemberId" },
         therapistName: { $ifNull: [{ $first: "$member.name" }, null] },

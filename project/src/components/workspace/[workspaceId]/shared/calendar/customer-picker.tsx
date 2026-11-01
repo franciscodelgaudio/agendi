@@ -1,17 +1,22 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
-import { UserPlusIcon } from "lucide-react"
+import { SearchIcon, UserPlusIcon, UserRoundPenIcon } from "lucide-react"
 import { searchCustomersAction, type CustomerOption } from "@/lib/actions/appointment"
 import { createCustomerAction } from "@/lib/actions/customer"
 import { Button } from "@/components/ui/button"
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 const SEARCH_DELAY_MS = 250
 
-export type PickedCustomer = { id: string; name: string }
+type RegisteredOption = { id: string; name: string }
+
+export type PickedCustomer =
+  | { kind: "registered"; customerId: string; name: string }
+  | { kind: "guest"; name: string; observation: string | null }
 
 export function CustomerPicker({
   workspaceId,
@@ -20,7 +25,11 @@ export function CustomerPicker({
   workspaceId: string
   defaultValue: PickedCustomer | null
 }) {
-  const [value, setValue] = useState<PickedCustomer | null>(defaultValue)
+  const [mode, setMode] = useState<PickedCustomer["kind"]>(defaultValue?.kind ?? "registered")
+  const [value, setValue] = useState<RegisteredOption | null>(
+    defaultValue?.kind === "registered" ? { id: defaultValue.customerId, name: defaultValue.name } : null,
+  )
+  const guest = defaultValue?.kind === "guest" ? defaultValue : null
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<{ key: string; customers: CustomerOption[] }>({ key: "", customers: [] })
@@ -62,15 +71,46 @@ export function CustomerPicker({
   return (
     <Field>
       <div className="flex items-center justify-between gap-2">
-        <FieldLabel htmlFor="appointment-customer">Cliente</FieldLabel>
-        {!creating && (
-          <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setCreating(true)}>
-            <UserPlusIcon />
-            Novo cliente
+        <FieldLabel htmlFor={mode === "guest" ? "appointment-customer-name" : "appointment-customer"}>Cliente (opcional)</FieldLabel>
+        {mode === "guest" ? (
+          <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setMode("registered")}>
+            <SearchIcon />
+            Buscar cadastrado
           </Button>
+        ) : (
+          !creating && (
+            <div className="flex items-center gap-3">
+              <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setMode("guest")}>
+                <UserRoundPenIcon />
+                Sem cadastro
+              </Button>
+              <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setCreating(true)}>
+                <UserPlusIcon />
+                Novo cliente
+              </Button>
+            </div>
+          )
         )}
       </div>
-      {creating ? (
+      {mode === "guest" ? (
+        <div className="grid gap-2">
+          <Input
+            id="appointment-customer-name"
+            name="customerName"
+            placeholder="Nome do cliente"
+            defaultValue={guest?.name ?? ""}
+            maxLength={120}
+            required
+          />
+          <Textarea
+            aria-label="Observação sobre o cliente"
+            name="customerObservation"
+            placeholder="Observação (opcional)"
+            defaultValue={guest?.observation ?? ""}
+            maxLength={1000}
+          />
+        </div>
+      ) : creating ? (
         <div className="grid gap-2 rounded-md border p-3">
           <Input
             aria-label="Nome do cliente novo"
@@ -103,13 +143,13 @@ export function CustomerPicker({
           items={results.customers}
           filter={null}
           value={value}
-          onValueChange={(next: PickedCustomer | null) => setValue(next && { id: next.id, name: next.name })}
+          onValueChange={(next: RegisteredOption | null) => setValue(next && { id: next.id, name: next.name })}
           inputValue={open ? query : (value?.name ?? query)}
           onInputValueChange={setQuery}
           open={open}
           onOpenChange={setOpen}
-          itemToStringLabel={(customer: PickedCustomer) => customer.name}
-          isItemEqualToValue={(a: PickedCustomer, b: PickedCustomer) => a.id === b.id}
+          itemToStringLabel={(customer: RegisteredOption) => customer.name}
+          isItemEqualToValue={(a: RegisteredOption, b: RegisteredOption) => a.id === b.id}
         >
           <ComboboxInput id="appointment-customer" placeholder="Buscar cliente..." className="w-full" />
           <ComboboxContent>
@@ -125,7 +165,8 @@ export function CustomerPicker({
           </ComboboxContent>
         </Combobox>
       )}
-      <input type="hidden" name="customerId" value={value?.id ?? ""} />
+      <input type="hidden" name="customerKind" value={mode === "guest" ? "guest" : value ? "registered" : ""} />
+      {mode === "registered" && <input type="hidden" name="customerId" value={value?.id ?? ""} />}
     </Field>
   )
 }

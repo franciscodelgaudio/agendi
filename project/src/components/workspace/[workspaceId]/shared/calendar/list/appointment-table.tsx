@@ -80,7 +80,7 @@ export function AppointmentTable({ appointments, query, pathname, workspaceId, o
                   </div>
                 </TableCell>
                 <TableCell className="max-w-0 px-4">
-                  <div className="truncate font-medium">{appointment.customerName ?? "Cliente excluído"}</div>
+                  <div className="truncate font-medium">{appointment.customerName ?? "Sem cliente"}</div>
                   <div className="truncate text-sm text-muted-foreground @2xl:hidden">{appointment.name}</div>
                 </TableCell>
                 <TableCell className="px-4 whitespace-nowrap @max-2xl:hidden">

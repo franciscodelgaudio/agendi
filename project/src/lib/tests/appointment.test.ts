@@ -25,9 +25,11 @@ const CUSTOMER = { id: CUSTOMER_ID, name: "João Silva" };
 const ANA = { id: ANA_ID, name: "Ana" };
 const STATION = { id: STATION_ID, name: "Sala 1" };
 
+const REGISTERED = { kind: "registered", customerId: CUSTOMER_ID };
+
 const VALID = {
   serviceId: SERVICE_ID,
-  customerId: CUSTOMER_ID,
+  customer: REGISTERED,
   workspaceMemberId: ANA_ID,
   stationId: STATION_ID,
   startsAt: "2026-09-24T14:30",
@@ -83,7 +85,7 @@ describe("createAppointment", () => {
       workspaceId: WORKSPACE_ID,
       unitId: UNIT_ID,
       serviceId: SERVICE_ID,
-      customerId: CUSTOMER_ID,
+      customer: REGISTERED,
       workspaceMemberId: ANA_ID,
       stationId: STATION_ID,
       name: "Massagem Candle",
@@ -105,6 +107,50 @@ describe("createAppointment", () => {
     );
   });
 
+  it.each([null, undefined])("agenda sem cliente (%j), sem consultar o cadastro", async (customer) => {
+    const deps = makeDeps();
+
+    const result = await createAppointment({ ...VALID, customer }, ctx, deps);
+
+    expect(result).toEqual({ ok: true, appointmentId: APPOINTMENT_ID });
+    expect(deps.findCustomer).not.toHaveBeenCalled();
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ customer: null }));
+  });
+
+  it("agenda com cliente avulso só com nome e observação, sem consultar o cadastro", async () => {
+    const deps = makeDeps();
+
+    await createAppointment(
+      { ...VALID, customer: { kind: "guest", name: "  Pedro Souza ", observation: " Alérgico a lavanda " } },
+      ctx,
+      deps,
+    );
+
+    expect(deps.findCustomer).not.toHaveBeenCalled();
+    expect(deps.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ customer: { kind: "guest", name: "Pedro Souza", observation: "Alérgico a lavanda" } }),
+    );
+  });
+
+  it.each([undefined, null, "  "])("cliente avulso sem observação (%j) guarda null", async (observation) => {
+    const deps = makeDeps();
+
+    await createAppointment({ ...VALID, customer: { kind: "guest", name: "Pedro", observation } }, ctx, deps);
+
+    expect(deps.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ customer: { kind: "guest", name: "Pedro", observation: null } }),
+    );
+  });
+
+  it("cliente cadastrado guarda só o id, descartando nome e observação enviados junto", async () => {
+    const deps = makeDeps();
+
+    await createAppointment({ ...VALID, customer: { ...REGISTERED, name: "Outro", observation: "x" } }, ctx, deps);
+
+    expect(deps.findCustomer).toHaveBeenCalledWith(CUSTOMER_ID);
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ customer: REGISTERED }));
+  });
+
   it("confere conflito da profissional e a estação no intervalo do agendamento", async () => {
     const deps = makeDeps();
 
@@ -119,7 +165,16 @@ describe("createAppointment", () => {
     ["input nulo", null, "invalid_input"],
     ["serviço ausente", { ...VALID, serviceId: undefined }, "invalid_input"],
     ["serviço vazio", { ...VALID, serviceId: " " }, "invalid_service"],
-    ["cliente vazio", { ...VALID, customerId: "" }, "invalid_customer"],
+    ["cliente cadastrado sem id", { ...VALID, customer: { kind: "registered", customerId: " " } }, "invalid_customer"],
+    ["tipo de cliente desconhecido", { ...VALID, customer: { kind: "vip", name: "Pedro" } }, "invalid_customer"],
+    ["cliente que não é objeto", { ...VALID, customer: CUSTOMER_ID }, "invalid_customer"],
+    ["cliente avulso sem nome", { ...VALID, customer: { kind: "guest", name: "  " } }, "invalid_customer_name"],
+    ["nome do avulso acima de 120 caracteres", { ...VALID, customer: { kind: "guest", name: "a".repeat(121) } }, "customer_name_too_long"],
+    [
+      "observação do avulso acima de 1000 caracteres",
+      { ...VALID, customer: { kind: "guest", name: "Pedro", observation: "a".repeat(1001) } },
+      "customer_observation_too_long",
+    ],
     ["profissional vazia", { ...VALID, workspaceMemberId: "" }, "invalid_member"],
     ["estação vazia", { ...VALID, stationId: "" }, "invalid_station"],
     ["início inválido", { ...VALID, startsAt: "amanhã" }, "invalid_starts_at"],
@@ -200,7 +255,7 @@ describe("updateAppointment", () => {
     });
     expect(deps.update).toHaveBeenCalledWith(APPOINTMENT_ID, {
       serviceId: SERVICE_ID,
-      customerId: CUSTOMER_ID,
+      customer: REGISTERED,
       workspaceMemberId: ANA_ID,
       stationId: STATION_ID,
       name: "Massagem Candle",

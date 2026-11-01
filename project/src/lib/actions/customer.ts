@@ -11,6 +11,7 @@ import {
   type CreateCustomerError,
   type UpdateCustomerError,
 } from "@/service/workspace/[workspaceId]/customers/customer"
+import { Appointment } from "@/models/Appointment"
 import { Customer } from "@/models/Customer"
 
 const errorMessages: Record<CreateCustomerError | UpdateCustomerError | "unauthenticated", string> = {
@@ -94,7 +95,16 @@ export async function deleteCustomerAction(workspaceId: string, customerId: stri
   const filter = workspaceFilter(workspaceId, customerId)
 
   const result = await deleteCustomer(filter && customerId, session, {
-    remove: async () => (await Customer.deleteOne(filter!)).deletedCount > 0,
+    remove: async () => {
+      const removed = await Customer.findOneAndDelete(filter!, { projection: { name: 1, observation: 1 } }).lean()
+      return removed && { name: removed.name, observation: removed.observation ?? null }
+    },
+    detachAppointments: async (_id, guest) => {
+      await Appointment.updateMany(
+        { workspaceId: filter!.workspaceId, "customer.customerId": filter!._id },
+        { $set: { customer: guest } },
+      )
+    },
   })
 
   if (!result.ok) return { error: errorMessages[result.error] }

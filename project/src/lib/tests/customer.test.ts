@@ -220,25 +220,39 @@ describe("updateCustomer", () => {
 });
 
 describe("deleteCustomer", () => {
-  function makeDeps(found = true) {
-    return { remove: vi.fn().mockResolvedValue(found) };
+  function makeDeps(found: { name: string; observation: string | null } | null = SAVED) {
+    return { remove: vi.fn().mockResolvedValue(found), detachAppointments: vi.fn().mockResolvedValue(undefined) };
   }
 
-  it("remove o cliente", async () => {
+  it("remove o cliente e mantém os agendamentos dele como avulsos, com o nome e a observação do cadastro", async () => {
     const deps = makeDeps();
 
     const result = await deleteCustomer(CUSTOMER_ID, { actor: MANAGER }, deps);
 
     expect(result).toEqual({ ok: true });
     expect(deps.remove).toHaveBeenCalledWith(CUSTOMER_ID);
+    expect(deps.detachAppointments).toHaveBeenCalledWith(CUSTOMER_ID, {
+      kind: "guest",
+      name: "Maria Silva",
+      observation: "Prefere horários pela manhã",
+    });
+  });
+
+  it("cliente sem observação vira avulso com observação null", async () => {
+    const deps = makeDeps({ name: "Maria Silva", observation: null });
+
+    await deleteCustomer(CUSTOMER_ID, { actor: MANAGER }, deps);
+
+    expect(deps.detachAppointments).toHaveBeenCalledWith(CUSTOMER_ID, { kind: "guest", name: "Maria Silva", observation: null });
   });
 
   it("cliente que não existe no workspace", async () => {
-    const deps = makeDeps(false);
+    const deps = makeDeps(null);
 
     const result = await deleteCustomer(CUSTOMER_ID, { actor: ADMIN }, deps);
 
     expect(result).toEqual({ ok: false, error: "customer_not_found" });
+    expect(deps.detachAppointments).not.toHaveBeenCalled();
   });
 
   it.each([null, undefined, ""])("sem id do cliente (%j), não remove", async (customerId) => {
@@ -248,6 +262,7 @@ describe("deleteCustomer", () => {
 
     expect(result).toEqual({ ok: false, error: "customer_not_found" });
     expect(deps.remove).not.toHaveBeenCalled();
+    expect(deps.detachAppointments).not.toHaveBeenCalled();
   });
 
   it("sem acesso ao workspace, não remove", async () => {
@@ -257,6 +272,7 @@ describe("deleteCustomer", () => {
 
     expect(result).toEqual({ ok: false, error: "workspace_not_found" });
     expect(deps.remove).not.toHaveBeenCalled();
+    expect(deps.detachAppointments).not.toHaveBeenCalled();
   });
 
   it("sem a permissão de gerenciar clientes, não remove", async () => {
@@ -266,5 +282,6 @@ describe("deleteCustomer", () => {
 
     expect(result).toEqual({ ok: false, error: "forbidden" });
     expect(deps.remove).not.toHaveBeenCalled();
+    expect(deps.detachAppointments).not.toHaveBeenCalled();
   });
 });

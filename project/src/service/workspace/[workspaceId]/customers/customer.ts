@@ -2,6 +2,7 @@ import { z } from "zod";
 import { issueCode } from "@/service/_shared/validation";
 import { checkAccess, type AccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check";
 import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
+import type { AppointmentCustomer } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment";
 
 const MAX_NAME_LENGTH = 120;
 const MAX_OBSERVATION_LENGTH = 1000;
@@ -90,12 +91,17 @@ export type DeleteCustomerResult = { ok: true } | { ok: false; error: DeleteCust
 export async function deleteCustomer(
   customerId: string | null | undefined,
   ctx: { actor: Actor | null },
-  deps: { remove: (customerId: string) => Promise<boolean> },
+  deps: {
+    remove: (customerId: string) => Promise<{ name: string; observation: string | null } | null>;
+    detachAppointments: (customerId: string, guest: Extract<AppointmentCustomer, { kind: "guest" }>) => Promise<void>;
+  },
 ): Promise<DeleteCustomerResult> {
   const accessError = checkAccess(ctx.actor, "customers.manage");
   if (accessError) return { ok: false, error: accessError };
   if (!customerId) return { ok: false, error: "customer_not_found" };
 
-  if (!(await deps.remove(customerId))) return { ok: false, error: "customer_not_found" };
+  const removed = await deps.remove(customerId);
+  if (!removed) return { ok: false, error: "customer_not_found" };
+  await deps.detachAppointments(customerId, { kind: "guest", name: removed.name, observation: removed.observation });
   return { ok: true };
 }

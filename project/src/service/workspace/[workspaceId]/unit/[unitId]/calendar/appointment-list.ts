@@ -4,6 +4,7 @@ import { first, type SearchParams, type SortDir } from "@/service/workspace/[wor
 import { accentInsensitivePattern } from "@/service/workspace/[workspaceId]/users/user-list";
 import {
   APPOINTMENT_STATUSES,
+  type AppointmentCustomer,
   type AppointmentStatus,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment";
 
@@ -17,7 +18,7 @@ export type AppointmentRow = {
   id: string;
   unitId: string;
   serviceId: string;
-  customerId: string;
+  customer: AppointmentCustomer | null;
   customerName: string | null;
   workspaceMemberId: string;
   memberName: string | null;
@@ -50,9 +51,9 @@ export const APPOINTMENT_VIEW: PipelineStage.FacetPipelineStage[] = [
   {
     $lookup: {
       from: "customers",
-      localField: "customerId",
+      localField: "customer.customerId",
       foreignField: "_id",
-      as: "customer",
+      as: "registeredCustomer",
       pipeline: [{ $project: { _id: 0, name: 1 } }],
     },
   },
@@ -83,8 +84,14 @@ export const APPOINTMENT_VIEW: PipelineStage.FacetPipelineStage[] = [
       id: { $toString: "$_id" },
       unitId: { $toString: "$unitId" },
       serviceId: { $toString: "$serviceId" },
-      customerId: { $toString: "$customerId" },
-      customerName: { $ifNull: [{ $first: "$customer.name" }, null] },
+      customer: {
+        $cond: [
+          { $eq: ["$customer.kind", "registered"] },
+          { kind: "registered", customerId: { $toString: "$customer.customerId" } },
+          { $ifNull: ["$customer", null] },
+        ],
+      },
+      customerName: { $ifNull: [{ $first: "$registeredCustomer.name" }, "$customer.name", null] },
       workspaceMemberId: { $toString: "$workspaceMemberId" },
       memberName: { $ifNull: [{ $first: "$member.name" }, null] },
       stationId: { $toString: "$stationId" },
@@ -124,6 +131,32 @@ export function parseCalendarRange(input: unknown): CalendarRange | null {
   const days = (endDate.getTime() - startDate.getTime()) / DAY_MS;
   if (days <= 0 || days > MAX_RANGE_DAYS) return null;
   return { start: start as string, end: end as string, unit: objectIdOrEmpty(unit), member: objectIdOrEmpty(member) };
+}
+
+export const CALENDAR_VIEWS = ["timeGridDay", "timeGridWeek", "dayGridMonth"] as const;
+export type CalendarView = (typeof CALENDAR_VIEWS)[number];
+export type CalendarQuery = CalendarRange & { view: CalendarView };
+
+function shiftDay(day: string, days: number) {
+  const [year, month, date] = parseDay(day)!;
+  return new Date(Date.UTC(year, month - 1, date + days)).toISOString().slice(0, 10);
+}
+
+function defaultRange(view: CalendarView, today: string) {
+  if (view === "timeGridDay") return { start: today, end: shiftDay(today, 1) };
+  const anchor = view === "dayGridMonth" ? `${today.slice(0, 8)}01` : today;
+  const start = shiftDay(anchor, -new Date(`${anchor}T00:00:00Z`).getUTCDay());
+  return { start, end: shiftDay(start, view === "dayGridMonth" ? MAX_RANGE_DAYS : 7) };
+}
+
+export function parseCalendarQuery(params: SearchParams, today: string): CalendarQuery {
+  const requested = first(params.view);
+  const view = CALENDAR_VIEWS.includes(requested as CalendarView) ? (requested as CalendarView) : "timeGridWeek";
+  const filters = { unit: first(params.unit), member: first(params.member) };
+  const range =
+    parseCalendarRange({ start: first(params.start), end: first(params.end), ...filters }) ??
+    parseCalendarRange({ ...defaultRange(view, today), ...filters })!;
+  return { view, ...range };
 }
 
 function rangeMatch({ start, end }: CalendarRange) {

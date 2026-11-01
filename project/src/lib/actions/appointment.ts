@@ -11,6 +11,7 @@ import {
   rescheduleAppointment,
   setAppointmentStatus,
   updateAppointment,
+  type AppointmentFields,
   type AppointmentFieldsError,
   type RescheduleAppointmentError,
   type SetAppointmentStatusError,
@@ -37,9 +38,12 @@ type AppointmentError =
   | "unit_not_found"
 
 const errorMessages: Record<Exclude<AppointmentError, "forbidden"> | "unauthenticated", string> = {
-  invalid_input: "Preencha serviço, cliente, profissional, estação e início.",
+  invalid_input: "Preencha serviço, profissional, estação e início.",
   invalid_service: "Escolha o serviço.",
   invalid_customer: "Escolha o cliente.",
+  invalid_customer_name: "Informe o nome do cliente.",
+  customer_name_too_long: "O nome do cliente pode ter no máximo 120 caracteres.",
+  customer_observation_too_long: "A observação do cliente pode ter no máximo 1000 caracteres.",
   invalid_member: "Escolha a profissional.",
   invalid_station: "Escolha a estação.",
   invalid_starts_at: "Informe uma data e hora válidas.",
@@ -80,10 +84,21 @@ function appointmentFilter(workspaceId: string, appointmentId: string) {
   return { _id: new Types.ObjectId(appointmentId), workspaceId: new Types.ObjectId(workspaceId) }
 }
 
+function customerInput(formData: FormData) {
+  const kind = formData.get("customerKind")
+  if (!kind) return null
+  return {
+    kind,
+    customerId: formData.get("customerId"),
+    name: formData.get("customerName"),
+    observation: formData.get("customerObservation"),
+  }
+}
+
 function appointmentInput(formData: FormData) {
   return {
     serviceId: formData.get("serviceId"),
-    customerId: formData.get("customerId"),
+    customer: customerInput(formData),
     workspaceMemberId: formData.get("workspaceMemberId"),
     stationId: formData.get("stationId"),
     startsAt: formData.get("startsAt"),
@@ -92,11 +107,12 @@ function appointmentInput(formData: FormData) {
   }
 }
 
-function toIds<T extends { serviceId: string; customerId: string; workspaceMemberId: string; stationId: string }>(fields: T) {
+function toIds<T extends AppointmentFields>({ customer, ...fields }: T) {
   return {
     ...fields,
+    customer:
+      customer?.kind === "registered" ? { kind: customer.kind, customerId: new Types.ObjectId(customer.customerId) } : customer,
     serviceId: new Types.ObjectId(fields.serviceId),
-    customerId: new Types.ObjectId(fields.customerId),
     workspaceMemberId: new Types.ObjectId(fields.workspaceMemberId),
     stationId: new Types.ObjectId(fields.stationId),
   }

@@ -38,16 +38,17 @@ export async function insertWallet({
 
 export async function recordAppointmentIncome(appointmentId: string, priceCents: number) {
   const appointment = await Appointment.findById(appointmentId)
-    .select({ name: 1, startsAt: 1, unitId: 1, customerId: 1 })
+    .select({ name: 1, startsAt: 1, unitId: 1, customer: 1 })
     .lean()
   if (!appointment) return
-  const [unit, customer] = await Promise.all([
+  const { customer } = appointment
+  const [unit, registered] = await Promise.all([
     Unit.findById(appointment.unitId).select({ walletId: 1, workspaceId: 1 }).lean(),
-    Customer.findById(appointment.customerId).select({ name: 1 }).lean(),
+    customer?.kind === "registered" ? Customer.findById(customer.customerId).select({ name: 1 }).lean() : null,
   ])
   const data = appointmentTransaction({
     name: appointment.name,
-    customerName: customer?.name ?? null,
+    customerName: customer?.kind === "guest" ? customer.name : (registered?.name ?? null),
     priceCents,
     startsAt: appointment.startsAt,
   })

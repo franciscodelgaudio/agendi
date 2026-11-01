@@ -213,12 +213,7 @@ export function CalendarSkeleton({ unitFilter = true }: { unitFilter?: boolean }
 
 // Seletor Calendário/Lista ao lado do título.
 export function CalendarHeadingSkeleton({ section = false }: { section?: boolean }) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-4">
-      <Skeleton className={section ? "h-7 w-32" : "h-8 w-48"} />
-      <Skeleton className="h-9 w-52" />
-    </div>
-  )
+  return <Skeleton className={section ? "h-7 w-32" : "h-8 w-48"} />
 }
 
 // Cabeçalho da unidade (avatar, nome e abas), enquanto o layout da unidade carrega.

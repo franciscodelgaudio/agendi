@@ -43,7 +43,10 @@ export function appointmentFormValues(appointment: AppointmentRow): AppointmentF
   return {
     unitId: appointment.unitId,
     workspaceMemberId: appointment.workspaceMemberId,
-    customer: appointment.customerName ? { id: appointment.customerId, name: appointment.customerName } : null,
+    customer:
+      appointment.customer?.kind === "registered"
+        ? { ...appointment.customer, name: appointment.customerName ?? "" }
+        : appointment.customer,
     startsAt: appointment.startsAt,
     durationMinutes: appointment.durationMinutes,
     serviceId: appointment.serviceId,
@@ -132,7 +135,7 @@ export function DeleteAppointmentDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Excluir agendamento?</AlertDialogTitle>
           <AlertDialogDescription>
-            O agendamento de <strong>{appointment.customerName ?? "cliente excluído"}</strong> será excluído permanentemente,
+            O agendamento de <strong>{appointment.customerName ?? appointment.name}</strong> será excluído permanentemente,
             junto com a entrada dele no caixa, se houver. Essa ação não pode ser desfeita.
           </AlertDialogDescription>
         </AlertDialogHeader>

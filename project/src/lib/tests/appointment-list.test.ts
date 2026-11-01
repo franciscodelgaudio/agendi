@@ -6,6 +6,7 @@ import {
   appointmentListPipeline,
   calendarPipeline,
   parseAppointmentListQuery,
+  parseCalendarQuery,
   parseCalendarRange,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list";
 
@@ -15,14 +16,14 @@ const ANA_ID = "64b7f0c2a1b2c3d4e5f60751";
 const brt = (path: string) => ({ $dateToString: { date: path, format: "%Y-%m-%dT%H:%M", timezone: "-03:00" } });
 
 describe("APPOINTMENT_VIEW", () => {
-  it("traz cliente, profissional e estação pelos ids, com os horários em Brasília", () => {
+  it("traz o cliente (cadastrado pelo id, avulso pelo nome), profissional e estação, com os horários em Brasília", () => {
     expect(APPOINTMENT_VIEW).toEqual([
       {
         $lookup: {
           from: "customers",
-          localField: "customerId",
+          localField: "customer.customerId",
           foreignField: "_id",
-          as: "customer",
+          as: "registeredCustomer",
           pipeline: [{ $project: { _id: 0, name: 1 } }],
         },
       },
@@ -53,8 +54,14 @@ describe("APPOINTMENT_VIEW", () => {
           id: { $toString: "$_id" },
           unitId: { $toString: "$unitId" },
           serviceId: { $toString: "$serviceId" },
-          customerId: { $toString: "$customerId" },
-          customerName: { $ifNull: [{ $first: "$customer.name" }, null] },
+          customer: {
+            $cond: [
+              { $eq: ["$customer.kind", "registered"] },
+              { kind: "registered", customerId: { $toString: "$customer.customerId" } },
+              { $ifNull: ["$customer", null] },
+            ],
+          },
+          customerName: { $ifNull: [{ $first: "$registeredCustomer.name" }, "$customer.name", null] },
           workspaceMemberId: { $toString: "$workspaceMemberId" },
           memberName: { $ifNull: [{ $first: "$member.name" }, null] },
           stationId: { $toString: "$stationId" },
@@ -114,6 +121,68 @@ describe("parseCalendarRange", () => {
     ["sem dias", {}],
   ])("recusa %s", (_label, input) => {
     expect(parseCalendarRange(input)).toBeNull();
+  });
+});
+
+describe("parseCalendarQuery", () => {
+  const THURSDAY = "2026-11-05";
+
+  it("sem parâmetros, mostra a semana de hoje, de domingo a domingo, sem filtros", () => {
+    expect(parseCalendarQuery({}, THURSDAY)).toEqual({
+      view: "timeGridWeek",
+      start: "2026-11-01",
+      end: "2026-11-08",
+      unit: "",
+      member: "",
+    });
+  });
+
+  it("num domingo, a semana começa no próprio dia", () => {
+    expect(parseCalendarQuery({}, "2026-11-01")).toMatchObject({ start: "2026-11-01", end: "2026-11-08" });
+  });
+
+  it("na visão de dia sem período, mostra só hoje, virando o mês", () => {
+    expect(parseCalendarQuery({ view: "timeGridDay" }, "2026-11-30")).toMatchObject({
+      view: "timeGridDay",
+      start: "2026-11-30",
+      end: "2026-12-01",
+    });
+  });
+
+  it("na visão de mês sem período, mostra as 6 semanas do mês de hoje, começando no domingo antes do dia 1", () => {
+    expect(parseCalendarQuery({ view: "dayGridMonth" }, "2026-12-15")).toMatchObject({
+      view: "dayGridMonth",
+      start: "2026-11-29",
+      end: "2027-01-10",
+    });
+  });
+
+  it("usa a visão, o período e os filtros válidos da URL", () => {
+    expect(
+      parseCalendarQuery(
+        { view: "dayGridMonth", start: "2026-09-27", end: "2026-11-08", unit: [UNIT_ID, "x"], member: ANA_ID },
+        THURSDAY,
+      ),
+    ).toEqual({ view: "dayGridMonth", start: "2026-09-27", end: "2026-11-08", unit: UNIT_ID, member: ANA_ID });
+  });
+
+  it.each([
+    ["fim antes do início", { start: "2026-09-28", end: "2026-09-21" }],
+    ["mais de 42 dias", { start: "2026-09-01", end: "2026-10-14" }],
+    ["dia inválido", { start: "2026-02-30", end: "2026-03-02" }],
+    ["só o início", { start: "2026-09-21" }],
+  ])("com %s, volta para a semana de hoje", (_label, params) => {
+    expect(parseCalendarQuery(params, THURSDAY)).toMatchObject({ start: "2026-11-01", end: "2026-11-08" });
+  });
+
+  it("visão desconhecida vira a de semana, e filtros que não são ids são ignorados", () => {
+    expect(parseCalendarQuery({ view: "listWeek", unit: "x", member: "1" }, THURSDAY)).toEqual({
+      view: "timeGridWeek",
+      start: "2026-11-01",
+      end: "2026-11-08",
+      unit: "",
+      member: "",
+    });
   });
 });
 

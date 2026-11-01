@@ -170,7 +170,7 @@ export function AppointmentCalendar({
       }
       return appointments.map((appointment) => ({
         id: appointment.id,
-        title: `${appointment.customerName ?? "Cliente"} · ${appointment.name}`,
+        title: `${appointment.customerName ?? "Sem cliente"} · ${appointment.name}`,
         start: appointment.startsAt,
         end: appointment.endsAt,
         color: appointment.color ?? colors.get(appointment.workspaceMemberId) ?? "#64748b",
@@ -396,7 +396,7 @@ export function AppointmentCalendar({
               const customerName = (
                 <span className="flex min-w-0 items-center gap-1 font-semibold">
                   {appointment.status === "done" && <CheckIcon className="size-3 shrink-0" aria-label="Concluído" />}
-                  <span className="truncate">{appointment.customerName ?? "Cliente excluído"}</span>
+                  <span className="truncate">{appointment.customerName ?? "Sem cliente"}</span>
                 </span>
               )
               if (view.type.startsWith("dayGrid") || isShort) {
@@ -529,7 +529,10 @@ export function AppointmentCalendar({
               </SheetHeader>
               <dl className="grid gap-3 px-4 text-sm">
                 {[
-                  ["Cliente", sheet.appointment.customerName ?? "Cliente excluído"],
+                  ["Cliente", sheet.appointment.customerName ?? "Sem cliente"],
+                  ...(sheet.appointment.customer?.kind === "guest" && sheet.appointment.customer.observation
+                    ? [["Observação", sheet.appointment.customer.observation]]
+                    : []),
                   ["Profissional", sheet.appointment.memberName ?? "—"],
                   ["Estação", sheet.appointment.stationName ?? "—"],
                   ["Início", sheet.appointment.startsAt.replace("T", " às ")],

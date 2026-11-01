@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { issueCode } from "@/service/_shared/validation";
 import { BRT_OFFSET_HOURS, parseDay } from "@/service/_shared/timezone";
 import { isBookingColor } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-colors";
 import { parseDurationMinutes } from "@/service/workspace/[workspaceId]/services/service";
@@ -5,6 +7,8 @@ import { checkAccess, type AccessError } from "@/service/workspace/[workspaceId]
 import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
 
 const MINUTE_MS = 60 * 1000;
+const MAX_CUSTOMER_NAME_LENGTH = 120;
+const MAX_CUSTOMER_OBSERVATION_LENGTH = 1000;
 
 export const APPOINTMENT_STATUSES = ["scheduled", "done", "cancelled"] as const;
 export type AppointmentStatus = (typeof APPOINTMENT_STATUSES)[number];
@@ -19,6 +23,38 @@ export function parsePerformedAt(value: string) {
   const [year, month, date] = day;
   return new Date(Date.UTC(year, month - 1, date, hours + BRT_OFFSET_HOURS, minutes));
 }
+
+const appointmentCustomerSchema = z
+  .discriminatedUnion(
+    "kind",
+    [
+      z.object({
+        kind: z.literal("registered"),
+        customerId: z.string({ error: "invalid_customer" }).trim().min(1, { error: "invalid_customer" }),
+      }),
+      z.object({
+        kind: z.literal("guest"),
+        name: z
+          .string({ error: "invalid_customer_name" })
+          .trim()
+          .min(1, { error: "invalid_customer_name" })
+          .max(MAX_CUSTOMER_NAME_LENGTH, { error: "customer_name_too_long" }),
+        observation: z
+          .string({ error: "invalid_customer" })
+          .trim()
+          .max(MAX_CUSTOMER_OBSERVATION_LENGTH, { error: "customer_observation_too_long" })
+          .nullish()
+          .transform((value) => value || null),
+      }),
+    ],
+    { error: "invalid_customer" },
+  )
+  .nullish()
+  .transform((value) => value ?? null);
+
+export type AppointmentCustomer = NonNullable<z.infer<typeof appointmentCustomerSchema>>;
+
+type CustomerError = "invalid_customer" | "invalid_customer_name" | "customer_name_too_long" | "customer_observation_too_long";
 
 type MemberInterval = { workspaceMemberId: string; startsAt: Date; endsAt: Date; excludeId?: string };
 type StationInterval = { stationId: string; startsAt: Date; endsAt: Date; excludeId?: string };
@@ -40,7 +76,7 @@ type AvailabilityError = "member_busy" | "station_busy";
 export type AppointmentFieldsError =
   | "invalid_input"
   | "invalid_service"
-  | "invalid_customer"
+  | CustomerError
   | "invalid_member"
   | "invalid_station"
   | "invalid_starts_at"
@@ -54,7 +90,7 @@ export type AppointmentFieldsError =
 
 export type AppointmentFields = {
   serviceId: string;
-  customerId: string;
+  customer: AppointmentCustomer | null;
   workspaceMemberId: string;
   stationId: string;
   name: string;
@@ -85,7 +121,7 @@ async function resolveFields(
   lookups: Lookups,
   excludeId?: string,
 ): Promise<{ ok: true; fields: AppointmentFields } | { ok: false; error: AppointmentFieldsError }> {
-  const { serviceId, customerId, workspaceMemberId, stationId, startsAt, durationMinutes, color } = (input ??
+  const { serviceId, customer: customerInput, workspaceMemberId, stationId, startsAt, durationMinutes, color } = (input ??
     {}) as Record<string, unknown>;
   if (input == null || typeof startsAt !== "string") return { ok: false, error: "invalid_input" };
   if (durationMinutes != null && typeof durationMinutes !== "string") return { ok: false, error: "invalid_input" };
@@ -93,14 +129,16 @@ async function resolveFields(
 
   const ids = [
     requiredId(serviceId, "invalid_service"),
-    requiredId(customerId, "invalid_customer"),
     requiredId(workspaceMemberId, "invalid_member"),
     requiredId(stationId, "invalid_station"),
   ];
   for (const id of ids) {
     if ("error" in id) return { ok: false, error: id.error as AppointmentFieldsError };
   }
-  const [service, customer, member, station] = ids.map((id) => (id as { id: string }).id);
+  const [service, member, station] = ids.map((id) => (id as { id: string }).id);
+  const parsedCustomer = appointmentCustomerSchema.safeParse(customerInput);
+  if (!parsedCustomer.success) return { ok: false, error: issueCode<CustomerError>(parsedCustomer.error) };
+  const customer = parsedCustomer.data;
 
   const start = parsePerformedAt(startsAt.trim());
   if (!start) return { ok: false, error: "invalid_starts_at" };
@@ -111,7 +149,7 @@ async function resolveFields(
 
   const foundService = await lookups.findService(service);
   if (!foundService) return { ok: false, error: "service_not_found" };
-  if (!(await lookups.findCustomer(customer))) return { ok: false, error: "customer_not_found" };
+  if (customer?.kind === "registered" && !(await lookups.findCustomer(customer.customerId))) return { ok: false, error: "customer_not_found" };
   if (!(await lookups.findMember(member))) return { ok: false, error: "member_not_found" };
   if (!(await lookups.findStation(station))) return { ok: false, error: "station_not_found" };
 
@@ -127,7 +165,7 @@ async function resolveFields(
     ok: true,
     fields: {
       serviceId: service,
-      customerId: customer,
+      customer,
       workspaceMemberId: member,
       stationId: station,
       name: foundService.name,
