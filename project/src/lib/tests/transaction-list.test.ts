@@ -4,9 +4,11 @@ import {
   parseTransactionListQuery,
   TRANSACTION_PAGE_SIZE,
   transactionListPipeline,
+  transactionTotalsPipeline,
 } from "@/service/workspace/[workspaceId]/cash-flow/wallets/[walletId]/transaction-list";
 
 const WALLET_ID = "64b7f0c2a1b2c3d4e5f60800";
+const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 const BASE = { q: "", type: "", status: "", sort: "paidAt", dir: "desc", page: 1 } as const;
 
 describe("parseTransactionListQuery", () => {
@@ -91,6 +93,37 @@ describe("transactionListPipeline", () => {
       { $match: walletMatch },
       { $sort: { totalCents: 1, _id: -1 } },
       ...paged(40),
+    ]);
+  });
+
+  it("com unidade, lista só as transações da unidade dentro da carteira", () => {
+    expect(transactionListPipeline(WALLET_ID, { ...BASE, type: "expense" }, UNIT_ID)[0]).toEqual({
+      $match: { ...walletMatch, unitId: new Types.ObjectId(UNIT_ID), type: "expense" },
+    });
+  });
+});
+
+describe("transactionTotalsPipeline", () => {
+  const paidSum = (type: string) => ({ $sum: { $cond: [{ $eq: ["$type", type] }, "$totalCents", 0] } });
+
+  it("soma as entradas e saídas pagas da unidade na carteira e o saldo", () => {
+    expect(transactionTotalsPipeline(WALLET_ID, UNIT_ID)).toEqual([
+      {
+        $match: {
+          walletId: new Types.ObjectId(WALLET_ID),
+          unitId: new Types.ObjectId(UNIT_ID),
+          paidAt: { $ne: null },
+        },
+      },
+      { $group: { _id: null, incomingCents: paidSum("incoming"), expenseCents: paidSum("expense") } },
+      {
+        $project: {
+          _id: 0,
+          incomingCents: 1,
+          expenseCents: 1,
+          balanceCents: { $subtract: ["$incomingCents", "$expenseCents"] },
+        },
+      },
     ]);
   });
 });

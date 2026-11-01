@@ -54,8 +54,10 @@ export function parseTransactionListQuery(params: SearchParams): TransactionList
 export function transactionListPipeline(
   walletId: string,
   { q, type, status, sort, dir, page }: TransactionListQuery,
+  unitId?: string,
 ): PipelineStage[] {
   const match: Record<string, unknown> = { walletId: new Types.ObjectId(walletId) };
+  if (unitId) match.unitId = new Types.ObjectId(unitId);
   if (type) match.type = type;
   if (status === "paid") match.paidAt = { $ne: null };
   if (status === "pending") match.paidAt = null;
@@ -85,5 +87,32 @@ export function transactionListPipeline(
       },
     },
     { $project: { rows: 1, total: { $ifNull: [{ $first: "$total.n" }, 0] } } },
+  ];
+}
+
+export type TransactionTotals = { incomingCents: number; expenseCents: number; balanceCents: number };
+
+function paidSum(type: TransactionType) {
+  return { $sum: { $cond: [{ $eq: ["$type", type] }, "$totalCents", 0] } };
+}
+
+export function transactionTotalsPipeline(walletId: string, unitId: string): PipelineStage[] {
+  return [
+    {
+      $match: {
+        walletId: new Types.ObjectId(walletId),
+        unitId: new Types.ObjectId(unitId),
+        paidAt: { $ne: null },
+      },
+    },
+    { $group: { _id: null, incomingCents: paidSum("incoming"), expenseCents: paidSum("expense") } },
+    {
+      $project: {
+        _id: 0,
+        incomingCents: 1,
+        expenseCents: 1,
+        balanceCents: { $subtract: ["$incomingCents", "$expenseCents"] },
+      },
+    },
   ];
 }

@@ -16,6 +16,7 @@ import {
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/cash-flow"
 import { walletListPipeline, type WalletListItem } from "@/service/workspace/[workspaceId]/cash-flow/wallet-list"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
+import { UNIT_PAGE_PATHS } from "@/service/workspace/[workspaceId]/page-access"
 import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { unitRefOptionsStages } from "@/service/workspace/[workspaceId]/unit/unit-form-store"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
@@ -28,7 +29,7 @@ import { Workspace } from "@/models/Workspace"
 import { timeFormat } from "@/components/shared/service-format"
 import type { TherapistOption } from "@/components/workspace/[workspaceId]/shared/team/therapist-avatar"
 import { CardEmpty, CardLink, CardLinkButton, money, plural, StatTile, TodaySchedule, type TodayBooking } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-overview"
-import { UnitInventorySheet, UnitWalletSheet, type RefOption } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-ref-sheets"
+import { UnitInventorySheet, type RefOption } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-ref-sheets"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 type UnitInventory = { id: string; name: string; productCount: number; quantity: number }
@@ -50,7 +51,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
   const { workspaceId, unitId } = await params
   const now = new Date()
   const user = await requireUser()
-  await requirePage(workspaceId, user.id, { unit: "overview", unitId })
+  const { pages } = await requirePage(workspaceId, user.id, { unit: "overview", unitId })
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access || !isObjectIdOrHexString(unitId)) notFound()
 
@@ -60,7 +61,6 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
     actor: Actor
     therapists: TherapistOption[]
     unit: { id: string; walletId: string | null; inventory: UnitInventory | null } | null
-    wallets: RefOption[]
     inventories: RefOption[]
   }>([
     ...access,
@@ -110,7 +110,6 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
         id: { $toString: "$_id" },
         actor: 1,
         therapists: 1,
-        wallets: 1,
         inventories: 1,
         unit: { $ifNull: [{ $first: "$unit" }, null] },
       },
@@ -118,9 +117,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
   ])
   if (!workspace?.unit) notFound()
   const canManage = can(workspace.actor, "units.manage")
-  const refOptions = canManage
-    ? { wallets: workspace.wallets, inventories: workspace.inventories }
-    : { wallets: [], inventories: [] }
+  const inventoryOptions = canManage ? workspace.inventories : []
   const { inventory } = workspace.unit
 
   // Mês corrente para os indicadores; ano corrente para a curva de custos.
@@ -229,21 +226,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
             <CardHeader>
               <CardTitle>{wallet ? wallet.name : "Carteira"}</CardTitle>
               <CardDescription>Entradas e saídas pagas da carteira da unidade</CardDescription>
-              {(canManage || wallet) && (
-                <CardAction className="flex gap-1">
-                  {canManage && (
-                    <UnitWalletSheet
-                      workspaceId={workspaceId}
-                      unitId={unitId}
-                      options={refOptions.wallets}
-                      currentId={wallet?.id ?? null}
-                    />
-                  )}
-                  {wallet && (
-                    <CardLinkButton href={`/workspace/${workspaceId}/cash-flow/wallets/${wallet.id}`}>Transações</CardLinkButton>
-                  )}
-                </CardAction>
-              )}
+              {pages.unit.includes("cash_flow") && <CardLink href={`${base}${UNIT_PAGE_PATHS.cash_flow}`}>Caixa</CardLink>}
             </CardHeader>
             <CardContent className="flex-1">
               {wallet ? (
@@ -279,7 +262,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
                     <UnitInventorySheet
                       workspaceId={workspaceId}
                       unitId={unitId}
-                      options={refOptions.inventories}
+                      options={inventoryOptions}
                       currentId={inventory?.id ?? null}
                     />
                   )}

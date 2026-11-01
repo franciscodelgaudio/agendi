@@ -61,6 +61,7 @@ const unitPageLabels: Record<UnitPage, string> = {
   calendar: "Agenda",
   appointments: "Atendimentos",
   services: "Serviços",
+  cash_flow: "Caixa",
 }
 
 const TOTAL = ACTIONS.length + WORKSPACE_PAGES.length + UNIT_PAGES.length

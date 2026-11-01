@@ -15,9 +15,11 @@ import {
 } from "@/service/workspace/[workspaceId]/cash-flow/wallet"
 import {
   createTransaction,
+  createUnitTransaction,
   deleteTransaction,
   updateTransaction,
   type CreateTransactionError,
+  type CreateUnitTransactionError,
   type DeleteTransactionError,
   type UpdateTransactionError,
 } from "@/service/workspace/[workspaceId]/cash-flow/wallets/[walletId]/transaction"
@@ -31,6 +33,7 @@ type WalletError =
   | UpdateWalletError
   | DeleteWalletError
   | CreateTransactionError
+  | CreateUnitTransactionError
   | UpdateTransactionError
   | DeleteTransactionError
 
@@ -46,6 +49,8 @@ const errorMessages: Record<Exclude<WalletError, "forbidden"> | "unauthenticated
   wallet_not_found: "Carteira não encontrada neste workspace.",
   wallet_in_use: "Alguma unidade ainda usa esta carteira. Troque a carteira dela antes.",
   wallet_has_transactions: "Esta carteira tem transações. Exclua as transações antes.",
+  unit_not_found: "Unidade não encontrada neste workspace.",
+  unit_without_wallet: "Esta unidade não tem carteira. Vincule uma carteira antes.",
   transaction_not_found: "Transação não encontrada nesta carteira.",
   transaction_from_appointment: "Esta entrada vem de um atendimento. Altere o atendimento.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
@@ -156,6 +161,33 @@ export async function createTransactionAction(
 
   const result = await createTransaction(transactionInput(formData), walletFilter && walletId, session, {
     walletExists: async () => !!(await Wallet.exists(walletFilter!)),
+    insert: async (data) => {
+      const transaction = await Transaction.create(data)
+      return { id: transaction._id.toString() }
+    },
+  })
+
+  if (!result.ok) return { error: messageOf(result.error) }
+
+  refresh()
+  return { error: null }
+}
+
+export async function createUnitTransactionAction(
+  workspaceId: string,
+  unitId: string,
+  _prev: WalletFormState,
+  formData: FormData,
+): Promise<WalletFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const unitFilter = workspaceFilter(session.workspaceId, unitId)
+
+  const result = await createUnitTransaction(transactionInput(formData), unitFilter && unitId, session, {
+    findUnit: async () => {
+      const unit = await Unit.findOne(unitFilter!).select({ walletId: 1 }).lean()
+      return unit ? { walletId: unit.walletId?.toString() ?? null } : null
+    },
     insert: async (data) => {
       const transaction = await Transaction.create(data)
       return { id: transaction._id.toString() }

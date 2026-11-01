@@ -4,6 +4,7 @@ import { useActionState, useState, useTransition } from "react"
 import { EllipsisIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
 import {
   createTransactionAction,
+  createUnitTransactionAction,
   deleteTransactionAction,
   updateTransactionAction,
   type WalletFormState,
@@ -105,11 +106,15 @@ function TransactionFields({ idPrefix, transaction }: { idPrefix: string; transa
   )
 }
 
-export function CreateTransactionSheet({ workspaceId, walletId }: { workspaceId: string; walletId: string }) {
+type CreateTarget = { walletId: string; unitId?: never } | { unitId: string; walletId?: never }
+
+export function CreateTransactionSheet({ workspaceId, ...target }: { workspaceId: string } & CreateTarget) {
   const [open, setOpen] = useState(false)
   const [state, formAction, pending] = useActionState(
     async (prev: WalletFormState, formData: FormData) => {
-      const next = await createTransactionAction(workspaceId, walletId, prev, formData)
+      const next = target.unitId
+        ? await createUnitTransactionAction(workspaceId, target.unitId, prev, formData)
+        : await createTransactionAction(workspaceId, target.walletId!, prev, formData)
       if (!next.error) setOpen(false)
       return next
     },
@@ -126,7 +131,9 @@ export function CreateTransactionSheet({ workspaceId, walletId }: { workspaceId:
         <form action={formAction} className="flex min-h-0 flex-1 flex-col">
           <SheetHeader>
             <SheetTitle>Nova transação</SheetTitle>
-            <SheetDescription>Uma entrada ou saída de dinheiro desta carteira.</SheetDescription>
+            <SheetDescription>
+              {target.unitId ? "Uma entrada ou saída de dinheiro desta unidade, na carteira dela." : "Uma entrada ou saída de dinheiro desta carteira."}
+            </SheetDescription>
           </SheetHeader>
           <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
             {state.error && <FieldError>{state.error}</FieldError>}

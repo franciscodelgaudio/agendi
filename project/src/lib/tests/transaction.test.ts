@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   appointmentTransaction,
   createTransaction,
+  createUnitTransaction,
   deleteTransaction,
   updateTransaction,
 } from "@/service/workspace/[workspaceId]/cash-flow/wallets/[walletId]/transaction";
@@ -10,6 +11,7 @@ import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const WALLET_ID = "64b7f0c2a1b2c3d4e5f60800";
 const TRANSACTION_ID = "64b7f0c2a1b2c3d4e5f60810";
+const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
 
 const MANAGER = actorWith("cash_flow.manage");
 
@@ -106,6 +108,74 @@ describe("createTransaction", () => {
 
     expect(result).toEqual({ ok: false, error });
     expect(deps.insert).not.toHaveBeenCalled();
+  });
+});
+
+describe("createUnitTransaction", () => {
+  function makeDeps(unit: { walletId: string | null } | null = { walletId: WALLET_ID }) {
+    return {
+      findUnit: vi.fn().mockResolvedValue(unit),
+      insert: vi.fn().mockResolvedValue({ id: TRANSACTION_ID }),
+    };
+  }
+  const ctx = { workspaceId: WORKSPACE_ID, actor: ADMIN };
+
+  it("lança a transação na carteira da unidade, marcada com a unidade", async () => {
+    const deps = makeDeps();
+
+    const result = await createUnitTransaction(VALID, UNIT_ID, { workspaceId: WORKSPACE_ID, actor: MANAGER }, deps);
+
+    expect(result).toEqual({ ok: true, transactionId: TRANSACTION_ID });
+    expect(deps.findUnit).toHaveBeenCalledWith(UNIT_ID);
+    expect(deps.insert).toHaveBeenCalledWith({ ...SAVED, walletId: WALLET_ID, unitId: UNIT_ID, workspaceId: WORKSPACE_ID });
+  });
+
+  it("valida como no lançamento da carteira", async () => {
+    const deps = makeDeps();
+
+    const result = await createUnitTransaction({ ...VALID, total: "0" }, UNIT_ID, ctx, deps);
+
+    expect(result).toEqual({ ok: false, error: "invalid_total" });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("recusa unidade sem carteira", async () => {
+    const deps = makeDeps({ walletId: null });
+
+    const result = await createUnitTransaction(VALID, UNIT_ID, ctx, deps);
+
+    expect(result).toEqual({ ok: false, error: "unit_without_wallet" });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("recusa unidade que não é do workspace", async () => {
+    const deps = makeDeps(null);
+
+    const result = await createUnitTransaction(VALID, UNIT_ID, ctx, deps);
+
+    expect(result).toEqual({ ok: false, error: "unit_not_found" });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it.each([null, undefined, ""])("sem unidade (%j), não grava", async (unitId) => {
+    const deps = makeDeps();
+
+    const result = await createUnitTransaction(VALID, unitId, ctx, deps);
+
+    expect(result).toEqual({ ok: false, error: "unit_not_found" });
+    expect(deps.findUnit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["sem acesso ao workspace", null, "workspace_not_found"],
+    ["sem a permissão de gerenciar o caixa", STAFF, "forbidden"],
+  ] as const)("%s, não grava", async (_label, actor, error) => {
+    const deps = makeDeps();
+
+    const result = await createUnitTransaction(VALID, UNIT_ID, { workspaceId: WORKSPACE_ID, actor }, deps);
+
+    expect(result).toEqual({ ok: false, error });
+    expect(deps.findUnit).not.toHaveBeenCalled();
   });
 });
 

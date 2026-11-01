@@ -10,12 +10,14 @@ const transactionSchema = new Schema(
     type: { type: String, enum: TRANSACTION_TYPES, required: true },
     walletId: { type: Schema.Types.ObjectId, ref: "Wallet", required: true },
     appointmentId: { type: Schema.Types.ObjectId, ref: "Appointment", default: null },
+    unitId: { type: Schema.Types.ObjectId, ref: "Unit", default: null },
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true, index: true },
   },
   { collection: "transactions", timestamps: true },
 );
 
 transactionSchema.index({ walletId: 1, paidAt: -1 });
+transactionSchema.index({ walletId: 1, unitId: 1, paidAt: -1 });
 transactionSchema.index({ appointmentId: 1 }, { unique: true, partialFilterExpression: { appointmentId: { $type: "objectId" } } });
 
 transactionSchema.plugin(connectOnUse);

@@ -55,7 +55,7 @@ export async function recordAppointmentIncome(appointmentId: string, priceCents:
   if (!data || !unit?.walletId) return
   await Transaction.updateOne(
     { appointmentId: appointment._id },
-    { $set: data, $setOnInsert: { walletId: unit.walletId, workspaceId: unit.workspaceId } },
+    { $set: data, $setOnInsert: { walletId: unit.walletId, unitId: appointment.unitId, workspaceId: unit.workspaceId } },
     { upsert: true },
   )
 }

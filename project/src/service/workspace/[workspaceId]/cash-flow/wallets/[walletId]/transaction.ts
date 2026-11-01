@@ -79,6 +79,36 @@ export async function createTransaction(
   return { ok: true, transactionId: transaction.id };
 }
 
+export type CreateUnitTransactionError = AccessError | TransactionInputError | "unit_not_found" | "unit_without_wallet";
+
+export type CreateUnitTransactionResult =
+  | { ok: true; transactionId: string }
+  | { ok: false; error: CreateUnitTransactionError };
+
+export async function createUnitTransaction(
+  input: unknown,
+  unitId: string | null | undefined,
+  ctx: { workspaceId: string; actor: Actor | null },
+  deps: {
+    findUnit: (unitId: string) => Promise<{ walletId: string | null } | null>;
+    insert: (data: TransactionData & { walletId: string; unitId: string; workspaceId: string }) => Promise<{ id: string }>;
+  },
+): Promise<CreateUnitTransactionResult> {
+  const accessError = checkAccess(ctx.actor, "cash_flow.manage");
+  if (accessError) return { ok: false, error: accessError };
+
+  const parsed = parseTransaction(input);
+  if (!parsed.ok) return parsed;
+  if (!unitId) return { ok: false, error: "unit_not_found" };
+
+  const unit = await deps.findUnit(unitId);
+  if (!unit) return { ok: false, error: "unit_not_found" };
+  if (!unit.walletId) return { ok: false, error: "unit_without_wallet" };
+
+  const transaction = await deps.insert({ ...parsed.data, walletId: unit.walletId, unitId, workspaceId: ctx.workspaceId });
+  return { ok: true, transactionId: transaction.id };
+}
+
 type FoundTransaction = { fromAppointment: boolean };
 
 export type UpdateTransactionError =

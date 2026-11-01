@@ -2,7 +2,7 @@
 
 import Link from "@/components/shared/link"
 import { usePathname } from "next/navigation"
-import { ArrowRightIcon, CalendarIcon, CircleCheckIcon, LayoutDashboardIcon, LeafIcon, type LucideIcon } from "lucide-react"
+import { ArrowRightIcon, CalendarIcon, CircleCheckIcon, LayoutDashboardIcon, LeafIcon, WalletIcon, type LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { UNIT_PAGE_PATHS, type UnitPage } from "@/service/workspace/[workspaceId]/page-access"
 import { cn } from "@/service/_shared/utils"
@@ -17,6 +17,7 @@ export function UnitNav({ workspaceId, unitId, pages }: { workspaceId: string; u
     calendar: { title: "Agenda", icon: CalendarIcon },
     appointments: { title: "Atendimentos", icon: CircleCheckIcon },
     services: { title: "Serviços", icon: LeafIcon },
+    cash_flow: { title: "Caixa", icon: WalletIcon },
   }
   const items = pages.map((page) => ({ ...tabs[page], href: `${base}${UNIT_PAGE_PATHS[page]}` }))
 
