@@ -97,14 +97,14 @@ const PROJECT_DAY_TOTAL = { $project: { _id: 0, date: "$_id", count: 1, cents: 1
 
 const INCOME_LOOKUP = {
   $lookup: {
-    from: "transactions",
+    from: "receivables",
     localField: "_id",
     foreignField: "appointmentId",
     as: "income",
-    pipeline: [{ $project: { _id: 0, totalCents: 1 } }],
+    pipeline: [{ $project: { _id: 0, valueCents: 1 } }],
   },
 };
-const INCOME_CENTS = { $ifNull: [{ $first: "$income.totalCents" }, 0] };
+const INCOME_CENTS = { $ifNull: [{ $first: "$income.valueCents" }, 0] };
 
 const PRICE_LOOKUP = {
   $lookup: {

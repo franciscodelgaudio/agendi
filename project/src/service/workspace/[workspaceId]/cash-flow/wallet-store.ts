@@ -1,11 +1,7 @@
-import { Types } from "mongoose"
 import { BRT_OFFSET_HOURS, parseDay } from "@/service/_shared/timezone"
 import type { OpeningBalance } from "@/service/workspace/[workspaceId]/cash-flow/opening-balance"
-import { appointmentTransaction } from "@/service/workspace/[workspaceId]/cash-flow/wallets/[walletId]/transaction"
-import { Appointment } from "@/models/Appointment"
-import { Customer } from "@/models/Customer"
+import type { WalletSettlement } from "@/service/workspace/[workspaceId]/cash-flow/wallet"
 import { Transaction } from "@/models/Transaction"
-import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
 
 function dayStart(day: string) {
@@ -16,13 +12,15 @@ function dayStart(day: string) {
 export async function insertWallet({
   workspaceId,
   name,
+  settlement,
   openingBalance,
 }: {
   workspaceId: string
   name: string
+  settlement: WalletSettlement
   openingBalance: OpeningBalance | null
 }) {
-  const wallet = await Wallet.create({ name, workspaceId })
+  const wallet = await Wallet.create({ name, settlement, workspaceId })
   if (openingBalance && openingBalance.amountCents > 0) {
     await Transaction.create({
       name: "Saldo inicial",
@@ -34,32 +32,4 @@ export async function insertWallet({
     })
   }
   return { id: wallet._id.toString() }
-}
-
-export async function recordAppointmentIncome(appointmentId: string, priceCents: number) {
-  const appointment = await Appointment.findById(appointmentId)
-    .select({ name: 1, startsAt: 1, unitId: 1, customer: 1 })
-    .lean()
-  if (!appointment) return
-  const { customer } = appointment
-  const [unit, registered] = await Promise.all([
-    Unit.findById(appointment.unitId).select({ walletId: 1, workspaceId: 1 }).lean(),
-    customer?.kind === "registered" ? Customer.findById(customer.customerId).select({ name: 1 }).lean() : null,
-  ])
-  const data = appointmentTransaction({
-    name: appointment.name,
-    customerName: customer?.kind === "guest" ? customer.name : (registered?.name ?? null),
-    priceCents,
-    startsAt: appointment.startsAt,
-  })
-  if (!data || !unit?.walletId) return
-  await Transaction.updateOne(
-    { appointmentId: appointment._id },
-    { $set: data, $setOnInsert: { walletId: unit.walletId, unitId: appointment.unitId, workspaceId: unit.workspaceId } },
-    { upsert: true },
-  )
-}
-
-export async function removeAppointmentIncome(appointmentId: Types.ObjectId | string) {
-  await Transaction.deleteOne({ appointmentId: new Types.ObjectId(appointmentId) })
 }

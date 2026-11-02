@@ -109,13 +109,13 @@ export async function createUnitTransaction(
   return { ok: true, transactionId: transaction.id };
 }
 
-type FoundTransaction = { fromAppointment: boolean };
+type FoundTransaction = { fromStatement: boolean };
 
 export type UpdateTransactionError =
   | AccessError
   | TransactionInputError
   | "transaction_not_found"
-  | "transaction_from_appointment";
+  | "transaction_from_statement";
 
 export type UpdateTransactionResult = { ok: true } | { ok: false; error: UpdateTransactionError };
 
@@ -137,13 +137,13 @@ export async function updateTransaction(
 
   const found = await deps.findTransaction(transactionId);
   if (!found) return { ok: false, error: "transaction_not_found" };
-  if (found.fromAppointment) return { ok: false, error: "transaction_from_appointment" };
+  if (found.fromStatement) return { ok: false, error: "transaction_from_statement" };
 
   if (!(await deps.update(transactionId, parsed.data))) return { ok: false, error: "transaction_not_found" };
   return { ok: true };
 }
 
-export type DeleteTransactionError = AccessError | "transaction_not_found" | "transaction_from_appointment";
+export type DeleteTransactionError = AccessError | "transaction_not_found" | "transaction_from_statement";
 
 export type DeleteTransactionResult = { ok: true } | { ok: false; error: DeleteTransactionError };
 
@@ -161,23 +161,8 @@ export async function deleteTransaction(
 
   const found = await deps.findTransaction(transactionId);
   if (!found) return { ok: false, error: "transaction_not_found" };
-  if (found.fromAppointment) return { ok: false, error: "transaction_from_appointment" };
+  if (found.fromStatement) return { ok: false, error: "transaction_from_statement" };
 
   if (!(await deps.remove(transactionId))) return { ok: false, error: "transaction_not_found" };
   return { ok: true };
-}
-
-export function appointmentTransaction(appointment: {
-  name: string;
-  customerName: string | null;
-  priceCents: number;
-  startsAt: Date;
-}): { name: string; totalCents: number; type: "incoming"; paidAt: Date } | null {
-  if (appointment.priceCents <= 0) return null;
-  return {
-    name: appointment.customerName ? `${appointment.name} · ${appointment.customerName}` : appointment.name,
-    totalCents: appointment.priceCents,
-    type: "incoming",
-    paidAt: appointment.startsAt,
-  };
 }

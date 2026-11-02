@@ -38,6 +38,15 @@ describe("transactionListPipeline", () => {
           { $skip: skip },
           { $limit: TRANSACTION_PAGE_SIZE },
           {
+            $lookup: {
+              from: "statements",
+              localField: "_id",
+              foreignField: "transactionId",
+              as: "statements",
+              pipeline: [{ $project: { _id: 1 } }],
+            },
+          },
+          {
             $project: {
               _id: 0,
               id: { $toString: "$_id" },
@@ -45,7 +54,7 @@ describe("transactionListPipeline", () => {
               totalCents: 1,
               type: 1,
               paidAt: 1,
-              fromAppointment: { $ne: [{ $ifNull: ["$appointmentId", null] }, null] },
+              fromStatement: { $gt: [{ $size: "$statements" }, 0] },
             },
           },
         ],

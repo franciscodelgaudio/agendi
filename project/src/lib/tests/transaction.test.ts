@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import {
-  appointmentTransaction,
   createTransaction,
   createUnitTransaction,
   deleteTransaction,
@@ -180,7 +179,7 @@ describe("createUnitTransaction", () => {
 });
 
 describe("updateTransaction", () => {
-  function makeDeps(found: { fromAppointment: boolean } | null = { fromAppointment: false }, updated = true) {
+  function makeDeps(found: { fromStatement: boolean } | null = { fromStatement: false }, updated = true) {
     return {
       findTransaction: vi.fn().mockResolvedValue(found),
       update: vi.fn().mockResolvedValue(updated),
@@ -196,12 +195,12 @@ describe("updateTransaction", () => {
     expect(deps.update).toHaveBeenCalledWith(TRANSACTION_ID, { ...SAVED, paidAt: null });
   });
 
-  it("não edita a entrada gerada por um atendimento", async () => {
-    const deps = makeDeps({ fromAppointment: true });
+  it("não edita a entrada gerada por um bloco de recebíveis", async () => {
+    const deps = makeDeps({ fromStatement: true });
 
     const result = await updateTransaction(VALID, TRANSACTION_ID, { actor: ADMIN }, deps);
 
-    expect(result).toEqual({ ok: false, error: "transaction_from_appointment" });
+    expect(result).toEqual({ ok: false, error: "transaction_from_statement" });
     expect(deps.update).not.toHaveBeenCalled();
   });
 
@@ -217,7 +216,7 @@ describe("updateTransaction", () => {
   it.each([
     ["sem id", null, makeDeps()],
     ["transação que não é do workspace", TRANSACTION_ID, makeDeps(null)],
-    ["transação que some antes de gravar", TRANSACTION_ID, makeDeps({ fromAppointment: false }, false)],
+    ["transação que some antes de gravar", TRANSACTION_ID, makeDeps({ fromStatement: false }, false)],
   ])("%s devolve não encontrada", async (_label, transactionId, deps) => {
     const result = await updateTransaction(VALID, transactionId, { actor: ADMIN }, deps);
 
@@ -235,7 +234,7 @@ describe("updateTransaction", () => {
 });
 
 describe("deleteTransaction", () => {
-  function makeDeps(found: { fromAppointment: boolean } | null = { fromAppointment: false }, removed = true) {
+  function makeDeps(found: { fromStatement: boolean } | null = { fromStatement: false }, removed = true) {
     return {
       findTransaction: vi.fn().mockResolvedValue(found),
       remove: vi.fn().mockResolvedValue(removed),
@@ -251,19 +250,19 @@ describe("deleteTransaction", () => {
     expect(deps.remove).toHaveBeenCalledWith(TRANSACTION_ID);
   });
 
-  it("não exclui a entrada gerada por um atendimento", async () => {
-    const deps = makeDeps({ fromAppointment: true });
+  it("não exclui a entrada gerada por um bloco de recebíveis", async () => {
+    const deps = makeDeps({ fromStatement: true });
 
     const result = await deleteTransaction(TRANSACTION_ID, { actor: ADMIN }, deps);
 
-    expect(result).toEqual({ ok: false, error: "transaction_from_appointment" });
+    expect(result).toEqual({ ok: false, error: "transaction_from_statement" });
     expect(deps.remove).not.toHaveBeenCalled();
   });
 
   it.each([
     ["sem id", "", makeDeps()],
     ["transação que não é do workspace", TRANSACTION_ID, makeDeps(null)],
-    ["transação que some antes de excluir", TRANSACTION_ID, makeDeps({ fromAppointment: false }, false)],
+    ["transação que some antes de excluir", TRANSACTION_ID, makeDeps({ fromStatement: false }, false)],
   ])("%s devolve não encontrada", async (_label, transactionId, deps) => {
     const result = await deleteTransaction(transactionId, { actor: ADMIN }, deps);
 
@@ -277,26 +276,5 @@ describe("deleteTransaction", () => {
 
     expect(result).toEqual({ ok: false, error: "workspace_not_found" });
     expect(deps.remove).not.toHaveBeenCalled();
-  });
-});
-
-describe("appointmentTransaction", () => {
-  const startsAt = new Date("2026-10-05T17:30:00.000Z");
-
-  it("o agendamento concluído vira uma entrada paga no horário dele, com o nome do serviço e do cliente", () => {
-    expect(appointmentTransaction({ name: "Massagem Candle", customerName: "João Silva", priceCents: 18_000, startsAt })).toEqual({
-      name: "Massagem Candle · João Silva",
-      totalCents: 18_000,
-      type: "incoming",
-      paidAt: startsAt,
-    });
-  });
-
-  it("sem cliente, fica só o nome do serviço", () => {
-    expect(appointmentTransaction({ name: "Massagem", customerName: null, priceCents: 100, startsAt })?.name).toBe("Massagem");
-  });
-
-  it("agendamento sem valor não gera entrada", () => {
-    expect(appointmentTransaction({ name: "Massagem", customerName: "João", priceCents: 0, startsAt })).toBeNull();
   });
 });

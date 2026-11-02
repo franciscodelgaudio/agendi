@@ -27,7 +27,7 @@ export type TransactionListItem = {
   totalCents: number;
   type: TransactionType;
   paidAt: Date | null;
-  fromAppointment: boolean;
+  fromStatement: boolean;
 };
 
 export type TransactionListPage = { rows: TransactionListItem[]; total: number };
@@ -72,6 +72,15 @@ export function transactionListPipeline(
           { $skip: (page - 1) * TRANSACTION_PAGE_SIZE },
           { $limit: TRANSACTION_PAGE_SIZE },
           {
+            $lookup: {
+              from: "statements",
+              localField: "_id",
+              foreignField: "transactionId",
+              as: "statements",
+              pipeline: [{ $project: { _id: 1 } }],
+            },
+          },
+          {
             $project: {
               _id: 0,
               id: { $toString: "$_id" },
@@ -79,7 +88,7 @@ export function transactionListPipeline(
               totalCents: 1,
               type: 1,
               paidAt: 1,
-              fromAppointment: { $ne: [{ $ifNull: ["$appointmentId", null] }, null] },
+              fromStatement: { $gt: [{ $size: "$statements" }, 0] },
             },
           },
         ],

@@ -295,7 +295,7 @@ export async function rescheduleAppointment(
   return { ok: true };
 }
 
-export type SetAppointmentStatusError = AccessError | "invalid_status" | "appointment_not_found";
+export type SetAppointmentStatusError = AccessError | "invalid_status" | "appointment_not_found" | "appointment_settled";
 
 export async function setAppointmentStatus(
   input: unknown,
@@ -305,8 +305,9 @@ export async function setAppointmentStatus(
     findAppointment: (id: string) => Promise<{ status: string; serviceId: string } | null>;
     findServicePrice: (serviceId: string) => Promise<number | null>;
     update: (id: string, status: AppointmentStatus) => Promise<boolean>;
-    recordIncome: (id: string, priceCents: number) => Promise<void>;
-    removeIncome: (id: string) => Promise<void>;
+    isSettled: (id: string) => Promise<boolean>;
+    recordReceivable: (id: string, priceCents: number) => Promise<void>;
+    removeReceivable: (id: string) => Promise<void>;
   },
 ): Promise<AppointmentResult<SetAppointmentStatusError>> {
   if (!ctx.actor) return { ok: false, error: "workspace_not_found" };
@@ -321,26 +322,35 @@ export async function setAppointmentStatus(
   const accessError = checkAccess(ctx.actor, touchesDone ? "appointments.manage" : "bookings.manage");
   if (accessError) return { ok: false, error: accessError };
   if (found.status === next) return { ok: true };
+  const leavingDone = found.status === "done";
+  if (leavingDone && (await deps.isSettled(appointmentId))) return { ok: false, error: "appointment_settled" };
 
   if (!(await deps.update(appointmentId, next))) return { ok: false, error: "appointment_not_found" };
-  if (found.status === "done") await deps.removeIncome(appointmentId);
+  if (leavingDone) await deps.removeReceivable(appointmentId);
   if (next === "done") {
     const priceCents = await deps.findServicePrice(found.serviceId);
-    if (priceCents) await deps.recordIncome(appointmentId, priceCents);
+    if (priceCents) await deps.recordReceivable(appointmentId, priceCents);
   }
   return { ok: true };
 }
 
+export type DeleteAppointmentError = AccessError | "appointment_not_found" | "appointment_settled";
+
 export async function deleteAppointment(
   appointmentId: string | null | undefined,
   ctx: { actor: Actor | null },
-  deps: { remove: (id: string) => Promise<boolean>; removeIncome: (id: string) => Promise<void> },
-): Promise<AppointmentResult<AccessError | "appointment_not_found">> {
+  deps: {
+    isSettled: (id: string) => Promise<boolean>;
+    remove: (id: string) => Promise<boolean>;
+    removeReceivable: (id: string) => Promise<void>;
+  },
+): Promise<AppointmentResult<DeleteAppointmentError>> {
   const accessError = checkAccess(ctx.actor, "bookings.manage");
   if (accessError) return { ok: false, error: accessError };
   if (!appointmentId) return { ok: false, error: "appointment_not_found" };
+  if (await deps.isSettled(appointmentId)) return { ok: false, error: "appointment_settled" };
 
   if (!(await deps.remove(appointmentId))) return { ok: false, error: "appointment_not_found" };
-  await deps.removeIncome(appointmentId);
+  await deps.removeReceivable(appointmentId);
   return { ok: true };
 }

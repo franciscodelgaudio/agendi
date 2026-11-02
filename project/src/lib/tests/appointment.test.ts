@@ -356,17 +356,23 @@ describe("rescheduleAppointment", () => {
 });
 
 describe("setAppointmentStatus", () => {
-  function makeDeps({ status = "scheduled" as string | null, price = 18_000 as number | null, updated = true } = {}) {
+  function makeDeps({
+    status = "scheduled" as string | null,
+    price = 18_000 as number | null,
+    updated = true,
+    settled = false,
+  } = {}) {
     return {
       findAppointment: vi.fn().mockResolvedValue(status ? { status, serviceId: SERVICE_ID } : null),
       findServicePrice: vi.fn().mockResolvedValue(price),
       update: vi.fn().mockResolvedValue(updated),
-      recordIncome: vi.fn().mockResolvedValue(undefined),
-      removeIncome: vi.fn().mockResolvedValue(undefined),
+      isSettled: vi.fn().mockResolvedValue(settled),
+      recordReceivable: vi.fn().mockResolvedValue(undefined),
+      removeReceivable: vi.fn().mockResolvedValue(undefined),
     };
   }
 
-  it("concluir gera a entrada com o preço atual do serviço", async () => {
+  it("concluir gera o recebível com o preço atual do serviço", async () => {
     const deps = makeDeps();
 
     const result = await setAppointmentStatus({ status: "done" }, APPOINTMENT_ID, { actor: ATTENDANT }, deps);
@@ -374,37 +380,50 @@ describe("setAppointmentStatus", () => {
     expect(result).toEqual({ ok: true });
     expect(deps.update).toHaveBeenCalledWith(APPOINTMENT_ID, "done");
     expect(deps.findServicePrice).toHaveBeenCalledWith(SERVICE_ID);
-    expect(deps.recordIncome).toHaveBeenCalledWith(APPOINTMENT_ID, 18_000);
+    expect(deps.recordReceivable).toHaveBeenCalledWith(APPOINTMENT_ID, 18_000);
   });
 
   it.each([
     ["serviço excluído", null],
     ["serviço de graça", 0],
-  ])("concluir com %s não gera entrada", async (_label, price) => {
+  ])("concluir com %s não gera recebível", async (_label, price) => {
     const deps = makeDeps({ price });
 
     expect(await setAppointmentStatus({ status: "done" }, APPOINTMENT_ID, { actor: ADMIN }, deps)).toEqual({ ok: true });
-    expect(deps.recordIncome).not.toHaveBeenCalled();
+    expect(deps.recordReceivable).not.toHaveBeenCalled();
   });
 
-  it.each(["scheduled", "cancelled"])("sair de concluído para %s apaga a entrada", async (status) => {
+  it.each(["scheduled", "cancelled"])("sair de concluído para %s apaga o recebível pendente", async (status) => {
     const deps = makeDeps({ status: "done" });
 
     await setAppointmentStatus({ status }, APPOINTMENT_ID, { actor: ADMIN }, deps);
 
+    expect(deps.isSettled).toHaveBeenCalledWith(APPOINTMENT_ID);
     expect(deps.update).toHaveBeenCalledWith(APPOINTMENT_ID, status);
-    expect(deps.removeIncome).toHaveBeenCalledWith(APPOINTMENT_ID);
-    expect(deps.recordIncome).not.toHaveBeenCalled();
+    expect(deps.removeReceivable).toHaveBeenCalledWith(APPOINTMENT_ID);
+    expect(deps.recordReceivable).not.toHaveBeenCalled();
   });
 
-  it("cancelar um agendado não mexe no caixa", async () => {
+  it("não sai de concluído quando o recebível já está num bloco", async () => {
+    const deps = makeDeps({ status: "done", settled: true });
+
+    expect(await setAppointmentStatus({ status: "scheduled" }, APPOINTMENT_ID, { actor: ADMIN }, deps)).toEqual({
+      ok: false,
+      error: "appointment_settled",
+    });
+    expect(deps.update).not.toHaveBeenCalled();
+    expect(deps.removeReceivable).not.toHaveBeenCalled();
+  });
+
+  it("cancelar um agendado não mexe nos recebíveis", async () => {
     const deps = makeDeps();
 
     await setAppointmentStatus({ status: "cancelled" }, APPOINTMENT_ID, { actor: SCHEDULER }, deps);
 
     expect(deps.update).toHaveBeenCalledWith(APPOINTMENT_ID, "cancelled");
-    expect(deps.recordIncome).not.toHaveBeenCalled();
-    expect(deps.removeIncome).not.toHaveBeenCalled();
+    expect(deps.isSettled).not.toHaveBeenCalled();
+    expect(deps.recordReceivable).not.toHaveBeenCalled();
+    expect(deps.removeReceivable).not.toHaveBeenCalled();
   });
 
   it("o mesmo status não grava nada", async () => {
@@ -412,7 +431,7 @@ describe("setAppointmentStatus", () => {
 
     expect(await setAppointmentStatus({ status: "done" }, APPOINTMENT_ID, { actor: ADMIN }, deps)).toEqual({ ok: true });
     expect(deps.update).not.toHaveBeenCalled();
-    expect(deps.recordIncome).not.toHaveBeenCalled();
+    expect(deps.recordReceivable).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -435,7 +454,7 @@ describe("setAppointmentStatus", () => {
     const result = await setAppointmentStatus(input, label === "sem id" ? "" : APPOINTMENT_ID, { actor: ADMIN }, deps);
 
     expect(result).toEqual({ ok: false, error });
-    expect(deps.recordIncome).not.toHaveBeenCalled();
+    expect(deps.recordReceivable).not.toHaveBeenCalled();
   });
 
   it("sem acesso ao workspace, não muda", async () => {
@@ -449,26 +468,38 @@ describe("setAppointmentStatus", () => {
 });
 
 describe("deleteAppointment", () => {
-  function makeDeps(found = true) {
-    return { remove: vi.fn().mockResolvedValue(found), removeIncome: vi.fn().mockResolvedValue(undefined) };
+  function makeDeps(found = true, settled = false) {
+    return {
+      isSettled: vi.fn().mockResolvedValue(settled),
+      remove: vi.fn().mockResolvedValue(found),
+      removeReceivable: vi.fn().mockResolvedValue(undefined),
+    };
   }
 
-  it("exclui o agendamento e a entrada dele no caixa, se houver", async () => {
+  it("exclui o agendamento e o recebível pendente dele, se houver", async () => {
     const deps = makeDeps();
 
     const result = await deleteAppointment(APPOINTMENT_ID, { actor: SCHEDULER }, deps);
 
     expect(result).toEqual({ ok: true });
     expect(deps.remove).toHaveBeenCalledWith(APPOINTMENT_ID);
-    expect(deps.removeIncome).toHaveBeenCalledWith(APPOINTMENT_ID);
+    expect(deps.removeReceivable).toHaveBeenCalledWith(APPOINTMENT_ID);
+  });
+
+  it("não exclui o agendamento cujo recebível já está num bloco", async () => {
+    const deps = makeDeps(true, true);
+
+    expect(await deleteAppointment(APPOINTMENT_ID, { actor: ADMIN }, deps)).toEqual({ ok: false, error: "appointment_settled" });
+    expect(deps.remove).not.toHaveBeenCalled();
+    expect(deps.removeReceivable).not.toHaveBeenCalled();
   });
 
   it.each([
     ["sem id", "", makeDeps()],
     ["agendamento que não é do workspace", APPOINTMENT_ID, makeDeps(false)],
-  ])("%s devolve não encontrado sem mexer no caixa", async (_label, appointmentId, deps) => {
+  ])("%s devolve não encontrado sem mexer nos recebíveis", async (_label, appointmentId, deps) => {
     expect(await deleteAppointment(appointmentId, { actor: ADMIN }, deps)).toEqual({ ok: false, error: "appointment_not_found" });
-    expect(deps.removeIncome).not.toHaveBeenCalled();
+    expect(deps.removeReceivable).not.toHaveBeenCalled();
   });
 
   it("sem a permissão de gerenciar agendamentos, não exclui", async () => {

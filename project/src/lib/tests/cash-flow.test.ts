@@ -96,14 +96,14 @@ const RANGE_MATCH = { $gte: new Date("2026-09-21T03:00:00.000Z"), $lt: new Date(
 const PROJECT_DAY = { $project: { _id: 0, date: "$_id", count: 1, cents: 1 } };
 const INCOME_LOOKUP = {
   $lookup: {
-    from: "transactions",
+    from: "receivables",
     localField: "_id",
     foreignField: "appointmentId",
     as: "income",
-    pipeline: [{ $project: { _id: 0, totalCents: 1 } }],
+    pipeline: [{ $project: { _id: 0, valueCents: 1 } }],
   },
 };
-const INCOME_CENTS = { $ifNull: [{ $first: "$income.totalCents" }, 0] };
+const INCOME_CENTS = { $ifNull: [{ $first: "$income.valueCents" }, 0] };
 const PRICE_LOOKUP = {
   $lookup: {
     from: "services",
@@ -116,7 +116,7 @@ const PRICE_LOOKUP = {
 const PRICE_CENTS = { $ifNull: [{ $first: "$services.priceCents" }, 0] };
 
 describe("dailyDoneTotalsPipeline", () => {
-  it("soma por dia em Brasília os agendamentos concluídos, pelo valor que entrou no caixa", () => {
+  it("soma por dia em Brasília os agendamentos concluídos, pelo valor do recebível", () => {
     expect(dailyDoneTotalsPipeline(RANGE)).toEqual([
       { $match: { status: "done", startsAt: RANGE_MATCH } },
       INCOME_LOOKUP,
@@ -186,7 +186,7 @@ describe("summarizeCashFlow", () => {
 const PROJECT_SERVICE = { $project: { _id: 0, serviceId: { $toString: "$_id" }, serviceName: 1, count: 1, cents: 1 } };
 
 describe("serviceDoneTotalsPipeline", () => {
-  it("soma cada serviço dos concluídos no intervalo, com o nome copiado mais recente e o valor que entrou no caixa", () => {
+  it("soma cada serviço dos concluídos no intervalo, com o nome copiado mais recente e o valor do recebível", () => {
     expect(serviceDoneTotalsPipeline(RANGE)).toEqual([
       { $match: { status: "done", startsAt: RANGE_MATCH } },
       { $sort: { startsAt: 1 } },

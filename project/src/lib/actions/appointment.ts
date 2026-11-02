@@ -13,6 +13,7 @@ import {
   updateAppointment,
   type AppointmentFields,
   type AppointmentFieldsError,
+  type DeleteAppointmentError,
   type RescheduleAppointmentError,
   type SetAppointmentStatusError,
   type UpdateAppointmentError,
@@ -23,7 +24,11 @@ import {
   findUnitStation,
   stationAppointmentsFinder,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-store"
-import { recordAppointmentIncome, removeAppointmentIncome } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
+import {
+  isAppointmentSettled,
+  recordAppointmentReceivable,
+  removeAppointmentReceivable,
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivable-store"
 import { customerListPipeline, type CustomerListPage } from "@/service/workspace/[workspaceId]/customers/customer-list"
 import { Appointment } from "@/models/Appointment"
 import { Customer } from "@/models/Customer"
@@ -35,6 +40,7 @@ type AppointmentError =
   | UpdateAppointmentError
   | RescheduleAppointmentError
   | SetAppointmentStatusError
+  | DeleteAppointmentError
   | "unit_not_found"
 
 const errorMessages: Record<Exclude<AppointmentError, "forbidden"> | "unauthenticated", string> = {
@@ -58,6 +64,7 @@ const errorMessages: Record<Exclude<AppointmentError, "forbidden"> | "unauthenti
   station_busy: "A estação já tem um agendamento nesse horário.",
   appointment_not_found: "Agendamento não encontrado ou sem permissão.",
   appointment_not_scheduled: "Só é possível alterar agendamentos que ainda não foram concluídos nem cancelados.",
+  appointment_settled: "Este atendimento já está num fechamento. Desfaça o fechamento antes.",
   unit_not_found: "Escolha uma unidade válida deste workspace.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
@@ -236,8 +243,9 @@ export async function setAppointmentStatusAction(
       return service?.priceCents ?? null
     },
     update: async (_id, next) => (await Appointment.updateOne(filter!, { $set: { status: next } })).matchedCount > 0,
-    recordIncome: recordAppointmentIncome,
-    removeIncome: removeAppointmentIncome,
+    isSettled: isAppointmentSettled,
+    recordReceivable: recordAppointmentReceivable,
+    removeReceivable: removeAppointmentReceivable,
   })
 
   if (!result.ok) {
@@ -255,8 +263,9 @@ export async function deleteAppointmentAction(workspaceId: string, appointmentId
   const filter = appointmentFilter(session.workspaceId, appointmentId)
 
   const result = await deleteAppointment(filter && appointmentId, session, {
+    isSettled: isAppointmentSettled,
     remove: async () => (await Appointment.deleteOne(filter!)).deletedCount > 0,
-    removeIncome: removeAppointmentIncome,
+    removeReceivable: removeAppointmentReceivable,
   })
 
   if (!result.ok) return { error: messageOf(result.error) }

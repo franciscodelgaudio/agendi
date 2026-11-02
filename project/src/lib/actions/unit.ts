@@ -100,7 +100,7 @@ function membersChecker(workspaceId: string) {
 async function resolveWallet(workspaceId: string, wallet: WalletRef | null) {
   if (!wallet) return null
   if ("id" in wallet) return new Types.ObjectId(wallet.id)
-  return new Types.ObjectId((await insertWallet({ workspaceId, ...wallet })).id)
+  return new Types.ObjectId((await insertWallet({ workspaceId, settlement: "immediate", ...wallet })).id)
 }
 
 async function resolveInventory(workspaceId: string, inventory: InventoryRef | null) {

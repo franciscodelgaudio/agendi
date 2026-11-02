@@ -1,8 +1,10 @@
 import { Types, type PipelineStage } from "mongoose";
+import type { WalletSettlement } from "@/service/workspace/[workspaceId]/cash-flow/wallet";
 
 export type WalletListItem = {
   id: string;
   name: string;
+  settlement: WalletSettlement;
   units: { id: string; name: string }[];
   incomingCents: number;
   expenseCents: number;
@@ -41,6 +43,7 @@ export function walletListPipeline(workspaceId: string): PipelineStage[] {
         _id: 0,
         id: { $toString: "$_id" },
         name: 1,
+        settlement: 1,
         units: 1,
         incomingCents: paidSum("incoming"),
         expenseCents: paidSum("expense"),

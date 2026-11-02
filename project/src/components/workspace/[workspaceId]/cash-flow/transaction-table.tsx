@@ -69,7 +69,7 @@ export function TransactionTable({ workspaceId, transactions, query, pathname, c
                 </TableCell>
                 {canManage && (
                   <TableCell className="px-4 text-right">
-                    {!transaction.fromAppointment && <TransactionActions workspaceId={workspaceId} transaction={transaction} />}
+                    {!transaction.fromStatement && <TransactionActions workspaceId={workspaceId} transaction={transaction} />}
                   </TableCell>
                 )}
               </TableRow>

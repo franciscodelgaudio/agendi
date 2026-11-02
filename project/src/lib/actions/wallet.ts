@@ -24,6 +24,8 @@ import {
   type UpdateTransactionError,
 } from "@/service/workspace/[workspaceId]/cash-flow/wallets/[walletId]/transaction"
 import { insertWallet } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
+import { Receivable } from "@/models/Receivable"
+import { Statement } from "@/models/Statement"
 import { Transaction } from "@/models/Transaction"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
@@ -48,11 +50,12 @@ const errorMessages: Record<Exclude<WalletError, "forbidden"> | "unauthenticated
   invalid_paid_at: "Informe um dia de pagamento válido.",
   wallet_not_found: "Carteira não encontrada neste workspace.",
   wallet_in_use: "Alguma unidade ainda usa esta carteira. Troque a carteira dela antes.",
-  wallet_has_transactions: "Esta carteira tem transações. Exclua as transações antes.",
+  wallet_has_transactions: "Esta carteira tem transações ou recebíveis. Exclua-os antes.",
   unit_not_found: "Unidade não encontrada neste workspace.",
   unit_without_wallet: "Esta unidade não tem carteira. Vincule uma carteira antes.",
   transaction_not_found: "Transação não encontrada nesta carteira.",
-  transaction_from_appointment: "Esta entrada vem de um atendimento. Altere o atendimento.",
+  invalid_settlement: "Escolha como a carteira recebe.",
+  transaction_from_statement: "Esta entrada vem de um fechamento de recebíveis. Altere pelo caixa da unidade.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
@@ -86,6 +89,7 @@ export async function createWalletAction(
   const result = await createWallet(
     {
       name: formData.get("name"),
+      settlement: formData.get("settlement") ?? undefined,
       openingBalance: { amount: formData.get("openingBalance"), date: formData.get("openingBalanceDate") },
     },
     session,
@@ -108,7 +112,7 @@ export async function updateWalletAction(
   if (!session) return { error: messageOf("unauthenticated") }
   const filter = workspaceFilter(session.workspaceId, walletId)
 
-  const result = await updateWallet({ name: formData.get("name") }, filter && walletId, session, {
+  const result = await updateWallet({ name: formData.get("name"), settlement: formData.get("settlement") ?? undefined }, filter && walletId, session, {
     update: async (_id, data) => (await Wallet.updateOne(filter!, { $set: data })).matchedCount > 0,
   })
 
@@ -125,7 +129,8 @@ export async function deleteWalletAction(workspaceId: string, walletId: string):
 
   const result = await deleteWallet(filter && walletId, session, {
     hasUnits: async () => !!(await Unit.exists({ walletId: filter!._id })),
-    hasTransactions: async () => !!(await Transaction.exists({ walletId: filter!._id })),
+    hasTransactions: async () =>
+      !!(await Transaction.exists({ walletId: filter!._id })) || !!(await Receivable.exists({ walletId: filter!._id })),
     remove: async () => (await Wallet.deleteOne(filter!)).deletedCount > 0,
   })
 
@@ -145,8 +150,8 @@ function transactionInput(formData: FormData) {
 }
 
 async function findTransaction(filter: ReturnType<typeof workspaceFilter>) {
-  const transaction = filter && (await Transaction.findOne(filter).select({ appointmentId: 1 }).lean())
-  return transaction ? { fromAppointment: !!transaction.appointmentId } : null
+  const transaction = filter && (await Transaction.findOne(filter).select({ _id: 1 }).lean())
+  return transaction ? { fromStatement: !!(await Statement.exists({ transactionId: transaction._id })) } : null
 }
 
 export async function createTransactionAction(
