@@ -37,7 +37,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { parsePassOnBps, passOnCents } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/statement"
+import { netCents, parsePassOnBps, passOnCents } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/statement"
 import type {
   PendingByUnit,
   PendingReceivable,
@@ -51,13 +51,13 @@ function money(cents: number) {
 }
 
 function PassOnFields({ idPrefix, grossCents }: { idPrefix: string; grossCents: number }) {
-  const [passOn, setPassOn] = useState("100")
+  const [passOn, setPassOn] = useState("0")
   const bps = parsePassOnBps(passOn)
 
   return (
     <>
       <Field>
-        <FieldLabel htmlFor={`${idPrefix}-pass-on`}>Repasse</FieldLabel>
+        <FieldLabel htmlFor={`${idPrefix}-pass-on`}>Repasse ao parceiro</FieldLabel>
         <InputGroup>
           <InputGroupInput
             id={`${idPrefix}-pass-on`}
@@ -76,8 +76,10 @@ function PassOnFields({ idPrefix, grossCents }: { idPrefix: string; grossCents: 
       <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 rounded-md border bg-muted/50 px-3 py-2 text-sm">
         <dt className="text-muted-foreground">Bruto</dt>
         <dd className="text-right tabular-nums">{money(grossCents)}</dd>
+        <dt className="text-muted-foreground">Repasse ao parceiro</dt>
+        <dd className="text-right tabular-nums">{bps === null ? "—" : `−${money(passOnCents(grossCents, bps))}`}</dd>
         <dt className="font-medium">Entra na carteira</dt>
-        <dd className="text-right font-semibold tabular-nums">{bps === null ? "—" : money(passOnCents(grossCents, bps))}</dd>
+        <dd className="text-right font-semibold tabular-nums">{bps === null ? "—" : money(netCents(grossCents, bps))}</dd>
       </dl>
     </>
   )
@@ -169,7 +171,7 @@ export function CloseStatementSheet({
             <SheetTitle>Fechar período</SheetTitle>
             <SheetDescription>
               Junta os {selected.count} recebíveis pendentes{target.kind === "unit" ? " desta unidade" : ""} num fechamento e
-              aplica a porcentagem do repasse.
+              desconta o repasse ao parceiro.
             </SheetDescription>
           </SheetHeader>
           <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
@@ -232,7 +234,7 @@ function SettleReceivableContent({
         <SheetHeader>
           <SheetTitle>Confirmar pagamento</SheetTitle>
           <SheetDescription>
-            <strong>{receivable.name}</strong> vira uma entrada na carteira com a porcentagem do repasse.
+            <strong>{receivable.name}</strong> vira uma entrada na carteira, descontado o repasse ao parceiro.
           </SheetDescription>
         </SheetHeader>
         <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
@@ -294,7 +296,7 @@ export function StatementActions({ workspaceId, statement }: { workspaceId: stri
   const { open, setOpen, state, formAction, pending } = useSheetAction((prev, formData) =>
     payStatementAction(workspaceId, statement.id, prev, formData),
   )
-  const netCents = passOnCents(statement.grossCents, statement.passOnBps)
+  const net = netCents(statement.grossCents, statement.passOnBps)
 
   return (
     <>
@@ -321,7 +323,7 @@ export function StatementActions({ workspaceId, statement }: { workspaceId: stri
             <SheetHeader>
               <SheetTitle>Registrar pagamento</SheetTitle>
               <SheetDescription>
-                <strong>{statement.name}</strong> vira uma entrada de {money(netCents)} na carteira.
+                <strong>{statement.name}</strong> vira uma entrada de {money(net)} na carteira.
               </SheetDescription>
             </SheetHeader>
             <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">

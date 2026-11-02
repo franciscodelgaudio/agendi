@@ -5,7 +5,7 @@ const statementSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
     closedAt: { type: Date, required: true },
-    passOnBps: { type: Number, required: true, min: 1, max: 10_000 },
+    passOnBps: { type: Number, required: true, min: 0, max: 9999 },
     walletId: { type: Schema.Types.ObjectId, ref: "Wallet", required: true },
     unitId: { type: Schema.Types.ObjectId, ref: "Unit", default: null },
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true, index: true },

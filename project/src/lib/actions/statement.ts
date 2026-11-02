@@ -35,7 +35,7 @@ const errorMessages: Record<Exclude<StatementError, "forbidden"> | "unauthentica
   invalid_input: "Preencha todos os campos.",
   invalid_name: "Informe o nome do fechamento.",
   name_too_long: "O nome pode ter no máximo 80 caracteres.",
-  invalid_pass_on: "Informe um repasse entre 0,01% e 100%, como 70 ou 62,5.",
+  invalid_pass_on: "Informe um repasse ao parceiro entre 0% e 99,99%, como 30 ou 12,5.",
   invalid_paid_at: "Informe um dia de pagamento válido.",
   unit_not_found: "Unidade não encontrada neste workspace.",
   unit_without_wallet: "Esta unidade não tem carteira. Vincule uma carteira antes.",

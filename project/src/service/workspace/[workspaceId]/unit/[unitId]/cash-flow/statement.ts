@@ -12,11 +12,15 @@ export function parsePassOnBps(value: string) {
   const match = /^(\d{1,3})(?:[.,](\d{1,2}))?$/.exec(value.trim());
   if (!match) return null;
   const bps = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
-  return bps > 0 && bps <= FULL_BPS ? bps : null;
+  return bps < FULL_BPS ? bps : null;
 }
 
 export function passOnCents(grossCents: number, passOnBps: number) {
   return Math.round((grossCents * passOnBps) / FULL_BPS);
+}
+
+export function netCents(grossCents: number, passOnBps: number) {
+  return grossCents - passOnCents(grossCents, passOnBps);
 }
 
 function dayStart(value: string) {
@@ -26,8 +30,8 @@ function dayStart(value: string) {
 
 const passOnField = z
   .string({ error: "invalid_pass_on" })
-  .transform((value) => parsePassOnBps(value) ?? 0)
-  .refine((bps) => bps > 0, { error: "invalid_pass_on" });
+  .transform((value) => parsePassOnBps(value) ?? -1)
+  .refine((bps) => bps >= 0, { error: "invalid_pass_on" });
 
 const requiredPaidAtField = z
   .string({ error: "invalid_paid_at" })
@@ -97,7 +101,7 @@ function statementTransaction(
 ): StatementTransaction {
   return {
     name: statement.name,
-    totalCents: passOnCents(grossCents, statement.passOnBps),
+    totalCents: netCents(grossCents, statement.passOnBps),
     type: "incoming",
     paidAt,
     walletId: statement.walletId,

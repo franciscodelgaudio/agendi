@@ -3,7 +3,7 @@ import { StatementActions } from "@/components/workspace/[workspaceId]/cash-flow
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { StatementListItem } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivable-list"
-import { passOnCents } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/statement"
+import { netCents, passOnCents } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/statement"
 
 const dayFormat = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Sao_Paulo" })
 const percentFormat = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 })
@@ -68,11 +68,12 @@ export function StatementTable({ workspaceId, statements, showUnit, canManage }:
               )}
               <TableCell className="px-4 whitespace-nowrap tabular-nums @max-2xl:hidden">{statementPeriod(statement)}</TableCell>
               <TableCell className="px-4 text-right tabular-nums @max-xl:hidden">{money(statement.grossCents)}</TableCell>
-              <TableCell className="px-4 text-right tabular-nums @max-xl:hidden">
-                {percentFormat.format(statement.passOnBps / 100)}%
+              <TableCell className="px-4 text-right whitespace-nowrap tabular-nums @max-xl:hidden">
+                −{money(passOnCents(statement.grossCents, statement.passOnBps))}
+                <span className="block text-xs text-muted-foreground">{percentFormat.format(statement.passOnBps / 100)}%</span>
               </TableCell>
               <TableCell className="px-4 text-right font-medium tabular-nums">
-                {money(statement.totalCents ?? passOnCents(statement.grossCents, statement.passOnBps))}
+                {money(statement.totalCents ?? netCents(statement.grossCents, statement.passOnBps))}
               </TableCell>
               <TableCell className="px-4 whitespace-nowrap @max-md:hidden">
                 {statement.paidAt ? (

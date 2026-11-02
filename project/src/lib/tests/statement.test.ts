@@ -4,6 +4,7 @@ import {
   closeWalletStatement,
   deleteStatement,
   parsePassOnBps,
+  netCents,
   passOnCents,
   payStatement,
   settleReceivable,
@@ -24,29 +25,49 @@ const DUPLICATE_KEY = Object.assign(new Error("E11000"), { code: 11000 });
 
 describe("parsePassOnBps", () => {
   it.each([
-    ["70", 7000],
+    ["30", 3000],
     ["62,5", 6250],
     ["62.5", 6250],
     [" 33,33 ", 3333],
-    ["100", 10_000],
+    ["0", 0],
     ["0,01", 1],
+    ["99,99", 9999],
   ])("lê %j como %i pontos-base", (value, bps) => {
     expect(parsePassOnBps(value)).toBe(bps);
   });
 
-  it.each(["0", "100,01", "120", "-10", "70,125", "abc", ""])("recusa %j", (value) => {
+  it.each(["100", "100,01", "120", "-10", "30,125", "abc", ""])("recusa %j", (value) => {
     expect(parsePassOnBps(value)).toBeNull();
   });
 });
 
 describe("passOnCents", () => {
-  it("aplica a porcentagem sobre o bruto", () => {
-    expect(passOnCents(280_000, 7000)).toBe(196_000);
+  it("é a parte do bruto que vai para o parceiro", () => {
+    expect(passOnCents(280_000, 3000)).toBe(84_000);
   });
 
   it("arredonda para o centavo mais próximo", () => {
     expect(passOnCents(10_001, 3333)).toBe(3333);
     expect(passOnCents(15, 5000)).toBe(8);
+  });
+
+  it("sem repasse, nada vai para o parceiro", () => {
+    expect(passOnCents(280_000, 0)).toBe(0);
+  });
+});
+
+describe("netCents", () => {
+  it("é o que sobra do bruto depois do repasse ao parceiro", () => {
+    expect(netCents(280_000, 3000)).toBe(196_000);
+  });
+
+  it("repasse e líquido somam sempre o bruto, mesmo arredondando", () => {
+    expect(netCents(15, 5000)).toBe(7);
+    expect(netCents(10_001, 3333) + passOnCents(10_001, 3333)).toBe(10_001);
+  });
+
+  it("sem repasse, o bruto todo entra na carteira", () => {
+    expect(netCents(280_000, 0)).toBe(280_000);
   });
 });
 
@@ -68,9 +89,9 @@ describe("closeStatement", () => {
     };
   }
   const ctx = { workspaceId: WORKSPACE_ID, actor: MANAGER, now: NOW };
-  const VALID = { name: " Repasse outubro ", passOn: "70", paidAt: "" };
+  const VALID = { name: " Repasse outubro ", passOn: "30", paidAt: "" };
 
-  it("fecha todos os pendentes da unidade num bloco com a porcentagem, ainda sem pagamento", async () => {
+  it("fecha todos os pendentes da unidade num bloco com o repasse, ainda sem pagamento", async () => {
     const deps = makeDeps();
 
     const result = await closeStatement(VALID, UNIT_ID, ctx, deps);
@@ -81,7 +102,7 @@ describe("closeStatement", () => {
       statement: {
         name: "Repasse outubro",
         closedAt: NOW,
-        passOnBps: 7000,
+        passOnBps: 3000,
         walletId: WALLET_ID,
         unitId: UNIT_ID,
         workspaceId: WORKSPACE_ID,
@@ -91,7 +112,7 @@ describe("closeStatement", () => {
     });
   });
 
-  it("com dia de pagamento, já gera a entrada com o valor do repasse", async () => {
+  it("com dia de pagamento, já gera a entrada com o bruto menos o repasse", async () => {
     const deps = makeDeps();
 
     await closeStatement({ ...VALID, paidAt: "2026-11-02" }, UNIT_ID, ctx, deps);
@@ -134,7 +155,7 @@ describe("closeStatement", () => {
     ["input nulo", null, "invalid_input"],
     ["nome vazio", { ...VALID, name: " " }, "invalid_name"],
     ["nome com mais de 80 caracteres", { ...VALID, name: "a".repeat(81) }, "name_too_long"],
-    ["porcentagem zero", { ...VALID, passOn: "0" }, "invalid_pass_on"],
+    ["repasse de 100%", { ...VALID, passOn: "100" }, "invalid_pass_on"],
     ["porcentagem acima de 100", { ...VALID, passOn: "101" }, "invalid_pass_on"],
     ["dia de pagamento inválido", { ...VALID, paidAt: "2026-02-30" }, "invalid_paid_at"],
   ])("recusa %s", async (_label, input, error) => {
@@ -185,7 +206,7 @@ describe("closeWalletStatement", () => {
     };
   }
   const ctx = { workspaceId: WORKSPACE_ID, actor: MANAGER, now: NOW };
-  const VALID = { name: "Repasse outubro", passOn: "70", paidAt: "", unitId: "" };
+  const VALID = { name: "Repasse outubro", passOn: "30", paidAt: "", unitId: "" };
 
   it.each(["", null, undefined])("sem unidade (%j), fecha os pendentes de todas as unidades da carteira juntos", async (unitId) => {
     const deps = makeDeps();
@@ -200,7 +221,7 @@ describe("closeWalletStatement", () => {
       statement: {
         name: "Repasse outubro",
         closedAt: NOW,
-        passOnBps: 7000,
+        passOnBps: 3000,
         walletId: WALLET_ID,
         unitId: null,
         workspaceId: WORKSPACE_ID,
@@ -310,7 +331,7 @@ describe("settleReceivable", () => {
     return { findPendingReceivable: vi.fn().mockResolvedValue(receivable), save };
   }
   const ctx = { workspaceId: WORKSPACE_ID, actor: ADMIN, now: NOW };
-  const VALID = { passOn: "100", paidAt: "2026-11-02" };
+  const VALID = { passOn: "0", paidAt: "2026-11-02" };
 
   it("confirma o pagamento de um recebível: bloco de um item, já pago, com o nome dele", async () => {
     const deps = makeDeps();
@@ -323,7 +344,7 @@ describe("settleReceivable", () => {
       statement: {
         name: "Massagem · João",
         closedAt: NOW,
-        passOnBps: 10_000,
+        passOnBps: 0,
         walletId: WALLET_ID,
         unitId: UNIT_ID,
         workspaceId: WORKSPACE_ID,
@@ -341,7 +362,7 @@ describe("settleReceivable", () => {
     });
   });
 
-  it("aplica a porcentagem do repasse", async () => {
+  it("desconta o repasse do parceiro", async () => {
     const deps = makeDeps();
 
     await settleReceivable({ ...VALID, passOn: "62,5" }, RECEIVABLE_A, ctx, deps);
@@ -349,7 +370,7 @@ describe("settleReceivable", () => {
     expect(deps.save).toHaveBeenCalledWith(
       expect.objectContaining({
         statement: expect.objectContaining({ passOnBps: 6250 }),
-        transaction: expect.objectContaining({ totalCents: 17_500 }),
+        transaction: expect.objectContaining({ totalCents: 10_500 }),
       }),
     );
   });
@@ -404,7 +425,7 @@ describe("payStatement", () => {
     walletId: WALLET_ID,
     unitId: UNIT_ID as string | null,
     workspaceId: WORKSPACE_ID,
-    passOnBps: 7000,
+    passOnBps: 3000,
     grossCents: 40_000,
     paid: false,
   };
@@ -413,7 +434,7 @@ describe("payStatement", () => {
     return { findStatement: vi.fn().mockResolvedValue(statement), pay: vi.fn().mockResolvedValue(paid) };
   }
 
-  it("gera a entrada do bloco fechado com o valor do repasse", async () => {
+  it("gera a entrada do bloco fechado com o bruto menos o repasse", async () => {
     const deps = makeDeps();
 
     const result = await payStatement({ paidAt: "2026-11-02" }, STATEMENT_ID, { actor: MANAGER }, deps);
