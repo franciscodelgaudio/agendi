@@ -2,14 +2,10 @@ import { PiggyBankIcon } from "lucide-react"
 import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import type { UnitCashFlow } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
 import Link from "@/components/shared/link"
-import { CashFlowTabs } from "@/components/workspace/[workspaceId]/unit/[unitId]/cash-flow-tabs"
+import { CashFlowTabs } from "@/components/workspace/[workspaceId]/cash-flow/cash-flow-tabs"
+import { SETTLEMENT_LABELS } from "@/components/workspace/[workspaceId]/cash-flow/settlement-labels"
 import { UnitWalletSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-ref-sheets"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-
-export const SETTLEMENT_LABELS = {
-  immediate: "Recebe na hora",
-  statement: "Recebe por fechamento",
-} as const
 
 type Props = {
   workspaceId: string

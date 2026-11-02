@@ -52,6 +52,7 @@ const errorMessages: Record<Exclude<WalletError, "forbidden"> | "unauthenticated
   wallet_in_use: "Alguma unidade ainda usa esta carteira. Troque a carteira dela antes.",
   wallet_has_transactions: "Esta carteira tem transações ou recebíveis. Exclua-os antes.",
   unit_not_found: "Unidade não encontrada neste workspace.",
+  unit_not_in_wallet: "Esta unidade não usa esta carteira.",
   unit_without_wallet: "Esta unidade não tem carteira. Vincule uma carteira antes.",
   transaction_not_found: "Transação não encontrada nesta carteira.",
   invalid_settlement: "Escolha como a carteira recebe.",
@@ -164,8 +165,13 @@ export async function createTransactionAction(
   if (!session) return { error: messageOf("unauthenticated") }
   const walletFilter = workspaceFilter(session.workspaceId, walletId)
 
-  const result = await createTransaction(transactionInput(formData), walletFilter && walletId, session, {
+  const result = await createTransaction({ ...transactionInput(formData), unitId: formData.get("unitId") }, walletFilter && walletId, session, {
     walletExists: async () => !!(await Wallet.exists(walletFilter!)),
+    findUnit: async (unitId) => {
+      const unitFilter = workspaceFilter(session.workspaceId, unitId)
+      const unit = unitFilter && (await Unit.findOne(unitFilter).select({ walletId: 1 }).lean())
+      return unit ? { walletId: unit.walletId?.toString() ?? null } : null
+    },
     insert: async (data) => {
       const transaction = await Transaction.create(data)
       return { id: transaction._id.toString() }

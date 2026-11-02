@@ -56,6 +56,14 @@ const closeSchema = z.object(
   { error: "invalid_input" },
 );
 
+const closeWalletSchema = closeSchema.extend({
+  unitId: z
+    .string({ error: "invalid_input" })
+    .trim()
+    .nullish()
+    .transform((value) => value || null),
+});
+
 const settleSchema = z.object({ passOn: passOnField, paidAt: requiredPaidAtField }, { error: "invalid_input" });
 
 const paySchema = z.object({ paidAt: requiredPaidAtField }, { error: "invalid_input" });
@@ -131,7 +139,7 @@ export async function closeStatement(
   ctx: StatementCtx,
   deps: {
     findUnit: (unitId: string) => Promise<{ walletId: string | null } | null>;
-    findPending: (filter: { walletId: string; unitId: string }) => Promise<{ id: string; valueCents: number }[]>;
+    findPending: FindPending;
     save: SaveStatement;
   },
 ): Promise<CloseStatementResult> {
@@ -146,16 +154,26 @@ export async function closeStatement(
   if (!unit) return { ok: false, error: "unit_not_found" };
   if (!unit.walletId) return { ok: false, error: "unit_without_wallet" };
 
-  const pending = await deps.findPending({ walletId: unit.walletId, unitId });
+  return closePending(parsed.data, { walletId: unit.walletId, unitId }, ctx, deps);
+}
+
+type FindPending = (filter: { walletId: string; unitId: string | null }) => Promise<{ id: string; valueCents: number }[]>;
+
+async function closePending(
+  { name, passOn, paidAt }: { name: string; passOn: number; paidAt: Date | null },
+  scope: { walletId: string; unitId: string | null },
+  ctx: StatementCtx,
+  deps: { findPending: FindPending; save: SaveStatement },
+): Promise<{ ok: true; statementId: string } | { ok: false; error: "no_pending_receivables" | "receivable_settled" }> {
+  const pending = await deps.findPending(scope);
   if (pending.length === 0) return { ok: false, error: "no_pending_receivables" };
 
-  const { name, passOn, paidAt } = parsed.data;
   const statement: StatementData = {
     name,
     closedAt: ctx.now,
     passOnBps: passOn,
-    walletId: unit.walletId,
-    unitId,
+    walletId: scope.walletId,
+    unitId: scope.unitId,
     workspaceId: ctx.workspaceId,
     receivableIds: pending.map((receivable) => receivable.id),
   };
@@ -164,6 +182,45 @@ export async function closeStatement(
     statement,
     transaction: paidAt ? statementTransaction(statement, grossCents, paidAt) : null,
   });
+}
+
+export type CloseWalletStatementError =
+  | AccessError
+  | StatementInputError
+  | "wallet_not_found"
+  | "unit_not_found"
+  | "unit_not_in_wallet"
+  | "no_pending_receivables"
+  | "receivable_settled";
+
+export type CloseWalletStatementResult = { ok: true; statementId: string } | { ok: false; error: CloseWalletStatementError };
+
+export async function closeWalletStatement(
+  input: unknown,
+  walletId: string | null | undefined,
+  ctx: StatementCtx,
+  deps: {
+    walletExists: (walletId: string) => Promise<boolean>;
+    findUnit: (unitId: string) => Promise<{ walletId: string | null } | null>;
+    findPending: FindPending;
+    save: SaveStatement;
+  },
+): Promise<CloseWalletStatementResult> {
+  const accessError = checkAccess(ctx.actor, "cash_flow.manage");
+  if (accessError) return { ok: false, error: accessError };
+
+  const parsed = closeWalletSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: issueCode<StatementInputError>(parsed.error) };
+  if (!walletId || !(await deps.walletExists(walletId))) return { ok: false, error: "wallet_not_found" };
+
+  const { unitId, ...data } = parsed.data;
+  if (unitId) {
+    const unit = await deps.findUnit(unitId);
+    if (!unit) return { ok: false, error: "unit_not_found" };
+    if (unit.walletId !== walletId) return { ok: false, error: "unit_not_in_wallet" };
+  }
+
+  return closePending(data, { walletId, unitId }, ctx, deps);
 }
 
 export type SettleReceivableError = AccessError | StatementInputError | "receivable_not_found" | "receivable_settled";

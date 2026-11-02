@@ -4,6 +4,7 @@ import { refresh } from "next/cache"
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { getSessionUserId } from "@/service/(auth)/session"
 import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
+import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 import {
   createAppointment,
@@ -25,6 +26,7 @@ import {
   stationAppointmentsFinder,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-store"
 import {
+  findReceivableToConfirm,
   isAppointmentSettled,
   recordAppointmentReceivable,
   removeAppointmentReceivable,
@@ -71,6 +73,10 @@ const errorMessages: Record<Exclude<AppointmentError, "forbidden"> | "unauthenti
 }
 
 export type AppointmentActionState = { error: string | null }
+
+export type ReceivableToConfirm = { id: string; name: string; valueCents: number; accruedAt: Date }
+
+export type AppointmentStatusState = { error: string | null; receivableToConfirm: ReceivableToConfirm | null }
 
 function messageOf(
   error: AppointmentError | "unauthenticated",
@@ -224,9 +230,9 @@ export async function setAppointmentStatusAction(
   workspaceId: string,
   appointmentId: string,
   status: string,
-): Promise<AppointmentActionState> {
+): Promise<AppointmentStatusState> {
   const session = await sessionAccess(workspaceId)
-  if (!session) return { error: messageOf("unauthenticated") }
+  if (!session) return { error: messageOf("unauthenticated"), receivableToConfirm: null }
   const filter = appointmentFilter(session.workspaceId, appointmentId)
   let previous: string | null = null
 
@@ -250,11 +256,15 @@ export async function setAppointmentStatusAction(
 
   if (!result.ok) {
     const touchesDone = status === "done" || previous === "done"
-    return { error: messageOf(result.error, touchesDone ? "appointments.manage" : "bookings.manage") }
+    return {
+      error: messageOf(result.error, touchesDone ? "appointments.manage" : "bookings.manage"),
+      receivableToConfirm: null,
+    }
   }
 
+  const confirms = status === "done" && previous !== "done" && !!session.actor && can(session.actor, "cash_flow.manage")
   refresh()
-  return { error: null }
+  return { error: null, receivableToConfirm: confirms ? await findReceivableToConfirm(appointmentId) : null }
 }
 
 export async function deleteAppointmentAction(workspaceId: string, appointmentId: string): Promise<AppointmentActionState> {

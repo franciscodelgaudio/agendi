@@ -38,6 +38,12 @@ const transactionSchema = z.object(
   { error: "invalid_input" },
 );
 
+const unitIdField = z
+  .string({ error: "invalid_input" })
+  .trim()
+  .nullish()
+  .transform((value) => value || null);
+
 export type TransactionInputError =
   | "invalid_input"
   | "invalid_name"
@@ -55,7 +61,12 @@ function parseTransaction(input: unknown): { ok: true; data: TransactionData } |
   return { ok: true, data: { name, totalCents: total, type, paidAt } };
 }
 
-export type CreateTransactionError = AccessError | TransactionInputError | "wallet_not_found";
+export type CreateTransactionError =
+  | AccessError
+  | TransactionInputError
+  | "wallet_not_found"
+  | "unit_not_found"
+  | "unit_not_in_wallet";
 
 export type CreateTransactionResult = { ok: true; transactionId: string } | { ok: false; error: CreateTransactionError };
 
@@ -65,7 +76,8 @@ export async function createTransaction(
   ctx: { workspaceId: string; actor: Actor | null },
   deps: {
     walletExists: (walletId: string) => Promise<boolean>;
-    insert: (data: TransactionData & { walletId: string; workspaceId: string }) => Promise<{ id: string }>;
+    findUnit: (unitId: string) => Promise<{ walletId: string | null } | null>;
+    insert: (data: TransactionData & { walletId: string; unitId: string | null; workspaceId: string }) => Promise<{ id: string }>;
   },
 ): Promise<CreateTransactionResult> {
   const accessError = checkAccess(ctx.actor, "cash_flow.manage");
@@ -73,9 +85,17 @@ export async function createTransaction(
 
   const parsed = parseTransaction(input);
   if (!parsed.ok) return parsed;
+  const unitId = unitIdField.safeParse((input as Record<string, unknown>).unitId);
+  if (!unitId.success) return { ok: false, error: "invalid_input" };
   if (!walletId || !(await deps.walletExists(walletId))) return { ok: false, error: "wallet_not_found" };
 
-  const transaction = await deps.insert({ ...parsed.data, walletId, workspaceId: ctx.workspaceId });
+  if (unitId.data) {
+    const unit = await deps.findUnit(unitId.data);
+    if (!unit) return { ok: false, error: "unit_not_found" };
+    if (unit.walletId !== walletId) return { ok: false, error: "unit_not_in_wallet" };
+  }
+
+  const transaction = await deps.insert({ ...parsed.data, walletId, unitId: unitId.data, workspaceId: ctx.workspaceId });
   return { ok: true, transactionId: transaction.id };
 }
 

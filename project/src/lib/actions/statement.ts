@@ -7,10 +7,12 @@ import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permis
 import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 import {
   closeStatement,
+  closeWalletStatement,
   deleteStatement,
   payStatement,
   settleReceivable,
   type CloseStatementError,
+  type CloseWalletStatementError,
   type DeleteStatementError,
   type PayStatementError,
   type SettleReceivableError,
@@ -25,8 +27,9 @@ import {
   saveStatement,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivable-store"
 import { Unit } from "@/models/Unit"
+import { Wallet } from "@/models/Wallet"
 
-type StatementError = CloseStatementError | SettleReceivableError | PayStatementError | DeleteStatementError
+type StatementError = CloseStatementError | CloseWalletStatementError | SettleReceivableError | PayStatementError | DeleteStatementError
 
 const errorMessages: Record<Exclude<StatementError, "forbidden"> | "unauthenticated", string> = {
   invalid_input: "Preencha todos os campos.",
@@ -36,6 +39,8 @@ const errorMessages: Record<Exclude<StatementError, "forbidden"> | "unauthentica
   invalid_paid_at: "Informe um dia de pagamento válido.",
   unit_not_found: "Unidade não encontrada neste workspace.",
   unit_without_wallet: "Esta unidade não tem carteira. Vincule uma carteira antes.",
+  unit_not_in_wallet: "Esta unidade não usa esta carteira.",
+  wallet_not_found: "Carteira não encontrada neste workspace.",
   no_pending_receivables: "Não há recebíveis pendentes para fechar.",
   receivable_not_found: "Recebível não encontrado ou já fechado. Recarregue a página.",
   receivable_settled: "Algum recebível já entrou em outro fechamento. Recarregue a página.",
@@ -76,12 +81,47 @@ export async function closeStatementAction(
     validId(unitId),
     { ...session, now: new Date() },
     {
-      findUnit: async (id) => {
-        const unit = await Unit.findOne({ _id: id, workspaceId: new Types.ObjectId(session.workspaceId) })
-          .select({ walletId: 1 })
-          .lean()
-        return unit ? { walletId: unit.walletId?.toString() ?? null } : null
-      },
+      findUnit: unitWalletFinder(session.workspaceId),
+      findPending: findPendingReceivables,
+      save: saveStatement,
+    },
+  )
+
+  if (!result.ok) return { error: messageOf(result.error) }
+
+  refresh()
+  return { error: null }
+}
+
+function unitWalletFinder(workspaceId: string) {
+  return async (id: string) => {
+    if (!isObjectIdOrHexString(id)) return null
+    const unit = await Unit.findOne({ _id: id, workspaceId: new Types.ObjectId(workspaceId) }).select({ walletId: 1 }).lean()
+    return unit ? { walletId: unit.walletId?.toString() ?? null } : null
+  }
+}
+
+export async function closeWalletStatementAction(
+  workspaceId: string,
+  walletId: string,
+  _prev: StatementFormState,
+  formData: FormData,
+): Promise<StatementFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+
+  const result = await closeWalletStatement(
+    {
+      name: formData.get("name"),
+      passOn: formData.get("passOn"),
+      paidAt: formData.get("paidAt"),
+      unitId: formData.get("unitId"),
+    },
+    validId(walletId),
+    { ...session, now: new Date() },
+    {
+      walletExists: async (id) => !!(await Wallet.exists({ _id: id, workspaceId: new Types.ObjectId(session.workspaceId) })),
+      findUnit: unitWalletFinder(session.workspaceId),
       findPending: findPendingReceivables,
       save: saveStatement,
     },

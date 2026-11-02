@@ -8,6 +8,7 @@ import {
   deleteAppointmentAction,
   setAppointmentStatusAction,
   updateAppointmentAction,
+  type ReceivableToConfirm,
 } from "@/lib/actions/appointment"
 import type { AppointmentRow } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list"
 import {
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { FieldError } from "@/components/ui/field"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { ConfirmPaymentSheet } from "@/components/workspace/[workspaceId]/cash-flow/statement-sheets"
 import {
   AppointmentForm,
   type AppointmentFormOptions,
@@ -61,14 +63,26 @@ export function canReopen(appointment: AppointmentRow, { canSchedule, canAttend 
 
 export function useAppointmentStatus(workspaceId: string, onDone: () => void) {
   const [pending, startTransition] = useTransition()
+  const [toConfirm, setToConfirm] = useState<ReceivableToConfirm | null>(null)
   function change(appointment: AppointmentRow, status: AppointmentRow["status"]) {
     startTransition(async () => {
       const result = await setAppointmentStatusAction(workspaceId, appointment.id, status)
       if (result.error) toast.error(result.error)
+      else if (result.receivableToConfirm) setToConfirm(result.receivableToConfirm)
       else onDone()
     })
   }
-  return { pending, change }
+  const confirmation = (
+    <ConfirmPaymentSheet
+      workspaceId={workspaceId}
+      receivable={toConfirm}
+      onClose={() => {
+        setToConfirm(null)
+        onDone()
+      }}
+    />
+  )
+  return { pending, change, confirmation }
 }
 
 export function StatusButtons({
@@ -82,9 +96,10 @@ export function StatusButtons({
   permissions: AppointmentPermissions
   onDone: () => void
 }) {
-  const { pending, change } = useAppointmentStatus(workspaceId, onDone)
+  const { pending, change, confirmation } = useAppointmentStatus(workspaceId, onDone)
   return (
     <>
+      {confirmation}
       {appointment.status === "scheduled" && permissions.canAttend && (
         <Button type="button" variant="outline" disabled={pending} onClick={() => change(appointment, "done")}>
           <CircleCheckIcon />
@@ -136,7 +151,7 @@ export function DeleteAppointmentDialog({
           <AlertDialogTitle>Excluir agendamento?</AlertDialogTitle>
           <AlertDialogDescription>
             O agendamento de <strong>{appointment.customerName ?? appointment.name}</strong> será excluído permanentemente,
-            junto com a entrada dele no caixa, se houver. Essa ação não pode ser desfeita.
+            junto com o recebível pendente dele, se houver. Essa ação não pode ser desfeita.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error && <FieldError>{error}</FieldError>}
@@ -180,7 +195,7 @@ export function AppointmentRowActions({
   const [editKey, setEditKey] = useState(0)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const done = () => router.refresh()
-  const { pending, change } = useAppointmentStatus(workspaceId, done)
+  const { pending, change, confirmation } = useAppointmentStatus(workspaceId, done)
   const scheduled = appointment.status === "scheduled"
 
   return (
@@ -257,6 +272,7 @@ export function AppointmentRowActions({
         onOpenChange={setDeleteOpen}
         onDone={done}
       />
+      {confirmation}
     </>
   )
 }

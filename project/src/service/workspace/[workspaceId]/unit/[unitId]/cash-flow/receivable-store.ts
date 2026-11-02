@@ -80,9 +80,9 @@ export async function isAppointmentSettled(appointmentId: string) {
   return !!receivable && !!(await Statement.exists({ receivableIds: receivable._id }))
 }
 
-export async function findPendingReceivables({ walletId, unitId }: { walletId: string; unitId: string }) {
+export async function findPendingReceivables({ walletId, unitId }: { walletId: string; unitId: string | null }) {
   return Receivable.aggregate<{ id: string; valueCents: number }>([
-    { $match: { walletId: new Types.ObjectId(walletId), unitId: new Types.ObjectId(unitId) } },
+    { $match: { walletId: new Types.ObjectId(walletId), ...(unitId && { unitId: new Types.ObjectId(unitId) }) } },
     ...NOT_IN_STATEMENT,
     { $project: { _id: 0, id: { $toString: "$_id" }, valueCents: 1 } },
   ])
@@ -214,4 +214,23 @@ export async function removeUnpaidStatement(workspaceId: string, statementId: st
   const filter = statementFilter(workspaceId, statementId)
   if (!filter) return false
   return (await Statement.deleteOne({ ...filter, transactionId: null })).deletedCount > 0
+}
+
+export async function findReceivableToConfirm(appointmentId: string) {
+  const [receivable] = await Receivable.aggregate<{ id: string; name: string; valueCents: number; accruedAt: Date }>([
+    { $match: { appointmentId: new Types.ObjectId(appointmentId) } },
+    ...NOT_IN_STATEMENT,
+    {
+      $lookup: {
+        from: "wallets",
+        localField: "walletId",
+        foreignField: "_id",
+        as: "wallet",
+        pipeline: [{ $project: { _id: 0, settlement: 1 } }],
+      },
+    },
+    { $match: { "wallet.settlement": { $ne: "statement" } } },
+    { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, valueCents: 1, accruedAt: 1 } },
+  ])
+  return receivable ?? null
 }

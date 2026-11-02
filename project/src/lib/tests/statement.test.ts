@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   closeStatement,
+  closeWalletStatement,
   deleteStatement,
   parsePassOnBps,
   passOnCents,
@@ -160,6 +161,136 @@ describe("closeStatement", () => {
 
     expect(await closeStatement(VALID, UNIT_ID, { ...ctx, actor }, deps)).toEqual({ ok: false, error });
     expect(deps.findPending).not.toHaveBeenCalled();
+  });
+});
+
+describe("closeWalletStatement", () => {
+  const OTHER_WALLET_ID = "64b7f0c2a1b2c3d4e5f60801";
+  const PENDING = [
+    { id: RECEIVABLE_A, valueCents: 28_000 },
+    { id: RECEIVABLE_B, valueCents: 12_000 },
+  ];
+
+  function makeDeps({
+    walletExists = true,
+    unit = { walletId: WALLET_ID } as { walletId: string | null } | null,
+    pending = PENDING as { id: string; valueCents: number }[],
+    save = vi.fn().mockResolvedValue({ id: STATEMENT_ID }),
+  } = {}) {
+    return {
+      walletExists: vi.fn().mockResolvedValue(walletExists),
+      findUnit: vi.fn().mockResolvedValue(unit),
+      findPending: vi.fn().mockResolvedValue(pending),
+      save,
+    };
+  }
+  const ctx = { workspaceId: WORKSPACE_ID, actor: MANAGER, now: NOW };
+  const VALID = { name: "Repasse outubro", passOn: "70", paidAt: "", unitId: "" };
+
+  it.each(["", null, undefined])("sem unidade (%j), fecha os pendentes de todas as unidades da carteira juntos", async (unitId) => {
+    const deps = makeDeps();
+
+    const result = await closeWalletStatement({ ...VALID, unitId }, WALLET_ID, ctx, deps);
+
+    expect(result).toEqual({ ok: true, statementId: STATEMENT_ID });
+    expect(deps.walletExists).toHaveBeenCalledWith(WALLET_ID);
+    expect(deps.findUnit).not.toHaveBeenCalled();
+    expect(deps.findPending).toHaveBeenCalledWith({ walletId: WALLET_ID, unitId: null });
+    expect(deps.save).toHaveBeenCalledWith({
+      statement: {
+        name: "Repasse outubro",
+        closedAt: NOW,
+        passOnBps: 7000,
+        walletId: WALLET_ID,
+        unitId: null,
+        workspaceId: WORKSPACE_ID,
+        receivableIds: [RECEIVABLE_A, RECEIVABLE_B],
+      },
+      transaction: null,
+    });
+  });
+
+  it("todas as unidades, já recebido, gera a entrada sem unidade", async () => {
+    const deps = makeDeps();
+
+    await closeWalletStatement({ ...VALID, paidAt: "2026-11-02" }, WALLET_ID, ctx, deps);
+
+    expect(deps.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transaction: {
+          name: "Repasse outubro",
+          totalCents: 28_000,
+          type: "incoming",
+          paidAt: PAID_AT,
+          walletId: WALLET_ID,
+          unitId: null,
+          workspaceId: WORKSPACE_ID,
+        },
+      }),
+    );
+  });
+
+  it("com unidade, fecha só os pendentes dela", async () => {
+    const deps = makeDeps();
+
+    await closeWalletStatement({ ...VALID, unitId: ` ${UNIT_ID} `, paidAt: "2026-11-02" }, WALLET_ID, ctx, deps);
+
+    expect(deps.findUnit).toHaveBeenCalledWith(UNIT_ID);
+    expect(deps.findPending).toHaveBeenCalledWith({ walletId: WALLET_ID, unitId: UNIT_ID });
+    expect(deps.save).toHaveBeenCalledWith({
+      statement: expect.objectContaining({ unitId: UNIT_ID }),
+      transaction: expect.objectContaining({ unitId: UNIT_ID }),
+    });
+  });
+
+  it.each([
+    ["unidade que não é do workspace", makeDeps({ unit: null }), "unit_not_found"],
+    ["unidade de outra carteira", makeDeps({ unit: { walletId: OTHER_WALLET_ID } }), "unit_not_in_wallet"],
+    ["unidade sem carteira", makeDeps({ unit: { walletId: null } }), "unit_not_in_wallet"],
+  ] as const)("recusa %s", async (_label, deps, error) => {
+    expect(await closeWalletStatement({ ...VALID, unitId: UNIT_ID }, WALLET_ID, ctx, deps)).toEqual({ ok: false, error });
+    expect(deps.findPending).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["sem carteira", "", makeDeps()],
+    ["carteira que não é do workspace", WALLET_ID, makeDeps({ walletExists: false })],
+  ])("%s devolve carteira não encontrada", async (_label, walletId, deps) => {
+    expect(await closeWalletStatement(VALID, walletId, ctx, deps)).toEqual({ ok: false, error: "wallet_not_found" });
+    expect(deps.save).not.toHaveBeenCalled();
+  });
+
+  it("sem pendentes, não fecha nada", async () => {
+    const deps = makeDeps({ pending: [] });
+
+    expect(await closeWalletStatement(VALID, WALLET_ID, ctx, deps)).toEqual({ ok: false, error: "no_pending_receivables" });
+    expect(deps.save).not.toHaveBeenCalled();
+  });
+
+  it("recebível que entrou em outro bloco no meio do caminho derruba o fechamento", async () => {
+    const deps = makeDeps({ save: vi.fn().mockRejectedValue(DUPLICATE_KEY) });
+
+    expect(await closeWalletStatement(VALID, WALLET_ID, ctx, deps)).toEqual({ ok: false, error: "receivable_settled" });
+  });
+
+  it.each([
+    ["porcentagem inválida", { ...VALID, passOn: "abc" }, "invalid_pass_on"],
+    ["unidade que não é texto", { ...VALID, unitId: 1 }, "invalid_input"],
+  ])("recusa %s", async (_label, input, error) => {
+    const deps = makeDeps();
+
+    expect(await closeWalletStatement(input, WALLET_ID, ctx, deps)).toEqual({ ok: false, error });
+    expect(deps.save).not.toHaveBeenCalled();
+  });
+
+  it("sem a permissão de gerenciar o caixa, não fecha", async () => {
+    const deps = makeDeps();
+
+    expect(await closeWalletStatement(VALID, WALLET_ID, { ...ctx, actor: STAFF }, deps)).toEqual({
+      ok: false,
+      error: "forbidden",
+    });
+    expect(deps.walletExists).not.toHaveBeenCalled();
   });
 });
 

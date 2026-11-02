@@ -18,9 +18,10 @@ const VALID = { name: "Aluguel", total: "1500.00", type: "expense", paidAt: "202
 const SAVED = { name: "Aluguel", totalCents: 150_000, type: "expense", paidAt: new Date("2026-10-05T03:00:00.000Z") };
 
 describe("createTransaction", () => {
-  function makeDeps(walletExists = true) {
+  function makeDeps(walletExists = true, unit: { walletId: string | null } | null = { walletId: WALLET_ID }) {
     return {
       walletExists: vi.fn().mockResolvedValue(walletExists),
+      findUnit: vi.fn().mockResolvedValue(unit),
       insert: vi.fn().mockResolvedValue({ id: TRANSACTION_ID }),
     };
   }
@@ -33,7 +34,37 @@ describe("createTransaction", () => {
 
     expect(result).toEqual({ ok: true, transactionId: TRANSACTION_ID });
     expect(deps.walletExists).toHaveBeenCalledWith(WALLET_ID);
-    expect(deps.insert).toHaveBeenCalledWith({ ...SAVED, walletId: WALLET_ID, workspaceId: WORKSPACE_ID });
+    expect(deps.insert).toHaveBeenCalledWith({ ...SAVED, walletId: WALLET_ID, unitId: null, workspaceId: WORKSPACE_ID });
+  });
+
+  it.each(["", "  ", null, undefined])("sem unidade (%j), fica só na carteira", async (unitId) => {
+    const deps = makeDeps();
+
+    await createTransaction({ ...VALID, unitId }, WALLET_ID, ctx, deps);
+
+    expect(deps.findUnit).not.toHaveBeenCalled();
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ unitId: null }));
+  });
+
+  it("com unidade da carteira, lança marcada com a unidade", async () => {
+    const deps = makeDeps();
+
+    const result = await createTransaction({ ...VALID, unitId: ` ${UNIT_ID} ` }, WALLET_ID, ctx, deps);
+
+    expect(result).toEqual({ ok: true, transactionId: TRANSACTION_ID });
+    expect(deps.findUnit).toHaveBeenCalledWith(UNIT_ID);
+    expect(deps.insert).toHaveBeenCalledWith({ ...SAVED, walletId: WALLET_ID, unitId: UNIT_ID, workspaceId: WORKSPACE_ID });
+  });
+
+  it.each([
+    ["unidade que não é do workspace", makeDeps(true, null), "unit_not_found"],
+    ["unidade de outra carteira", makeDeps(true, { walletId: "64b7f0c2a1b2c3d4e5f60801" }), "unit_not_in_wallet"],
+    ["unidade sem carteira", makeDeps(true, { walletId: null }), "unit_not_in_wallet"],
+  ] as const)("recusa %s sem gravar", async (_label, deps, error) => {
+    const result = await createTransaction({ ...VALID, unitId: UNIT_ID }, WALLET_ID, ctx, deps);
+
+    expect(result).toEqual({ ok: false, error });
+    expect(deps.insert).not.toHaveBeenCalled();
   });
 
   it("entrada também é aceita, por quem gerencia o caixa", async () => {
@@ -70,6 +101,7 @@ describe("createTransaction", () => {
     ["valor zero", { ...VALID, total: "0" }, "invalid_total"],
     ["tipo desconhecido", { ...VALID, type: "transfer" }, "invalid_type"],
     ["dia inválido", { ...VALID, paidAt: "2026-02-30" }, "invalid_paid_at"],
+    ["unidade que não é texto", { ...VALID, unitId: 1 }, "invalid_input"],
   ])("recusa %s sem gravar", async (_label, input, error) => {
     const deps = makeDeps();
 

@@ -106,7 +106,35 @@ function TransactionFields({ idPrefix, transaction }: { idPrefix: string; transa
   )
 }
 
-type CreateTarget = { walletId: string; unitId?: never } | { unitId: string; walletId?: never }
+const WALLET_ONLY = "wallet"
+
+function UnitField({ units }: { units: { id: string; name: string }[] }) {
+  const [value, setValue] = useState(WALLET_ONLY)
+  const items = [{ value: WALLET_ONLY, label: "Só a carteira" }, ...units.map((unit) => ({ value: unit.id, label: unit.name }))]
+
+  return (
+    <Field>
+      <input type="hidden" name="unitId" value={value === WALLET_ONLY ? "" : value} />
+      <FieldLabel htmlFor="create-transaction-unit">Unidade</FieldLabel>
+      <Select items={items} value={value} onValueChange={(next) => setValue(next as string)}>
+        <SelectTrigger id="create-transaction-unit" className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {items.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
+  )
+}
+
+type CreateTarget =
+  | { walletId: string; units: { id: string; name: string }[]; unitId?: never }
+  | { unitId: string; walletId?: never; units?: never }
 
 export function CreateTransactionSheet({ workspaceId, ...target }: { workspaceId: string } & CreateTarget) {
   const [open, setOpen] = useState(false)
@@ -138,6 +166,7 @@ export function CreateTransactionSheet({ workspaceId, ...target }: { workspaceId
           <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
             {state.error && <FieldError>{state.error}</FieldError>}
             <TransactionFields idPrefix="create-transaction" />
+            {target.units && target.units.length > 0 && <UnitField units={target.units} />}
           </FieldGroup>
           <SheetFooter>
             <Button type="submit" loading={pending}>
