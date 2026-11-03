@@ -24,6 +24,7 @@ import {
 import { insertWallet } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
 import { Appointment } from "@/models/Appointment"
 import { Inventory } from "@/models/Inventory"
+import { Partner } from "@/models/Partner"
 import { Service } from "@/models/Service"
 import { Unit } from "@/models/Unit"
 import { Wallet } from "@/models/Wallet"
@@ -100,7 +101,7 @@ function membersChecker(workspaceId: string) {
 async function resolveWallet(workspaceId: string, wallet: WalletRef | null) {
   if (!wallet) return null
   if ("id" in wallet) return new Types.ObjectId(wallet.id)
-  return new Types.ObjectId((await insertWallet({ workspaceId, settlement: "immediate", ...wallet })).id)
+  return new Types.ObjectId((await insertWallet({ workspaceId, ...wallet })).id)
 }
 
 async function resolveInventory(workspaceId: string, inventory: InventoryRef | null) {
@@ -245,7 +246,11 @@ export async function deleteUnitAction(workspaceId: string, unitId: string): Pro
     remove: async (id) => {
       const { deletedCount } = await Unit.deleteOne(filter!)
       if (deletedCount === 0) return false
-      await Promise.all([Appointment.deleteMany({ unitId: id }), Service.deleteMany({ unitId: id })])
+      await Promise.all([
+        Appointment.deleteMany({ unitId: id }),
+        Service.deleteMany({ unitId: id }),
+        Partner.updateOne({ unitId: id }, { $set: { unitId: null } }),
+      ])
       return true
     },
   })

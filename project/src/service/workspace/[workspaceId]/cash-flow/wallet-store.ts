@@ -1,6 +1,5 @@
 import { BRT_OFFSET_HOURS, parseDay } from "@/service/_shared/timezone"
 import type { OpeningBalance } from "@/service/workspace/[workspaceId]/cash-flow/opening-balance"
-import type { WalletSettlement } from "@/service/workspace/[workspaceId]/cash-flow/wallet"
 import { Transaction } from "@/models/Transaction"
 import { Wallet } from "@/models/Wallet"
 
@@ -12,15 +11,13 @@ function dayStart(day: string) {
 export async function insertWallet({
   workspaceId,
   name,
-  settlement,
   openingBalance,
 }: {
   workspaceId: string
   name: string
-  settlement: WalletSettlement
   openingBalance: OpeningBalance | null
 }) {
-  const wallet = await Wallet.create({ name, settlement, workspaceId })
+  const wallet = await Wallet.create({ name, workspaceId })
   if (openingBalance && openingBalance.amountCents > 0) {
     await Transaction.create({
       name: "Saldo inicial",

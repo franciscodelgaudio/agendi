@@ -4,10 +4,12 @@ import { connectOnUse } from "@/service/_shared/database/mongoose";
 const statementSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
-    closedAt: { type: Date, required: true },
-    passOnBps: { type: Number, required: true, min: 0, max: 9999 },
+    from: { type: Date, default: null },
+    to: { type: Date, required: true },
+    grossCents: { type: Number, required: true, min: 0 },
+    shareBps: { type: Number, required: true, min: 0, max: 9999 },
+    partnerId: { type: Schema.Types.ObjectId, ref: "Partner", required: true },
     walletId: { type: Schema.Types.ObjectId, ref: "Wallet", required: true },
-    unitId: { type: Schema.Types.ObjectId, ref: "Unit", default: null },
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true, index: true },
     receivableIds: {
       type: [{ type: Schema.Types.ObjectId, ref: "Receivable" }],
@@ -19,7 +21,8 @@ const statementSchema = new Schema(
   { collection: "statements", timestamps: true },
 );
 
-statementSchema.index({ walletId: 1, unitId: 1, closedAt: -1 });
+statementSchema.index({ partnerId: 1, to: -1 });
+statementSchema.index({ walletId: 1, to: -1 });
 statementSchema.index({ receivableIds: 1 }, { unique: true });
 statementSchema.index({ transactionId: 1 }, { unique: true, partialFilterExpression: { transactionId: { $type: "objectId" } } });
 

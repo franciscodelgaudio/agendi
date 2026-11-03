@@ -55,7 +55,6 @@ const errorMessages: Record<Exclude<WalletError, "forbidden"> | "unauthenticated
   unit_not_in_wallet: "Esta unidade não usa esta carteira.",
   unit_without_wallet: "Esta unidade não tem carteira. Vincule uma carteira antes.",
   transaction_not_found: "Transação não encontrada nesta carteira.",
-  invalid_settlement: "Escolha como a carteira recebe.",
   transaction_from_statement: "Esta entrada vem de um fechamento de recebíveis. Altere pelo caixa da unidade.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
@@ -90,7 +89,6 @@ export async function createWalletAction(
   const result = await createWallet(
     {
       name: formData.get("name"),
-      settlement: formData.get("settlement") ?? undefined,
       openingBalance: { amount: formData.get("openingBalance"), date: formData.get("openingBalanceDate") },
     },
     session,
@@ -113,7 +111,7 @@ export async function updateWalletAction(
   if (!session) return { error: messageOf("unauthenticated") }
   const filter = workspaceFilter(session.workspaceId, walletId)
 
-  const result = await updateWallet({ name: formData.get("name"), settlement: formData.get("settlement") ?? undefined }, filter && walletId, session, {
+  const result = await updateWallet({ name: formData.get("name") }, filter && walletId, session, {
     update: async (_id, data) => (await Wallet.updateOne(filter!, { $set: data })).matchedCount > 0,
   })
 

@@ -1,49 +1,50 @@
 "use server"
 
 import { refresh } from "next/cache"
-import { isObjectIdOrHexString, Types } from "mongoose"
+import { isObjectIdOrHexString } from "mongoose"
 import { getSessionUserId } from "@/service/(auth)/session"
 import { forbiddenMessage } from "@/service/workspace/[workspaceId]/users/permissions/access-check"
 import { findWorkspaceAccess } from "@/service/workspace/[workspaceId]/workspace-access"
 import {
   closeStatement,
-  closeWalletStatement,
   deleteStatement,
   payStatement,
   settleReceivable,
   type CloseStatementError,
-  type CloseWalletStatementError,
   type DeleteStatementError,
   type PayStatementError,
   type SettleReceivableError,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/statement"
 import {
+  findPartnerToClose,
   findPendingReceivable,
   findPendingReceivables,
   findStatementPaid,
   findStatementToPay,
   payStatementWith,
   removeUnpaidStatement,
+  saveReceivableTransaction,
   saveStatement,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivable-store"
-import { Unit } from "@/models/Unit"
-import { Wallet } from "@/models/Wallet"
 
-type StatementError = CloseStatementError | CloseWalletStatementError | SettleReceivableError | PayStatementError | DeleteStatementError
+type StatementError = CloseStatementError | SettleReceivableError | PayStatementError | DeleteStatementError
 
 const errorMessages: Record<Exclude<StatementError, "forbidden"> | "unauthenticated", string> = {
   invalid_input: "Preencha todos os campos.",
   invalid_name: "Informe o nome do fechamento.",
   name_too_long: "O nome pode ter no máximo 80 caracteres.",
-  invalid_pass_on: "Informe um repasse ao parceiro entre 0% e 99,99%, como 30 ou 12,5.",
   invalid_paid_at: "Informe um dia de pagamento válido.",
-  unit_not_found: "Unidade não encontrada neste workspace.",
-  unit_without_wallet: "Esta unidade não tem carteira. Vincule uma carteira antes.",
-  unit_not_in_wallet: "Esta unidade não usa esta carteira.",
-  wallet_not_found: "Carteira não encontrada neste workspace.",
+  invalid_period: "Escolha como definir o período.",
+  invalid_period_start: "Informe um dia de início válido.",
+  invalid_period_end: "Informe um dia de fim válido.",
+  period_reversed: "O início do período deve ser antes do fim.",
+  partner_not_found: "Parceiro não encontrado neste workspace.",
+  partner_without_unit: "Este parceiro não está vinculado a nenhuma unidade.",
+  unit_without_wallet: "A unidade deste parceiro não tem carteira. Vincule uma carteira antes.",
   no_pending_receivables: "Não há recebíveis pendentes para fechar.",
-  receivable_not_found: "Recebível não encontrado ou já fechado. Recarregue a página.",
-  receivable_settled: "Algum recebível já entrou em outro fechamento. Recarregue a página.",
+  receivable_not_found: "Recebível não encontrado ou já recebido. Recarregue a página.",
+  receivable_has_partner: "Este atendimento é recebido pelo parceiro e entra no próximo fechamento.",
+  receivable_settled: "Algum recebível já foi recebido ou entrou em outro fechamento. Recarregue a página.",
   statement_not_found: "Fechamento não encontrado. Recarregue a página.",
   statement_paid: "Este fechamento já foi pago.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
@@ -69,7 +70,7 @@ function validId(id: string) {
 
 export async function closeStatementAction(
   workspaceId: string,
-  unitId: string,
+  partnerId: string,
   _prev: StatementFormState,
   formData: FormData,
 ): Promise<StatementFormState> {
@@ -77,51 +78,17 @@ export async function closeStatementAction(
   if (!session) return { error: messageOf("unauthenticated") }
 
   const result = await closeStatement(
-    { name: formData.get("name"), passOn: formData.get("passOn"), paidAt: formData.get("paidAt") },
-    validId(unitId),
-    { ...session, now: new Date() },
-    {
-      findUnit: unitWalletFinder(session.workspaceId),
-      findPending: findPendingReceivables,
-      save: saveStatement,
-    },
-  )
-
-  if (!result.ok) return { error: messageOf(result.error) }
-
-  refresh()
-  return { error: null }
-}
-
-function unitWalletFinder(workspaceId: string) {
-  return async (id: string) => {
-    if (!isObjectIdOrHexString(id)) return null
-    const unit = await Unit.findOne({ _id: id, workspaceId: new Types.ObjectId(workspaceId) }).select({ walletId: 1 }).lean()
-    return unit ? { walletId: unit.walletId?.toString() ?? null } : null
-  }
-}
-
-export async function closeWalletStatementAction(
-  workspaceId: string,
-  walletId: string,
-  _prev: StatementFormState,
-  formData: FormData,
-): Promise<StatementFormState> {
-  const session = await sessionAccess(workspaceId)
-  if (!session) return { error: messageOf("unauthenticated") }
-
-  const result = await closeWalletStatement(
     {
       name: formData.get("name"),
-      passOn: formData.get("passOn"),
       paidAt: formData.get("paidAt"),
-      unitId: formData.get("unitId"),
+      period: formData.get("period"),
+      from: formData.get("from"),
+      to: formData.get("to"),
     },
-    validId(walletId),
-    { ...session, now: new Date() },
+    validId(partnerId),
+    session,
     {
-      walletExists: async (id) => !!(await Wallet.exists({ _id: id, workspaceId: new Types.ObjectId(session.workspaceId) })),
-      findUnit: unitWalletFinder(session.workspaceId),
+      findPartner: (id) => findPartnerToClose(session.workspaceId, id),
       findPending: findPendingReceivables,
       save: saveStatement,
     },
@@ -142,15 +109,10 @@ export async function settleReceivableAction(
   const session = await sessionAccess(workspaceId)
   if (!session) return { error: messageOf("unauthenticated") }
 
-  const result = await settleReceivable(
-    { passOn: formData.get("passOn"), paidAt: formData.get("paidAt") },
-    validId(receivableId),
-    { ...session, now: new Date() },
-    {
-      findPendingReceivable: (id) => findPendingReceivable(session.workspaceId, id),
-      save: saveStatement,
-    },
-  )
+  const result = await settleReceivable({ paidAt: formData.get("paidAt") }, validId(receivableId), session, {
+    findPendingReceivable: (id) => findPendingReceivable(session.workspaceId, id),
+    save: saveReceivableTransaction,
+  })
 
   if (!result.ok) return { error: messageOf(result.error) }
 

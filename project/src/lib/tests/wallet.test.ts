@@ -22,17 +22,16 @@ describe("createWallet", () => {
     expect(deps.insert).toHaveBeenCalledWith({
       workspaceId: WORKSPACE_ID,
       name: "Conta Itaú",
-      settlement: "immediate",
       openingBalance: null,
     });
   });
 
-  it("recebimento por bloco de recebíveis", async () => {
+  it("ignora modo de recebimento enviado: quem decide é o parceiro da unidade", async () => {
     const deps = makeDeps();
 
     await createWallet({ name: "AIRA", settlement: "statement" }, ctx, deps);
 
-    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ settlement: "statement" }));
+    expect(deps.insert).toHaveBeenCalledWith({ workspaceId: WORKSPACE_ID, name: "AIRA", openingBalance: null });
   });
 
   it("com saldo inicial, leva o valor em centavos e o dia", async () => {
@@ -47,7 +46,6 @@ describe("createWallet", () => {
     expect(deps.insert).toHaveBeenCalledWith({
       workspaceId: WORKSPACE_ID,
       name: "Conta Itaú",
-      settlement: "immediate",
       openingBalance: { amountCents: 250_000, date: "2026-09-01" },
     });
   });
@@ -66,7 +64,6 @@ describe("createWallet", () => {
     ["nome que não é texto", { name: 1 }, "invalid_input"],
     ["nome vazio", { name: "  " }, "invalid_name"],
     ["nome com mais de 40 caracteres", { name: "a".repeat(41) }, "name_too_long"],
-    ["modo de recebimento desconhecido", { name: "Conta", settlement: "monthly" }, "invalid_settlement"],
     ["saldo inválido", { name: "Conta", openingBalance: { amount: "abc", date: "2026-09-01" } }, "invalid_opening_balance"],
     ["dia do saldo inválido", { name: "Conta", openingBalance: { amount: "10", date: "2026-02-30" } }, "invalid_opening_balance_date"],
   ])("recusa %s", async (_label, input, error) => {
@@ -105,21 +102,12 @@ describe("updateWallet", () => {
     expect(deps.update).toHaveBeenCalledWith(WALLET_ID, { name: "Conta Nubank" });
   });
 
-  it("troca o modo de recebimento", async () => {
+  it("ignora modo de recebimento enviado", async () => {
     const deps = makeDeps();
 
-    await updateWallet({ name: "AIRA", settlement: "statement" }, WALLET_ID, { actor: MANAGER }, deps);
+    await updateWallet({ name: "AIRA", settlement: "statement" }, WALLET_ID, { actor: ADMIN }, deps);
 
-    expect(deps.update).toHaveBeenCalledWith(WALLET_ID, { name: "AIRA", settlement: "statement" });
-  });
-
-  it("recusa modo de recebimento desconhecido", async () => {
-    const deps = makeDeps();
-
-    const result = await updateWallet({ name: "AIRA", settlement: "monthly" }, WALLET_ID, { actor: ADMIN }, deps);
-
-    expect(result).toEqual({ ok: false, error: "invalid_settlement" });
-    expect(deps.update).not.toHaveBeenCalled();
+    expect(deps.update).toHaveBeenCalledWith(WALLET_ID, { name: "AIRA" });
   });
 
   it("recusa nome vazio sem gravar", async () => {

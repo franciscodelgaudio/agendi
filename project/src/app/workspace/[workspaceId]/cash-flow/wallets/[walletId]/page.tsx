@@ -22,7 +22,7 @@ export default async function WalletPage({
 }: PageProps<"/workspace/[workspaceId]/cash-flow/wallets/[walletId]">) {
   const { workspaceId, walletId } = await params
   const query = parseTransactionListQuery(await searchParams)
-  const { actor, wallet } = await loadWalletCashFlow(workspaceId, walletId)
+  const { actor, wallet, partners } = await loadWalletCashFlow(workspaceId, walletId)
   const [result] = await Transaction.aggregate<TransactionListPage>(transactionListPipeline(walletId, query))
 
   const pathname = `/workspace/${workspaceId}/cash-flow/wallets/${walletId}`
@@ -38,6 +38,7 @@ export default async function WalletPage({
     <WalletShell
       workspaceId={workspaceId}
       wallet={wallet}
+      partners={partners}
       actions={canManage && <CreateTransactionSheet workspaceId={workspaceId} walletId={walletId} units={wallet.units} />}
     >
       <div className="flex flex-wrap items-center gap-2">

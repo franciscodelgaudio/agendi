@@ -5,8 +5,6 @@ import { checkAccess, type AccessError } from "@/service/workspace/[workspaceId]
 import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
 
 export const MAX_WALLET_NAME_LENGTH = 40;
-export const WALLET_SETTLEMENTS = ["immediate", "statement"] as const;
-export type WalletSettlement = (typeof WALLET_SETTLEMENTS)[number];
 
 const walletSchema = z.object(
   {
@@ -15,12 +13,11 @@ const walletSchema = z.object(
       .trim()
       .min(1, { error: "invalid_name" })
       .max(MAX_WALLET_NAME_LENGTH, { error: "name_too_long" }),
-    settlement: z.enum(WALLET_SETTLEMENTS, { error: "invalid_settlement" }).optional(),
   },
   { error: "invalid_input" },
 );
 
-export type WalletInputError = "invalid_input" | "invalid_name" | "name_too_long" | "invalid_settlement";
+export type WalletInputError = "invalid_input" | "invalid_name" | "name_too_long";
 
 export type CreateWalletError = AccessError | WalletInputError | OpeningBalanceError;
 
@@ -33,7 +30,6 @@ export async function createWallet(
     insert: (data: {
       workspaceId: string;
       name: string;
-      settlement: WalletSettlement;
       openingBalance: OpeningBalance | null;
     }) => Promise<{ id: string }>;
   },
@@ -49,7 +45,6 @@ export async function createWallet(
   const wallet = await deps.insert({
     workspaceId: ctx.workspaceId,
     name: parsed.data.name,
-    settlement: parsed.data.settlement ?? "immediate",
     openingBalance: balance.value,
   });
   return { ok: true, walletId: wallet.id };
@@ -63,7 +58,7 @@ export async function updateWallet(
   input: unknown,
   walletId: string | null | undefined,
   ctx: { actor: Actor | null },
-  deps: { update: (walletId: string, data: { name: string; settlement?: WalletSettlement }) => Promise<boolean> },
+  deps: { update: (walletId: string, data: { name: string }) => Promise<boolean> },
 ): Promise<UpdateWalletResult> {
   const accessError = checkAccess(ctx.actor, "cash_flow.manage");
   if (accessError) return { ok: false, error: accessError };

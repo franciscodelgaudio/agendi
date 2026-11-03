@@ -29,10 +29,11 @@ type Props = {
   // "2026-09-24"; vazio mostra o placeholder até escolher um dia.
   defaultValue: string
   placeholder?: string
+  onChange?: (day: string) => void
 }
 
 // Dia escolhido pelo Calendar, enviado como "2026-09-24" num campo oculto.
-export function DayField({ id, name, label, defaultValue, placeholder }: Props) {
+export function DayField({ id, name, label, defaultValue, placeholder, onChange }: Props) {
   const [day, setDay] = useState(defaultValue)
   const [open, setOpen] = useState(false)
 
@@ -54,6 +55,7 @@ export function DayField({ id, name, label, defaultValue, placeholder }: Props) 
             required
             onSelect={(date) => {
               setDay(toDay(date))
+              onChange?.(toDay(date))
               setOpen(false)
             }}
           />

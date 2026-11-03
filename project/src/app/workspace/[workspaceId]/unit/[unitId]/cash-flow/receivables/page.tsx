@@ -10,7 +10,6 @@ import {
 import { ListPagination } from "@/components/shared/list-pagination"
 import { ListTotals } from "@/components/shared/list-totals"
 import { ReceivableTable } from "@/components/workspace/[workspaceId]/cash-flow/receivable-table"
-import { CloseStatementSheet } from "@/components/workspace/[workspaceId]/cash-flow/statement-sheets"
 import { UnitCashFlowShell } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-cash-flow-shell"
 import { Receivable } from "@/models/Receivable"
 
@@ -25,7 +24,7 @@ export default async function UnitReceivablesPage({
   if (!wallet) return <UnitCashFlowShell workspaceId={workspaceId} unitId={unitId} data={data} />
 
   const canManage = can(data.actor, "cash_flow.manage")
-  const immediate = wallet.settlement === "immediate"
+  const { partner } = data
   const [result = { rows: [], total: 0, totalCents: 0 }] = await Receivable.aggregate<PendingReceivablePage>(
     pendingReceivablesPipeline(wallet.id, unitId, page),
   )
@@ -35,25 +34,16 @@ export default async function UnitReceivablesPage({
   if (pages > 0 && page > pages) redirect(`${pathname}?page=${pages}`)
 
   return (
-    <UnitCashFlowShell
-      workspaceId={workspaceId}
-      unitId={unitId}
-      data={data}
-      actions={
-        canManage && (
-          <CloseStatementSheet
-            workspaceId={workspaceId}
-            target={{ kind: "unit", unitId, pendingCount: result.total, pendingCents: result.totalCents }}
-            primary={!immediate}
-          />
-        )
-      }
-    >
+    <UnitCashFlowShell workspaceId={workspaceId} unitId={unitId} data={data}>
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm text-muted-foreground">Atendimentos concluídos que ainda não entraram num fechamento.</p>
+        <p className="text-sm text-muted-foreground">
+          {partner
+            ? `Atendimentos concluídos que ${partner.name} recebe dos clientes. Eles entram no próximo fechamento.`
+            : "Atendimentos concluídos que ainda não foram recebidos."}
+        </p>
         <ListTotals items={[{ label: "A receber", cents: result.totalCents }]} />
       </div>
-      <ReceivableTable workspaceId={workspaceId} receivables={result.rows} showUnit={false} canSettle={canManage && immediate} />
+      <ReceivableTable workspaceId={workspaceId} receivables={result.rows} showUnit={false} canSettle={canManage && !partner} />
       <ListPagination
         query={{}}
         page={page}

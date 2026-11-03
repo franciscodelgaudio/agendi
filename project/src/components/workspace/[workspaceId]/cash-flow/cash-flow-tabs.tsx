@@ -4,12 +4,12 @@ import { usePathname } from "next/navigation"
 import Link from "@/components/shared/link"
 import { cn } from "@/service/_shared/utils"
 
-export function CashFlowTabs({ base }: { base: string }) {
+export function CashFlowTabs({ base, showStatements }: { base: string; showStatements: boolean }) {
   const pathname = usePathname()
   const items = [
     { title: "Transações", href: base },
     { title: "A receber", href: `${base}/receivables` },
-    { title: "Fechamentos", href: `${base}/statements` },
+    ...(showStatements ? [{ title: "Fechamentos", href: `${base}/statements` }] : []),
   ]
 
   return (

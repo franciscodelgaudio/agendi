@@ -29,6 +29,7 @@ const permissionLabels: Record<Action, string> = {
   "stock.manage": "Gerenciar estoque",
   "stock.transfer": "Transferir produtos entre inventários",
   "cash_flow.manage": "Gerenciar carteiras e transações do caixa",
+  "partners.manage": "Cadastrar parceiros e as faixas de repasse",
   "users.manage": "Convidar, editar e remover usuários",
   "workspace.manage": "Editar o workspace (nome e imagem)",
 }
@@ -38,7 +39,7 @@ const actionGroups: { name: string; actions: Action[] }[] = [
   { name: "Clientes", actions: ["customers.manage"] },
   { name: "Serviços", actions: ["services.manage"] },
   { name: "Unidades", actions: ["units.manage"] },
-  { name: "Caixa", actions: ["cash_flow.manage"] },
+  { name: "Caixa", actions: ["cash_flow.manage", "partners.manage"] },
   { name: "Estoque", actions: ["stock.manage", "stock.transfer"] },
   { name: "Usuários", actions: ["users.manage"] },
   { name: "Workspace", actions: ["workspace.manage"] },

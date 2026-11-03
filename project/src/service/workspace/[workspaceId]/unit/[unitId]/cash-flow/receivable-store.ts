@@ -1,9 +1,21 @@
 import mongoose, { isObjectIdOrHexString, Types, type ClientSession } from "mongoose"
 import { connectDB } from "@/service/_shared/database/mongoose"
+import {
+  NOT_SETTLED,
+  partnerPeriodsPipeline,
+  type StatementPeriod,
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivable-list"
 import { appointmentReceivable } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivable"
-import type { StatementData, StatementTransaction } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/statement"
+import type {
+  PartnerToClose,
+  PendingFilter,
+  ReceivableTransaction,
+  StatementData,
+  StatementTransaction,
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/statement"
 import { Appointment } from "@/models/Appointment"
 import { Customer } from "@/models/Customer"
+import { Partner } from "@/models/Partner"
 import { Receivable } from "@/models/Receivable"
 import { Statement } from "@/models/Statement"
 import { Transaction } from "@/models/Transaction"
@@ -25,27 +37,17 @@ function objectId(id: string | null) {
   return id ? new Types.ObjectId(id) : null
 }
 
-function transactionDoc(transaction: StatementTransaction) {
+function transactionDoc(transaction: StatementTransaction | ReceivableTransaction) {
   return {
     ...transaction,
     walletId: new Types.ObjectId(transaction.walletId),
     unitId: objectId(transaction.unitId),
     workspaceId: new Types.ObjectId(transaction.workspaceId),
+    receivableId: "receivableId" in transaction ? new Types.ObjectId(transaction.receivableId) : null,
   }
 }
 
-const NOT_IN_STATEMENT = [
-  {
-    $lookup: {
-      from: "statements",
-      localField: "_id",
-      foreignField: "receivableIds",
-      as: "statements",
-      pipeline: [{ $project: { _id: 1 } }],
-    },
-  },
-  { $match: { statements: { $size: 0 } } },
-]
+const NULLABLE_ID = (field: unknown) => ({ $cond: [{ $eq: [{ $ifNull: [field, null] }, null] }, null, { $toString: field }] })
 
 export async function recordAppointmentReceivable(appointmentId: string, priceCents: number) {
   const appointment = await Appointment.findById(appointmentId)
@@ -77,13 +79,24 @@ export async function removeAppointmentReceivable(appointmentId: string) {
 
 export async function isAppointmentSettled(appointmentId: string) {
   const receivable = await Receivable.findOne({ appointmentId: new Types.ObjectId(appointmentId) }).select({ _id: 1 }).lean()
-  return !!receivable && !!(await Statement.exists({ receivableIds: receivable._id }))
+  if (!receivable) return false
+  const [statement, transaction] = await Promise.all([
+    Statement.exists({ receivableIds: receivable._id }),
+    Transaction.exists({ receivableId: receivable._id }),
+  ])
+  return !!statement || !!transaction
 }
 
-export async function findPendingReceivables({ walletId, unitId }: { walletId: string; unitId: string | null }) {
+export async function findPendingReceivables({ walletId, unitId, from, before }: PendingFilter) {
   return Receivable.aggregate<{ id: string; valueCents: number }>([
-    { $match: { walletId: new Types.ObjectId(walletId), ...(unitId && { unitId: new Types.ObjectId(unitId) }) } },
-    ...NOT_IN_STATEMENT,
+    {
+      $match: {
+        walletId: new Types.ObjectId(walletId),
+        unitId: new Types.ObjectId(unitId),
+        accruedAt: { ...(from && { $gte: from }), $lt: before },
+      },
+    },
+    ...NOT_SETTLED,
     { $project: { _id: 0, id: { $toString: "$_id" }, valueCents: 1 } },
   ])
 }
@@ -96,9 +109,19 @@ export async function findPendingReceivable(workspaceId: string, receivableId: s
     valueCents: number
     walletId: string
     unitId: string | null
+    unitHasPartner: boolean
   }>([
     { $match: { _id: new Types.ObjectId(receivableId), workspaceId: new Types.ObjectId(workspaceId) } },
-    ...NOT_IN_STATEMENT,
+    ...NOT_SETTLED,
+    {
+      $lookup: {
+        from: "partners",
+        localField: "unitId",
+        foreignField: "unitId",
+        as: "partners",
+        pipeline: [{ $project: { _id: 1 } }],
+      },
+    },
     {
       $project: {
         _id: 0,
@@ -106,7 +129,8 @@ export async function findPendingReceivable(workspaceId: string, receivableId: s
         name: 1,
         valueCents: 1,
         walletId: { $toString: "$walletId" },
-        unitId: { $cond: [{ $eq: [{ $ifNull: ["$unitId", null] }, null] }, null, { $toString: "$unitId" }] },
+        unitId: NULLABLE_ID("$unitId"),
+        unitHasPartner: { $gt: [{ $size: "$partners" }, 0] },
       },
     },
   ])
@@ -128,8 +152,8 @@ export async function saveStatement({
         {
           ...statement,
           _id: statementId,
+          partnerId: new Types.ObjectId(statement.partnerId),
           walletId: new Types.ObjectId(statement.walletId),
-          unitId: objectId(statement.unitId),
           workspaceId: new Types.ObjectId(statement.workspaceId),
           receivableIds: statement.receivableIds.map((id) => new Types.ObjectId(id)),
           transactionId: created?._id ?? null,
@@ -139,6 +163,25 @@ export async function saveStatement({
     )
   })
   return { id: statementId.toString() }
+}
+
+export async function saveReceivableTransaction(transaction: ReceivableTransaction) {
+  const [created] = await Transaction.create([transactionDoc(transaction)])
+  return { id: created._id.toString() }
+}
+
+export async function findPartnerToClose(workspaceId: string, partnerId: string): Promise<PartnerToClose | null> {
+  if (!isObjectIdOrHexString(partnerId)) return null
+  const partner = await Partner.findOne({ _id: partnerId, workspaceId: new Types.ObjectId(workspaceId) })
+    .select({ thresholdRule: 1, tiers: 1, unitId: 1 })
+    .lean()
+  if (!partner) return null
+  const unit = partner.unitId ? await Unit.findById(partner.unitId).select({ walletId: 1 }).lean() : null
+  return {
+    thresholdRule: partner.thresholdRule,
+    tiers: partner.tiers.map(({ thresholdCents, shareBps }) => ({ thresholdCents, shareBps })),
+    unit: unit ? { id: unit._id.toString(), walletId: unit.walletId?.toString() ?? null } : null,
+  }
 }
 
 function statementFilter(workspaceId: string, statementId: string) {
@@ -154,29 +197,29 @@ export async function findStatementToPay(workspaceId: string, statementId: strin
     walletId: string
     unitId: string | null
     workspaceId: string
-    passOnBps: number
+    shareBps: number
     grossCents: number
     paid: boolean
   }>([
     { $match: filter },
     {
       $lookup: {
-        from: "receivables",
-        localField: "receivableIds",
+        from: "partners",
+        localField: "partnerId",
         foreignField: "_id",
-        as: "receivables",
-        pipeline: [{ $project: { _id: 0, valueCents: 1 } }],
+        as: "partner",
+        pipeline: [{ $project: { _id: 0, unitId: 1 } }],
       },
     },
     {
       $project: {
         _id: 0,
         name: 1,
-        passOnBps: 1,
+        shareBps: 1,
+        grossCents: 1,
         walletId: { $toString: "$walletId" },
-        unitId: { $cond: [{ $eq: [{ $ifNull: ["$unitId", null] }, null] }, null, { $toString: "$unitId" }] },
+        unitId: NULLABLE_ID({ $first: "$partner.unitId" }),
         workspaceId: { $toString: "$workspaceId" },
-        grossCents: { $sum: "$receivables.valueCents" },
         paid: { $ne: [{ $ifNull: ["$transactionId", null] }, null] },
       },
     },
@@ -219,18 +262,23 @@ export async function removeUnpaidStatement(workspaceId: string, statementId: st
 export async function findReceivableToConfirm(appointmentId: string) {
   const [receivable] = await Receivable.aggregate<{ id: string; name: string; valueCents: number; accruedAt: Date }>([
     { $match: { appointmentId: new Types.ObjectId(appointmentId) } },
-    ...NOT_IN_STATEMENT,
+    ...NOT_SETTLED,
     {
       $lookup: {
-        from: "wallets",
-        localField: "walletId",
-        foreignField: "_id",
-        as: "wallet",
-        pipeline: [{ $project: { _id: 0, settlement: 1 } }],
+        from: "partners",
+        localField: "unitId",
+        foreignField: "unitId",
+        as: "partners",
+        pipeline: [{ $project: { _id: 1 } }],
       },
     },
-    { $match: { "wallet.settlement": { $ne: "statement" } } },
+    { $match: { partners: { $size: 0 } } },
     { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, valueCents: 1, accruedAt: 1 } },
   ])
   return receivable ?? null
+}
+
+export async function findPartnerPeriods(partnerIds: string[]) {
+  const periods = await Promise.all(partnerIds.map((id) => Statement.aggregate<StatementPeriod>(partnerPeriodsPipeline(id))))
+  return Object.fromEntries(partnerIds.map((id, index) => [id, periods[index]]))
 }

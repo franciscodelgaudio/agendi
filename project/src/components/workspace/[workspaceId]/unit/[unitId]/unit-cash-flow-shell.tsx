@@ -3,7 +3,8 @@ import { can } from "@/service/workspace/[workspaceId]/users/permissions/permiss
 import type { UnitCashFlow } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
 import Link from "@/components/shared/link"
 import { CashFlowTabs } from "@/components/workspace/[workspaceId]/cash-flow/cash-flow-tabs"
-import { SETTLEMENT_LABELS } from "@/components/workspace/[workspaceId]/cash-flow/settlement-labels"
+import { tiersSummary } from "@/components/workspace/[workspaceId]/cash-flow/partner-format"
+import { UnitPartnerSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-partner-sheet"
 import { UnitWalletSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-ref-sheets"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 
@@ -15,7 +16,13 @@ type Props = {
   children?: React.ReactNode
 }
 
-export function UnitCashFlowShell({ workspaceId, unitId, data: { actor, wallet, wallets }, actions, children }: Props) {
+export function UnitCashFlowShell({
+  workspaceId,
+  unitId,
+  data: { actor, wallet, wallets, partner, unlinkedPartners },
+  actions,
+  children,
+}: Props) {
   const canManageUnit = can(actor, "units.manage")
   const walletSheet = canManageUnit && (
     <UnitWalletSheet workspaceId={workspaceId} unitId={unitId} options={wallets} currentId={wallet?.id ?? null} />
@@ -52,16 +59,19 @@ export function UnitCashFlowShell({ workspaceId, unitId, data: { actor, wallet, 
             Carteira{" "}
             <Link href={`/workspace/${workspaceId}/cash-flow/wallets/${wallet.id}`} className="font-medium text-foreground hover:underline">
               {wallet.name}
-            </Link>{" "}
-            · {SETTLEMENT_LABELS[wallet.settlement]}
+            </Link>
+            {partner && ` · Recebe por ${partner.name} (${tiersSummary(partner)})`}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {walletSheet}
+          {can(actor, "partners.manage") && (
+            <UnitPartnerSheet workspaceId={workspaceId} unitId={unitId} partner={partner} unlinked={unlinkedPartners} />
+          )}
           {actions}
         </div>
       </div>
-      <CashFlowTabs base={`/workspace/${workspaceId}/unit/${unitId}/cash-flow`} />
+      <CashFlowTabs base={`/workspace/${workspaceId}/unit/${unitId}/cash-flow`} showStatements={!!partner} />
       {children}
     </div>
   )

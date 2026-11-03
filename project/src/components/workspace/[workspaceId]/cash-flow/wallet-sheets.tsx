@@ -23,43 +23,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import type { WalletSettlement } from "@/service/workspace/[workspaceId]/cash-flow/wallet"
 
 function NameField({ id, defaultValue }: { id: string; defaultValue?: string }) {
   return (
     <Field>
       <FieldLabel htmlFor={id}>Nome</FieldLabel>
       <Input id={id} name="name" placeholder="Conta Itaú" defaultValue={defaultValue} maxLength={40} autoFocus required />
-    </Field>
-  )
-}
-
-const SETTLEMENT_ITEMS = [
-  { value: "immediate", label: "Na hora", description: "Cada atendimento concluído é confirmado e entra na carteira." },
-  { value: "statement", label: "Por fechamento", description: "Os atendimentos acumulam e entram juntos num fechamento com repasse." },
-]
-
-function SettlementField({ id, defaultValue = "immediate" }: { id: string; defaultValue?: WalletSettlement }) {
-  const [value, setValue] = useState<string>(defaultValue)
-
-  return (
-    <Field>
-      <FieldLabel htmlFor={id}>Recebimento dos atendimentos</FieldLabel>
-      <Select name="settlement" items={SETTLEMENT_ITEMS} value={value} onValueChange={(next) => setValue(next as string)}>
-        <SelectTrigger id={id} className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {SETTLEMENT_ITEMS.map((item) => (
-            <SelectItem key={item.value} value={item.value}>
-              {item.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <p className="text-sm text-muted-foreground">{SETTLEMENT_ITEMS.find((item) => item.value === value)?.description}</p>
     </Field>
   )
 }
@@ -90,7 +60,6 @@ export function CreateWalletSheet({ workspaceId }: { workspaceId: string }) {
           <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
             {state.error && <FieldError>{state.error}</FieldError>}
             <NameField id="create-wallet-name" />
-            <SettlementField id="create-wallet-settlement" />
             <OpeningBalanceFields idPrefix="create-wallet" />
           </FieldGroup>
           <SheetFooter>
@@ -104,7 +73,7 @@ export function CreateWalletSheet({ workspaceId }: { workspaceId: string }) {
   )
 }
 
-type Wallet = { id: string; name: string; settlement: WalletSettlement }
+type Wallet = { id: string; name: string }
 
 export function WalletActions({ workspaceId, wallet }: { workspaceId: string; wallet: Wallet }) {
   const [editOpen, setEditOpen] = useState(false)
@@ -149,7 +118,6 @@ export function WalletActions({ workspaceId, wallet }: { workspaceId: string; wa
             <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
               {state.error && <FieldError>{state.error}</FieldError>}
               <NameField id={`edit-wallet-${wallet.id}`} defaultValue={wallet.name} />
-              <SettlementField id={`edit-wallet-${wallet.id}-settlement`} defaultValue={wallet.settlement} />
             </FieldGroup>
             <SheetFooter>
               <Button type="submit" loading={pending}>

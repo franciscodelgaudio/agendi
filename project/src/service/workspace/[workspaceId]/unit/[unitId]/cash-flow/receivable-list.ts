@@ -9,18 +9,19 @@ export type PendingReceivablePage = { rows: PendingReceivable[]; total: number; 
 export type StatementListItem = {
   id: string;
   name: string;
-  closedAt: Date;
-  passOnBps: number;
-  count: number;
-  grossCents: number;
+  createdAt: Date;
   from: Date | null;
-  to: Date | null;
+  to: Date;
+  grossCents: number;
+  shareBps: number;
+  count: number;
+  partnerName: string | null;
   paidAt: Date | null;
   totalCents: number | null;
-  unitName?: string | null;
 };
+export type StatementPeriod = { name: string; from: string | null; to: string };
 export type StatementListPage = { rows: StatementListItem[]; total: number };
-export type PendingByUnit = { unitId: string | null; unitName: string | null; count: number; cents: number };
+export type PendingDay = { unitId: string | null; day: string; count: number; cents: number; unitName?: string | null };
 
 export function parseListPage(params: SearchParams) {
   const page = first(params.page);
@@ -48,7 +49,7 @@ function withUnitName(unitId: string | null, project: Record<string, unknown>) {
   return unitId ? [{ $project: project }] : [UNIT_LOOKUP, { $project: { ...project, unitName: UNIT_NAME } }];
 }
 
-const NOT_IN_STATEMENT = [
+export const NOT_SETTLED = [
   {
     $lookup: {
       from: "statements",
@@ -59,6 +60,16 @@ const NOT_IN_STATEMENT = [
     },
   },
   { $match: { statements: { $size: 0 } } },
+  {
+    $lookup: {
+      from: "transactions",
+      localField: "_id",
+      foreignField: "receivableId",
+      as: "transactions",
+      pipeline: [{ $project: { _id: 1 } }],
+    },
+  },
+  { $match: { transactions: { $size: 0 } } },
 ];
 
 function paged(page: number) {
@@ -70,7 +81,7 @@ const TOTAL = { $ifNull: [{ $first: "$total.n" }, 0] };
 export function pendingReceivablesPipeline(walletId: string, unitId: string | null, page: number): PipelineStage[] {
   return [
     scopeMatch(walletId, unitId),
-    ...NOT_IN_STATEMENT,
+    ...NOT_SETTLED,
     { $sort: { accruedAt: -1, _id: -1 } },
     {
       $facet: {
@@ -86,23 +97,19 @@ export function pendingReceivablesPipeline(walletId: string, unitId: string | nu
   ];
 }
 
-export function statementListPipeline(walletId: string, unitId: string | null, page: number): PipelineStage[] {
+function brasiliaDay(field: string) {
+  return { $dateToString: { format: "%Y-%m-%d", date: field, timezone: "-03:00" } };
+}
+
+export function statementListPipeline(scope: { partnerId: string } | { walletId: string }, page: number): PipelineStage[] {
+  const match = "partnerId" in scope ? { partnerId: new Types.ObjectId(scope.partnerId) } : { walletId: new Types.ObjectId(scope.walletId) };
   return [
-    scopeMatch(walletId, unitId),
-    { $sort: { closedAt: -1, _id: -1 } },
+    { $match: match },
+    { $sort: { to: -1, _id: -1 } },
     {
       $facet: {
         rows: [
           ...paged(page),
-          {
-            $lookup: {
-              from: "receivables",
-              localField: "receivableIds",
-              foreignField: "_id",
-              as: "receivables",
-              pipeline: [{ $project: { _id: 0, valueCents: 1, accruedAt: 1 } }],
-            },
-          },
           {
             $lookup: {
               from: "transactions",
@@ -112,19 +119,31 @@ export function statementListPipeline(walletId: string, unitId: string | null, p
               pipeline: [{ $project: { _id: 0, totalCents: 1, paidAt: 1 } }],
             },
           },
-          ...withUnitName(unitId, {
-            _id: 0,
-            id: { $toString: "$_id" },
-            name: 1,
-            closedAt: 1,
-            passOnBps: 1,
-            count: { $size: "$receivables" },
-            grossCents: { $sum: "$receivables.valueCents" },
-            from: { $min: "$receivables.accruedAt" },
-            to: { $max: "$receivables.accruedAt" },
-            paidAt: { $ifNull: [{ $first: "$transaction.paidAt" }, null] },
-            totalCents: { $ifNull: [{ $first: "$transaction.totalCents" }, null] },
-          }),
+          {
+            $lookup: {
+              from: "partners",
+              localField: "partnerId",
+              foreignField: "_id",
+              as: "partner",
+              pipeline: [{ $project: { _id: 0, name: 1 } }],
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              id: { $toString: "$_id" },
+              name: 1,
+              createdAt: 1,
+              from: 1,
+              to: 1,
+              grossCents: 1,
+              shareBps: 1,
+              count: { $size: "$receivableIds" },
+              partnerName: { $ifNull: [{ $first: "$partner.name" }, null] },
+              paidAt: { $ifNull: [{ $first: "$transaction.paidAt" }, null] },
+              totalCents: { $ifNull: [{ $first: "$transaction.totalCents" }, null] },
+            },
+          },
         ],
         total: [{ $count: "n" }],
       },
@@ -133,21 +152,41 @@ export function statementListPipeline(walletId: string, unitId: string | null, p
   ];
 }
 
-export function pendingByUnitPipeline(walletId: string): PipelineStage[] {
+export function partnerPeriodsPipeline(partnerId: string): PipelineStage[] {
   return [
-    scopeMatch(walletId, null),
-    ...NOT_IN_STATEMENT,
-    { $group: { _id: "$unitId", count: { $sum: 1 }, cents: { $sum: "$valueCents" } } },
+    { $match: { partnerId: new Types.ObjectId(partnerId) } },
+    { $sort: { to: 1, _id: 1 } },
+    { $project: { _id: 0, name: 1, from: brasiliaDay("$from"), to: brasiliaDay("$to") } },
+  ];
+}
+
+export function pendingByDayPipeline(walletId: string, unitId: string | null): PipelineStage[] {
+  const project = {
+    _id: 0,
+    unitId: { $toString: "$_id.unitId" },
+    day: "$_id.day",
+    count: 1,
+    cents: 1,
+  };
+  return [
+    scopeMatch(walletId, unitId),
+    ...NOT_SETTLED,
     {
-      $lookup: {
-        from: "units",
-        localField: "_id",
-        foreignField: "_id",
-        as: "unit",
-        pipeline: [{ $project: { _id: 0, name: 1 } }],
+      $group: {
+        _id: {
+          unitId: "$unitId",
+          day: brasiliaDay("$accruedAt"),
+        },
+        count: { $sum: 1 },
+        cents: { $sum: "$valueCents" },
       },
     },
-    { $project: { _id: 0, unitId: { $toString: "$_id" }, unitName: UNIT_NAME, count: 1, cents: 1 } },
-    { $sort: { unitName: 1 } },
+    ...(unitId
+      ? [{ $project: project }, { $sort: { day: 1 as const } }]
+      : [
+          { $lookup: { ...UNIT_LOOKUP.$lookup, localField: "_id.unitId" } },
+          { $project: { ...project, unitName: UNIT_NAME } },
+          { $sort: { day: 1 as const, unitName: 1 as const } },
+        ]),
   ];
 }
