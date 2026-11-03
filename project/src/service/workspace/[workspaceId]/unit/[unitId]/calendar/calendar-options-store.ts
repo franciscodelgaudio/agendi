@@ -27,10 +27,10 @@ const HOUR_MS = 60 * 60 * 1000
 export async function loadCalendarAppointments(workspaceId: string, params: SearchParams, unitId?: string) {
   const today = new Date(Date.now() - BRT_OFFSET_HOURS * HOUR_MS).toISOString().slice(0, 10)
   const query = parseCalendarQuery(unitId ? { ...params, unit: unitId } : params, today)
-  const workspaceMatch = { $match: { workspaceId: new Types.ObjectId(workspaceId) } }
+  const workspaceMatch = () => ({ $match: { workspaceId: new Types.ObjectId(workspaceId) } })
   const [appointments, blocked] = await Promise.all([
-    Appointment.aggregate<AppointmentRow>([workspaceMatch, ...calendarPipeline(query)]),
-    AppointmentBlocked.aggregate<AppointmentBlockedRow>([workspaceMatch, ...blockedCalendarPipeline(query)]),
+    Appointment.aggregate<AppointmentRow>([workspaceMatch(), ...calendarPipeline(query)]),
+    AppointmentBlocked.aggregate<AppointmentBlockedRow>([workspaceMatch(), ...blockedCalendarPipeline(query)]),
   ])
   return { query, appointments, blocked }
 }
