@@ -117,6 +117,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
   ])
   if (!workspace?.unit) notFound()
   const canManage = can(workspace.actor, "units.manage")
+  const hasStock = pages.workspace.includes("stock")
   const inventoryOptions = canManage ? workspace.inventories : []
   const { inventory } = workspace.unit
 
@@ -255,7 +256,10 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
               <CardDescription>Produtos no estoque da unidade</CardDescription>
               {(canManage || inventory) && (
                 <CardAction className="flex gap-1">
-                  {canManage && (
+                  {canManage && !inventory && hasStock && (
+                    <CardLinkButton href={`/workspace/${workspaceId}/stock`}>Vincular</CardLinkButton>
+                  )}
+                  {canManage && !hasStock && (
                     <UnitInventorySheet
                       workspaceId={workspaceId}
                       unitId={unitId}

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser } from "@/service/(auth)/session"
+import { loadStockUnit } from "@/service/workspace/[workspaceId]/stock/stock-unit-store"
 import {
   parseProductListQuery,
   PRODUCT_PAGE_SIZE,
@@ -23,6 +24,7 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
   const user = await requireUser()
   const { actor } = await requirePage(workspaceId, user.id, { workspace: "stock" })
   const canManage = can(actor, "stock.manage")
+  if (await loadStockUnit(workspaceId)) redirect(`/workspace/${workspaceId}/stock`)
 
   const [result] = await Product.aggregate<ProductListPage>(productListPipeline(workspaceId, query))
   const pathname = `/workspace/${workspaceId}/stock/products`

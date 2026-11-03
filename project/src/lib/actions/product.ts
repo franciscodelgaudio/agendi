@@ -27,6 +27,7 @@ const errorMessages: Record<Exclude<UpdateProductError | DeleteProductError, "fo
 }
 
 export type ProductFormState = { error: string | null }
+export type CreateProductFormState = { error: string | null; productId: string | null }
 
 function messageOf(error: UpdateProductError | DeleteProductError | "unauthenticated") {
   return error === "forbidden" ? forbiddenMessage("stock.manage") : errorMessages[error]
@@ -50,11 +51,11 @@ function productInput(formData: FormData) {
 
 export async function createProductAction(
   workspaceId: string,
-  _prev: ProductFormState,
+  _prev: CreateProductFormState,
   formData: FormData,
-): Promise<ProductFormState> {
+): Promise<CreateProductFormState> {
   const session = await sessionAccess(workspaceId)
-  if (!session) return { error: messageOf("unauthenticated") }
+  if (!session) return { error: messageOf("unauthenticated"), productId: null }
 
   const result = await createProduct(productInput(formData), session, {
     insert: async (data) => {
@@ -63,10 +64,10 @@ export async function createProductAction(
     },
   })
 
-  if (!result.ok) return { error: messageOf(result.error) }
+  if (!result.ok) return { error: messageOf(result.error), productId: null }
 
   refresh()
-  return { error: null }
+  return { error: null, productId: result.productId }
 }
 
 export async function updateProductAction(

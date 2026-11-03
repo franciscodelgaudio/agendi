@@ -1,82 +1,132 @@
-import { Types } from "mongoose"
+import { redirect } from "next/navigation"
 import { BoxesIcon } from "lucide-react"
 import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser } from "@/service/(auth)/session"
+import { loadStockUnit } from "@/service/workspace/[workspaceId]/stock/stock-unit-store"
+import {
+  INVENTORY_PAGE_SIZE,
+  inventoryListPipeline,
+  parseInventoryListQuery,
+  type InventoryListPage,
+} from "@/service/workspace/[workspaceId]/stock/inventory-list"
 import Link from "@/components/shared/link"
+import { ListPagination } from "@/components/shared/list-pagination"
+import { ListSearch } from "@/components/shared/list-search"
+import { ListToolbar } from "@/components/shared/list-toolbar"
+import { QuerySelect } from "@/components/shared/query-select"
+import { SortableHead } from "@/components/shared/sortable-head"
 import { CreateInventorySheet, InventoryActions } from "@/components/workspace/[workspaceId]/stock/inventory-sheets"
+import { UnitInventorySheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-ref-sheets"
 import { Badge } from "@/components/ui/badge"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Inventory } from "@/models/Inventory"
 
-type InventoryRow = {
-  id: string
-  name: string
-  units: { id: string; name: string }[]
-  productCount: number
-  quantity: number
-}
-
-export default async function InventoriesPage({ params }: PageProps<"/workspace/[workspaceId]/stock">) {
+export default async function InventoriesPage({ params, searchParams }: PageProps<"/workspace/[workspaceId]/stock">) {
   const { workspaceId } = await params
+  const query = parseInventoryListQuery(await searchParams)
   const user = await requireUser()
   const { actor } = await requirePage(workspaceId, user.id, { workspace: "stock" })
   const canManage = can(actor, "stock.manage")
+  const unit = await loadStockUnit(workspaceId)
+  const pathname = `/workspace/${workspaceId}/stock`
 
-  const inventories = await Inventory.aggregate<InventoryRow>([
-    { $match: { workspaceId: new Types.ObjectId(workspaceId) } },
-    {
-      $lookup: {
-        from: "units",
-        localField: "_id",
-        foreignField: "inventoryId",
-        as: "units",
-        pipeline: [{ $sort: { name: 1, _id: 1 } }, { $project: { _id: 0, id: { $toString: "$_id" }, name: 1 } }],
-      },
-    },
-    {
-      $project: {
-        _id: 0,
-        id: { $toString: "$_id" },
-        name: 1,
-        units: 1,
-        productCount: { $size: { $filter: { input: "$products", cond: { $gt: ["$$this.quantity", 0] } } } },
-        quantity: { $sum: "$products.quantity" },
-      },
-    },
-    { $sort: { name: 1, id: 1 } },
-  ])
+  if (unit?.inventoryId) redirect(`${pathname}/${unit.inventoryId}`)
+
+  if (unit) {
+    const canLink = can(actor, "units.manage")
+    return (
+      <Empty className="border">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <BoxesIcon />
+          </EmptyMedia>
+          <EmptyTitle>{unit.name} não tem estoque</EmptyTitle>
+          <EmptyDescription>
+            {canLink
+              ? "Crie um estoque novo ou vincule um que já existe para registrar entradas e saídas de produtos."
+              : "Peça a quem gerencia as unidades para vincular um estoque."}{" "}
+            Para ver todos os estoques, escolha &quot;Todas as unidades&quot; no seletor.
+          </EmptyDescription>
+        </EmptyHeader>
+        {canLink && (
+          <EmptyContent className="flex-row flex-wrap justify-center gap-2">
+            <UnitInventorySheet
+              workspaceId={workspaceId}
+              unitId={unit.id}
+              unitName={unit.name}
+              options={unit.inventories}
+              currentId={null}
+              createOnly
+            />
+            {unit.inventories.length > 0 && (
+              <UnitInventorySheet
+                workspaceId={workspaceId}
+                unitId={unit.id}
+                unitName={unit.name}
+                options={unit.inventories}
+                currentId={null}
+                standalone
+              />
+            )}
+          </EmptyContent>
+        )}
+      </Empty>
+    )
+  }
+
+  const [result] = await Inventory.aggregate<InventoryListPage>(inventoryListPipeline(workspaceId, query))
+  const listQuery = { q: query.q, unit: query.unit, sort: query.sort, dir: query.dir }
+  const pages = Math.ceil(result.total / INVENTORY_PAGE_SIZE)
+  if (pages > 0 && query.page > pages) {
+    redirect(`${pathname}?${new URLSearchParams(Object.entries({ ...listQuery, page: String(pages) }).filter(([, v]) => v))}`)
+  }
 
   return (
     <>
-      {canManage && (
-        <div className="flex justify-end">
-          <CreateInventorySheet workspaceId={workspaceId} />
-        </div>
-      )}
+      <ListToolbar actions={canManage && <CreateInventorySheet workspaceId={workspaceId} />}>
+        <ListSearch query={listQuery} placeholder="Buscar estoque..." />
+        <QuerySelect
+          query={listQuery}
+          field="unit"
+          label="Unidade"
+          items={[
+            { value: "all", label: "Com e sem unidade" },
+            { value: "linked", label: "Com unidade" },
+            { value: "unlinked", label: "Sem unidade" },
+          ]}
+        />
+      </ListToolbar>
       <div className="@container border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-full px-4">Estoque</TableHead>
+              <SortableHead field="name" label="Estoque" query={listQuery} pathname={pathname} className="w-full" />
               <TableHead className="px-4 @max-3xl:hidden">Unidades</TableHead>
-              <TableHead className="px-4 text-right @max-md:hidden">Produtos</TableHead>
-              <TableHead className="px-4 text-right">Itens</TableHead>
+              <SortableHead
+                field="products"
+                label="Produtos"
+                query={listQuery}
+                pathname={pathname}
+                className="text-right @max-md:hidden"
+              />
+              <SortableHead field="quantity" label="Itens" query={listQuery} pathname={pathname} className="text-right" />
               {canManage && <TableHead className="w-0 px-4" />}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {inventories.length === 0 && (
+            {result.rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={canManage ? 5 : 4} className="h-24 px-4 text-center text-muted-foreground">
-                  Nenhum estoque cadastrado.
+                  Nenhum estoque encontrado.
                 </TableCell>
               </TableRow>
             )}
-            {inventories.map((inventory) => (
+            {result.rows.map((inventory) => (
               <TableRow key={inventory.id}>
                 <TableCell className="max-w-0 px-4 font-medium">
-                  <Link href={`/workspace/${workspaceId}/stock/${inventory.id}`} className="flex items-center gap-2 hover:underline">
+                  <Link href={`${pathname}/${inventory.id}`} className="flex items-center gap-2 hover:underline">
                     <BoxesIcon className="size-4 shrink-0 text-muted-foreground" />
                     <span className="truncate">{inventory.name}</span>
                   </Link>
@@ -86,9 +136,9 @@ export default async function InventoriesPage({ params }: PageProps<"/workspace/
                     {inventory.units.length === 0 ? (
                       <span className="text-muted-foreground">Sem unidades</span>
                     ) : (
-                      inventory.units.map((unit) => (
-                        <Badge key={unit.id} variant="secondary">
-                          {unit.name}
+                      inventory.units.map((linked) => (
+                        <Badge key={linked.id} variant="secondary">
+                          {linked.name}
                         </Badge>
                       ))
                     )}
@@ -106,6 +156,14 @@ export default async function InventoriesPage({ params }: PageProps<"/workspace/
           </TableBody>
         </Table>
       </div>
+      <ListPagination
+        query={listQuery}
+        page={query.page}
+        pageSize={INVENTORY_PAGE_SIZE}
+        total={result.total}
+        pathname={pathname}
+        itemLabel="estoques"
+      />
     </>
   )
 }

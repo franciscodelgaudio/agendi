@@ -114,6 +114,14 @@ describe("switchUnitHref", () => {
     expect(switchUnitHref(pathname, BASE, unit)).toBe(expected);
   });
 
+  it.each([
+    [UNIT, `${BASE}/stock/${INVENTORY_ID}`],
+    [OTHER_UNIT, `${BASE}/stock`],
+    [null, `${BASE}/stock/products`],
+  ] as const)("do catálogo de produtos, escolher %j vai para %s", (unit, expected) => {
+    expect(switchUnitHref(`${BASE}/stock/products`, BASE, unit)).toBe(expected);
+  });
+
   it("serviços sem unidade voltam para o início", () => {
     expect(switchUnitHref(`${BASE}/unit/${UNIT_ID}/services`, BASE, null)).toBe(BASE);
   });

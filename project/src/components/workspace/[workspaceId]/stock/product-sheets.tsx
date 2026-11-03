@@ -2,7 +2,13 @@
 
 import { useActionState, useState, useTransition } from "react"
 import { EllipsisIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
-import { createProductAction, deleteProductAction, updateProductAction, type ProductFormState } from "@/lib/actions/product"
+import {
+  createProductAction,
+  deleteProductAction,
+  updateProductAction,
+  type CreateProductFormState,
+  type ProductFormState,
+} from "@/lib/actions/product"
 import { AmountInput } from "@/components/shared/amount-input"
 import {
   AlertDialog,
@@ -27,7 +33,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 
 type Product = { id: string; name: string; priceCents: number }
 
-function ProductFields({ idPrefix, product }: { idPrefix: string; product?: Product }) {
+export function ProductFields({ idPrefix, product }: { idPrefix: string; product?: Product }) {
   return (
     <>
       <Field>
@@ -60,12 +66,12 @@ function ProductFields({ idPrefix, product }: { idPrefix: string; product?: Prod
 export function CreateProductSheet({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false)
   const [state, formAction, pending] = useActionState(
-    async (prev: ProductFormState, formData: FormData) => {
+    async (prev: CreateProductFormState, formData: FormData) => {
       const next = await createProductAction(workspaceId, prev, formData)
       if (!next.error) setOpen(false)
       return next
     },
-    { error: null },
+    { error: null, productId: null },
   )
 
   return (

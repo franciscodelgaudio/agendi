@@ -9,6 +9,8 @@ import {
   type InventoryProductsPage,
 } from "@/service/workspace/[workspaceId]/stock/[inventoryId]/inventory-products"
 import { loadInventoryScreen } from "@/service/workspace/[workspaceId]/stock/[inventoryId]/inventory-screen-store"
+import { loadStockUnit } from "@/service/workspace/[workspaceId]/stock/stock-unit-store"
+import { UnitInventorySheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-ref-sheets"
 import { currencyFormat } from "@/components/shared/service-format"
 import { ListPagination } from "@/components/shared/list-pagination"
 import { ListSearch } from "@/components/shared/list-search"
@@ -27,8 +29,10 @@ export default async function InventoryPage({
   const query = parseInventoryProductsQuery(await searchParams)
   const user = await requireUser()
   const { actor } = await requirePage(workspaceId, user.id, { workspace: "stock" })
-  const screen = await loadInventoryScreen(workspaceId, inventoryId)
+  const [screen, unit] = await Promise.all([loadInventoryScreen(workspaceId, inventoryId), loadStockUnit(workspaceId)])
   if (!screen) notFound()
+  const linkUnit =
+    unit && can(actor, "units.manage") && (unit.inventoryId === null || unit.inventoryId === inventoryId) ? unit : null
 
   const [result = { rows: [], total: 0 }] = await Inventory.aggregate<InventoryProductsPage>(
     inventoryProductsPipeline(inventoryId, query),
@@ -42,10 +46,21 @@ export default async function InventoryPage({
 
   return (
     <>
-      <InventoryHeader workspaceId={workspaceId} inventory={screen.inventory} />
+      <InventoryHeader workspaceId={workspaceId} inventory={screen.inventory} ofSelectedUnit={unit?.inventoryId === inventoryId} />
       <ListToolbar
         actions={
           <>
+            {linkUnit && (
+              <UnitInventorySheet
+                workspaceId={workspaceId}
+                unitId={linkUnit.id}
+                unitName={linkUnit.name}
+                options={linkUnit.inventories}
+                currentId={linkUnit.inventoryId}
+                defaultId={inventoryId}
+                standalone
+              />
+            )}
             {can(actor, "stock.transfer") && screen.inventories.length > 0 && (
               <TransferSheet
                 workspaceId={workspaceId}

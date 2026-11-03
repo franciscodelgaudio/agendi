@@ -9,6 +9,7 @@ import {
   type MovementListPage,
 } from "@/service/workspace/[workspaceId]/stock/[inventoryId]/movement-list"
 import { loadInventoryScreen } from "@/service/workspace/[workspaceId]/stock/[inventoryId]/inventory-screen-store"
+import { loadStockUnit } from "@/service/workspace/[workspaceId]/stock/stock-unit-store"
 import { ListPagination } from "@/components/shared/list-pagination"
 import { ListSearch } from "@/components/shared/list-search"
 import { QuerySelect } from "@/components/shared/query-select"
@@ -34,7 +35,7 @@ export default async function InventoryMovementsPage({
   const query = parseMovementListQuery(await searchParams)
   const user = await requireUser()
   await requirePage(workspaceId, user.id, { workspace: "stock" })
-  const screen = await loadInventoryScreen(workspaceId, inventoryId)
+  const [screen, unit] = await Promise.all([loadInventoryScreen(workspaceId, inventoryId), loadStockUnit(workspaceId)])
   if (!screen) notFound()
 
   const [result] = await StockMovement.aggregate<MovementListPage>(movementListPipeline(inventoryId, query))
@@ -47,7 +48,7 @@ export default async function InventoryMovementsPage({
 
   return (
     <>
-      <InventoryHeader workspaceId={workspaceId} inventory={screen.inventory} />
+      <InventoryHeader workspaceId={workspaceId} inventory={screen.inventory} ofSelectedUnit={unit?.inventoryId === inventoryId} />
       <div className="flex flex-wrap items-center gap-2">
         <ListSearch query={listQuery} placeholder="Buscar movimento..." />
         <QuerySelect

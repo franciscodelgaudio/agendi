@@ -1,7 +1,7 @@
 "use client"
 
 import { useActionState, useState } from "react"
-import { ArrowLeftRightIcon, LinkIcon } from "lucide-react"
+import { ArrowLeftRightIcon, LinkIcon, PlusIcon } from "lucide-react"
 import { setUnitInventoryAction, setUnitWalletAction, type UnitFormState } from "@/lib/actions/unit"
 import { OpeningBalanceFields } from "@/components/workspace/[workspaceId]/cash-flow/opening-balance-fields"
 import { Button } from "@/components/ui/button"
@@ -59,9 +59,19 @@ const inventory: Kind = {
   withBalance: false,
 }
 
-type Props = { workspaceId: string; unitId: string; options: RefOption[]; currentId: string | null; standalone?: boolean }
+type Props = {
+  workspaceId: string
+  unitId: string
+  options: RefOption[]
+  currentId: string | null
+  standalone?: boolean
+  unitName?: string
+  defaultId?: string
+  createOnly?: boolean
+}
 
-function UnitRefSheet({ kind, workspaceId, unitId, options, currentId, standalone = false }: Props & { kind: Kind }) {
+function UnitRefSheet({ kind, standalone = false, ...props }: Props & { kind: Kind }) {
+  const { currentId } = props
   const [open, setOpen] = useState(false)
   const [formKey, setFormKey] = useState(0)
 
@@ -73,27 +83,36 @@ function UnitRefSheet({ kind, workspaceId, unitId, options, currentId, standalon
         setOpen(next)
       }}
     >
-      <SheetTrigger render={<Button variant={standalone ? "outline" : "ghost"} size={standalone ? "default" : "sm"} />}>
-        {currentId ? <ArrowLeftRightIcon /> : <LinkIcon />}
-        {standalone ? (currentId ? `Trocar ${kind.label.toLowerCase()}` : `Vincular ${kind.label.toLowerCase()}`) : currentId ? "Trocar" : "Vincular"}
-      </SheetTrigger>
+      {props.createOnly ? (
+        <SheetTrigger render={<Button />}>
+          <PlusIcon />
+          {kind.newLabel}
+        </SheetTrigger>
+      ) : (
+        <SheetTrigger render={<Button variant={standalone ? "outline" : "ghost"} size={standalone ? "default" : "sm"} />}>
+          {currentId ? <ArrowLeftRightIcon /> : <LinkIcon />}
+          {standalone ? (currentId ? `Trocar ${kind.label.toLowerCase()}` : `Vincular ${kind.label.toLowerCase()}`) : currentId ? "Trocar" : "Vincular"}
+        </SheetTrigger>
+      )}
       <SheetContent>
-        <UnitRefForm
-          key={formKey}
-          kind={kind}
-          workspaceId={workspaceId}
-          unitId={unitId}
-          options={options}
-          currentId={currentId}
-          onDone={() => setOpen(false)}
-        />
+        <UnitRefForm key={formKey} kind={kind} {...props} onDone={() => setOpen(false)} />
       </SheetContent>
     </Sheet>
   )
 }
 
-function UnitRefForm({ kind, workspaceId, unitId, options, currentId, onDone }: Props & { kind: Kind; onDone: () => void }) {
-  const [value, setValue] = useState<string | null>(currentId ?? (options.length ? null : NEW))
+function UnitRefForm({
+  kind,
+  workspaceId,
+  unitId,
+  options,
+  currentId,
+  unitName,
+  defaultId,
+  createOnly = false,
+  onDone,
+}: Props & { kind: Kind; onDone: () => void }) {
+  const [value, setValue] = useState<string | null>(createOnly ? NEW : (currentId ?? defaultId ?? (options.length ? null : NEW)))
   const [state, formAction, pending] = useActionState(
     async (prev: UnitFormState, formData: FormData) => {
       const next = await kind.action(workspaceId, unitId, prev, formData)
@@ -112,26 +131,39 @@ function UnitRefForm({ kind, workspaceId, unitId, options, currentId, onDone }: 
   return (
     <form action={formAction} className="flex min-h-0 flex-1 flex-col">
       <SheetHeader>
-        <SheetTitle>{kind.title}</SheetTitle>
-        <SheetDescription>{kind.description}</SheetDescription>
+        {createOnly ? (
+          <>
+            <SheetTitle>{unitName ? `${kind.newLabel} para ${unitName}` : kind.newLabel}</SheetTitle>
+            <SheetDescription>{`O ${kind.label.toLowerCase()} é criado e já fica vinculado à unidade.`}</SheetDescription>
+          </>
+        ) : (
+          <>
+            <SheetTitle>{unitName ? `${kind.label} de ${unitName}` : kind.title}</SheetTitle>
+            <SheetDescription>{kind.description}</SheetDescription>
+          </>
+        )}
       </SheetHeader>
       <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {state.error && <FieldError>{state.error}</FieldError>}
-        <Field>
-          <FieldLabel htmlFor={id}>{kind.label}</FieldLabel>
-          <Select name={`${kind.name}Id`} items={items} value={value} onValueChange={(next) => setValue(next as string)} required>
-            <SelectTrigger id={id} className="w-full">
-              <SelectValue placeholder="Escolha" />
-            </SelectTrigger>
-            <SelectContent>
-              {items.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+        {createOnly ? (
+          <input type="hidden" name={`${kind.name}Id`} value={NEW} />
+        ) : (
+          <Field>
+            <FieldLabel htmlFor={id}>{kind.label}</FieldLabel>
+            <Select name={`${kind.name}Id`} items={items} value={value} onValueChange={(next) => setValue(next as string)} required>
+              <SelectTrigger id={id} className="w-full">
+                <SelectValue placeholder="Escolha" />
+              </SelectTrigger>
+              <SelectContent>
+                {items.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
         {value === NEW && (
           <>
             <Field>

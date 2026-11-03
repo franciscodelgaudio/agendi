@@ -96,6 +96,6 @@ export function selectedUnitId(pathname: string, base: string, savedUnitId: stri
 
 export function switchUnitHref(pathname: string, base: string, unit: ContextUnit | null) {
   const section = sectionOf(pathname, base) ?? "inicio";
-  if (!SCOPED_SECTIONS.includes(section)) return pathname;
+  if (!SCOPED_SECTIONS.includes(section) || (!unit && pathname === `${base}/stock/products`)) return pathname;
   return sectionHref(section, base, unit) ?? base;
 }
