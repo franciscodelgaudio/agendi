@@ -2,79 +2,52 @@ import { redirect } from "next/navigation"
 import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { loadWalletCashFlow } from "@/service/workspace/[workspaceId]/cash-flow/wallets/[walletId]/wallet-page-store"
 import {
-  parseTransactionListQuery,
-  TRANSACTION_PAGE_SIZE,
-  transactionListPipeline,
-  type TransactionListPage,
-} from "@/service/workspace/[workspaceId]/cash-flow/wallets/[walletId]/transaction-list"
+  parseListPage,
+  pendingReceivablesPipeline,
+  RECEIVABLE_PAGE_SIZE,
+  type PendingReceivablePage,
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivable-list"
 import { ListPagination } from "@/components/shared/list-pagination"
-import { ListSearch } from "@/components/shared/list-search"
 import { ListTotals } from "@/components/shared/list-totals"
-import { QuerySelect } from "@/components/shared/query-select"
-import { CreateTransactionSheet } from "@/components/workspace/[workspaceId]/cash-flow/transaction-sheets"
-import { TransactionTable } from "@/components/workspace/[workspaceId]/cash-flow/transaction-table"
+import { ReceivableTable } from "@/components/workspace/[workspaceId]/cash-flow/receivable-table"
 import { WalletShell } from "@/components/workspace/[workspaceId]/cash-flow/wallet-shell"
-import { Transaction } from "@/models/Transaction"
+import { Receivable } from "@/models/Receivable"
 
-export default async function WalletPage({
+export default async function WalletReceivablesPage({
   params,
   searchParams,
-}: PageProps<"/workspace/[workspaceId]/cash-flow/wallets/[walletId]">) {
+}: PageProps<"/workspace/[workspaceId]/cash-flow/wallets/[walletId]/receivables">) {
   const { workspaceId, walletId } = await params
-  const query = parseTransactionListQuery(await searchParams)
+  const page = parseListPage(await searchParams)
   const { actor, wallet, partners } = await loadWalletCashFlow(workspaceId, walletId)
-  const [result] = await Transaction.aggregate<TransactionListPage>(transactionListPipeline(walletId, query))
-
-  const pathname = `/workspace/${workspaceId}/cash-flow/wallets/${walletId}`
-  const listQuery = { q: query.q, type: query.type, sort: query.sort, dir: query.dir }
-  const pages = Math.ceil(result.total / TRANSACTION_PAGE_SIZE)
-  if (pages > 0 && query.page > pages) {
-    const params = new URLSearchParams(Object.entries({ ...listQuery, page: String(pages) }).filter(([, v]) => v))
-    redirect(`${pathname}?${params}`)
-  }
   const canManage = can(actor, "cash_flow.manage")
 
+  const [result = { rows: [], total: 0, totalCents: 0 }] = await Receivable.aggregate<PendingReceivablePage>(
+    pendingReceivablesPipeline(walletId, null, page),
+  )
+
+  const pathname = `/workspace/${workspaceId}/cash-flow/wallets/${walletId}/receivables`
+  const pages = Math.ceil(result.total / RECEIVABLE_PAGE_SIZE)
+  if (pages > 0 && page > pages) redirect(`${pathname}?page=${pages}`)
+
   return (
-    <WalletShell
-      workspaceId={workspaceId}
-      wallet={wallet}
-      partners={partners}
-      actions={canManage && <CreateTransactionSheet workspaceId={workspaceId} walletId={walletId} units={wallet.units} />}
-    >
+    <WalletShell workspaceId={workspaceId} wallet={wallet} partners={partners}>
       <div className="flex flex-wrap items-center gap-2">
-        <ListSearch query={listQuery} placeholder="Buscar transação..." />
-        <QuerySelect
-          query={listQuery}
-          field="type"
-          label="Tipo"
-          items={[
-            { value: "all", label: "Entradas e saídas" },
-            { value: "incoming", label: "Entradas" },
-            { value: "expense", label: "Saídas" },
-          ]}
-        />
-        <ListTotals
-          items={[
-            { label: "Entradas", cents: wallet.incomingCents },
-            { label: "Saídas", cents: wallet.expenseCents },
-            { label: "Saldo", cents: wallet.balanceCents },
-          ]}
-        />
+        <p className="text-sm text-muted-foreground">
+          {partners.length > 0
+            ? "Atendimentos concluídos que ainda não foram recebidos. Os das unidades com parceiro entram no próximo fechamento."
+            : "Atendimentos concluídos que ainda não foram recebidos."}
+        </p>
+        <ListTotals items={[{ label: "A receber", cents: result.totalCents }]} />
       </div>
-      <TransactionTable
-        workspaceId={workspaceId}
-        transactions={result.rows}
-        query={listQuery}
-        pathname={pathname}
-        canManage={canManage}
-      />
+      <ReceivableTable workspaceId={workspaceId} receivables={result.rows} showUnit canSettle={canManage && partners.length === 0} />
       <ListPagination
-        query={listQuery}
-        page={query.page}
-        pageSize={TRANSACTION_PAGE_SIZE}
+        query={{}}
+        page={page}
+        pageSize={RECEIVABLE_PAGE_SIZE}
         total={result.total}
         pathname={pathname}
-        itemLabel="transações"
+        itemLabel="recebíveis"
       />
     </WalletShell>
   )

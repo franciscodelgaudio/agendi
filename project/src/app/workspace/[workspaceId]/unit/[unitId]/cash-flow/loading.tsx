@@ -1,10 +1,9 @@
-import { FiltersSkeleton, PageSkeleton, PaginationSkeleton, TableSkeleton } from "@/components/shared/page-skeletons"
+import { PageSkeleton, PaginationSkeleton, TableSkeleton } from "@/components/shared/page-skeletons"
 
 export default function Loading() {
   return (
     <PageSkeleton section>
-      <FiltersSkeleton selects={2} />
-      <TableSkeleton columns={4} />
+      <TableSkeleton columns={3} />
       <PaginationSkeleton />
     </PageSkeleton>
   )

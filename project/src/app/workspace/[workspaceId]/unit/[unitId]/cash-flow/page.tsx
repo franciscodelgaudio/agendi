@@ -2,89 +2,55 @@ import { redirect } from "next/navigation"
 import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { loadUnitCashFlow } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
 import {
-  parseTransactionListQuery,
-  TRANSACTION_PAGE_SIZE,
-  transactionListPipeline,
-  transactionTotalsPipeline,
-  type TransactionListPage,
-  type TransactionTotals,
-} from "@/service/workspace/[workspaceId]/cash-flow/wallets/[walletId]/transaction-list"
+  parseListPage,
+  pendingReceivablesPipeline,
+  RECEIVABLE_PAGE_SIZE,
+  type PendingReceivablePage,
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivable-list"
 import { ListPagination } from "@/components/shared/list-pagination"
-import { ListSearch } from "@/components/shared/list-search"
 import { ListTotals } from "@/components/shared/list-totals"
-import { QuerySelect } from "@/components/shared/query-select"
-import { CreateTransactionSheet } from "@/components/workspace/[workspaceId]/cash-flow/transaction-sheets"
-import { TransactionTable } from "@/components/workspace/[workspaceId]/cash-flow/transaction-table"
+import { ReceivableTable } from "@/components/workspace/[workspaceId]/cash-flow/receivable-table"
 import { UnitCashFlowShell } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-cash-flow-shell"
-import { Transaction } from "@/models/Transaction"
+import { Receivable } from "@/models/Receivable"
 
-const NO_TOTALS: TransactionTotals = { incomingCents: 0, expenseCents: 0, balanceCents: 0 }
-
-export default async function UnitCashFlowPage({
+export default async function UnitReceivablesPage({
   params,
   searchParams,
-}: PageProps<"/workspace/[workspaceId]/unit/[unitId]/cash-flow">) {
+}: PageProps<"/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivables">) {
   const { workspaceId, unitId } = await params
-  const query = parseTransactionListQuery(await searchParams)
+  const page = parseListPage(await searchParams)
   const data = await loadUnitCashFlow(workspaceId, unitId)
   const { wallet } = data
   if (!wallet) return <UnitCashFlowShell workspaceId={workspaceId} unitId={unitId} data={data} />
 
   const canManage = can(data.actor, "cash_flow.manage")
-  const [[totals = NO_TOTALS], [result]] = await Promise.all([
-    Transaction.aggregate<TransactionTotals>(transactionTotalsPipeline(wallet.id, unitId)),
-    Transaction.aggregate<TransactionListPage>(transactionListPipeline(wallet.id, query, unitId)),
-  ])
+  const { partner } = data
+  const [result = { rows: [], total: 0, totalCents: 0 }] = await Receivable.aggregate<PendingReceivablePage>(
+    pendingReceivablesPipeline(wallet.id, unitId, page),
+  )
 
-  const pathname = `/workspace/${workspaceId}/unit/${unitId}/cash-flow`
-  const listQuery = { q: query.q, type: query.type, sort: query.sort, dir: query.dir }
-  const pages = Math.ceil(result.total / TRANSACTION_PAGE_SIZE)
-  if (pages > 0 && query.page > pages) {
-    const params = new URLSearchParams(Object.entries({ ...listQuery, page: String(pages) }).filter(([, v]) => v))
-    redirect(`${pathname}?${params}`)
-  }
+  const pathname = `/workspace/${workspaceId}/unit/${unitId}/cash-flow/receivables`
+  const pages = Math.ceil(result.total / RECEIVABLE_PAGE_SIZE)
+  if (pages > 0 && page > pages) redirect(`${pathname}?page=${pages}`)
 
   return (
-    <UnitCashFlowShell
-      workspaceId={workspaceId}
-      unitId={unitId}
-      data={data}
-      actions={canManage && <CreateTransactionSheet workspaceId={workspaceId} unitId={unitId} />}
-    >
+    <UnitCashFlowShell workspaceId={workspaceId} unitId={unitId} data={data}>
       <div className="flex flex-wrap items-center gap-2">
-        <ListSearch query={listQuery} placeholder="Buscar transação..." />
-        <QuerySelect
-          query={listQuery}
-          field="type"
-          label="Tipo"
-          items={[
-            { value: "all", label: "Entradas e saídas" },
-            { value: "incoming", label: "Entradas" },
-            { value: "expense", label: "Saídas" },
-          ]}
-        />
-        <ListTotals
-          items={[
-            { label: "Entradas", cents: totals.incomingCents },
-            { label: "Saídas", cents: totals.expenseCents },
-            { label: "Saldo", cents: totals.balanceCents },
-          ]}
-        />
+        <p className="text-sm text-muted-foreground">
+          {partner
+            ? `Atendimentos concluídos que ${partner.name} recebe dos clientes. Eles entram no próximo fechamento.`
+            : "Atendimentos concluídos que ainda não foram recebidos."}
+        </p>
+        <ListTotals items={[{ label: "A receber", cents: result.totalCents }]} />
       </div>
-      <TransactionTable
-        workspaceId={workspaceId}
-        transactions={result.rows}
-        query={listQuery}
-        pathname={pathname}
-        canManage={canManage}
-      />
+      <ReceivableTable workspaceId={workspaceId} receivables={result.rows} showUnit={false} canSettle={canManage && !partner} />
       <ListPagination
-        query={listQuery}
-        page={query.page}
-        pageSize={TRANSACTION_PAGE_SIZE}
+        query={{}}
+        page={page}
+        pageSize={RECEIVABLE_PAGE_SIZE}
         total={result.total}
         pathname={pathname}
-        itemLabel="transações"
+        itemLabel="recebíveis"
       />
     </UnitCashFlowShell>
   )
