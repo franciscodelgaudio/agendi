@@ -27,7 +27,7 @@ const permissionLabels: Record<Action, string> = {
   "appointments.manage": "Gerenciar atendimentos",
   "customers.manage": "Cadastrar, editar e remover clientes",
   "stock.manage": "Gerenciar estoque",
-  "stock.transfer": "Transferir produtos entre inventários",
+  "stock.transfer": "Transferir produtos entre estoques",
   "cash_flow.manage": "Gerenciar carteiras e transações do caixa",
   "partners.manage": "Cadastrar parceiros e as faixas de repasse",
   "users.manage": "Convidar, editar e remover usuários",
@@ -52,15 +52,14 @@ const workspacePageLabels: Record<WorkspacePage, string> = {
   units: "Unidades",
   calendar: "Agenda",
   customers: "Clientes",
-  cash_flow: "Caixa",
+  cash_flow: "Caixa e parceiros",
   stock: "Estoque",
   users: "Usuários",
 }
 
 const unitPageLabels: Record<UnitPage, string> = {
-  overview: "Visão geral",
+  overview: "Início",
   calendar: "Agenda",
-  appointments: "Atendimentos",
   services: "Serviços",
   cash_flow: "Caixa",
 }

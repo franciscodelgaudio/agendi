@@ -64,7 +64,7 @@ function PartnerExample({ name, thresholdRule, drafts }: { name: string; thresho
   )
 }
 
-function PartnerFields({ partner }: { partner: UnitPartner | null }) {
+export function PartnerFields({ partner }: { partner: UnitPartner | null }) {
   const [name, setName] = useState(partner?.name ?? "")
   const [thresholdRule, setThresholdRule] = useState<ThresholdRule>(partner?.thresholdRule ?? "above")
   const [drafts, setDrafts] = useState(() => draftsOf(partner))
@@ -194,7 +194,7 @@ function SourceField({ unlinked, value, onChange }: { unlinked: UnitPartner[]; v
   )
 }
 
-function DeletePartnerDialog({
+export function DeletePartnerDialog({
   workspaceId,
   partner,
   open,

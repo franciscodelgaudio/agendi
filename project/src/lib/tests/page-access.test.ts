@@ -12,12 +12,12 @@ describe("visiblePages", () => {
     const actor = {
       admin: false,
       permissions: [],
-      pages: { workspace: ["users", "home", "calendar"], unit: ["appointments", "overview"] },
+      pages: { workspace: ["users", "home", "calendar"], unit: ["services", "overview"] },
     } as const;
 
     expect(visiblePages(actor)).toEqual({
       workspace: ["home", "calendar", "users"],
-      unit: ["overview", "appointments"],
+      unit: ["overview", "services"],
     });
   });
 
@@ -25,7 +25,7 @@ describe("visiblePages", () => {
     const actor = {
       admin: false,
       permissions: [],
-      pages: { workspace: ["home", "billing"], unit: ["reports", "stock", "commission"] },
+      pages: { workspace: ["home", "billing"], unit: ["reports", "stock", "commission", "appointments"] },
     } as const;
 
     expect(visiblePages(actor)).toEqual({ workspace: ["home"], unit: [] });
@@ -42,8 +42,8 @@ describe("WORKSPACE_PAGES", () => {
 });
 
 describe("UNIT_PAGES", () => {
-  it("a unidade tem as abas de serviços em /services e de caixa em /cash-flow, e não tem aba de estoque", () => {
-    expect(UNIT_PAGES).toEqual(["overview", "calendar", "appointments", "services", "cash_flow"]);
+  it("a unidade tem serviços em /services e caixa em /cash-flow, sem lista de atendimentos nem estoque", () => {
+    expect(UNIT_PAGES).toEqual(["overview", "calendar", "services", "cash_flow"]);
     expect(UNIT_PAGE_PATHS.services).toBe("/services");
     expect(UNIT_PAGE_PATHS.cash_flow).toBe("/cash-flow");
   });

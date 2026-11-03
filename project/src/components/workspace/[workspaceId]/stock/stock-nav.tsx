@@ -13,7 +13,7 @@ export function StockNav({ workspaceId }: { workspaceId: string }) {
   return (
     <SectionNav
       items={[
-        { title: "Inventários", icon: <BoxesIcon />, href: base },
+        { title: "Estoques", icon: <BoxesIcon />, href: base },
         { title: "Produtos", icon: <PackageIcon />, href: products },
       ]}
     />

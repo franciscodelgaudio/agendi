@@ -79,7 +79,7 @@ export function StatementTable({ workspaceId, statements, showPartner, canManage
               </TableCell>
               {canManage && (
                 <TableCell className="px-4 text-right">
-                  {!statement.paidAt && <StatementActions workspaceId={workspaceId} statement={statement} />}
+                  <StatementActions workspaceId={workspaceId} statement={statement} />
                 </TableCell>
               )}
             </TableRow>

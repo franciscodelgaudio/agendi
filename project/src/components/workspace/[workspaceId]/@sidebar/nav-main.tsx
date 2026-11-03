@@ -3,11 +3,13 @@
 import Link from "@/components/shared/link"
 import { usePathname } from "next/navigation"
 import {
-  MapPinIcon,
-  CalendarIcon,
-  HomeIcon,
   ArchiveIcon,
+  CalendarIcon,
   ContactIcon,
+  HandshakeIcon,
+  HomeIcon,
+  LeafIcon,
+  MapPinIcon,
   UsersIcon,
   WalletIcon,
   type LucideIcon,
@@ -18,54 +20,116 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar"
-import { WORKSPACE_PAGE_PATHS, type WorkspacePage } from "@/service/workspace/[workspaceId]/page-access"
+import { UnitSwitcher, type SidebarUnit } from "@/components/workspace/[workspaceId]/@sidebar/unit-switcher"
+import type { RolePages } from "@/service/workspace/[workspaceId]/page-access"
+import {
+  sectionHref,
+  sectionOf,
+  selectedUnitId,
+  type NavSection,
+} from "@/service/workspace/[workspaceId]/unit-context"
 
-type NavItem = { title: string; href: string; icon: LucideIcon }
+type NavItem = { section: NavSection; title: string; icon: LucideIcon }
 
-// Itens com subpáginas (ex.: a lista do calendário) seguem ativos nelas; o Início só na própria página.
-export function isNavItemActive(pathname: string, href: string, base: string) {
-  return pathname === href || (href !== base && pathname.startsWith(`${href}/`))
+const MAIN: NavItem[] = [
+  { section: "inicio", title: "Início", icon: HomeIcon },
+  { section: "agenda", title: "Agenda", icon: CalendarIcon },
+  { section: "clientes", title: "Clientes", icon: ContactIcon },
+  { section: "caixa", title: "Caixa", icon: WalletIcon },
+  { section: "parceiros", title: "Parceiros", icon: HandshakeIcon },
+  { section: "servicos", title: "Serviços", icon: LeafIcon },
+  { section: "estoque", title: "Estoque", icon: ArchiveIcon },
+]
+
+const SETTINGS: NavItem[] = [
+  { section: "unidades", title: "Unidades", icon: MapPinIcon },
+  { section: "usuarios", title: "Usuários", icon: UsersIcon },
+]
+
+export function canSee(section: NavSection, pages: RolePages, inUnit: boolean) {
+  const { workspace, unit } = pages
+  switch (section) {
+    case "inicio":
+      return inUnit ? unit.includes("overview") : workspace.includes("home")
+    case "agenda":
+      return inUnit ? unit.includes("calendar") : workspace.includes("calendar")
+    case "caixa":
+      return inUnit ? unit.includes("cash_flow") : workspace.includes("cash_flow")
+    case "servicos":
+      return inUnit && unit.includes("services")
+    case "clientes":
+      return workspace.includes("customers")
+    case "parceiros":
+      return workspace.includes("cash_flow")
+    case "estoque":
+      return workspace.includes("stock")
+    case "unidades":
+      return workspace.includes("units")
+    case "usuarios":
+      return workspace.includes("users")
+  }
 }
 
-// pages: páginas do sistema liberadas para a role do usuário.
-export function NavMain({ workspaceId, pages }: { workspaceId: string; pages: WorkspacePage[] }) {
-  const pathname = usePathname()
-  const base = `/workspace/${workspaceId}`
-  const item = (page: WorkspacePage, title: string, icon: LucideIcon) =>
-    pages.includes(page) ? [{ title, href: `${base}${WORKSPACE_PAGE_PATHS[page]}`, icon }] : []
-  const groups: { label?: string; items: NavItem[] }[] = [
-    { items: item("home", "Início", HomeIcon) },
-    {
-      label: "Geral",
-      items: [
-        ...item("units", "Unidades", MapPinIcon),
-        ...item("calendar", "Agenda", CalendarIcon),
-        ...item("customers", "Clientes", ContactIcon),
-        ...item("cash_flow", "Caixa", WalletIcon),
-        ...item("stock", "Estoque", ArchiveIcon),
-      ],
-    },
-    { label: "Configurações", items: item("users", "Usuários", UsersIcon) },
-  ]
+type Props = {
+  workspaceId: string
+  pages: RolePages
+  units: SidebarUnit[]
+  savedUnitId: string | null
+  canCreateUnit: boolean
+}
 
-  return groups.filter((group) => group.items.length > 0).map((group, i) => (
-    <SidebarGroup key={group.label ?? i}>
-      {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
-      <SidebarMenu>
-        {group.items.map((item) => (
-          <SidebarMenuItem key={item.href}>
-            <SidebarMenuButton
-              tooltip={item.title}
-              isActive={isNavItemActive(pathname, item.href, base)}
-              render={<Link href={item.href} />}
-            >
-              <item.icon />
-              <span>{item.title}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+export function NavMain({ workspaceId, pages, units, savedUnitId, canCreateUnit }: Props) {
+  const pathname = usePathname()
+  const { setOpenMobile } = useSidebar()
+  const base = `/workspace/${workspaceId}`
+  const unitId = selectedUnitId(
+    pathname,
+    base,
+    savedUnitId,
+    units.map((unit) => unit.id),
+  )
+  const selected = units.find((unit) => unit.id === unitId) ?? null
+  const current = sectionOf(pathname, base)
+
+  const groups = [
+    { label: null, items: MAIN },
+    { label: "Configurações", items: SETTINGS },
+  ].map((group) => ({
+    ...group,
+    items: group.items.flatMap((item) => {
+      const href = canSee(item.section, pages, !!selected) && sectionHref(item.section, base, selected)
+      return href ? [{ ...item, href }] : []
+    }),
+  }))
+
+  return (
+    <>
+      {units.length > 0 && (
+        <UnitSwitcher workspaceId={workspaceId} units={units} selected={selected} canCreate={canCreateUnit} />
+      )}
+      {groups
+        .filter((group) => group.items.length > 0)
+        .map((group) => (
+          <SidebarGroup key={group.label ?? "main"}>
+            {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
+            <SidebarMenu>
+              {group.items.map((item) => (
+                <SidebarMenuItem key={item.section}>
+                  <SidebarMenuButton
+                    tooltip={item.title}
+                    isActive={current === item.section}
+                    render={<Link href={item.href} onClick={() => setOpenMobile(false)} />}
+                  >
+                    <item.icon />
+                    <span>{item.title}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
         ))}
-      </SidebarMenu>
-    </SidebarGroup>
-  ))
+    </>
+  )
 }

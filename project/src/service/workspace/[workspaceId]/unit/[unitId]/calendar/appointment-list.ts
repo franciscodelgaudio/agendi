@@ -1,9 +1,7 @@
 import { Types, type PipelineStage } from "mongoose";
 import { BRT_OFFSET_HOURS, parseDay } from "@/service/_shared/timezone";
-import { first, type SearchParams, type SortDir } from "@/service/workspace/[workspaceId]/unit/unit-list";
-import { accentInsensitivePattern } from "@/service/workspace/[workspaceId]/users/user-list";
+import { first, type SearchParams } from "@/service/workspace/[workspaceId]/unit/unit-list";
 import {
-  APPOINTMENT_STATUSES,
   type AppointmentCustomer,
   type AppointmentStatus,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment";
@@ -168,88 +166,4 @@ export function calendarPipeline(range: CalendarRange): PipelineStage.FacetPipel
   if (range.unit) match.unitId = new Types.ObjectId(range.unit);
   if (range.member) match.workspaceMemberId = new Types.ObjectId(range.member);
   return [{ $match: match }, { $sort: { startsAt: 1, _id: 1 } }, ...APPOINTMENT_VIEW];
-}
-
-export const APPOINTMENT_PAGE_SIZE = 20;
-const SORT_FIELDS = { startsAt: "startsAt", customer: "customerName", name: "name" } as const;
-
-export type AppointmentSortField = keyof typeof SORT_FIELDS;
-export type AppointmentListQuery = {
-  q: string;
-  sort: AppointmentSortField;
-  dir: SortDir;
-  unit: string;
-  member: string;
-  status: AppointmentStatus | "";
-  from: string;
-  to: string;
-  page: number;
-};
-export type AppointmentPage = { rows: AppointmentRow[]; total: number };
-
-function isSortField(value: string | undefined): value is AppointmentSortField {
-  return value !== undefined && Object.hasOwn(SORT_FIELDS, value);
-}
-
-function dayOrEmpty(value: string | undefined) {
-  return value && parseDay(value) ? value : "";
-}
-
-export function parseAppointmentListQuery(params: SearchParams): AppointmentListQuery {
-  const sort = first(params.sort);
-  const status = first(params.status);
-  const page = first(params.page);
-  return {
-    q: first(params.q)?.trim() ?? "",
-    sort: isSortField(sort) ? sort : "startsAt",
-    dir: first(params.dir) === "asc" ? "asc" : "desc",
-    unit: objectIdOrEmpty(first(params.unit)),
-    member: objectIdOrEmpty(first(params.member)),
-    status: APPOINTMENT_STATUSES.includes(status as AppointmentStatus) ? (status as AppointmentStatus) : "",
-    from: dayOrEmpty(first(params.from)),
-    to: dayOrEmpty(first(params.to)),
-    page: page && /^[1-9]\d*$/.test(page) ? Number(page) : 1,
-  };
-}
-
-export function appointmentListPipeline({
-  q,
-  sort,
-  dir,
-  unit,
-  member,
-  status,
-  from,
-  to,
-  page,
-}: AppointmentListQuery): PipelineStage[] {
-  const match: Record<string, unknown> = {};
-  if (from || to) {
-    const startsAt: Record<string, Date> = {};
-    if (from) startsAt.$gte = dayStart(from)!;
-    if (to) startsAt.$lt = new Date(dayStart(to)!.getTime() + DAY_MS);
-    match.startsAt = startsAt;
-  }
-  if (unit) match.unitId = new Types.ObjectId(unit);
-  if (member) match.workspaceMemberId = new Types.ObjectId(member);
-  if (status) match.status = status;
-
-  const stages: PipelineStage[] = [];
-  if (Object.keys(match).length) stages.push({ $match: match });
-  stages.push(...APPOINTMENT_VIEW);
-  if (q) {
-    const regex = { $regex: accentInsensitivePattern(q), $options: "i" };
-    stages.push({ $match: { $or: [{ customerName: regex }, { name: regex }, { memberName: regex }] } });
-  }
-  stages.push(
-    { $sort: { [SORT_FIELDS[sort]]: dir === "desc" ? -1 : 1, id: 1 } },
-    {
-      $facet: {
-        rows: [{ $skip: (page - 1) * APPOINTMENT_PAGE_SIZE }, { $limit: APPOINTMENT_PAGE_SIZE }],
-        total: [{ $count: "n" }],
-      },
-    },
-    { $project: { rows: 1, total: { $ifNull: [{ $first: "$total.n" }, 0] } } },
-  );
-  return stages;
 }

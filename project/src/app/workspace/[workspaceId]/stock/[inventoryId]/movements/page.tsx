@@ -108,7 +108,7 @@ export default async function InventoryMovementsPage({
         pageSize={MOVEMENT_PAGE_SIZE}
         total={result.total}
         pathname={pathname}
-        itemLabel="movimentos"
+        itemLabel="movimentações"
       />
     </>
   )

@@ -47,7 +47,7 @@ export type SetUnitWalletError =
 
 export type SetUnitWalletResult = { ok: true } | { ok: false; error: SetUnitWalletError };
 
-async function parseWalletRef(
+export async function parseWalletRef(
   input: unknown,
   walletExists: (walletId: string) => Promise<boolean>,
 ): Promise<{ ok: true; value: WalletRef | null } | { ok: false; error: SetUnitWalletError }> {
@@ -96,7 +96,7 @@ export type SetUnitInventoryError =
 
 export type SetUnitInventoryResult = { ok: true } | { ok: false; error: SetUnitInventoryError };
 
-async function parseInventoryRef(
+export async function parseInventoryRef(
   input: unknown,
   inventoryExists: (inventoryId: string) => Promise<boolean>,
 ): Promise<{ ok: true; value: InventoryRef | null } | { ok: false; error: SetUnitInventoryError }> {

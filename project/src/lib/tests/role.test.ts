@@ -42,7 +42,7 @@ describe("createRole", () => {
   it("com ponto de partida, copia as permissões e as páginas da role escolhida", async () => {
     const base = {
       permissions: ["bookings.manage", "attends"],
-      pages: { workspace: ["home", "calendar"], unit: ["calendar", "appointments"] },
+      pages: { workspace: ["home", "calendar"], unit: ["calendar", "services"] },
     };
     const deps = makeDeps({ findBaseRole: vi.fn().mockResolvedValue(base) });
 
@@ -246,7 +246,7 @@ describe("updateRolePermissions", () => {
     [ROLE_ID]: {
       permissions: ["attends", "bookings.manage"],
       workspace: ["calendar", "home"],
-      unit: ["appointments", "calendar"],
+      unit: ["services", "calendar"],
     },
     [OTHER_ROLE_ID]: { permissions: [], workspace: [...WORKSPACE_PAGES], unit: [] },
   };
@@ -267,7 +267,7 @@ describe("updateRolePermissions", () => {
     expect(deps.save).toHaveBeenCalledWith({
       [ROLE_ID]: {
         permissions: ["bookings.manage", "attends"],
-        pages: { workspace: ["home", "calendar"], unit: ["calendar", "appointments"] },
+        pages: { workspace: ["home", "calendar"], unit: ["calendar", "services"] },
       },
       [OTHER_ROLE_ID]: { permissions: [], pages: { workspace: [...WORKSPACE_PAGES], unit: [] } },
     });
@@ -277,13 +277,13 @@ describe("updateRolePermissions", () => {
     const deps = makeDeps([ROLE_ID]);
 
     await updateRolePermissions(
-      { [ROLE_ID]: { permissions: ["attends", "attends"], workspace: ["home", "home"], unit: ["appointments", "appointments"] } },
+      { [ROLE_ID]: { permissions: ["attends", "attends"], workspace: ["home", "home"], unit: ["services", "services"] } },
       { actor: ADMIN },
       deps,
     );
 
     expect(deps.save).toHaveBeenCalledWith({
-      [ROLE_ID]: { permissions: ["attends"], pages: { workspace: ["home"], unit: ["appointments"] } },
+      [ROLE_ID]: { permissions: ["attends"], pages: { workspace: ["home"], unit: ["services"] } },
     });
   });
 
@@ -318,7 +318,7 @@ describe("updateRolePermissions", () => {
     ["lista não é array", { ...input, [OTHER_ROLE_ID]: { ...other, unit: "stock" } }],
     ["permissão desconhecida", { ...input, [OTHER_ROLE_ID]: { ...other, permissions: ["billing.manage"] } }],
     ["página desconhecida", { ...input, [OTHER_ROLE_ID]: { ...other, workspace: ["home", "billing"] } }],
-    ["página de unidade no escopo do sistema", { ...input, [OTHER_ROLE_ID]: { ...other, workspace: ["home", "appointments"] } }],
+    ["página de unidade no escopo do sistema", { ...input, [OTHER_ROLE_ID]: { ...other, workspace: ["home", "services"] } }],
     ["item que não é string", { ...input, [OTHER_ROLE_ID]: { ...other, workspace: ["home", 1] } }],
   ])("retorna invalid_input sem salvar quando %s", async (_label, value) => {
     const deps = makeDeps();

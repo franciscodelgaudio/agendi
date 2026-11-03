@@ -1,73 +1,68 @@
-"use client"
-
 import Link from "@/components/shared/link"
-import { usePathname } from "next/navigation"
-import { ArrowRightIcon, CalendarIcon, CircleCheckIcon, LayoutDashboardIcon, LeafIcon, WalletIcon, type LucideIcon } from "lucide-react"
+import { ArrowRightIcon, LeafIcon, PiggyBankIcon, type LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { UNIT_PAGE_PATHS, type UnitPage } from "@/service/workspace/[workspaceId]/page-access"
-import { cn } from "@/service/_shared/utils"
+import { UNIT_PAGE_PATHS } from "@/service/workspace/[workspaceId]/page-access"
 
-type NavItem = { title: string; icon: LucideIcon }
-
-export function UnitNav({ workspaceId, unitId, pages }: { workspaceId: string; unitId: string; pages: UnitPage[] }) {
-  const pathname = usePathname()
-  const base = `/workspace/${workspaceId}/unit/${unitId}`
-  const tabs: Record<UnitPage, NavItem> = {
-    overview: { title: "Visão geral", icon: LayoutDashboardIcon },
-    calendar: { title: "Agenda", icon: CalendarIcon },
-    appointments: { title: "Atendimentos", icon: CircleCheckIcon },
-    services: { title: "Serviços", icon: LeafIcon },
-    cash_flow: { title: "Caixa", icon: WalletIcon },
-  }
-  const items = pages.map((page) => ({ ...tabs[page], href: `${base}${UNIT_PAGE_PATHS[page]}` }))
-
+function SetupNotice({
+  icon: Icon,
+  title,
+  description,
+  action,
+}: {
+  icon: LucideIcon
+  title: string
+  description: string
+  action?: { label: string; href: string }
+}) {
   return (
-    <nav className="sticky top-0 z-20 -mx-4 flex gap-1 overflow-x-auto bg-background px-4 pt-2 overflow-y-hidden shadow-[inset_0_-1px_0_var(--border)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {items.map((item) => {
-        // Abas com subpáginas (ex.: a lista do calendário) seguem ativas nelas.
-        const isActive = pathname === item.href || (item.href !== base && pathname.startsWith(`${item.href}/`))
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={isActive ? "page" : undefined}
-            className={cn(
-              "flex shrink-0 items-center gap-2 border-b-2 px-3 pt-2 pb-4 text-sm font-medium transition-colors [&_svg]:size-4",
-              isActive
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <item.icon />
-            {item.title}
-          </Link>
-        )
-      })}
-    </nav>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border border-primary/20 bg-primary/5 px-4 py-3">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary [&_svg]:size-4">
+        <Icon />
+      </span>
+      <div className="grid min-w-0 flex-1 basis-60">
+        <span className="font-medium">{title}</span>
+        <span className="text-sm text-muted-foreground">{description}</span>
+      </div>
+      {action && (
+        <Button size="sm" nativeButton={false} render={<Link href={action.href} />}>
+          {action.label}
+          <ArrowRightIcon />
+        </Button>
+      )}
+    </div>
   )
 }
 
-export function ServicesSetupNotice({ workspaceId, unitId, canManage }: { workspaceId: string; unitId: string; canManage: boolean }) {
-  const href = `/workspace/${workspaceId}/unit/${unitId}${UNIT_PAGE_PATHS.services}`
+type Props = {
+  workspaceId: string
+  unitId: string
+  missingServices: boolean
+  missingWallet: boolean
+  canManageServices: boolean
+  canManageUnit: boolean
+}
+
+export function UnitSetupNotices({ workspaceId, unitId, missingServices, missingWallet, canManageServices, canManageUnit }: Props) {
+  const base = `/workspace/${workspaceId}/unit/${unitId}`
+  if (!missingServices && !missingWallet) return null
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary [&_svg]:size-4">
-        <LeafIcon />
-      </span>
-      <div className="grid min-w-0 flex-1 basis-60">
-        <span className="font-medium">
-          {canManage ? "Comece cadastrando os serviços" : "Nenhum serviço cadastrado"}
-        </span>
-        <span className="text-sm text-muted-foreground">
-          Os agendamentos dependem dos serviços desta unidade, com duração e preço.
-        </span>
-      </div>
-      {canManage && (
-        <Button size="sm" nativeButton={false} render={<Link href={href} />}>
-          Cadastrar serviços
-          <ArrowRightIcon />
-        </Button>
+    <div className="grid gap-2">
+      {missingWallet && (
+        <SetupNotice
+          icon={PiggyBankIcon}
+          title={canManageUnit ? "Vincule uma carteira a esta unidade" : "Esta unidade não tem carteira"}
+          description="Sem carteira, os atendimentos concluídos não viram valores a receber."
+          action={canManageUnit ? { label: "Vincular carteira", href: `${base}${UNIT_PAGE_PATHS.cash_flow}` } : undefined}
+        />
+      )}
+      {missingServices && (
+        <SetupNotice
+          icon={LeafIcon}
+          title={canManageServices ? "Comece cadastrando os serviços" : "Nenhum serviço cadastrado"}
+          description="Os agendamentos dependem dos serviços desta unidade, com duração e preço."
+          action={canManageServices ? { label: "Cadastrar serviços", href: `${base}${UNIT_PAGE_PATHS.services}` } : undefined}
+        />
       )}
     </div>
   )

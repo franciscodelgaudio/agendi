@@ -190,13 +190,21 @@ export function TransactionActions({ workspaceId, transaction }: { workspaceId: 
         <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Ações de ${transaction.name}`} />}>
           <EllipsisIcon />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => setEditOpen(true)}>
+        <DropdownMenuContent align="end" className="w-64">
+          {transaction.fromStatement && (
+            <>
+              <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                Veio do pagamento de um fechamento. Para alterar, estorne o pagamento em Fechamentos.
+              </p>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          <DropdownMenuItem disabled={transaction.fromStatement} onClick={() => setEditOpen(true)}>
             <PencilIcon />
             Editar
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
+          <DropdownMenuItem variant="destructive" disabled={transaction.fromStatement} onClick={() => setDeleteOpen(true)}>
             <Trash2Icon />
             Excluir
           </DropdownMenuItem>

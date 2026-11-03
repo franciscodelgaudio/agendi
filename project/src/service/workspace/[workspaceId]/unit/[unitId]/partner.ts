@@ -85,9 +85,9 @@ export type PartnerInputError =
 
 export type PartnerData = { name: string; thresholdRule: ThresholdRule; tiers: PartnerTier[]; unitId: string | null };
 
-type PartnerSaveError = PartnerInputError | "unit_not_found" | "unit_has_partner";
+export type PartnerSaveError = PartnerInputError | "unit_not_found" | "unit_has_partner";
 
-async function parsePartner(
+export async function parsePartner(
   input: unknown,
   unitExists: (unitId: string) => Promise<boolean>,
 ): Promise<{ ok: true; data: PartnerData } | { ok: false; error: PartnerSaveError }> {

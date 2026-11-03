@@ -1,17 +1,11 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { isObjectIdOrHexString, Types } from "mongoose"
-import { visiblePages } from "@/service/workspace/[workspaceId]/page-access"
 import { can, type Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { requireUser, workspaceAccessStages } from "@/service/(auth)/session"
 import { Workspace } from "@/models/Workspace"
-import { Avatar, AvatarImage } from "@/components/ui/avatar"
-import { InitialFallback } from "@/components/shared/initial-fallback"
-import { ServicesSetupNotice, UnitNav } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-nav"
-import { UnitHeaderSkeleton } from "@/components/shared/page-skeletons"
+import { UnitSetupNotices } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-nav"
 
-// O cabeçalho da unidade carrega à parte, para a aba mostrar seu skeleton logo abaixo dele.
-// As páginas verificam o acesso por conta própria.
 export default async function UnitLayout({
   children,
   params,
@@ -20,24 +14,22 @@ export default async function UnitLayout({
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
-      <Suspense fallback={<UnitHeaderSkeleton />}>
-        <UnitHeader workspaceId={workspaceId} unitId={unitId} />
+      <Suspense fallback={null}>
+        <UnitNotices workspaceId={workspaceId} unitId={unitId} />
       </Suspense>
       {children}
     </div>
   )
 }
 
-async function UnitHeader({ workspaceId, unitId }: { workspaceId: string; unitId: string }) {
+async function UnitNotices({ workspaceId, unitId }: { workspaceId: string; unitId: string }) {
   const user = await requireUser()
   const access = workspaceAccessStages(workspaceId, user.id)
   if (!access || !isObjectIdOrHexString(unitId)) notFound()
 
-  // Parte do workspace (e não de units) para que o acesso ao workspace seja garantido.
-  // Basta saber se há algum serviço: sem eles a unidade não agenda nem registra atendimentos.
   const [workspace] = await Workspace.aggregate<{
     actor: Actor
-    unit: { id: string; name: string; imageUrl: string | null; hasServices: boolean } | null
+    unit: { name: string; hasServices: boolean; hasWallet: boolean } | null
   }>([
     ...access,
     {
@@ -60,10 +52,9 @@ async function UnitHeader({ workspaceId, unitId }: { workspaceId: string; unitId
           {
             $project: {
               _id: 0,
-              id: { $toString: "$_id" },
               name: 1,
-              imageUrl: { $ifNull: ["$imageUrl", null] },
               hasServices: { $gt: [{ $size: "$services" }, 0] },
+              hasWallet: { $ne: [{ $ifNull: ["$walletId", null] }, null] },
             },
           },
         ],
@@ -76,20 +67,14 @@ async function UnitHeader({ workspaceId, unitId }: { workspaceId: string; unitId
 
   return (
     <>
-      <div className="flex items-center gap-4">
-        <Avatar className="size-14 rounded-lg after:rounded-lg">
-          {unit.imageUrl && <AvatarImage src={unit.imageUrl} alt={unit.name} className="rounded-lg object-contain" />}
-          <InitialFallback name={unit.name} className="rounded-lg text-lg" />
-        </Avatar>
-        <h2 className="min-w-0 truncate text-2xl font-semibold tracking-tight">{unit.name}</h2>
-      </div>
-      {!unit.hasServices && (
-        <ServicesSetupNotice workspaceId={workspaceId} unitId={unitId} canManage={can(workspace.actor, "services.manage")} />
-      )}
-      <UnitNav
-        workspaceId={workspaceId}
-        unitId={unitId}
-        pages={visiblePages(workspace.actor).unit}
+      <span className="-mb-2 truncate text-sm text-muted-foreground">{unit.name}</span>
+      <UnitSetupNotices
+      workspaceId={workspaceId}
+      unitId={unitId}
+      missingServices={!unit.hasServices}
+      missingWallet={!unit.hasWallet}
+      canManageServices={can(workspace.actor, "services.manage")}
+      canManageUnit={can(workspace.actor, "units.manage")}
       />
     </>
   )

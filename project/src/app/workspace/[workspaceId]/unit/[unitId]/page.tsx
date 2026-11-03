@@ -159,7 +159,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="text-lg font-semibold tracking-tight">Visão geral</h3>
+        <h3 className="text-lg font-semibold tracking-tight">Início</h3>
         <span className="text-sm text-muted-foreground first-letter:uppercase">{todayFormat.format(toDate(today))}</span>
       </div>
 
@@ -255,7 +255,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
           <Card>
             <CardHeader>
               <CardTitle>{inventory ? inventory.name : "Estoque"}</CardTitle>
-              <CardDescription>Produtos do inventário da unidade</CardDescription>
+              <CardDescription>Produtos no estoque da unidade</CardDescription>
               {(canManage || inventory) && (
                 <CardAction className="flex gap-1">
                   {canManage && (
@@ -267,7 +267,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
                     />
                   )}
                   {inventory && (
-                    <CardLinkButton href={`/workspace/${workspaceId}/stock/${inventory.id}`}>Produtos</CardLinkButton>
+                    <CardLinkButton href={`/workspace/${workspaceId}/stock/${inventory.id}`}>Ver estoque</CardLinkButton>
                   )}
                 </CardAction>
               )}

@@ -10,10 +10,12 @@ import {
   deleteStatement,
   payStatement,
   settleReceivable,
+  unpayStatement,
   type CloseStatementError,
   type DeleteStatementError,
   type PayStatementError,
   type SettleReceivableError,
+  type UnpayStatementError,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/statement"
 import {
   findPartnerToClose,
@@ -25,9 +27,15 @@ import {
   removeUnpaidStatement,
   saveReceivableTransaction,
   saveStatement,
+  unpayStatementWith,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivable-store"
 
-type StatementError = CloseStatementError | SettleReceivableError | PayStatementError | DeleteStatementError
+type StatementError =
+  | CloseStatementError
+  | SettleReceivableError
+  | PayStatementError
+  | DeleteStatementError
+  | UnpayStatementError
 
 const errorMessages: Record<Exclude<StatementError, "forbidden"> | "unauthenticated", string> = {
   invalid_input: "Preencha todos os campos.",
@@ -47,6 +55,7 @@ const errorMessages: Record<Exclude<StatementError, "forbidden"> | "unauthentica
   receivable_settled: "Algum recebível já foi recebido ou entrou em outro fechamento. Recarregue a página.",
   statement_not_found: "Fechamento não encontrado. Recarregue a página.",
   statement_paid: "Este fechamento já foi pago.",
+  statement_not_paid: "Este fechamento ainda não foi pago.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
@@ -147,6 +156,21 @@ export async function deleteStatementAction(workspaceId: string, statementId: st
   const result = await deleteStatement(validId(statementId), session, {
     findStatement: (id) => findStatementPaid(session.workspaceId, id),
     remove: (id) => removeUnpaidStatement(session.workspaceId, id),
+  })
+
+  if (!result.ok) return { error: messageOf(result.error) }
+
+  refresh()
+  return { error: null }
+}
+
+export async function unpayStatementAction(workspaceId: string, statementId: string): Promise<StatementFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+
+  const result = await unpayStatement(validId(statementId), session, {
+    findStatement: (id) => findStatementPaid(session.workspaceId, id),
+    unpay: (id) => unpayStatementWith(session.workspaceId, id),
   })
 
   if (!result.ok) return { error: messageOf(result.error) }

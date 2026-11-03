@@ -23,7 +23,7 @@ const NO_TOTALS: TransactionTotals = { incomingCents: 0, expenseCents: 0, balanc
 export default async function UnitCashFlowPage({
   params,
   searchParams,
-}: PageProps<"/workspace/[workspaceId]/unit/[unitId]/cash-flow">) {
+}: PageProps<"/workspace/[workspaceId]/unit/[unitId]/cash-flow/transactions">) {
   const { workspaceId, unitId } = await params
   const query = parseTransactionListQuery(await searchParams)
   const data = await loadUnitCashFlow(workspaceId, unitId)
@@ -36,7 +36,7 @@ export default async function UnitCashFlowPage({
     Transaction.aggregate<TransactionListPage>(transactionListPipeline(wallet.id, query, unitId)),
   ])
 
-  const pathname = `/workspace/${workspaceId}/unit/${unitId}/cash-flow`
+  const pathname = `/workspace/${workspaceId}/unit/${unitId}/cash-flow/transactions`
   const listQuery = { q: query.q, type: query.type, sort: query.sort, dir: query.dir }
   const pages = Math.ceil(result.total / TRANSACTION_PAGE_SIZE)
   if (pages > 0 && query.page > pages) {

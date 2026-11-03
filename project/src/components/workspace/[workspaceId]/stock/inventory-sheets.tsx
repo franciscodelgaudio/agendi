@@ -53,12 +53,12 @@ export function CreateInventorySheet({ workspaceId }: { workspaceId: string }) {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger render={<Button />}>
         <PlusIcon />
-        Novo inventário
+        Novo estoque
       </SheetTrigger>
       <SheetContent>
         <form action={formAction} className="flex min-h-0 flex-1 flex-col">
           <SheetHeader>
-            <SheetTitle>Novo inventário</SheetTitle>
+            <SheetTitle>Novo estoque</SheetTitle>
             <SheetDescription>Lugar onde ficam os produtos de uma ou mais unidades.</SheetDescription>
           </SheetHeader>
           <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
@@ -113,8 +113,8 @@ export function InventoryActions({ workspaceId, inventory }: { workspaceId: stri
         <SheetContent>
           <form action={formAction} className="flex min-h-0 flex-1 flex-col">
             <SheetHeader>
-              <SheetTitle>Renomear inventário</SheetTitle>
-              <SheetDescription>O nome aparece nas unidades e nos movimentos.</SheetDescription>
+              <SheetTitle>Renomear estoque</SheetTitle>
+              <SheetDescription>O nome aparece nas unidades e nas movimentações.</SheetDescription>
             </SheetHeader>
             <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
               {state.error && <FieldError>{state.error}</FieldError>}
@@ -138,10 +138,10 @@ export function InventoryActions({ workspaceId, inventory }: { workspaceId: stri
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir inventário?</AlertDialogTitle>
+            <AlertDialogTitle>Excluir estoque?</AlertDialogTitle>
             <AlertDialogDescription>
-              O inventário <strong>{inventory.name}</strong> e os movimentos dele serão excluídos. Só é possível excluir
-              inventários que nenhuma unidade usa.
+              O estoque <strong>{inventory.name}</strong> e as movimentações dele serão excluídos. Só é possível excluir
+              estoques que nenhuma unidade usa.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {error && <FieldError>{error}</FieldError>}

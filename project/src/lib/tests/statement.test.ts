@@ -9,6 +9,7 @@ import {
   pendingInPeriod,
   settleReceivable,
   suggestedPeriod,
+  unpayStatement,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/statement";
 import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
@@ -587,5 +588,49 @@ describe("deleteStatement", () => {
 
     expect(await deleteStatement(STATEMENT_ID, { actor: null }, deps)).toEqual({ ok: false, error: "workspace_not_found" });
     expect(deps.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe("unpayStatement", () => {
+  function makeDeps(statement: { paid: boolean } | null = { paid: true }, unpaid = true) {
+    return { findStatement: vi.fn().mockResolvedValue(statement), unpay: vi.fn().mockResolvedValue(unpaid) };
+  }
+
+  it("estorna o pagamento, tirando a entrada da carteira e voltando o fechamento para aguardando pagamento", async () => {
+    const deps = makeDeps();
+
+    expect(await unpayStatement(STATEMENT_ID, { actor: MANAGER }, deps)).toEqual({ ok: true });
+    expect(deps.findStatement).toHaveBeenCalledWith(STATEMENT_ID);
+    expect(deps.unpay).toHaveBeenCalledWith(STATEMENT_ID);
+  });
+
+  it("não estorna fechamento que ainda não foi pago", async () => {
+    const deps = makeDeps({ paid: false });
+
+    expect(await unpayStatement(STATEMENT_ID, { actor: ADMIN }, deps)).toEqual({ ok: false, error: "statement_not_paid" });
+    expect(deps.unpay).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["sem id", "", makeDeps()],
+    ["fechamento que não é do workspace", STATEMENT_ID, makeDeps(null)],
+    ["fechamento estornado ou excluído antes de gravar", STATEMENT_ID, makeDeps({ paid: true }, false)],
+  ])("%s devolve não encontrado", async (_label, statementId, deps) => {
+    expect(await unpayStatement(statementId, { actor: ADMIN }, deps)).toEqual({ ok: false, error: "statement_not_found" });
+  });
+
+  it("sem a permissão de gerenciar o caixa, não estorna", async () => {
+    const deps = makeDeps();
+
+    expect(await unpayStatement(STATEMENT_ID, { actor: STAFF }, deps)).toEqual({ ok: false, error: "forbidden" });
+    expect(deps.findStatement).not.toHaveBeenCalled();
+    expect(deps.unpay).not.toHaveBeenCalled();
+  });
+
+  it("sem acesso ao workspace, não estorna", async () => {
+    const deps = makeDeps();
+
+    expect(await unpayStatement(STATEMENT_ID, { actor: null }, deps)).toEqual({ ok: false, error: "workspace_not_found" });
+    expect(deps.unpay).not.toHaveBeenCalled();
   });
 });

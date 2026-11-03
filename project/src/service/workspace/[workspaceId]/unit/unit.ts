@@ -64,11 +64,11 @@ type UnitFields<Stations> = {
 
 export type UnitData = UnitFields<StationInput[]>;
 
-type UnitLookups = {
+export type UnitLookups = {
   membersExist: (ids: string[]) => Promise<boolean>;
 };
 
-async function parseUnitInput(
+export async function parseUnitInput(
   input: unknown,
   { membersExist }: UnitLookups,
 ): Promise<{ ok: true; data: UnitFields<StationGroup[]> } | { ok: false; error: UnitInputError }> {

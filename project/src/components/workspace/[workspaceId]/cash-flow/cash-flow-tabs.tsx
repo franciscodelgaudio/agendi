@@ -7,9 +7,9 @@ import { cn } from "@/service/_shared/utils"
 export function CashFlowTabs({ base, showStatements }: { base: string; showStatements: boolean }) {
   const pathname = usePathname()
   const items = [
-    { title: "Transações", href: base },
-    { title: "A receber", href: `${base}/receivables` },
+    { title: "A receber", href: base },
     ...(showStatements ? [{ title: "Fechamentos", href: `${base}/statements` }] : []),
+    { title: "Transações", href: `${base}/transactions` },
   ]
 
   return (

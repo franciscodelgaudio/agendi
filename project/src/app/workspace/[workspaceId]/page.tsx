@@ -26,13 +26,10 @@ import { loadDayAppointments } from "@/service/workspace/[workspaceId]/unit/[uni
 import { Wallet } from "@/models/Wallet"
 import { Workspace } from "@/models/Workspace"
 import Link from "@/components/shared/link"
-import { CreateUnitSheet } from "@/components/workspace/[workspaceId]/unit/create-unit-sheet"
 import { timeFormat } from "@/components/shared/service-format"
 import type { TherapistOption } from "@/components/workspace/[workspaceId]/shared/team/therapist-avatar"
-import type { MemberOption } from "@/components/workspace/[workspaceId]/unit/unit-member-fields"
 import { CardEmpty, CardLink, money, plural, RankList, StatTile, TodaySchedule, type TodayBooking } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-overview"
-import { UnitsEmpty } from "@/components/workspace/[workspaceId]/unit/units-empty"
-import { unitMemberOptionsStages } from "@/service/workspace/[workspaceId]/unit/unit-form-store"
+import { NewUnitButton, UnitsEmpty } from "@/components/workspace/[workspaceId]/unit/units-empty"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -77,7 +74,6 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     actor: Actor
     units: UnitInfo[]
     therapists: TherapistOption[]
-    members: MemberOption[]
   }>([
     ...access,
     {
@@ -100,18 +96,16 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
       },
     },
     ...therapistOptionsStages(),
-    ...unitMemberOptionsStages(),
-    { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, actor: 1, units: 1, therapists: 1, members: 1 } },
+    { $project: { _id: 0, id: { $toString: "$_id" }, name: 1, actor: 1, units: 1, therapists: 1 } },
   ])
   if (!workspace) notFound()
   const { units } = workspace
   const canManage = can(workspace.actor, "units.manage")
-  const options = { members: canManage ? workspace.members : [] }
 
   if (units.length === 0) {
     return (
       <div className="flex flex-1 flex-col p-4">
-        <UnitsEmpty workspaceId={workspace.id} canManage={canManage} options={options} />
+        <UnitsEmpty workspaceId={workspace.id} canManage={canManage} />
       </div>
     )
   }
@@ -189,7 +183,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
             {todayFormat.format(toDate(today))} · {plural(units.length, "unidade", "unidades")}
           </span>
         </div>
-        {canManage && <CreateUnitSheet workspaceId={workspace.id} options={options} />}
+        {canManage && <NewUnitButton workspaceId={workspace.id} />}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

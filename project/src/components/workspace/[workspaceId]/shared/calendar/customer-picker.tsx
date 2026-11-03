@@ -1,13 +1,12 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
-import { SearchIcon, UserPlusIcon, UserRoundPenIcon } from "lucide-react"
+import { useEffect, useState } from "react"
 import { searchCustomersAction, type CustomerOption } from "@/lib/actions/appointment"
-import { createCustomerAction } from "@/lib/actions/customer"
-import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox"
-import { Field, FieldError, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 
 const SEARCH_DELAY_MS = 250
@@ -25,23 +24,21 @@ export function CustomerPicker({
   workspaceId: string
   defaultValue: PickedCustomer | null
 }) {
-  const [mode, setMode] = useState<PickedCustomer["kind"]>(defaultValue?.kind ?? "registered")
-  const [value, setValue] = useState<RegisteredOption | null>(
+  const [picked, setPicked] = useState<RegisteredOption | null>(
     defaultValue?.kind === "registered" ? { id: defaultValue.customerId, name: defaultValue.name } : null,
   )
-  const guest = defaultValue?.kind === "guest" ? defaultValue : null
+  const [query, setQuery] = useState(defaultValue?.name ?? "")
+  const [observation, setObservation] = useState(defaultValue?.kind === "guest" ? (defaultValue.observation ?? "") : "")
+  const [save, setSave] = useState(false)
+  const [cellphone, setCellphone] = useState("")
   const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState("")
   const [results, setResults] = useState<{ key: string; customers: CustomerOption[] }>({ key: "", customers: [] })
-  const [creating, setCreating] = useState(false)
-  const [newName, setNewName] = useState("")
-  const [newCellphone, setNewCellphone] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  const [saving, startSaving] = useTransition()
   const loading = results.key !== query
+  const name = query.trim()
+  const guest = !picked && !!name
 
   useEffect(() => {
-    if (!open) return
+    if (!open || !name) return
     let ignore = false
     const timer = setTimeout(async () => {
       const customers = await searchCustomersAction(workspaceId, query)
@@ -51,122 +48,81 @@ export function CustomerPicker({
       ignore = true
       clearTimeout(timer)
     }
-  }, [workspaceId, open, query])
-
-  function saveNew() {
-    startSaving(async () => {
-      const formData = new FormData()
-      formData.set("name", newName)
-      formData.set("cellphone", newCellphone)
-      const result = await createCustomerAction(workspaceId, { error: null }, formData)
-      setError(result.error)
-      if (result.error || !result.customerId) return
-      setValue({ id: result.customerId, name: newName.trim() })
-      setCreating(false)
-      setNewName("")
-      setNewCellphone("")
-    })
-  }
+  }, [workspaceId, open, query, name])
 
   return (
     <Field>
-      <div className="flex items-center justify-between gap-2">
-        <FieldLabel htmlFor={mode === "guest" ? "appointment-customer-name" : "appointment-customer"}>Cliente (opcional)</FieldLabel>
-        {mode === "guest" ? (
-          <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setMode("registered")}>
-            <SearchIcon />
-            Buscar cadastrado
-          </Button>
-        ) : (
-          !creating && (
-            <div className="flex items-center gap-3">
-              <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setMode("guest")}>
-                <UserRoundPenIcon />
-                Sem cadastro
-              </Button>
-              <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setCreating(true)}>
-                <UserPlusIcon />
-                Novo cliente
-              </Button>
-            </div>
-          )
-        )}
-      </div>
-      {mode === "guest" ? (
-        <div className="grid gap-2">
-          <Input
-            id="appointment-customer-name"
-            name="customerName"
-            placeholder="Nome do cliente"
-            defaultValue={guest?.name ?? ""}
-            maxLength={120}
-            required
-          />
+      <FieldLabel htmlFor="appointment-customer">Cliente</FieldLabel>
+      <Combobox
+        items={name ? results.customers : []}
+        filter={null}
+        value={picked}
+        onValueChange={(next: RegisteredOption | null) => {
+          setPicked(next && { id: next.id, name: next.name })
+          if (next) setQuery(next.name)
+        }}
+        inputValue={query}
+        onInputValueChange={(next) => {
+          setQuery(next)
+          if (picked && next !== picked.name) setPicked(null)
+        }}
+        open={open && !!name}
+        onOpenChange={setOpen}
+        itemToStringLabel={(customer: RegisteredOption) => customer.name}
+        isItemEqualToValue={(a: RegisteredOption, b: RegisteredOption) => a.id === b.id}
+      >
+        <ComboboxInput id="appointment-customer" placeholder="Nome ou celular" className="w-full" />
+        <ComboboxContent>
+          <ComboboxEmpty>{loading ? "Buscando..." : "Nenhum cliente cadastrado com esse nome. Fica sem cadastro."}</ComboboxEmpty>
+          <ComboboxList>
+            {(customer: CustomerOption) => (
+              <ComboboxItem key={customer.id} value={customer}>
+                <span className="truncate">{customer.name}</span>
+                {customer.cellphone && <span className="ml-auto text-xs text-muted-foreground">{customer.cellphone}</span>}
+              </ComboboxItem>
+            )}
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
+      <FieldDescription>
+        {picked ? "Cliente cadastrado." : guest ? "Sem cadastro." : "Opcional. Digite para buscar clientes cadastrados."}
+      </FieldDescription>
+
+      {guest && (
+        <div className="grid gap-3">
+          <div className="flex items-center gap-2">
+            <Checkbox id="appointment-save-customer" checked={save} onCheckedChange={(checked) => setSave(checked === true)} />
+            <Label htmlFor="appointment-save-customer" className="font-normal">
+              Salvar como cliente
+            </Label>
+          </div>
+          {save && (
+            <Input
+              aria-label="Celular do cliente"
+              type="tel"
+              inputMode="tel"
+              placeholder="Celular (opcional)"
+              value={cellphone}
+              onChange={(e) => setCellphone(e.target.value)}
+              maxLength={20}
+            />
+          )}
           <Textarea
             aria-label="Observação sobre o cliente"
-            name="customerObservation"
             placeholder="Observação (opcional)"
-            defaultValue={guest?.observation ?? ""}
+            value={observation}
+            onChange={(e) => setObservation(e.target.value)}
             maxLength={1000}
           />
         </div>
-      ) : creating ? (
-        <div className="grid gap-2 rounded-md border p-3">
-          <Input
-            aria-label="Nome do cliente novo"
-            placeholder="Nome"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            maxLength={120}
-          />
-          <Input
-            aria-label="Celular do cliente novo"
-            type="tel"
-            inputMode="tel"
-            placeholder="Celular (opcional)"
-            value={newCellphone}
-            onChange={(e) => setNewCellphone(e.target.value)}
-            maxLength={20}
-          />
-          {error && <FieldError>{error}</FieldError>}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setCreating(false)} disabled={saving}>
-              Cancelar
-            </Button>
-            <Button type="button" size="sm" onClick={saveNew} loading={saving}>
-              Cadastrar
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <Combobox
-          items={results.customers}
-          filter={null}
-          value={value}
-          onValueChange={(next: RegisteredOption | null) => setValue(next && { id: next.id, name: next.name })}
-          inputValue={open ? query : (value?.name ?? query)}
-          onInputValueChange={setQuery}
-          open={open}
-          onOpenChange={setOpen}
-          itemToStringLabel={(customer: RegisteredOption) => customer.name}
-          isItemEqualToValue={(a: RegisteredOption, b: RegisteredOption) => a.id === b.id}
-        >
-          <ComboboxInput id="appointment-customer" placeholder="Buscar cliente..." className="w-full" />
-          <ComboboxContent>
-            <ComboboxEmpty>{loading ? "Buscando..." : "Nenhum cliente encontrado."}</ComboboxEmpty>
-            <ComboboxList>
-              {(customer: CustomerOption) => (
-                <ComboboxItem key={customer.id} value={customer}>
-                  <span className="truncate">{customer.name}</span>
-                  {customer.cellphone && <span className="ml-auto text-xs text-muted-foreground">{customer.cellphone}</span>}
-                </ComboboxItem>
-              )}
-            </ComboboxList>
-          </ComboboxContent>
-        </Combobox>
       )}
-      <input type="hidden" name="customerKind" value={mode === "guest" ? "guest" : value ? "registered" : ""} />
-      {mode === "registered" && <input type="hidden" name="customerId" value={value?.id ?? ""} />}
+
+      <input type="hidden" name="customerKind" value={picked ? "registered" : guest ? "guest" : ""} />
+      <input type="hidden" name="customerId" value={picked?.id ?? ""} />
+      <input type="hidden" name="customerName" value={guest ? name : ""} />
+      <input type="hidden" name="customerObservation" value={guest ? observation : ""} />
+      <input type="hidden" name="saveCustomer" value={guest && save ? "on" : ""} />
+      <input type="hidden" name="customerCellphone" value={guest && save ? cellphone : ""} />
     </Field>
   )
 }

@@ -89,7 +89,7 @@ export function MovementSheet({
         <form action={formAction} className="flex min-h-0 flex-1 flex-col">
           <SheetHeader>
             <SheetTitle>Entrada ou saída</SheetTitle>
-            <SheetDescription>Soma ou tira a quantidade de um produto neste inventário.</SheetDescription>
+            <SheetDescription>Soma ou tira a quantidade de um produto neste estoque.</SheetDescription>
           </SheetHeader>
           <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
             {state.error && <FieldError>{state.error}</FieldError>}
@@ -150,7 +150,7 @@ export function TransferSheet({
         <form action={formAction} className="flex min-h-0 flex-1 flex-col">
           <SheetHeader>
             <SheetTitle>Transferir produto</SheetTitle>
-            <SheetDescription>Tira daqui e põe em outro inventário.</SheetDescription>
+            <SheetDescription>Tira daqui e põe em outro estoque.</SheetDescription>
           </SheetHeader>
           <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
             {state.error && <FieldError>{state.error}</FieldError>}
@@ -160,7 +160,7 @@ export function TransferSheet({
               id="transfer-target"
               name="toInventoryId"
               label="Para"
-              placeholder="Escolha o inventário"
+              placeholder="Escolha o estoque"
               options={inventories}
             />
           </FieldGroup>

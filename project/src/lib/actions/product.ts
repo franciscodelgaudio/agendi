@@ -21,7 +21,7 @@ const errorMessages: Record<Exclude<UpdateProductError | DeleteProductError, "fo
   name_too_long: "O nome pode ter no máximo 80 caracteres.",
   invalid_price: "Informe um preço válido, como 45,90.",
   product_not_found: "Produto não encontrado neste workspace.",
-  product_in_stock: "Este produto ainda tem quantidade em algum inventário. Dê saída antes de excluir.",
+  product_in_stock: "Este produto ainda tem quantidade em algum estoque. Dê saída antes de excluir.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }

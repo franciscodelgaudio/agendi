@@ -1,12 +1,13 @@
 "use client"
 
 import { useActionState, useState, useTransition } from "react"
-import { BanknoteIcon, CheckIcon, EllipsisIcon, LockIcon, TriangleAlertIcon, Undo2Icon } from "lucide-react"
+import { BanknoteIcon, CheckIcon, EllipsisIcon, LockIcon, Trash2Icon, TriangleAlertIcon, Undo2Icon } from "lucide-react"
 import {
   closeStatementAction,
   deleteStatementAction,
   payStatementAction,
   settleReceivableAction,
+  unpayStatementAction,
   type StatementFormState,
 } from "@/lib/actions/statement"
 import { DayField, toDate } from "@/components/shared/day-field"
@@ -428,8 +429,11 @@ export function ConfirmPaymentSheet({
 
 export function StatementActions({ workspaceId, statement }: { workspaceId: string; statement: StatementListItem }) {
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [unpayOpen, setUnpayOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleting, startDelete] = useTransition()
+  const [unpaying, startUnpay] = useTransition()
+  const paid = !!statement.paidAt
   const { open, setOpen, state, formAction, pending } = useSheetAction((prev, formData) =>
     payStatementAction(workspaceId, statement.id, prev, formData),
   )
@@ -441,15 +445,25 @@ export function StatementActions({ workspaceId, statement }: { workspaceId: stri
         <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Ações de ${statement.name}`} />}>
           <EllipsisIcon />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => setOpen(true)}>
-            <BanknoteIcon />
-            Registrar pagamento
-          </DropdownMenuItem>
+        <DropdownMenuContent align="end" className="w-64">
+          {paid ? (
+            <DropdownMenuItem variant="destructive" onClick={() => setUnpayOpen(true)}>
+              <Undo2Icon />
+              Estornar pagamento
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onClick={() => setOpen(true)}>
+              <BanknoteIcon />
+              Registrar pagamento
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-            <Undo2Icon />
-            Desfazer fechamento
+          <DropdownMenuItem variant="destructive" disabled={paid} onClick={() => setDeleteOpen(true)}>
+            <Trash2Icon />
+            <span className="flex flex-col">
+              Desfazer fechamento
+              {paid && <span className="text-xs text-muted-foreground">Estorne o pagamento primeiro.</span>}
+            </span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -511,6 +525,40 @@ export function StatementActions({ workspaceId, statement }: { workspaceId: stri
               }
             >
               {deleting ? "Desfazendo..." : "Desfazer"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={unpayOpen}
+        onOpenChange={(next) => {
+          if (!next) setError(null)
+          setUnpayOpen(next)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Estornar pagamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A entrada de {money(statement.totalCents ?? net)} de <strong>{statement.name}</strong> sai da carteira e o
+              fechamento volta para aguardando pagamento.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {error && <FieldError>{error}</FieldError>}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={unpaying}>Cancelar</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              loading={unpaying}
+              onClick={() =>
+                startUnpay(async () => {
+                  const result = await unpayStatementAction(workspaceId, statement.id)
+                  setError(result.error)
+                  if (!result.error) setUnpayOpen(false)
+                })
+              }
+            >
+              {unpaying ? "Estornando..." : "Estornar"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

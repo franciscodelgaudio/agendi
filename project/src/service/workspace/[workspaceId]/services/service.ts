@@ -38,7 +38,7 @@ export type ServiceInputError = "invalid_input" | "invalid_name" | "name_too_lon
 
 export type ServiceData = { name: string; durationMinutes: number; priceCents: number };
 
-function parseService(input: unknown): { ok: true; data: ServiceData } | { ok: false; error: ServiceInputError } {
+export function parseService(input: unknown): { ok: true; data: ServiceData } | { ok: false; error: ServiceInputError } {
   const parsed = serviceSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: issueCode<ServiceInputError>(parsed.error) };
   return { ok: true, data: { name: parsed.data.name, durationMinutes: parsed.data.duration!, priceCents: parsed.data.price! } };

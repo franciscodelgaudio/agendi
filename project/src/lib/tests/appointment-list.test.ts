@@ -1,11 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { Types } from "mongoose";
 import {
-  APPOINTMENT_PAGE_SIZE,
   APPOINTMENT_VIEW,
-  appointmentListPipeline,
   calendarPipeline,
-  parseAppointmentListQuery,
   parseCalendarQuery,
   parseCalendarRange,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list";
@@ -201,95 +198,5 @@ describe("calendarPipeline", () => {
       { $sort: { startsAt: 1, _id: 1 } },
       ...APPOINTMENT_VIEW,
     ]);
-  });
-});
-
-const BASE = { q: "", sort: "startsAt", dir: "desc", unit: "", member: "", status: "", from: "", to: "", page: 1 } as const;
-
-describe("parseAppointmentListQuery", () => {
-  it("sem parâmetros, mostra todos do mais recente para o mais antigo na página 1", () => {
-    expect(parseAppointmentListQuery({})).toEqual(BASE);
-  });
-
-  it("lê busca, filtros, período, ordenação e página válidos", () => {
-    expect(
-      parseAppointmentListQuery({
-        q: " joão ",
-        sort: "customer",
-        dir: "asc",
-        unit: UNIT_ID,
-        member: ANA_ID,
-        status: "done",
-        from: "2026-09-01",
-        to: "2026-09-30",
-        page: "2",
-      }),
-    ).toEqual({
-      q: "joão",
-      sort: "customer",
-      dir: "asc",
-      unit: UNIT_ID,
-      member: ANA_ID,
-      status: "done",
-      from: "2026-09-01",
-      to: "2026-09-30",
-      page: 2,
-    });
-  });
-
-  it("ignora valores inválidos", () => {
-    expect(
-      parseAppointmentListQuery({ sort: "price", unit: "x", member: "y", status: "pending", from: "2026-02-30", page: "0" }),
-    ).toEqual(BASE);
-  });
-});
-
-describe("appointmentListPipeline", () => {
-  const paged = (sort: Record<string, number>, skip: number) => [
-    { $sort: { ...sort, id: 1 } },
-    {
-      $facet: {
-        rows: [{ $skip: skip }, { $limit: APPOINTMENT_PAGE_SIZE }],
-        total: [{ $count: "n" }],
-      },
-    },
-    { $project: { rows: 1, total: { $ifNull: [{ $first: "$total.n" }, 0] } } },
-  ];
-
-  it("sem filtros, monta a visão e ordena pelo início mais recente", () => {
-    expect(appointmentListPipeline(BASE)).toEqual([...APPOINTMENT_VIEW, ...paged({ startsAt: -1 }, 0)]);
-  });
-
-  it("filtra unidade, profissional, status e período em Brasília antes de montar a visão", () => {
-    const stages = appointmentListPipeline({
-      ...BASE,
-      unit: UNIT_ID,
-      member: ANA_ID,
-      status: "scheduled",
-      from: "2026-09-01",
-      to: "2026-09-30",
-    });
-
-    expect(stages[0]).toEqual({
-      $match: {
-        startsAt: { $gte: new Date("2026-09-01T03:00:00.000Z"), $lt: new Date("2026-10-01T03:00:00.000Z") },
-        unitId: new Types.ObjectId(UNIT_ID),
-        workspaceMemberId: new Types.ObjectId(ANA_ID),
-        status: "scheduled",
-      },
-    });
-    expect(stages.slice(1, 1 + APPOINTMENT_VIEW.length)).toEqual(APPOINTMENT_VIEW);
-  });
-
-  it("busca no cliente, no serviço e na profissional sem diferenciar acentos, e ordena pelo cliente", () => {
-    const stages = appointmentListPipeline({ ...BASE, q: "joao", sort: "customer", dir: "asc", page: 3 });
-    const search = stages[APPOINTMENT_VIEW.length] as {
-      $match: { $or: { [field: string]: { $regex: string; $options: string } }[] };
-    };
-
-    expect(search.$match.$or.map((condition) => Object.keys(condition)[0])).toEqual(["customerName", "name", "memberName"]);
-    const { $regex, $options } = search.$match.$or[0].customerName;
-    expect(new RegExp($regex, $options).test("João Silva")).toBe(true);
-    expect(stages.slice(APPOINTMENT_VIEW.length + 1)).toEqual(paged({ customerName: 1 }, 2 * APPOINTMENT_PAGE_SIZE));
   });
 });

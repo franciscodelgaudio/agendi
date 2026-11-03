@@ -243,19 +243,6 @@ export function CalendarHeadingSkeleton({ section = false }: { section?: boolean
   return <Skeleton className={section ? "h-7 w-32" : "h-8 w-48"} />
 }
 
-// Cabeçalho da unidade (avatar, nome e abas), enquanto o layout da unidade carrega.
-export function UnitHeaderSkeleton() {
-  return (
-    <LoadingRegion className="contents">
-      <div className="flex items-center gap-4">
-        <Skeleton className="size-14 rounded-lg" />
-        <Skeleton className="h-8 w-56" />
-      </div>
-      <TabsNavSkeleton widths={["w-24", "w-20", "w-24", "w-28", "w-20", "w-20", "w-16"]} />
-    </LoadingRegion>
-  )
-}
-
 // Abas sublinhadas (unidade, usuários), uma por largura de rótulo.
 export function TabsNavSkeleton({ widths }: { widths: string[] }) {
   return (

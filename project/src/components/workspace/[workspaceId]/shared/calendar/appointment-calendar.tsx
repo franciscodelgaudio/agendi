@@ -12,11 +12,7 @@ import "@fullcalendar/react/skeleton.css"
 import "@fullcalendar/react/themes/monarch/theme.css"
 import { CheckIcon, PlusIcon, XIcon } from "lucide-react"
 import { toast } from "sonner"
-import {
-  createAppointmentAction,
-  rescheduleAppointmentAction,
-  updateAppointmentAction,
-} from "@/lib/actions/appointment"
+import { createAppointmentAction, rescheduleAppointmentAction } from "@/lib/actions/appointment"
 import { BOOKING_COLORS } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-colors"
 import type {
   AppointmentRow,
@@ -28,19 +24,13 @@ import { Button } from "@/components/ui/button"
 import { FieldError } from "@/components/ui/field"
 import { Popover, PopoverClose, PopoverContent } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import {
   AppointmentForm,
   type AppointmentFormOptions,
   type AppointmentFormValues,
 } from "@/components/workspace/[workspaceId]/shared/calendar/appointment-form"
-import {
-  appointmentFormValues,
-  DeleteAppointmentDialog,
-  StatusButtons,
-  STATUS_LABELS,
-  type AppointmentPermissions,
-} from "@/components/workspace/[workspaceId]/shared/calendar/appointment-actions"
+import type { AppointmentPermissions } from "@/components/workspace/[workspaceId]/shared/calendar/appointment-actions"
+import { AppointmentDetailSheet } from "@/components/workspace/[workspaceId]/shared/calendar/appointment-detail"
 import {
   MissingTherapistIcon,
   TherapistAvatar,
@@ -89,11 +79,7 @@ function brtNow() {
   return new Date(Date.now() - BRT_OFFSET_HOURS * HOUR_MS)
 }
 
-type SheetInput =
-  | { mode: "edit"; appointment: AppointmentRow }
-  | { mode: "view"; appointment: AppointmentRow }
-
-type SheetState = SheetInput & { key: number }
+type SheetState = { appointment: AppointmentRow; key: number }
 
 type Draft = { values: AppointmentFormValues; key: number; fallbackAnchor: Element | null }
 
@@ -122,7 +108,6 @@ export function AppointmentCalendar({
   const [sheetOpen, setSheetOpen] = useState(false)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [draftEl, setDraftEl] = useState<HTMLElement | null>(null)
-  const [deleteOpen, setDeleteOpen] = useState(false)
   const [hydrated, setHydrated] = useState(false)
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -140,13 +125,9 @@ export function AppointmentCalendar({
     startNavigation(() => router.replace(`${pathname}?${params}`, { scroll: false }))
   }
 
-  function openSheet(next: SheetInput) {
-    setSheet({ ...next, key: (sheet?.key ?? 0) + 1 })
+  function openSheet(appointment: AppointmentRow) {
+    setSheet({ appointment, key: (sheet?.key ?? 0) + 1 })
     setSheetOpen(true)
-  }
-
-  function closeSheet() {
-    setSheetOpen(false)
   }
 
   function openCreate(startsAt: string, durationMinutes: number, fallbackAnchor: Element | null = null) {
@@ -272,8 +253,6 @@ export function AppointmentCalendar({
       </Select>
     )
   }
-
-  const viewed = sheet && (sheet.mode === "edit" || sheet.mode === "view") ? sheet.appointment : null
 
   return (
     <div className="flex flex-col gap-4">
@@ -413,8 +392,7 @@ export function AppointmentCalendar({
               const appointment = event.extendedProps.appointment as AppointmentRow | undefined
               if (!appointment || (!canSchedule && !canAttend)) return
               setDraft(null)
-              const editable = appointment.status === "scheduled" && canSchedule
-              openSheet({ mode: editable ? "edit" : "view", appointment })
+              openSheet(appointment)
             }}
           />
         )}
@@ -456,82 +434,15 @@ export function AppointmentCalendar({
         </PopoverContent>
       </Popover>
 
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent>
-          {sheet?.mode === "edit" && (
-            <AppointmentForm
-              key={sheet.key}
-              workspaceId={workspaceId}
-              {...options}
-              mode="edit"
-              defaultValues={appointmentFormValues(sheet.appointment)}
-              action={(prev, formData) => updateAppointmentAction(workspaceId, sheet.appointment.id, prev, formData)}
-              onDone={closeSheet}
-              footer={
-                <>
-                  <StatusButtons
-                    workspaceId={workspaceId}
-                    appointment={sheet.appointment}
-                    permissions={permissions}
-                    onDone={closeSheet}
-                  />
-                  <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>
-                    Excluir
-                  </Button>
-                </>
-              }
-            />
-          )}
-          {sheet?.mode === "view" && (
-            <div className="flex min-h-0 flex-1 flex-col">
-              <SheetHeader>
-                <SheetTitle>{sheet.appointment.name}</SheetTitle>
-                <SheetDescription>{STATUS_LABELS[sheet.appointment.status]}</SheetDescription>
-              </SheetHeader>
-              <dl className="grid gap-3 px-4 text-sm">
-                {[
-                  ["Cliente", sheet.appointment.customerName ?? "Sem cliente"],
-                  ...(sheet.appointment.customer?.kind === "guest" && sheet.appointment.customer.observation
-                    ? [["Observação", sheet.appointment.customer.observation]]
-                    : []),
-                  ["Profissional", sheet.appointment.memberName ?? "—"],
-                  ["Estação", sheet.appointment.stationName ?? "—"],
-                  ["Início", sheet.appointment.startsAt.replace("T", " às ")],
-                  ["Duração", `${sheet.appointment.durationMinutes} min`],
-                ].map(([label, value]) => (
-                  <div key={label} className="flex justify-between gap-3">
-                    <dt className="text-muted-foreground">{label}</dt>
-                    <dd className="truncate font-medium">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-              <SheetFooter>
-                <StatusButtons
-                  workspaceId={workspaceId}
-                  appointment={sheet.appointment}
-                  permissions={permissions}
-                  onDone={closeSheet}
-                />
-                {canSchedule && (
-                  <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>
-                    Excluir
-                  </Button>
-                )}
-              </SheetFooter>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
-
-      {viewed && (
-        <DeleteAppointmentDialog
-          workspaceId={workspaceId}
-          appointment={viewed}
-          open={deleteOpen}
-          onOpenChange={setDeleteOpen}
-          onDone={closeSheet}
-        />
-      )}
+      <AppointmentDetailSheet
+        workspaceId={workspaceId}
+        appointment={sheet?.appointment ?? null}
+        contentKey={sheet?.key ?? 0}
+        permissions={permissions}
+        options={options}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+      />
     </div>
   )
 }

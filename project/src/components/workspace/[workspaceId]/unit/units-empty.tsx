@@ -1,6 +1,6 @@
-import { MapPinIcon } from "lucide-react"
-import { CreateUnitSheet } from "@/components/workspace/[workspaceId]/unit/create-unit-sheet"
-import type { UnitFormOptions } from "@/components/workspace/[workspaceId]/unit/unit-fields"
+import { MapPinIcon, PlusIcon } from "lucide-react"
+import Link from "@/components/shared/link"
+import { Button } from "@/components/ui/button"
 import {
   Empty,
   EmptyContent,
@@ -10,9 +10,18 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 
-type Props = { workspaceId: string; canManage: boolean; options: UnitFormOptions }
+export function NewUnitButton({ workspaceId }: { workspaceId: string }) {
+  return (
+    <Button nativeButton={false} render={<Link href={`/workspace/${workspaceId}/unit/new`} />}>
+      <PlusIcon />
+      Nova unidade
+    </Button>
+  )
+}
 
-export function UnitsEmpty({ workspaceId, canManage, options }: Props) {
+type Props = { workspaceId: string; canManage: boolean }
+
+export function UnitsEmpty({ workspaceId, canManage }: Props) {
   return (
     <Empty className="border">
       <EmptyHeader>
@@ -28,7 +37,7 @@ export function UnitsEmpty({ workspaceId, canManage, options }: Props) {
       </EmptyHeader>
       {canManage && (
         <EmptyContent>
-          <CreateUnitSheet workspaceId={workspaceId} options={options} />
+          <NewUnitButton workspaceId={workspaceId} />
         </EmptyContent>
       )}
     </Empty>

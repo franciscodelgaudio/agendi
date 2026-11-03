@@ -18,10 +18,11 @@ type Props = {
   name: string
   // "2026-09-24T14:30", no horário de Brasília.
   defaultValue: string
+  onChange?: (value: string) => void
 }
 
 // Data pelo Calendar e hora por um input; os dois viram um único campo no formato do datetime-local.
-export function DateTimeField({ idPrefix, name, defaultValue }: Props) {
+export function DateTimeField({ idPrefix, name, defaultValue, onChange }: Props) {
   const [day, setDay] = useState(defaultValue.slice(0, 10))
   const [time, setTime] = useState(defaultValue.slice(11, 16))
   const [open, setOpen] = useState(false)
@@ -47,6 +48,7 @@ export function DateTimeField({ idPrefix, name, defaultValue }: Props) {
               required
               onSelect={(date) => {
                 setDay(toDay(date))
+                onChange?.(`${toDay(date)}T${time}`)
                 setOpen(false)
               }}
             />
@@ -60,7 +62,10 @@ export function DateTimeField({ idPrefix, name, defaultValue }: Props) {
           type="time"
           step={60}
           value={time}
-          onChange={(e) => setTime(e.target.value)}
+          onChange={(e) => {
+            setTime(e.target.value)
+            onChange?.(`${day}T${e.target.value}`)
+          }}
           required
           className="appearance-none [&::-webkit-calendar-picker-indicator]:hidden"
         />

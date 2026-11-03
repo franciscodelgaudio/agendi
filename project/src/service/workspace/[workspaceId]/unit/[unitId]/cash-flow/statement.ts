@@ -350,3 +350,25 @@ export async function deleteStatement(
   if (!(await deps.remove(statementId))) return { ok: false, error: "statement_not_found" };
   return { ok: true };
 }
+
+export type UnpayStatementError = AccessError | "statement_not_found" | "statement_not_paid";
+
+export async function unpayStatement(
+  statementId: string | null | undefined,
+  ctx: { actor: Actor | null },
+  deps: {
+    findStatement: (statementId: string) => Promise<{ paid: boolean } | null>;
+    unpay: (statementId: string) => Promise<boolean>;
+  },
+): Promise<StatementResult<UnpayStatementError>> {
+  const accessError = checkAccess(ctx.actor, "cash_flow.manage");
+  if (accessError) return { ok: false, error: accessError };
+  if (!statementId) return { ok: false, error: "statement_not_found" };
+
+  const statement = await deps.findStatement(statementId);
+  if (!statement) return { ok: false, error: "statement_not_found" };
+  if (!statement.paid) return { ok: false, error: "statement_not_paid" };
+
+  if (!(await deps.unpay(statementId))) return { ok: false, error: "statement_not_found" };
+  return { ok: true };
+}

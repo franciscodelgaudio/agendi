@@ -253,6 +253,22 @@ export async function payStatementWith(workspaceId: string, statementId: string,
   }
 }
 
+export async function unpayStatementWith(workspaceId: string, statementId: string) {
+  const filter = statementFilter(workspaceId, statementId)
+  if (!filter) return false
+  let unpaid = false
+  await inTransaction(async (session) => {
+    const statement = await Statement.findOneAndUpdate(
+      { ...filter, transactionId: { $type: "objectId" } },
+      { $set: { transactionId: null } },
+      { session, projection: { transactionId: 1 } },
+    ).lean()
+    unpaid = !!statement?.transactionId
+    if (unpaid) await Transaction.deleteOne({ _id: statement!.transactionId, workspaceId: filter.workspaceId }, { session })
+  })
+  return unpaid
+}
+
 export async function removeUnpaidStatement(workspaceId: string, statementId: string) {
   const filter = statementFilter(workspaceId, statementId)
   if (!filter) return false

@@ -34,15 +34,15 @@ type InventoryError = UpdateInventoryError | DeleteInventoryError | RegisterMove
 
 const errorMessages: Record<Exclude<InventoryError, "forbidden"> | "unauthenticated", string> = {
   invalid_input: "Preencha todos os campos.",
-  invalid_name: "Informe o nome do inventário.",
+  invalid_name: "Informe o nome do estoque.",
   name_too_long: "O nome ficou longo demais.",
   invalid_type: "Escolha entrada ou saída.",
   invalid_quantity: "Informe uma quantidade inteira de 1 a 1.000.000.",
   product_not_found: "Produto não encontrado neste workspace.",
-  inventory_not_found: "Inventário não encontrado neste workspace.",
-  inventory_in_use: "Alguma unidade ainda usa este inventário. Troque o inventário dela antes.",
-  insufficient_stock: "Não há essa quantidade do produto no inventário.",
-  same_inventory: "Escolha outro inventário de destino.",
+  inventory_not_found: "Estoque não encontrado neste workspace.",
+  inventory_in_use: "Alguma unidade ainda usa este estoque. Troque o estoque dela antes.",
+  insufficient_stock: "Não há essa quantidade do produto no estoque.",
+  same_inventory: "Escolha outro estoque de destino.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }

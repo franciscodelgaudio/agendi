@@ -78,7 +78,7 @@ export function CreateProductSheet({ workspaceId }: { workspaceId: string }) {
         <form action={formAction} className="flex min-h-0 flex-1 flex-col">
           <SheetHeader>
             <SheetTitle>Novo produto</SheetTitle>
-            <SheetDescription>O produto entra no catálogo do workspace, sem quantidade em nenhum inventário.</SheetDescription>
+            <SheetDescription>O produto entra no catálogo do workspace, sem quantidade em nenhum estoque.</SheetDescription>
           </SheetHeader>
           <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
             {state.error && <FieldError>{state.error}</FieldError>}
@@ -160,7 +160,7 @@ export function ProductActions({ workspaceId, product }: { workspaceId: string; 
             <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
             <AlertDialogDescription>
               <strong>{product.name}</strong> sai do catálogo. Só é possível excluir produtos sem quantidade em nenhum
-              inventário.
+              estoque.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {error && <FieldError>{error}</FieldError>}

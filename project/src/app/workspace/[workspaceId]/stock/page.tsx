@@ -58,7 +58,7 @@ export default async function InventoriesPage({ params }: PageProps<"/workspace/
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-full px-4">Inventário</TableHead>
+              <TableHead className="w-full px-4">Estoque</TableHead>
               <TableHead className="px-4 @max-3xl:hidden">Unidades</TableHead>
               <TableHead className="px-4 text-right @max-md:hidden">Produtos</TableHead>
               <TableHead className="px-4 text-right">Itens</TableHead>
@@ -69,7 +69,7 @@ export default async function InventoriesPage({ params }: PageProps<"/workspace/
             {inventories.length === 0 && (
               <TableRow>
                 <TableCell colSpan={canManage ? 5 : 4} className="h-24 px-4 text-center text-muted-foreground">
-                  Nenhum inventário cadastrado.
+                  Nenhum estoque cadastrado.
                 </TableCell>
               </TableRow>
             )}

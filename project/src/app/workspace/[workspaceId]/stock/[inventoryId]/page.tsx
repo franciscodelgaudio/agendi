@@ -70,7 +70,7 @@ export default async function InventoryPage({
             {result.rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={3} className="h-24 px-4 text-center text-muted-foreground">
-                  Nenhum produto neste inventário.
+                  Nenhum produto neste estoque.
                 </TableCell>
               </TableRow>
             )}

@@ -7,7 +7,7 @@ import type { UnitFormValues } from "@/components/workspace/[workspaceId]/unit/u
 import type { MemberOption } from "@/components/workspace/[workspaceId]/unit/unit-member-fields"
 import { unitMemberOptionsStages } from "@/service/workspace/[workspaceId]/unit/unit-form-store"
 import { Workspace } from "@/models/Workspace"
-import { CreateUnitSheet } from "@/components/workspace/[workspaceId]/unit/create-unit-sheet"
+import { NewUnitButton } from "@/components/workspace/[workspaceId]/unit/units-empty"
 import { ListSearch } from "@/components/shared/list-search"
 import { UnitCards } from "@/components/workspace/[workspaceId]/unit/unit-cards"
 import { UnitsEmpty } from "@/components/workspace/[workspaceId]/unit/units-empty"
@@ -70,10 +70,10 @@ export default async function UnitsPage({
     <div className="flex flex-1 flex-col gap-4 p-4">
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-2xl font-semibold tracking-tight">Unidades</h2>
-        {canManage && unitCount > 0 && <CreateUnitSheet workspaceId={workspaceId} options={options} />}
+        {canManage && unitCount > 0 && <NewUnitButton workspaceId={workspaceId} />}
       </div>
       {unitCount === 0 ? (
-        <UnitsEmpty workspaceId={workspaceId} canManage={canManage} options={options} />
+        <UnitsEmpty workspaceId={workspaceId} canManage={canManage} />
       ) : (
         <>
           <ListSearch query={query} placeholder="Buscar unidade..." />

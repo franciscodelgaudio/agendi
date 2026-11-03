@@ -19,13 +19,13 @@ import { Transaction } from "@/models/Transaction"
 export default async function WalletPage({
   params,
   searchParams,
-}: PageProps<"/workspace/[workspaceId]/cash-flow/wallets/[walletId]">) {
+}: PageProps<"/workspace/[workspaceId]/cash-flow/wallets/[walletId]/transactions">) {
   const { workspaceId, walletId } = await params
   const query = parseTransactionListQuery(await searchParams)
   const { actor, wallet, partners } = await loadWalletCashFlow(workspaceId, walletId)
   const [result] = await Transaction.aggregate<TransactionListPage>(transactionListPipeline(walletId, query))
 
-  const pathname = `/workspace/${workspaceId}/cash-flow/wallets/${walletId}`
+  const pathname = `/workspace/${workspaceId}/cash-flow/wallets/${walletId}/transactions`
   const listQuery = { q: query.q, type: query.type, sort: query.sort, dir: query.dir }
   const pages = Math.ceil(result.total / TRANSACTION_PAGE_SIZE)
   if (pages > 0 && query.page > pages) {
