@@ -75,12 +75,13 @@ describe("createTransaction", () => {
     expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ type: "incoming" }));
   });
 
-  it.each(["", "  ", null, undefined])("sem dia de pagamento (%j), fica pendente", async (paidAt) => {
+  it.each(["", "  ", null, undefined])("exige o dia de pagamento (%j), sem gravar", async (paidAt) => {
     const deps = makeDeps();
 
-    await createTransaction({ ...VALID, paidAt }, WALLET_ID, ctx, deps);
+    const result = await createTransaction({ ...VALID, paidAt }, WALLET_ID, ctx, deps);
 
-    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ paidAt: null }));
+    expect(result).toEqual({ ok: false, error: "invalid_paid_at" });
+    expect(deps.insert).not.toHaveBeenCalled();
   });
 
   it("remove espaços das pontas do nome", async () => {
@@ -221,10 +222,19 @@ describe("updateTransaction", () => {
   it("grava os dados normalizados", async () => {
     const deps = makeDeps();
 
-    const result = await updateTransaction({ ...VALID, paidAt: "" }, TRANSACTION_ID, { actor: MANAGER }, deps);
+    const result = await updateTransaction(VALID, TRANSACTION_ID, { actor: MANAGER }, deps);
 
     expect(result).toEqual({ ok: true });
-    expect(deps.update).toHaveBeenCalledWith(TRANSACTION_ID, { ...SAVED, paidAt: null });
+    expect(deps.update).toHaveBeenCalledWith(TRANSACTION_ID, SAVED);
+  });
+
+  it("não deixa a transação sem dia de pagamento", async () => {
+    const deps = makeDeps();
+
+    const result = await updateTransaction({ ...VALID, paidAt: "" }, TRANSACTION_ID, { actor: MANAGER }, deps);
+
+    expect(result).toEqual({ ok: false, error: "invalid_paid_at" });
+    expect(deps.update).not.toHaveBeenCalled();
   });
 
   it("não edita a entrada gerada por um bloco de recebíveis", async () => {

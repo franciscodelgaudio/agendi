@@ -3,15 +3,16 @@ import { OptionalMark, RequiredMark } from "@/components/shared/field-hints"
 import { Input } from "@/components/ui/input"
 import { ImageUploadField } from "@/components/shared/image-upload-field"
 import { BusinessHoursFields } from "@/components/workspace/[workspaceId]/unit/business-hours-fields"
-import { StationFields, type StationOption } from "@/components/workspace/[workspaceId]/unit/station-fields"
+import { StationFields } from "@/components/workspace/[workspaceId]/unit/station-fields"
 import { UnitMemberFields, type MemberOption } from "@/components/workspace/[workspaceId]/unit/unit-member-fields"
 import type { BusinessHours } from "@/service/workspace/[workspaceId]/unit/[unitId]/business-hours"
+import type { StationGroup } from "@/service/workspace/[workspaceId]/unit/[unitId]/station"
 
 export type UnitFormValues = {
   id: string
   name: string
   imageUrl: string | null
-  stations: StationOption[]
+  stations: StationGroup[]
   workspaceMemberIds: string[]
   businessHours: BusinessHours
 }

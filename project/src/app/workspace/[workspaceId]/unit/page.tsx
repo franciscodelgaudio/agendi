@@ -9,7 +9,7 @@ import { unitMemberOptionsStages } from "@/service/workspace/[workspaceId]/unit/
 import { Workspace } from "@/models/Workspace"
 import { CreateUnitSheet } from "@/components/workspace/[workspaceId]/unit/create-unit-sheet"
 import { ListSearch } from "@/components/shared/list-search"
-import { UnitTable } from "@/components/workspace/[workspaceId]/unit/unit-table"
+import { UnitCards } from "@/components/workspace/[workspaceId]/unit/unit-cards"
 import { UnitsEmpty } from "@/components/workspace/[workspaceId]/unit/units-empty"
 
 export default async function UnitsPage({
@@ -26,7 +26,7 @@ export default async function UnitsPage({
   // Parte do workspace (e não de units) para que o acesso ao workspace seja garantido.
   // O total sem filtro separa "workspace sem unidades" de "busca sem resultado".
   const [workspace] = await Workspace.aggregate<{
-    units: (UnitFormValues & { createdAt: Date; updatedAt: Date })[]
+    units: UnitFormValues[]
     unitCount: number
     actor: Actor
     members: MemberOption[]
@@ -77,10 +77,9 @@ export default async function UnitsPage({
       ) : (
         <>
           <ListSearch query={query} placeholder="Buscar unidade..." />
-          <UnitTable
+          <UnitCards
             units={units}
             options={options}
-            query={query}
             pathname={`/workspace/${workspaceId}/unit`}
             workspaceId={workspaceId}
             canManage={canManage}

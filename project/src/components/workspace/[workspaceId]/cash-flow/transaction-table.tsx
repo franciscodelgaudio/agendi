@@ -1,3 +1,4 @@
+import { Fragment } from "react"
 import { ArrowDownLeftIcon, ArrowUpRightIcon } from "lucide-react"
 import { SortableHead } from "@/components/shared/sortable-head"
 import { currencyFormat } from "@/components/shared/service-format"
@@ -12,6 +13,13 @@ import type { SortDir } from "@/service/workspace/[workspaceId]/unit/unit-list"
 import { cn } from "@/service/_shared/utils"
 
 const dayFormat = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Sao_Paulo" })
+const monthFormat = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" })
+
+function monthLabel(month: string) {
+  const [year, index] = month.split("-").map(Number)
+  const label = monthFormat.format(new Date(Date.UTC(year, index - 1, 1)))
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
 
 type Props = {
   workspaceId: string
@@ -42,37 +50,40 @@ export function TransactionTable({ workspaceId, transactions, query, pathname, c
               </TableCell>
             </TableRow>
           )}
-          {transactions.map((transaction) => {
+          {transactions.map((transaction, index) => {
             const incoming = transaction.type === "incoming"
             const Icon = incoming ? ArrowDownLeftIcon : ArrowUpRightIcon
             return (
-              <TableRow key={transaction.id}>
-                <TableCell className="max-w-0 px-4 font-medium">
-                  <div className="flex items-center gap-2">
-                    <Icon className={cn("size-4 shrink-0", incoming ? "text-emerald-600" : "text-muted-foreground")} />
-                    <span className="truncate">{transaction.name}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="px-4 @max-xl:hidden">
-                  <Badge variant="secondary">{TRANSACTION_TYPE_LABELS[transaction.type]}</Badge>
-                </TableCell>
-                <TableCell className="px-4 tabular-nums @max-md:hidden">
-                  {transaction.paidAt ? (
-                    dayFormat.format(new Date(transaction.paidAt))
-                  ) : (
-                    <Badge variant="outline">Pendente</Badge>
-                  )}
-                </TableCell>
-                <TableCell className={cn("px-4 text-right tabular-nums", incoming ? "text-emerald-700" : "")}>
-                  {incoming ? "" : "−"}
-                  {currencyFormat.format(transaction.totalCents / 100)}
-                </TableCell>
-                {canManage && (
-                  <TableCell className="px-4 text-right">
-                    {!transaction.fromStatement && <TransactionActions workspaceId={workspaceId} transaction={transaction} />}
-                  </TableCell>
+              <Fragment key={transaction.id}>
+                {transaction.month !== transactions[index - 1]?.month && (
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableCell colSpan={canManage ? 5 : 4} className="px-4 font-medium text-muted-foreground">
+                      {monthLabel(transaction.month)}
+                    </TableCell>
+                  </TableRow>
                 )}
-              </TableRow>
+                <TableRow>
+                  <TableCell className="max-w-0 px-4 font-medium">
+                    <div className="flex items-center gap-2">
+                      <Icon className={cn("size-4 shrink-0", incoming ? "text-emerald-600" : "text-muted-foreground")} />
+                      <span className="truncate">{transaction.name}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-4 @max-xl:hidden">
+                    <Badge variant="secondary">{TRANSACTION_TYPE_LABELS[transaction.type]}</Badge>
+                  </TableCell>
+                  <TableCell className="px-4 tabular-nums @max-md:hidden">{dayFormat.format(new Date(transaction.paidAt))}</TableCell>
+                  <TableCell className={cn("px-4 text-right tabular-nums", incoming ? "text-emerald-700" : "")}>
+                    {incoming ? "" : "−"}
+                    {currencyFormat.format(transaction.totalCents / 100)}
+                  </TableCell>
+                  {canManage && (
+                    <TableCell className="px-4 text-right">
+                      {!transaction.fromStatement && <TransactionActions workspaceId={workspaceId} transaction={transaction} />}
+                    </TableCell>
+                  )}
+                </TableRow>
+              </Fragment>
             )
           })}
         </TableBody>

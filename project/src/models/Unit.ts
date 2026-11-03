@@ -2,7 +2,8 @@ import { Schema, model, models, type InferSchemaType, type Model } from "mongoos
 import { connectOnUse } from "@/service/_shared/database/mongoose";
 
 const stationSchema = new Schema({
-  name: { type: String, required: true, trim: true },
+  type: { type: String, required: true, trim: true },
+  number: { type: Number, required: true },
 });
 
 const businessHoursSchema = new Schema(

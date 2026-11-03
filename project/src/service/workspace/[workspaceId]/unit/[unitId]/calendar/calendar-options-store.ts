@@ -5,6 +5,7 @@ import {
   parseCalendarQuery,
   type AppointmentRow,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list"
+import { stationName } from "@/service/workspace/[workspaceId]/unit/[unitId]/station"
 import type { SearchParams } from "@/service/workspace/[workspaceId]/unit/unit-list"
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
 import { Appointment } from "@/models/Appointment"
@@ -61,7 +62,7 @@ export async function loadCalendarOptions(workspaceId: string, unitId?: string):
       unit.stations.map((station) => ({
         id: station._id.toString(),
         unitId: unit._id.toString(),
-        name: station.name,
+        name: stationName(station),
       })),
     ),
     therapists: therapistDoc?.therapists ?? [],

@@ -106,7 +106,7 @@ export const APPOINTMENT_VIEW: PipelineStage.FacetPipelineStage[] = [
                     cond: { $eq: ["$$this._id", "$stationId"] },
                   },
                 },
-                in: "$$this.name",
+                in: { $concat: ["$$this.type", " ", { $toString: "$$this.number" }] },
               },
             },
           },

@@ -24,7 +24,7 @@ export function walletListPipeline(workspaceId: string): PipelineStage[] {
         localField: "_id",
         foreignField: "walletId",
         as: "paid",
-        pipeline: [{ $match: { paidAt: { $ne: null } } }, { $group: { _id: "$type", cents: { $sum: "$totalCents" } } }],
+        pipeline: [{ $group: { _id: "$type", cents: { $sum: "$totalCents" } } }],
       },
     },
     {

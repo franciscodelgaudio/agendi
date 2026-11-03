@@ -41,12 +41,17 @@ export function unitListPipeline({ q, sort, dir }: UnitListQuery) {
         id: { $toString: "$_id" },
         name: 1,
         imageUrl: { $ifNull: ["$imageUrl", null] },
-        // Estações e membros para o formulário de edição, com os ids em texto.
+        // Estações agrupadas por tipo e membros com os ids em texto, para o formulário de edição.
         stations: {
           $map: {
-            input: "$stations",
-            as: "station",
-            in: { id: { $toString: "$$station._id" }, name: "$$station.name" },
+            input: { $filter: { input: "$stations", as: "station", cond: { $eq: ["$$station.number", 1] } } },
+            as: "first",
+            in: {
+              type: "$$first.type",
+              quantity: {
+                $size: { $filter: { input: "$stations", as: "station", cond: { $eq: ["$$station.type", "$$first.type"] } } },
+              },
+            },
           },
         },
         workspaceMemberIds: {

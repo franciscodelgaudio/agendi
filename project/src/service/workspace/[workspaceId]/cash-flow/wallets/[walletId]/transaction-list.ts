@@ -7,15 +7,12 @@ import {
 } from "@/service/workspace/[workspaceId]/cash-flow/wallets/[walletId]/transaction";
 
 export const TRANSACTION_PAGE_SIZE = 20;
-const STATUSES = ["paid", "pending"] as const;
 const SORT_FIELDS = { paidAt: "paidAt", name: "name", total: "totalCents" } as const;
 
-export type TransactionStatus = (typeof STATUSES)[number];
 export type TransactionSortField = keyof typeof SORT_FIELDS;
 export type TransactionListQuery = {
   q: string;
   type: TransactionType | "";
-  status: TransactionStatus | "";
   sort: TransactionSortField;
   dir: SortDir;
   page: number;
@@ -26,7 +23,8 @@ export type TransactionListItem = {
   name: string;
   totalCents: number;
   type: TransactionType;
-  paidAt: Date | null;
+  paidAt: Date;
+  month: string;
   fromStatement: boolean;
 };
 
@@ -38,13 +36,11 @@ function isSortField(value: string | undefined): value is TransactionSortField {
 
 export function parseTransactionListQuery(params: SearchParams): TransactionListQuery {
   const type = first(params.type);
-  const status = first(params.status);
   const sort = first(params.sort);
   const page = first(params.page);
   return {
     q: first(params.q)?.trim() ?? "",
     type: TRANSACTION_TYPES.includes(type as TransactionType) ? (type as TransactionType) : "",
-    status: STATUSES.includes(status as TransactionStatus) ? (status as TransactionStatus) : "",
     sort: isSortField(sort) ? sort : "paidAt",
     dir: first(params.dir) === "asc" ? "asc" : "desc",
     page: page && /^[1-9]\d*$/.test(page) ? Number(page) : 1,
@@ -53,19 +49,18 @@ export function parseTransactionListQuery(params: SearchParams): TransactionList
 
 export function transactionListPipeline(
   walletId: string,
-  { q, type, status, sort, dir, page }: TransactionListQuery,
+  { q, type, sort, dir, page }: TransactionListQuery,
   unitId?: string,
 ): PipelineStage[] {
   const match: Record<string, unknown> = { walletId: new Types.ObjectId(walletId) };
   if (unitId) match.unitId = new Types.ObjectId(unitId);
   if (type) match.type = type;
-  if (status === "paid") match.paidAt = { $ne: null };
-  if (status === "pending") match.paidAt = null;
   if (q) match.name = { $regex: accentInsensitivePattern(q), $options: "i" };
 
   return [
     { $match: match },
-    { $sort: { [SORT_FIELDS[sort]]: dir === "desc" ? -1 : 1, _id: -1 } },
+    { $addFields: { month: { $dateToString: { format: "%Y-%m", date: "$paidAt", timezone: "America/Sao_Paulo" } } } },
+    { $sort: { month: -1, [SORT_FIELDS[sort]]: dir === "desc" ? -1 : 1, _id: -1 } },
     {
       $facet: {
         rows: [
@@ -88,6 +83,7 @@ export function transactionListPipeline(
               totalCents: 1,
               type: 1,
               paidAt: 1,
+              month: 1,
               fromStatement: { $gt: [{ $size: "$statements" }, 0] },
             },
           },
@@ -107,13 +103,7 @@ function paidSum(type: TransactionType) {
 
 export function transactionTotalsPipeline(walletId: string, unitId: string): PipelineStage[] {
   return [
-    {
-      $match: {
-        walletId: new Types.ObjectId(walletId),
-        unitId: new Types.ObjectId(unitId),
-        paidAt: { $ne: null },
-      },
-    },
+    { $match: { walletId: new Types.ObjectId(walletId), unitId: new Types.ObjectId(unitId) } },
     { $group: { _id: null, incomingCents: paidSum("incoming"), expenseCents: paidSum("expense") } },
     {
       $project: {

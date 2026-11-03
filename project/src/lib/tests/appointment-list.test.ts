@@ -76,7 +76,7 @@ describe("APPOINTMENT_VIEW", () => {
                         cond: { $eq: ["$$this._id", "$stationId"] },
                       },
                     },
-                    in: "$$this.name",
+                    in: { $concat: ["$$this.type", " ", { $toString: "$$this.number" }] },
                   },
                 },
               },

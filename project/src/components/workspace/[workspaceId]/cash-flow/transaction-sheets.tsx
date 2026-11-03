@@ -22,7 +22,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,7 +31,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import type { TransactionListItem } from "@/service/workspace/[workspaceId]/cash-flow/wallets/[walletId]/transaction-list"
@@ -46,7 +44,6 @@ const TYPE_ITEMS = [
 
 function TransactionFields({ idPrefix, transaction }: { idPrefix: string; transaction?: TransactionListItem }) {
   const [type, setType] = useState<string>(transaction?.type ?? "expense")
-  const [paid, setPaid] = useState(transaction ? transaction.paidAt !== null : true)
 
   return (
     <>
@@ -90,18 +87,12 @@ function TransactionFields({ idPrefix, transaction }: { idPrefix: string; transa
           />
         </Field>
       </div>
-      <Label className="gap-2 font-normal">
-        <Checkbox checked={paid} onCheckedChange={setPaid} />
-        {type === "incoming" ? "Já recebida" : "Já paga"}
-      </Label>
-      {paid && (
-        <DayField
-          id={`${idPrefix}-paid-at`}
-          name="paidAt"
-          label={type === "incoming" ? "Recebida em" : "Paga em"}
-          defaultValue={transaction?.paidAt ? brtDay(new Date(transaction.paidAt)) : todayInBrasilia()}
-        />
-      )}
+      <DayField
+        id={`${idPrefix}-paid-at`}
+        name="paidAt"
+        label={type === "incoming" ? "Recebida em" : "Paga em"}
+        defaultValue={transaction ? brtDay(new Date(transaction.paidAt)) : todayInBrasilia()}
+      />
     </>
   )
 }

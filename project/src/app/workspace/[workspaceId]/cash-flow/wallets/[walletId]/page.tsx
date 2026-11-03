@@ -26,7 +26,7 @@ export default async function WalletPage({
   const [result] = await Transaction.aggregate<TransactionListPage>(transactionListPipeline(walletId, query))
 
   const pathname = `/workspace/${workspaceId}/cash-flow/wallets/${walletId}`
-  const listQuery = { q: query.q, type: query.type, status: query.status, sort: query.sort, dir: query.dir }
+  const listQuery = { q: query.q, type: query.type, sort: query.sort, dir: query.dir }
   const pages = Math.ceil(result.total / TRANSACTION_PAGE_SIZE)
   if (pages > 0 && query.page > pages) {
     const params = new URLSearchParams(Object.entries({ ...listQuery, page: String(pages) }).filter(([, v]) => v))
@@ -51,16 +51,6 @@ export default async function WalletPage({
             { value: "all", label: "Entradas e saídas" },
             { value: "incoming", label: "Entradas" },
             { value: "expense", label: "Saídas" },
-          ]}
-        />
-        <QuerySelect
-          query={listQuery}
-          field="status"
-          label="Situação"
-          items={[
-            { value: "all", label: "Pagas e pendentes" },
-            { value: "paid", label: "Pagas" },
-            { value: "pending", label: "Pendentes" },
           ]}
         />
         <ListTotals

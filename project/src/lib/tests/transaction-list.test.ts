@@ -9,7 +9,8 @@ import {
 
 const WALLET_ID = "64b7f0c2a1b2c3d4e5f60800";
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
-const BASE = { q: "", type: "", status: "", sort: "paidAt", dir: "desc", page: 1 } as const;
+const BASE = { q: "", type: "", sort: "paidAt", dir: "desc", page: 1 } as const;
+const MONTH = { $addFields: { month: { $dateToString: { format: "%Y-%m", date: "$paidAt", timezone: "America/Sao_Paulo" } } } };
 
 describe("parseTransactionListQuery", () => {
   it("sem parâmetros, mostra tudo pelo dia pago mais recente na página 1", () => {
@@ -18,8 +19,8 @@ describe("parseTransactionListQuery", () => {
 
   it("lê busca, filtros, ordenação e página válidos", () => {
     expect(
-      parseTransactionListQuery({ q: " aluguel ", type: "expense", status: "pending", sort: "total", dir: "asc", page: "2" }),
-    ).toEqual({ q: "aluguel", type: "expense", status: "pending", sort: "total", dir: "asc", page: 2 });
+      parseTransactionListQuery({ q: " aluguel ", type: "expense", sort: "total", dir: "asc", page: "2" }),
+    ).toEqual({ q: "aluguel", type: "expense", sort: "total", dir: "asc", page: 2 });
   });
 
   it("ignora valores inválidos", () => {
@@ -54,6 +55,7 @@ describe("transactionListPipeline", () => {
               totalCents: 1,
               type: 1,
               paidAt: 1,
+              month: 1,
               fromStatement: { $gt: [{ $size: "$statements" }, 0] },
             },
           },
@@ -68,39 +70,34 @@ describe("transactionListPipeline", () => {
     expect(TRANSACTION_PAGE_SIZE).toBe(20);
   });
 
-  it("sem filtros, lista as transações da carteira pelo dia pago mais recente", () => {
+  it("sem filtros, lista as transações da carteira por mês de Brasília e dia pago, do mais recente ao mais antigo", () => {
     expect(transactionListPipeline(WALLET_ID, BASE)).toEqual([
       { $match: walletMatch },
-      { $sort: { paidAt: -1, _id: -1 } },
+      MONTH,
+      { $sort: { month: -1, paidAt: -1, _id: -1 } },
       ...paged(0),
     ]);
   });
 
-  it("filtra por tipo e situação e busca no nome, sem diferenciar acentos", () => {
-    const stages = transactionListPipeline(WALLET_ID, { ...BASE, q: "joao", type: "incoming", status: "paid" });
+  it("filtra por tipo e busca no nome, sem diferenciar acentos", () => {
+    const stages = transactionListPipeline(WALLET_ID, { ...BASE, q: "joao", type: "incoming" });
     const match = stages[0] as { $match: { name: { $regex: string; $options: string } } };
 
     expect(match).toEqual({
       $match: {
         ...walletMatch,
         type: "incoming",
-        paidAt: { $ne: null },
         name: { $regex: expect.any(String), $options: "i" },
       },
     });
     expect(new RegExp(match.$match.name.$regex, "i").test("Atendimento · João")).toBe(true);
   });
 
-  it("pendentes são as sem dia de pagamento", () => {
-    expect(transactionListPipeline(WALLET_ID, { ...BASE, status: "pending" })[0]).toEqual({
-      $match: { ...walletMatch, paidAt: null },
-    });
-  });
-
-  it("ordena pelo valor crescente e pula as páginas anteriores", () => {
+  it("ordena pelo valor crescente dentro de cada mês, mantendo os meses do mais recente ao mais antigo, e pula as páginas anteriores", () => {
     expect(transactionListPipeline(WALLET_ID, { ...BASE, sort: "total", dir: "asc", page: 3 })).toEqual([
       { $match: walletMatch },
-      { $sort: { totalCents: 1, _id: -1 } },
+      MONTH,
+      { $sort: { month: -1, totalCents: 1, _id: -1 } },
       ...paged(40),
     ]);
   });
@@ -115,15 +112,9 @@ describe("transactionListPipeline", () => {
 describe("transactionTotalsPipeline", () => {
   const paidSum = (type: string) => ({ $sum: { $cond: [{ $eq: ["$type", type] }, "$totalCents", 0] } });
 
-  it("soma as entradas e saídas pagas da unidade na carteira e o saldo", () => {
+  it("soma as entradas e saídas da unidade na carteira e o saldo", () => {
     expect(transactionTotalsPipeline(WALLET_ID, UNIT_ID)).toEqual([
-      {
-        $match: {
-          walletId: new Types.ObjectId(WALLET_ID),
-          unitId: new Types.ObjectId(UNIT_ID),
-          paidAt: { $ne: null },
-        },
-      },
+      { $match: { walletId: new Types.ObjectId(WALLET_ID), unitId: new Types.ObjectId(UNIT_ID) } },
       { $group: { _id: null, incomingCents: paidSum("incoming"), expenseCents: paidSum("expense") } },
       {
         $project: {

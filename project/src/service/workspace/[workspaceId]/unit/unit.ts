@@ -1,7 +1,14 @@
 import { z } from "zod";
 import { issueCode } from "@/service/_shared/validation";
 import { parseBusinessHours, type BusinessHours, type BusinessHoursError } from "@/service/workspace/[workspaceId]/unit/[unitId]/business-hours";
-import { parseStations, type StationError, type StationInput } from "@/service/workspace/[workspaceId]/unit/[unitId]/station";
+import {
+  parseStations,
+  planStations,
+  type Station,
+  type StationError,
+  type StationGroup,
+  type StationInput,
+} from "@/service/workspace/[workspaceId]/unit/[unitId]/station";
 import { checkAccess, type AccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check";
 import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
 
@@ -47,13 +54,15 @@ export type UnitInputError =
   | StationError
   | BusinessHoursError;
 
-export type UnitData = {
+type UnitFields<Stations> = {
   name: string;
   imageUrl: string | null;
-  stations: StationInput[];
+  stations: Stations;
   businessHours: BusinessHours;
   workspaceMemberIds: string[];
 };
+
+export type UnitData = UnitFields<StationInput[]>;
 
 type UnitLookups = {
   membersExist: (ids: string[]) => Promise<boolean>;
@@ -62,7 +71,7 @@ type UnitLookups = {
 async function parseUnitInput(
   input: unknown,
   { membersExist }: UnitLookups,
-): Promise<{ ok: true; data: UnitData } | { ok: false; error: UnitInputError }> {
+): Promise<{ ok: true; data: UnitFields<StationGroup[]> } | { ok: false; error: UnitInputError }> {
   const parsed = unitSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: issueCode<UnitInputError>(parsed.error) };
   const { stations: stationsInput, businessHours: hoursInput } = input as Record<string, unknown>;
@@ -101,7 +110,11 @@ export async function createUnit(
   const parsed = await parseUnitInput(input, deps);
   if (!parsed.ok) return parsed;
 
-  const unit = await deps.insert({ workspaceId: ctx.workspaceId, ...parsed.data });
+  const unit = await deps.insert({
+    workspaceId: ctx.workspaceId,
+    ...parsed.data,
+    stations: planStations([], parsed.data.stations),
+  });
   return { ok: true, unitId: unit.id };
 }
 
@@ -114,6 +127,7 @@ export async function updateUnit(
   unitId: string | null | undefined,
   ctx: { actor: Actor | null },
   deps: UnitLookups & {
+    findStations: (unitId: string) => Promise<Station[] | null>;
     hasBookingsInRemovedStations: (unitId: string, keptStationIds: string[]) => Promise<boolean>;
     update: (unitId: string, data: UnitData) => Promise<boolean>;
   },
@@ -125,10 +139,14 @@ export async function updateUnit(
   const parsed = await parseUnitInput(input, deps);
   if (!parsed.ok) return parsed;
 
-  const keptStationIds = parsed.data.stations.flatMap((station) => (station.id ? [station.id] : []));
+  const existing = await deps.findStations(unitId);
+  if (!existing) return { ok: false, error: "unit_not_found" };
+
+  const stations = planStations(existing, parsed.data.stations);
+  const keptStationIds = stations.flatMap((station) => (station.id ? [station.id] : []));
   if (await deps.hasBookingsInRemovedStations(unitId, keptStationIds)) return { ok: false, error: "station_in_use" };
 
-  if (!(await deps.update(unitId, parsed.data))) return { ok: false, error: "unit_not_found" };
+  if (!(await deps.update(unitId, { ...parsed.data, stations }))) return { ok: false, error: "unit_not_found" };
   return { ok: true };
 }
 

@@ -9,7 +9,7 @@ const paidSum = (type: string) => ({
 });
 
 describe("walletListPipeline", () => {
-  it("lista as carteiras do workspace por nome, com as unidades e o saldo das transações pagas", () => {
+  it("lista as carteiras do workspace por nome, com as unidades e o saldo das transações", () => {
     expect(walletListPipeline(WORKSPACE_ID)).toEqual([
       { $match: { workspaceId: new Types.ObjectId(WORKSPACE_ID) } },
       {
@@ -18,7 +18,7 @@ describe("walletListPipeline", () => {
           localField: "_id",
           foreignField: "walletId",
           as: "paid",
-          pipeline: [{ $match: { paidAt: { $ne: null } } }, { $group: { _id: "$type", cents: { $sum: "$totalCents" } } }],
+          pipeline: [{ $group: { _id: "$type", cents: { $sum: "$totalCents" } } }],
         },
       },
       {

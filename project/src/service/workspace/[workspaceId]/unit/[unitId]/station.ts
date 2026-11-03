@@ -2,56 +2,72 @@ import { z } from "zod";
 import { issueCode } from "@/service/_shared/validation";
 
 const MAX_STATIONS = 20;
-const MAX_NAME_LENGTH = 40;
-const OBJECT_ID = /^[0-9a-f]{24}$/i;
+const MAX_TYPE_LENGTH = 30;
 
-export type StationInput = { id: string | null; name: string };
+export type StationGroup = { type: string; quantity: number };
+
+export type Station = { id: string; type: string; number: number };
+
+export type StationInput = { id: string | null; type: string; number: number };
 
 export type StationError =
   | "invalid_input"
   | "no_stations"
   | "too_many_stations"
-  | "invalid_station_name"
-  | "station_name_too_long"
-  | "duplicate_station_name";
+  | "invalid_station_type"
+  | "station_type_too_long"
+  | "duplicate_station_type"
+  | "invalid_station_quantity";
 
 const textList = z.array(z.string({ error: "invalid_input" }), { error: "invalid_input" });
 
 const stationsSchema = z
-  .object(
-    {
-      ids: textList.transform((ids) => ids.map((id) => id.trim())),
-      names: textList,
-    },
-    { error: "invalid_input" },
+  .object({ types: textList, quantities: textList }, { error: "invalid_input" })
+  .refine(({ types, quantities }) => types.length === quantities.length, { error: "invalid_input" })
+  .transform(({ types, quantities }) =>
+    types.map((type, i) => ({ type: type.trim(), quantity: quantities[i].trim() })),
   )
-  .refine(({ ids, names }) => ids.length === names.length, { error: "invalid_input" })
-  .refine(({ ids }) => {
-    const existing = ids.filter(Boolean);
-    return existing.every((id) => OBJECT_ID.test(id)) && new Set(existing).size === existing.length;
-  }, { error: "invalid_input" })
-  .transform(({ ids, names }) => names.map((name, i) => ({ id: ids[i] || null, name: name.trim() })))
   .pipe(
     z
       .array(
         z.object({
-          id: z.string().nullable(),
-          name: z
+          type: z
             .string()
-            .min(1, { error: "invalid_station_name" })
-            .max(MAX_NAME_LENGTH, { error: "station_name_too_long" }),
+            .min(1, { error: "invalid_station_type" })
+            .max(MAX_TYPE_LENGTH, { error: "station_type_too_long" }),
+          quantity: z
+            .string()
+            .regex(/^\d+$/, { error: "invalid_station_quantity" })
+            .transform(Number)
+            .refine((quantity) => quantity >= 1, { error: "invalid_station_quantity" }),
         }),
       )
       .min(1, { error: "no_stations" })
-      .max(MAX_STATIONS, { error: "too_many_stations" })
       .refine(
-        (stations) => new Set(stations.map(({ name }) => name.toLowerCase())).size === stations.length,
-        { error: "duplicate_station_name" },
+        (groups) => new Set(groups.map(({ type }) => type.toLowerCase())).size === groups.length,
+        { error: "duplicate_station_type" },
+      )
+      .refine(
+        (groups) => groups.reduce((total, { quantity }) => total + quantity, 0) <= MAX_STATIONS,
+        { error: "too_many_stations" },
       ),
   );
 
-export function parseStations(input: unknown): { ok: true; value: StationInput[] } | { ok: false; error: StationError } {
+export function parseStations(input: unknown): { ok: true; value: StationGroup[] } | { ok: false; error: StationError } {
   const parsed = stationsSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: issueCode<StationError>(parsed.error) };
   return { ok: true, value: parsed.data };
+}
+
+export function planStations(existing: Station[], groups: StationGroup[]): StationInput[] {
+  return groups.flatMap(({ type, quantity }) => {
+    const sameType = existing
+      .filter((station) => station.type.toLowerCase() === type.toLowerCase())
+      .sort((a, b) => a.number - b.number);
+    return Array.from({ length: quantity }, (_, i) => ({ id: sameType[i]?.id ?? null, type, number: i + 1 }));
+  });
+}
+
+export function stationName({ type, number }: { type: string; number: number }) {
+  return `${type} ${number}`;
 }

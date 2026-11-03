@@ -1,5 +1,6 @@
 import { isObjectIdOrHexString, Types } from "mongoose"
 import { findWorkspaceTherapists } from "@/service/workspace/[workspaceId]/team/therapist-lookup"
+import { stationName } from "@/service/workspace/[workspaceId]/unit/[unitId]/station"
 import { Appointment } from "@/models/Appointment"
 import { Customer } from "@/models/Customer"
 import { Service } from "@/models/Service"
@@ -62,7 +63,7 @@ export async function findUnitStation(unitId: string | Types.ObjectId, stationId
   if (!isObjectIdOrHexString(stationId)) return null
   const unit = await Unit.findOne({ _id: unitId, "stations._id": stationId }).select({ "stations.$": 1 }).lean()
   const station = unit?.stations[0]
-  return station ? { id: station._id.toString(), name: station.name } : null
+  return station ? { id: station._id.toString(), name: stationName(station) } : null
 }
 
 export function appointmentLookups(unit: { workspaceId: string; unitId: string }) {

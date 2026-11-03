@@ -28,12 +28,10 @@ const transactionSchema = z.object(
       .refine((cents) => cents > 0, { error: "invalid_total" }),
     type: z.enum(TRANSACTION_TYPES, { error: "invalid_type" }),
     paidAt: z
-      .string({ error: "invalid_input" })
+      .string({ error: "invalid_paid_at" })
       .trim()
-      .nullish()
-      .transform((value) => value || null)
-      .refine((value) => value === null || parseDay(value) !== null, { error: "invalid_paid_at" })
-      .transform((value) => (value ? dayStart(value) : null)),
+      .refine((value) => parseDay(value) !== null, { error: "invalid_paid_at" })
+      .transform(dayStart),
   },
   { error: "invalid_input" },
 );
@@ -52,7 +50,7 @@ export type TransactionInputError =
   | "invalid_type"
   | "invalid_paid_at";
 
-export type TransactionData = { name: string; totalCents: number; type: TransactionType; paidAt: Date | null };
+export type TransactionData = { name: string; totalCents: number; type: TransactionType; paidAt: Date };
 
 function parseTransaction(input: unknown): { ok: true; data: TransactionData } | { ok: false; error: TransactionInputError } {
   const parsed = transactionSchema.safeParse(input);

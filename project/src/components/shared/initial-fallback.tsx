@@ -17,7 +17,7 @@ const COLORS = [
 
 // A cor sai do nome, e não de um sorteio a cada render: parece aleatória, mas o mesmo
 // nome tem sempre a mesma cor (e servidor e cliente concordam).
-function colorFor(name: string) {
+export function colorFor(name: string) {
   let hash = 0
   for (const char of name) hash = (hash * 31 + char.codePointAt(0)!) | 0
   return COLORS[Math.abs(hash) % COLORS.length]

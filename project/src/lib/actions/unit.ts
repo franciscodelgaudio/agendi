@@ -39,10 +39,11 @@ const errorMessages: Record<Exclude<UnitError, "forbidden"> | "unauthenticated",
   invalid_image_url: "Informe uma URL válida começando com http:// ou https://.",
   invalid_members: "Algum membro escolhido não é deste workspace. Recarregue a página.",
   no_stations: "Cadastre pelo menos uma estação.",
-  too_many_stations: "Cadastre no máximo 20 estações.",
-  invalid_station_name: "Informe o nome de cada estação.",
-  station_name_too_long: "O nome da estação pode ter no máximo 40 caracteres.",
-  duplicate_station_name: "Cada estação precisa de um nome diferente.",
+  too_many_stations: "Cadastre no máximo 20 estações no total.",
+  invalid_station_type: "Informe o tipo de cada estação.",
+  station_type_too_long: "O tipo da estação pode ter no máximo 30 caracteres.",
+  duplicate_station_type: "Cada tipo de estação só pode aparecer uma vez.",
+  invalid_station_quantity: "Informe uma quantidade de estações a partir de 1.",
   invalid_business_hours: "Informe o horário de funcionamento.",
   invalid_business_hours_order: "O horário de fechamento deve ser depois da abertura.",
   station_in_use: "Uma estação removida ainda tem agendamentos. Mova ou cancele os agendamentos antes.",
@@ -66,7 +67,7 @@ function messageOf(error: UnitError | "unauthenticated") {
 }
 
 function toStationDocs(stations: StationInput[]) {
-  return stations.map(({ id, name }) => ({ _id: new Types.ObjectId(id ?? undefined), name }))
+  return stations.map(({ id, type, number }) => ({ _id: new Types.ObjectId(id ?? undefined), type, number }))
 }
 
 function toObjectIds(ids: string[]) {
@@ -78,8 +79,8 @@ function unitInput(formData: FormData) {
     name: formData.get("name"),
     imageUrl: formData.get("imageUrl"),
     stations: {
-      ids: formData.getAll("stationId"),
-      names: formData.getAll("stationName"),
+      types: formData.getAll("stationType"),
+      quantities: formData.getAll("stationQuantity"),
     },
     businessHours: { opensAt: formData.get("opensAt"), closesAt: formData.get("closesAt") },
     workspaceMemberIds: formData.getAll("workspaceMemberId"),
@@ -153,8 +154,11 @@ export async function updateUnitAction(
 
   const result = await updateUnit(unitInput(formData), filter && unitId, session, {
     membersExist: membersChecker(session.workspaceId),
+    findStations: async () => {
+      const unit = await Unit.findOne(filter!).select({ stations: 1 }).lean()
+      return unit?.stations.map(({ _id, type, number }) => ({ id: _id.toString(), type, number })) ?? null
+    },
     hasBookingsInRemovedStations: async (id, keptStationIds) => {
-      if (!(await Unit.exists(filter!))) return false
       const inUse = await Appointment.exists({
         unitId: id,
         status: "scheduled",

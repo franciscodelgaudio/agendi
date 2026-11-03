@@ -121,6 +121,33 @@ export function ListPageSkeleton({
   )
 }
 
+// Grade de cards das unidades: imagem, nome e as linhas de horário, estações e usuários.
+export function UnitCardsPageSkeleton() {
+  return (
+    <PageSkeleton>
+      <HeadingSkeleton action />
+      <FiltersSkeleton />
+      <div className="@container">
+        <div className="grid gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3">
+          {Array.from({ length: 3 }, (_, i) => (
+            <Card key={i} className="pt-0">
+              <Skeleton className="aspect-video w-full rounded-none" />
+              <CardContent className="gap-4">
+                <Skeleton className="h-6 w-2/5" />
+                <div className="flex flex-col gap-3">
+                  <Skeleton className="h-5 w-1/3" />
+                  <Skeleton className="h-5 w-1/2" />
+                  <Skeleton className="h-6 w-2/5" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </PageSkeleton>
+  )
+}
+
 function StatTileSkeleton() {
   return (
     <Card size="sm">

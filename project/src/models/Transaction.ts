@@ -6,7 +6,7 @@ const transactionSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
     totalCents: { type: Number, required: true, min: 0 },
-    paidAt: { type: Date, default: null },
+    paidAt: { type: Date, required: true },
     type: { type: String, enum: TRANSACTION_TYPES, required: true },
     walletId: { type: Schema.Types.ObjectId, ref: "Wallet", required: true },
     unitId: { type: Schema.Types.ObjectId, ref: "Unit", default: null },

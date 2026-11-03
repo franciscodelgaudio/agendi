@@ -4,15 +4,16 @@ import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
 const WORKSPACE_ID = "64b7f0c2a1b2c3d4e5f60718";
 const UNIT_ID = "64b7f0c2a1b2c3d4e5f60720";
-const SINGLE_ID = "64b7f0c2a1b2c3d4e5f60781";
+const MACA_1 = "64b7f0c2a1b2c3d4e5f60781";
+const MACA_2 = "64b7f0c2a1b2c3d4e5f60782";
 const ANA_MEMBER_ID = "64b7f0c2a1b2c3d4e5f60791";
 const WALLET_ID = "64b7f0c2a1b2c3d4e5f60800";
 const BIA_MEMBER_ID = "64b7f0c2a1b2c3d4e5f60792";
 
 const MANAGER = actorWith("units.manage");
 
-const STATIONS_INPUT = { ids: [""], names: ["Sala Single"] };
-const STATIONS = [{ id: null, name: "Sala Single" }];
+const STATIONS_INPUT = { types: ["Maca"], quantities: ["1"] };
+const STATIONS = [{ id: null, type: "Maca", number: 1 }];
 const HOURS = { opensAt: "08:00", closesAt: "22:00" };
 const BASE = {
   name: "Spa Central",
@@ -44,6 +45,18 @@ describe("createUnit", () => {
 
     expect(result).toEqual({ ok: true, unitId: UNIT_ID });
     expect(deps.insert).toHaveBeenCalledWith({ workspaceId: WORKSPACE_ID, ...SAVED });
+  });
+
+  it("gera as estações de cada tipo numeradas de 1 até a quantidade", async () => {
+    const deps = makeDeps();
+
+    await createUnit({ ...BASE, stations: { types: ["Maca", "Cadeira"], quantities: ["2", "1"] } }, ctx, deps);
+
+    expect(deps.insert.mock.calls[0][0].stations).toEqual([
+      { id: null, type: "Maca", number: 1 },
+      { id: null, type: "Maca", number: 2 },
+      { id: null, type: "Cadeira", number: 1 },
+    ]);
   });
 
   it("cria sem carteira nem inventário, ignorando os enviados", async () => {
@@ -132,8 +145,9 @@ describe("createUnit", () => {
     ["imageUrl que não é URL", { ...BASE, imageUrl: "logo.png" }, "invalid_image_url"],
     ["imageUrl sem http(s)", { ...BASE, imageUrl: "javascript:alert(1)" }, "invalid_image_url"],
     ["estações ausentes", { ...BASE, stations: undefined }, "invalid_input"],
-    ["nenhuma estação", { ...BASE, stations: { ids: [], names: [] } }, "no_stations"],
-    ["estação com nome repetido", { ...BASE, stations: { ids: ["", ""], names: ["A", "a"] } }, "duplicate_station_name"],
+    ["nenhuma estação", { ...BASE, stations: { types: [], quantities: [] } }, "no_stations"],
+    ["tipo de estação repetido", { ...BASE, stations: { types: ["Maca", "maca"], quantities: ["1", "1"] } }, "duplicate_station_type"],
+    ["quantidade de estações inválida", { ...BASE, stations: { types: ["Maca"], quantities: ["0"] } }, "invalid_station_quantity"],
     ["horário ausente", { ...BASE, businessHours: undefined }, "invalid_input"],
     ["horário inválido", { ...BASE, businessHours: { opensAt: "8h", closesAt: "22:00" } }, "invalid_business_hours"],
     ["fechamento antes da abertura", { ...BASE, businessHours: { opensAt: "22:00", closesAt: "08:00" } }, "invalid_business_hours_order"],
@@ -168,9 +182,15 @@ describe("createUnit", () => {
 });
 
 describe("updateUnit", () => {
-  function makeDeps({ found = true, inUse = false, membersExist = true } = {}) {
+  function makeDeps({
+    found = true,
+    inUse = false,
+    membersExist = true,
+    stations = [] as { id: string; type: string; number: number }[] | null,
+  } = {}) {
     return {
       membersExist: vi.fn().mockResolvedValue(membersExist),
+      findStations: vi.fn().mockResolvedValue(stations),
       hasBookingsInRemovedStations: vi.fn().mockResolvedValue(inUse),
       update: vi.fn().mockResolvedValue(found),
     };
@@ -211,33 +231,29 @@ describe("updateUnit", () => {
     expect(deps.update).toHaveBeenCalledWith(UNIT_ID, SAVED);
   });
 
-  it("passa as estações existentes com o id e as novas com id null", async () => {
-    const deps = makeDeps();
+  it("reaproveita as estações existentes do mesmo tipo e cria as que faltam", async () => {
+    const deps = makeDeps({ stations: [{ id: MACA_1, type: "Maca", number: 1 }] });
 
-    await updateUnit(
-      { ...BASE, stations: { ids: [SINGLE_ID, ""], names: ["Sala Single", "Sala Casal"] } },
-      UNIT_ID,
-      ctx,
-      deps,
-    );
+    await updateUnit({ ...BASE, stations: { types: ["Maca"], quantities: ["2"] } }, UNIT_ID, ctx, deps);
 
+    expect(deps.findStations).toHaveBeenCalledWith(UNIT_ID);
     expect(deps.update.mock.calls[0][1].stations).toEqual([
-      { id: SINGLE_ID, name: "Sala Single" },
-      { id: null, name: "Sala Casal" },
+      { id: MACA_1, type: "Maca", number: 1 },
+      { id: null, type: "Maca", number: 2 },
     ]);
   });
 
   it("confere agendamentos nas estações removidas, informando as que ficam", async () => {
-    const deps = makeDeps();
+    const deps = makeDeps({
+      stations: [
+        { id: MACA_1, type: "Maca", number: 1 },
+        { id: MACA_2, type: "Maca", number: 2 },
+      ],
+    });
 
-    await updateUnit(
-      { ...BASE, stations: { ids: [SINGLE_ID, ""], names: ["Sala Single", "Sala Casal"] } },
-      UNIT_ID,
-      ctx,
-      deps,
-    );
+    await updateUnit(BASE, UNIT_ID, ctx, deps);
 
-    expect(deps.hasBookingsInRemovedStations).toHaveBeenCalledWith(UNIT_ID, [SINGLE_ID]);
+    expect(deps.hasBookingsInRemovedStations).toHaveBeenCalledWith(UNIT_ID, [MACA_1]);
   });
 
   it("retorna station_in_use sem salvar quando uma estação removida tem agendamento por terminar", async () => {
@@ -262,7 +278,7 @@ describe("updateUnit", () => {
     ["input nulo", null, "invalid_input"],
     ["nome só com espaços", { ...BASE, name: "   " }, "invalid_name"],
     ["imageUrl sem http(s)", { ...BASE, imageUrl: "javascript:alert(1)" }, "invalid_image_url"],
-    ["nenhuma estação", { ...BASE, stations: { ids: [], names: [] } }, "no_stations"],
+    ["nenhuma estação", { ...BASE, stations: { types: [], quantities: [] } }, "no_stations"],
     ["fechamento igual à abertura", { ...BASE, businessHours: { opensAt: "10:00", closesAt: "10:00" } }, "invalid_business_hours_order"],
   ])("retorna erro sem conferir agendamentos nem salvar quando %s", async (_label, input, error) => {
     const deps = makeDeps();
@@ -270,6 +286,7 @@ describe("updateUnit", () => {
     const result = await updateUnit(input, UNIT_ID, ctx, deps);
 
     expect(result).toEqual({ ok: false, error });
+    expect(deps.findStations).not.toHaveBeenCalled();
     expect(deps.hasBookingsInRemovedStations).not.toHaveBeenCalled();
     expect(deps.update).not.toHaveBeenCalled();
   });
@@ -280,6 +297,16 @@ describe("updateUnit", () => {
     const result = await updateUnit(BASE, unitId, ctx, deps);
 
     expect(result).toEqual({ ok: false, error: "unit_not_found" });
+    expect(deps.update).not.toHaveBeenCalled();
+  });
+
+  it("retorna unit_not_found sem conferir agendamentos nem salvar quando as estações da unidade não são encontradas", async () => {
+    const deps = makeDeps({ stations: null });
+
+    const result = await updateUnit(BASE, UNIT_ID, ctx, deps);
+
+    expect(result).toEqual({ ok: false, error: "unit_not_found" });
+    expect(deps.hasBookingsInRemovedStations).not.toHaveBeenCalled();
     expect(deps.update).not.toHaveBeenCalled();
   });
 
