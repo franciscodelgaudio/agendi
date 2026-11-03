@@ -55,7 +55,7 @@ const errorMessages: Record<Exclude<WalletError, "forbidden"> | "unauthenticated
   unit_not_in_wallet: "Esta unidade não usa esta carteira.",
   unit_without_wallet: "Esta unidade não tem carteira. Vincule uma carteira antes.",
   transaction_not_found: "Transação não encontrada nesta carteira.",
-  transaction_from_statement: "Esta entrada vem de um fechamento de recebíveis. Altere pelo caixa da unidade.",
+  transaction_from_statement: "Esta entrada vem de um repasse conferido. Desfaça a conferência no caixa da unidade.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }

@@ -62,7 +62,8 @@ export function CustomerPicker({
           if (next) setQuery(next.name)
         }}
         inputValue={query}
-        onInputValueChange={(next) => {
+        onInputValueChange={(next, { reason }) => {
+          if (reason === "input-clear") return
           setQuery(next)
           if (picked && next !== picked.name) setPicked(null)
         }}

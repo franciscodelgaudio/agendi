@@ -3,7 +3,7 @@ import { CalendarHeadingSkeleton, CalendarSkeleton, PageSkeleton } from "@/compo
 export default function Loading() {
   return (
     <PageSkeleton section>
-      <CalendarHeadingSkeleton section />
+      <CalendarHeadingSkeleton />
       <CalendarSkeleton unitFilter={false} />
     </PageSkeleton>
   )

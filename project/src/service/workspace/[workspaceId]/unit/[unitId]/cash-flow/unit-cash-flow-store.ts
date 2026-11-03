@@ -8,7 +8,7 @@ import type { PartnerTier, ThresholdRule } from "@/service/workspace/[workspaceI
 import { Workspace } from "@/models/Workspace"
 
 export type UnitCashFlowWallet = { id: string; name: string }
-export type UnitPartner = { id: string; name: string; thresholdRule: ThresholdRule; tiers: PartnerTier[] }
+export type UnitPartner = { id: string; name: string; imageUrl: string | null; thresholdRule: ThresholdRule; tiers: PartnerTier[] }
 export type UnitCashFlow = {
   actor: Actor
   wallet: UnitCashFlowWallet | null
@@ -18,7 +18,14 @@ export type UnitCashFlow = {
 }
 
 const PARTNER_PROJECT = {
-  $project: { _id: 0, id: { $toString: "$_id" }, name: 1, thresholdRule: 1, tiers: { thresholdCents: 1, shareBps: 1 } },
+  $project: {
+    _id: 0,
+    id: { $toString: "$_id" },
+    name: 1,
+    imageUrl: { $ifNull: ["$imageUrl", null] },
+    thresholdRule: 1,
+    tiers: { thresholdCents: 1, shareBps: 1 },
+  },
 }
 
 export async function loadUnitCashFlow(workspaceId: string, unitId: string): Promise<UnitCashFlow> {

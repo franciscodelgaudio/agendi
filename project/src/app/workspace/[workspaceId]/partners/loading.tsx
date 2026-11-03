@@ -1,5 +1,5 @@
-import { ListPageSkeleton } from "@/components/shared/page-skeletons"
+import { UnitCardsPageSkeleton } from "@/components/shared/page-skeletons"
 
 export default function Loading() {
-  return <ListPageSkeleton action columns={3} />
+  return <UnitCardsPageSkeleton />
 }

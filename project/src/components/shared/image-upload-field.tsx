@@ -13,7 +13,7 @@ export const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
 type UploadOptions = {
   workspaceId: string
   // Define a pasta no bucket e a permissão conferida no servidor.
-  target: "workspace" | "unit" | "product"
+  target: "workspace" | "unit" | "product" | "partner"
   unitId?: string
   defaultValue?: string | null
 }

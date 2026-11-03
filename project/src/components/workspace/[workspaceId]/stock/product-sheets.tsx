@@ -80,7 +80,7 @@ export function CreateProductSheet({ workspaceId }: { workspaceId: string }) {
             <SheetTitle>Novo produto</SheetTitle>
             <SheetDescription>O produto entra no catálogo do workspace, sem quantidade em nenhum estoque.</SheetDescription>
           </SheetHeader>
-          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
             {state.error && <FieldError>{state.error}</FieldError>}
             <ProductFields idPrefix="create-product" />
           </FieldGroup>
@@ -135,7 +135,7 @@ export function ProductActions({ workspaceId, product }: { workspaceId: string; 
               <SheetTitle>Editar produto</SheetTitle>
               <SheetDescription>Altere o nome e o preço deste produto.</SheetDescription>
             </SheetHeader>
-            <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+            <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
               {state.error && <FieldError>{state.error}</FieldError>}
               <ProductFields idPrefix={`edit-product-${product.id}`} product={product} />
             </FieldGroup>

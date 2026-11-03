@@ -33,6 +33,7 @@ const SAVED_DATA = {
     { thresholdCents: 3_000_000, shareBps: 3500 },
   ],
   unitId: UNIT_ID,
+  imageUrl: null,
 };
 
 const INVALID_INPUTS: [string, unknown, string][] = [
@@ -41,6 +42,8 @@ const INVALID_INPUTS: [string, unknown, string][] = [
   ["nome vazio", { ...VALID_INPUT, name: "  " }, "invalid_name"],
   ["nome com mais de 60 caracteres", { ...VALID_INPUT, name: "a".repeat(61) }, "name_too_long"],
   ["regra de limite desconhecida", { ...VALID_INPUT, thresholdRule: "below" }, "invalid_threshold_rule"],
+  ["imagem que não é URL", { ...VALID_INPUT, imageUrl: "logo.png" }, "invalid_image_url"],
+  ["imagem sem http(s)", { ...VALID_INPUT, imageUrl: "javascript:alert(1)" }, "invalid_image_url"],
   ["faixas ausentes", { ...VALID_INPUT, tiers: undefined }, "invalid_tiers"],
   ["nenhuma faixa", { ...VALID_INPUT, tiers: [] }, "invalid_tiers"],
   [
@@ -116,6 +119,22 @@ describe("createPartner", () => {
         ],
       }),
     );
+  });
+
+  it("salva a imagem enviada, sem espaços nas pontas", async () => {
+    const deps = makeDeps();
+
+    await createPartner({ ...VALID_INPUT, imageUrl: " https://cdn.agendi.app/partners/hotel.png " }, ctx, deps);
+
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ imageUrl: "https://cdn.agendi.app/partners/hotel.png" }));
+  });
+
+  it.each(["", "  ", null])("imagem vazia (%j) fica sem imagem", async (imageUrl) => {
+    const deps = makeDeps();
+
+    await createPartner({ ...VALID_INPUT, imageUrl }, ctx, deps);
+
+    expect(deps.insert).toHaveBeenCalledWith(expect.objectContaining({ imageUrl: null }));
   });
 
   it("sem unidade, cria o parceiro sem vínculo e não consulta unidade", async () => {
@@ -197,6 +216,14 @@ describe("updatePartner", () => {
 
     expect(result).toEqual({ ok: true });
     expect(deps.update).toHaveBeenCalledWith(PARTNER_ID, SAVED_DATA);
+  });
+
+  it("troca a imagem do parceiro", async () => {
+    const deps = makeDeps();
+
+    await updatePartner({ ...VALID_INPUT, imageUrl: "https://cdn.agendi.app/partners/novo.webp" }, PARTNER_ID, ctx, deps);
+
+    expect(deps.update).toHaveBeenCalledWith(PARTNER_ID, { ...SAVED_DATA, imageUrl: "https://cdn.agendi.app/partners/novo.webp" });
   });
 
   it("desvincula da unidade com unitId nulo", async () => {

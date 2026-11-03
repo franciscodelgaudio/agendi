@@ -23,6 +23,7 @@
     "@vercel/analytics": "^2.0.1",
     "aws4fetch": "^1.0.20",
     "bcryptjs": "^3.0.3",
+    "boring-avatars": "^2.0.4",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "date-fns": "^4.4.0",

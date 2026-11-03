@@ -17,6 +17,7 @@ import { WorkspaceMember } from "@/models/WorkspaceMember"
 import { InviteMemberPopover } from "@/components/workspace/[workspaceId]/users/invite-member-popover"
 import { ListPagination } from "@/components/shared/list-pagination"
 import { ListSearch } from "@/components/shared/list-search"
+import { ListToolbar } from "@/components/shared/list-toolbar"
 import { MemberActions } from "@/components/workspace/[workspaceId]/users/member-actions"
 import { INVITE_STATUS_LABELS } from "@/components/workspace/[workspaceId]/users/user-labels"
 import type { RoleOption } from "@/components/workspace/[workspaceId]/users/member-fields"
@@ -86,13 +87,10 @@ export default async function UsersPage({ params, searchParams }: PageProps<"/wo
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <ListSearch query={filters} placeholder="Buscar nome ou email..." />
-          <UserRoleFilter query={filters} roles={roles} />
-        </div>
-        {canManage && <InviteMemberPopover workspaceId={workspaceId} choices={choices} />}
-      </div>
+      <ListToolbar actions={canManage && <InviteMemberPopover workspaceId={workspaceId} choices={choices} />}>
+        <ListSearch query={filters} placeholder="Buscar nome ou email..." />
+        <UserRoleFilter query={filters} roles={roles} />
+      </ListToolbar>
       <div className="border bg-card">
         <Table>
           <TableHeader>

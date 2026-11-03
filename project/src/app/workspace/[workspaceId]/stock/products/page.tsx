@@ -11,6 +11,7 @@ import {
 import { currencyFormat } from "@/components/shared/service-format"
 import { ListPagination } from "@/components/shared/list-pagination"
 import { ListSearch } from "@/components/shared/list-search"
+import { ListToolbar } from "@/components/shared/list-toolbar"
 import { SortableHead } from "@/components/shared/sortable-head"
 import { CreateProductSheet, ProductActions } from "@/components/workspace/[workspaceId]/stock/product-sheets"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -33,10 +34,9 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <ListToolbar actions={canManage && <CreateProductSheet workspaceId={workspaceId} />}>
         <ListSearch query={listQuery} placeholder="Buscar produto..." />
-        {canManage && <CreateProductSheet workspaceId={workspaceId} />}
-      </div>
+      </ListToolbar>
       <div className="@container border">
         <Table>
           <TableHeader>

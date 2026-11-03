@@ -16,7 +16,7 @@ const statementSchema = new Schema(
       required: true,
       validate: { validator: (ids: unknown[]) => ids.length > 0 },
     },
-    transactionId: { type: Schema.Types.ObjectId, ref: "Transaction", default: null },
+    transactionId: { type: Schema.Types.ObjectId, ref: "Transaction", required: true },
   },
   { collection: "statements", timestamps: true },
 );
@@ -24,7 +24,7 @@ const statementSchema = new Schema(
 statementSchema.index({ partnerId: 1, to: -1 });
 statementSchema.index({ walletId: 1, to: -1 });
 statementSchema.index({ receivableIds: 1 }, { unique: true });
-statementSchema.index({ transactionId: 1 }, { unique: true, partialFilterExpression: { transactionId: { $type: "objectId" } } });
+statementSchema.index({ transactionId: 1 }, { unique: true });
 
 statementSchema.plugin(connectOnUse);
 

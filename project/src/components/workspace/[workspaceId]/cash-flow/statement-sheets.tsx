@@ -1,18 +1,16 @@
 "use client"
 
 import { useActionState, useState, useTransition } from "react"
-import { BanknoteIcon, CheckIcon, EllipsisIcon, LockIcon, Trash2Icon, TriangleAlertIcon, Undo2Icon } from "lucide-react"
+import { CheckIcon, CircleAlertIcon, ClipboardCheckIcon, EllipsisIcon, TriangleAlertIcon, Undo2Icon } from "lucide-react"
 import {
   closeStatementAction,
   deleteStatementAction,
-  payStatementAction,
   settleReceivableAction,
-  unpayStatementAction,
   type StatementFormState,
 } from "@/lib/actions/statement"
 import { DayField, toDate } from "@/components/shared/day-field"
 import { todayInBrasilia } from "@/components/workspace/[workspaceId]/cash-flow/opening-balance-fields"
-import { money, percent, tierLabel } from "@/components/workspace/[workspaceId]/cash-flow/partner-format"
+import { money, tierLabel } from "@/components/workspace/[workspaceId]/cash-flow/partner-format"
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -23,24 +21,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { parseMoneyCents } from "@/service/_shared/money"
 import {
   closedPeriodOverlaps,
+  daysInPeriod,
   netCents,
   passOnCents,
-  pendingInPeriod,
   suggestedPeriod,
   type ClosePeriod,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/statement"
@@ -57,19 +48,6 @@ const shortDayFormat = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month:
 const dayFormat = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
 const monthFormat = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" })
 
-function useSheetAction(action: (prev: StatementFormState, formData: FormData) => Promise<StatementFormState>) {
-  const [open, setOpen] = useState(false)
-  const [state, formAction, pending] = useActionState(
-    async (prev: StatementFormState, formData: FormData) => {
-      const next = await action(prev, formData)
-      if (!next.error) setOpen(false)
-      return next
-    },
-    { error: null },
-  )
-  return { open, setOpen, state, formAction, pending }
-}
-
 const PERIOD_ITEMS = [
   { value: "range", label: "De/até" },
   { value: "until", label: "Todos os pendentes até uma data" },
@@ -83,15 +61,23 @@ function isFullMonth({ from, to }: { from: string; to: string }) {
   return from.endsWith("-01") && from.slice(0, 7) === to.slice(0, 7) && next.getDate() === 1
 }
 
-function periodName(partner: ClosablePartner, period: ClosePeriod) {
-  if (period.period === "until") return `${partner.name} · até ${dayFormat.format(toDate(period.to))}`
-  if (isFullMonth(period)) return `${partner.name} · ${monthFormat.format(toDate(period.from))}`
-  return `${partner.name} · ${shortDayFormat.format(toDate(period.from))} a ${shortDayFormat.format(toDate(period.to))}`
+function periodName(period: ClosePeriod) {
+  if (period.period === "until") return `Repasse até ${dayFormat.format(toDate(period.to))}`
+  if (isFullMonth(period)) return `Repasse de ${monthFormat.format(toDate(period.from))}`
+  return `Repasse de ${shortDayFormat.format(toDate(period.from))} a ${shortDayFormat.format(toDate(period.to))}`
 }
 
 function initialPeriod(partner: ClosablePartner, today: string): ClosePeriod {
   const lastTo = partner.periods.at(-1)?.to ?? null
   return { unitId: partner.unitId, period: "range", ...suggestedPeriod(lastTo, today) }
+}
+
+function moneyInput(cents: number) {
+  return (cents / 100).toFixed(2).replace(".", ",")
+}
+
+function plural(count: number) {
+  return count === 1 ? "1 atendimento" : `${count} atendimentos`
 }
 
 function PeriodFields({
@@ -114,7 +100,7 @@ function PeriodFields({
     <>
       <Field>
         <input type="hidden" name="period" value={value.period} />
-        <FieldLabel htmlFor="close-statement-period">Período</FieldLabel>
+        <FieldLabel htmlFor="close-statement-period">Período do repasse</FieldLabel>
         <Select
           items={PERIOD_ITEMS}
           value={value.period}
@@ -194,30 +180,51 @@ function PartnerField({ partners, value, onChange }: { partners: ClosablePartner
   )
 }
 
-function CloseSummary({ partner, count, grossCents }: { partner: ClosablePartner; count: number; grossCents: number }) {
+function PeriodDays({ days, count, cents }: { days: PendingDay[]; count: number; cents: number }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between gap-3 text-sm">
+        <span className="font-medium">Atendimentos do período</span>
+        <span className="text-muted-foreground tabular-nums">
+          {plural(count)} · {money(cents)}
+        </span>
+      </div>
+      {days.length === 0 ? (
+        <p className="rounded-md border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">Nenhum atendimento pendente neste período.</p>
+      ) : (
+        <ul className="max-h-56 divide-y overflow-y-auto rounded-md border text-sm">
+          {days.map((day) => (
+            <li key={`${day.unitId}-${day.day}`} className="flex items-center justify-between gap-3 px-3 py-2">
+              <span className="tabular-nums">{dayFormat.format(toDate(day.day))}</span>
+              <span className="ml-auto text-muted-foreground">{plural(day.count)}</span>
+              <span className="w-24 text-right tabular-nums">{money(day.cents)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-xs text-muted-foreground">Falta algum ou tem um a mais? Corrija na Agenda antes de confirmar.</p>
+    </div>
+  )
+}
+
+function ExpectedSummary({ partner, grossCents }: { partner: ClosablePartner; grossCents: number }) {
   const index = appliedTierIndex(partner, grossCents)
   const tier = partner.tiers[index]
-  const next = partner.tiers.at(index + 1)
   const shareCents = passOnCents(grossCents, tier.shareBps)
 
   return (
     <div className="flex flex-col gap-2">
+      <span className="text-sm font-medium">Quanto {partner.name} deve repassar</span>
       <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 rounded-md border bg-muted/50 px-3 py-2 text-sm">
-        <dt className="text-muted-foreground">{count === 1 ? "1 atendimento" : `${count} atendimentos`}</dt>
+        <dt className="text-muted-foreground">Bruto dos atendimentos</dt>
         <dd className="text-right tabular-nums">{money(grossCents)}</dd>
-        <dt className="text-muted-foreground">Faixa</dt>
-        <dd className="text-right">{tierLabel(partner.thresholdRule, tier, index)}</dd>
-        <dt className="text-muted-foreground">Fica com {partner.name}</dt>
+        <dt className="text-muted-foreground">
+          Parte de {partner.name} ({tierLabel(partner.thresholdRule, tier, index)})
+        </dt>
         <dd className="text-right tabular-nums">−{money(shareCents)}</dd>
-        <dt className="border-t pt-1 font-medium">Você recebe</dt>
+        <dt className="border-t pt-1 font-medium">Esperado</dt>
         <dd className="border-t pt-1 text-right font-semibold tabular-nums">{money(grossCents - shareCents)}</dd>
       </dl>
-      {next && (
-        <p className="text-xs text-muted-foreground">
-          Faltam {money(next.thresholdCents - grossCents + (partner.thresholdRule === "above" ? 1 : 0))} para a faixa de{" "}
-          {percent(next.shareBps)}.
-        </p>
-      )}
     </div>
   )
 }
@@ -230,9 +237,8 @@ function OverlapWarning({ overlaps }: { overlaps: { name: string; count: number;
       <ul className="flex flex-col gap-1">
         {overlaps.map((overlap) => (
           <li key={overlap.name}>
-            {overlap.count === 1 ? "1 atendimento" : `${overlap.count} atendimentos`} ({money(overlap.cents)}){" "}
-            {overlap.count === 1 ? "é de um dia já coberto" : "são de dias já cobertos"} por <strong>{overlap.name}</strong>. Eles
-            entram neste fechamento e contam para a faixa dele.
+            {plural(overlap.count)} ({money(overlap.cents)}) {overlap.count === 1 ? "é de um dia já coberto" : "são de dias já cobertos"}{" "}
+            por <strong>{overlap.name}</strong>. Eles entram neste repasse e contam para a faixa dele.
           </li>
         ))}
       </ul>
@@ -240,7 +246,31 @@ function OverlapWarning({ overlaps }: { overlaps: { name: string; count: number;
   )
 }
 
-export function CloseStatementSheet({
+function ReceivedCheck({ expectedCents, receivedCents }: { expectedCents: number; receivedCents: number | null }) {
+  if (!receivedCents) return null
+  const diff = receivedCents - expectedCents
+  if (diff === 0) {
+    return (
+      <p className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground">
+        <CheckIcon className="size-4" />
+        Bate com o esperado.
+      </p>
+    )
+  }
+  return (
+    <p className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
+      <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-amber-600" />
+      <span>
+        <strong>
+          {money(Math.abs(diff))} {diff < 0 ? "a menos" : "a mais"}
+        </strong>{" "}
+        que o esperado. O repasse fica registrado com essa diferença e entra na carteira o valor recebido.
+      </span>
+    </p>
+  )
+}
+
+export function ReconcileStatementSheet({
   workspaceId,
   partners,
   days,
@@ -250,6 +280,7 @@ export function CloseStatementSheet({
   days: PendingDay[]
 }) {
   const today = todayInBrasilia()
+  const [open, setOpen] = useState(false)
   const [partnerId, setPartnerId] = useState(partners[0]?.id ?? "")
   const partner = partners.find((item) => item.id === partnerId) ?? partners[0]
   const [period, setPeriod] = useState<ClosePeriod>(() =>
@@ -257,9 +288,14 @@ export function CloseStatementSheet({
   )
   const [version, setVersion] = useState(0)
   const [name, setName] = useState<string | null>(null)
-  const [paid, setPaid] = useState(false)
-  const { open, setOpen, state, formAction, pending } = useSheetAction((prev, formData) =>
-    closeStatementAction(workspaceId, partner.id, prev, formData),
+  const [received, setReceived] = useState<string | null>(null)
+  const [state, formAction, pending] = useActionState(
+    async (prev: StatementFormState, formData: FormData) => {
+      const next = await closeStatementAction(workspaceId, partner.id, prev, formData)
+      if (!next.error) setOpen(false)
+      return next
+    },
+    { error: null },
   )
 
   if (!partner) return null
@@ -269,11 +305,16 @@ export function CloseStatementSheet({
     setPeriod(initialPeriod(next, today))
     setVersion((current) => current + 1)
     setName(null)
-    setPaid(false)
+    setReceived(null)
   }
 
-  const selected = pendingInPeriod(days, period)
+  const selected = daysInPeriod(days, period)
+  const count = selected.reduce((sum, day) => sum + day.count, 0)
+  const grossCents = selected.reduce((sum, day) => sum + day.cents, 0)
   const overlaps = closedPeriodOverlaps(days, period, partner.periods)
+  const expectedCents = count > 0 ? netCents(grossCents, partner.tiers[appliedTierIndex(partner, grossCents)].shareBps) : 0
+  const receivedValue = received ?? moneyInput(expectedCents)
+  const receivedCents = parseMoneyCents(receivedValue)
 
   return (
     <Sheet
@@ -284,18 +325,18 @@ export function CloseStatementSheet({
       }}
     >
       <SheetTrigger render={<Button />}>
-        <LockIcon />
-        Fechar período
+        <ClipboardCheckIcon />
+        Conferir repasse
       </SheetTrigger>
       <SheetContent>
         <form action={formAction} className="flex min-h-0 flex-1 flex-col">
           <SheetHeader>
-            <SheetTitle>Fechar período</SheetTitle>
+            <SheetTitle>Conferir repasse</SheetTitle>
             <SheetDescription>
-              Junta os atendimentos pendentes do período e calcula a parte de <strong>{partner.name}</strong> pela faixa do bruto.
+              Compare com o relatório que <strong>{partner.name}</strong> enviou junto com o pagamento e registre quanto entrou.
             </SheetDescription>
           </SheetHeader>
-          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
             {state.error && <FieldError>{state.error}</FieldError>}
             {partners.length > 1 && (
               <PartnerField partners={partners} value={partner.id} onChange={(id) => reset(partners.find((item) => item.id === id)!)} />
@@ -309,34 +350,40 @@ export function CloseStatementSheet({
                 if (preset) setVersion((current) => current + 1)
               }}
             />
+            <OverlapWarning overlaps={overlaps} />
+            <PeriodDays days={selected} count={count} cents={grossCents} />
+            {count > 0 && <ExpectedSummary partner={partner} grossCents={grossCents} />}
+            <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel htmlFor="close-statement-received">Valor recebido</FieldLabel>
+                <Input
+                  id="close-statement-received"
+                  name="received"
+                  inputMode="decimal"
+                  value={receivedValue}
+                  onChange={(event) => setReceived(event.target.value)}
+                  required
+                />
+              </Field>
+              <DayField id="close-statement-paid-at" name="paidAt" label="Recebido em" defaultValue={today} />
+            </div>
+            {count > 0 && <ReceivedCheck expectedCents={expectedCents} receivedCents={receivedCents} />}
             <Field>
               <FieldLabel htmlFor="close-statement-name">Nome</FieldLabel>
               <Input
                 id="close-statement-name"
                 name="name"
-                value={name ?? periodName(partner, period)}
+                value={name ?? periodName(period)}
                 onChange={(event) => setName(event.target.value)}
                 maxLength={80}
                 required
               />
+              <FieldDescription>Aparece no extrato da carteira.</FieldDescription>
             </Field>
-            <OverlapWarning overlaps={overlaps} />
-            {selected.count > 0 ? (
-              <CloseSummary partner={partner} count={selected.count} grossCents={selected.cents} />
-            ) : (
-              <p className="rounded-md border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                Nenhum atendimento pendente neste período.
-              </p>
-            )}
-            <Label className="gap-2 font-normal">
-              <Checkbox checked={paid} onCheckedChange={setPaid} />
-              Já recebido
-            </Label>
-            {paid && <DayField id="close-statement-paid-at" name="paidAt" label="Recebido em" defaultValue={today} />}
           </FieldGroup>
           <SheetFooter>
-            <Button type="submit" loading={pending} disabled={selected.count === 0}>
-              {pending ? "Fechando..." : "Fechar"}
+            <Button type="submit" loading={pending} disabled={count === 0 || !receivedCents}>
+              {pending ? "Confirmando..." : `Confirmar e lançar ${money(receivedCents ?? 0)}`}
             </Button>
           </SheetFooter>
         </form>
@@ -376,7 +423,7 @@ function SettleReceivableContent({
             <strong>{receivable.name}</strong> entra na carteira como recebido: {money(receivable.valueCents)}.
           </SheetDescription>
         </SheetHeader>
-        <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+        <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
           {state.error && <FieldError>{state.error}</FieldError>}
           <DayField id={`settle-${receivable.id}-paid-at`} name="paidAt" label="Recebido em" defaultValue={todayInBrasilia()} />
         </FieldGroup>
@@ -402,7 +449,7 @@ export function SettleReceivableSheet({ workspaceId, receivable }: { workspaceId
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger render={<Button variant="outline" size="sm" />}>
         <CheckIcon />
-        Confirmar pagamento
+        Confirmar
       </SheetTrigger>
       <SettleReceivableContent workspaceId={workspaceId} receivable={receivable} onSettled={() => setOpen(false)} />
     </Sheet>
@@ -428,16 +475,9 @@ export function ConfirmPaymentSheet({
 }
 
 export function StatementActions({ workspaceId, statement }: { workspaceId: string; statement: StatementListItem }) {
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [unpayOpen, setUnpayOpen] = useState(false)
+  const [undoOpen, setUndoOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [deleting, startDelete] = useTransition()
-  const [unpaying, startUnpay] = useTransition()
-  const paid = !!statement.paidAt
-  const { open, setOpen, state, formAction, pending } = useSheetAction((prev, formData) =>
-    payStatementAction(workspaceId, statement.id, prev, formData),
-  )
-  const net = netCents(statement.grossCents, statement.shareBps)
+  const [undoing, startUndo] = useTransition()
 
   return (
     <>
@@ -445,120 +485,45 @@ export function StatementActions({ workspaceId, statement }: { workspaceId: stri
         <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Ações de ${statement.name}`} />}>
           <EllipsisIcon />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64">
-          {paid ? (
-            <DropdownMenuItem variant="destructive" onClick={() => setUnpayOpen(true)}>
-              <Undo2Icon />
-              Estornar pagamento
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem onClick={() => setOpen(true)}>
-              <BanknoteIcon />
-              Registrar pagamento
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" disabled={paid} onClick={() => setDeleteOpen(true)}>
-            <Trash2Icon />
-            <span className="flex flex-col">
-              Desfazer fechamento
-              {paid && <span className="text-xs text-muted-foreground">Estorne o pagamento primeiro.</span>}
-            </span>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuItem variant="destructive" onClick={() => setUndoOpen(true)}>
+            <Undo2Icon />
+            Desfazer conferência
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent>
-          <form action={formAction} className="flex min-h-0 flex-1 flex-col">
-            <SheetHeader>
-              <SheetTitle>Registrar pagamento</SheetTitle>
-              <SheetDescription>
-                <strong>{statement.name}</strong> vira uma entrada de {money(net)} na carteira.
-              </SheetDescription>
-            </SheetHeader>
-            <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
-              {state.error && <FieldError>{state.error}</FieldError>}
-              <DayField
-                id={`pay-statement-${statement.id}-paid-at`}
-                name="paidAt"
-                label="Recebido em"
-                defaultValue={todayInBrasilia()}
-              />
-            </FieldGroup>
-            <SheetFooter>
-              <Button type="submit" loading={pending}>
-                {pending ? "Registrando..." : "Registrar"}
-              </Button>
-            </SheetFooter>
-          </form>
-        </SheetContent>
-      </Sheet>
-
       <AlertDialog
-        open={deleteOpen}
+        open={undoOpen}
         onOpenChange={(next) => {
           if (!next) setError(null)
-          setDeleteOpen(next)
+          setUndoOpen(next)
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Desfazer fechamento?</AlertDialogTitle>
+            <AlertDialogTitle>Desfazer conferência?</AlertDialogTitle>
             <AlertDialogDescription>
-              {statement.count === 1 ? "O atendimento" : `Os ${statement.count} atendimentos`} de <strong>{statement.name}</strong>{" "}
-              {statement.count === 1 ? "volta" : "voltam"} para a lista de pendentes.
+              A entrada de {money(statement.totalCents)} de <strong>{statement.name}</strong> sai da carteira e{" "}
+              {statement.count === 1 ? "o atendimento volta" : `os ${statement.count} atendimentos voltam`} a ficar pendentes de
+              conferência.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {error && <FieldError>{error}</FieldError>}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={undoing}>Cancelar</AlertDialogCancel>
             <Button
               variant="destructive"
-              loading={deleting}
+              loading={undoing}
               onClick={() =>
-                startDelete(async () => {
+                startUndo(async () => {
                   const result = await deleteStatementAction(workspaceId, statement.id)
                   setError(result.error)
-                  if (!result.error) setDeleteOpen(false)
+                  if (!result.error) setUndoOpen(false)
                 })
               }
             >
-              {deleting ? "Desfazendo..." : "Desfazer"}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog
-        open={unpayOpen}
-        onOpenChange={(next) => {
-          if (!next) setError(null)
-          setUnpayOpen(next)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Estornar pagamento?</AlertDialogTitle>
-            <AlertDialogDescription>
-              A entrada de {money(statement.totalCents ?? net)} de <strong>{statement.name}</strong> sai da carteira e o
-              fechamento volta para aguardando pagamento.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {error && <FieldError>{error}</FieldError>}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={unpaying}>Cancelar</AlertDialogCancel>
-            <Button
-              variant="destructive"
-              loading={unpaying}
-              onClick={() =>
-                startUnpay(async () => {
-                  const result = await unpayStatementAction(workspaceId, statement.id)
-                  setError(result.error)
-                  if (!result.error) setUnpayOpen(false)
-                })
-              }
-            >
-              {unpaying ? "Estornando..." : "Estornar"}
+              {undoing ? "Desfazendo..." : "Desfazer"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

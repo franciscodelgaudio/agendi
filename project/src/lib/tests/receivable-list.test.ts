@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Types } from "mongoose";
 import {
   parseListPage,
+  parseStatementListQuery,
   partnerPeriodsPipeline,
   pendingByDayPipeline,
   pendingReceivablesPipeline,
@@ -151,6 +152,71 @@ describe("statementListPipeline", () => {
       },
       { $project: { rows: 1, total: TOTAL } },
     ]);
+  });
+});
+
+describe("parseStatementListQuery", () => {
+  it("sem parâmetros, mostra todos os repasses na página 1", () => {
+    expect(parseStatementListQuery({})).toEqual({ q: "", check: "", page: 1 });
+  });
+
+  it("lê busca, conferência e página válidas", () => {
+    expect(parseStatementListQuery({ q: " outubro ", check: "diff", page: "2" })).toEqual({ q: "outubro", check: "diff", page: 2 });
+    expect(parseStatementListQuery({ check: "match" }).check).toBe("match");
+  });
+
+  it("ignora conferência e página inválidas", () => {
+    expect(parseStatementListQuery({ check: "all", page: "0" })).toEqual({ q: "", check: "", page: 1 });
+  });
+});
+
+describe("statementListPipeline com busca e conferência", () => {
+  const PARTNER_MATCH = { partnerId: new Types.ObjectId(PARTNER_ID) };
+  const SORT = { $sort: { to: -1, _id: -1 } };
+  const RECEIVED_LOOKUP = {
+    $lookup: {
+      from: "transactions",
+      localField: "transactionId",
+      foreignField: "_id",
+      as: "transaction",
+      pipeline: [{ $project: { _id: 0, totalCents: 1 } }],
+    },
+  };
+  const RECEIVED = { $first: "$transaction.totalCents" };
+  const EXPECTED_NET = {
+    $subtract: ["$grossCents", { $floor: { $add: [{ $divide: [{ $multiply: ["$grossCents", "$shareBps"] }, 10_000] }, 0.5] } }],
+  };
+  const unfiltered = statementListPipeline({ partnerId: PARTNER_ID }, 1);
+
+  it("sem busca nem conferência, é a mesma lista de sempre", () => {
+    expect(statementListPipeline({ partnerId: PARTNER_ID }, 1, { q: "", check: "" })).toEqual(unfiltered);
+  });
+
+  it("busca no nome do repasse, sem diferenciar acentos", () => {
+    const stages = statementListPipeline({ partnerId: PARTNER_ID }, 1, { q: "marco", check: "" });
+    const match = stages[0] as { $match: { name: { $regex: string; $options: string } } };
+
+    expect(match).toEqual({ $match: { ...PARTNER_MATCH, name: { $regex: expect.any(String), $options: "i" } } });
+    expect(new RegExp(match.$match.name.$regex, "i").test("Repasse de março de 2026")).toBe(true);
+    expect(stages.slice(1)).toEqual(unfiltered.slice(1));
+  });
+
+  it("conferência que bateu: só os repasses em que o recebido é igual ao esperado (bruto menos a parte do parceiro, arredondada)", () => {
+    const stages = statementListPipeline({ partnerId: PARTNER_ID }, 1, { q: "", check: "match" });
+
+    expect(stages.slice(0, 4)).toEqual([
+      { $match: PARTNER_MATCH },
+      RECEIVED_LOOKUP,
+      { $match: { $expr: { $eq: [RECEIVED, EXPECTED_NET] } } },
+      SORT,
+    ]);
+    expect(stages.slice(4)).toEqual(unfiltered.slice(2));
+  });
+
+  it("conferência com diferença: só os repasses em que o recebido não bate com o esperado", () => {
+    const stages = statementListPipeline({ partnerId: PARTNER_ID }, 1, { q: "", check: "diff" });
+
+    expect(stages.slice(1, 3)).toEqual([RECEIVED_LOOKUP, { $match: { $expr: { $ne: [RECEIVED, EXPECTED_NET] } } }]);
   });
 });
 

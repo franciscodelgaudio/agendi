@@ -91,7 +91,7 @@ export function MovementSheet({
             <SheetTitle>Entrada ou saída</SheetTitle>
             <SheetDescription>Soma ou tira a quantidade de um produto neste estoque.</SheetDescription>
           </SheetHeader>
-          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
             {state.error && <FieldError>{state.error}</FieldError>}
             <OptionSelect
               id="movement-type"
@@ -152,7 +152,7 @@ export function TransferSheet({
             <SheetTitle>Transferir produto</SheetTitle>
             <SheetDescription>Tira daqui e põe em outro estoque.</SheetDescription>
           </SheetHeader>
-          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
             {state.error && <FieldError>{state.error}</FieldError>}
             <OptionSelect id="transfer-product" name="productId" label="Produto" placeholder="Escolha o produto" options={products} />
             <QuantityField id="transfer-quantity" />

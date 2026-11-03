@@ -67,7 +67,6 @@ async function UnitNotices({ workspaceId, unitId }: { workspaceId: string; unitI
 
   return (
     <>
-      <span className="-mb-2 truncate text-sm text-muted-foreground">{unit.name}</span>
       <UnitSetupNotices
       workspaceId={workspaceId}
       unitId={unitId}

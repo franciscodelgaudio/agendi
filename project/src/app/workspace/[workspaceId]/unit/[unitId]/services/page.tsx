@@ -13,10 +13,12 @@ import {
 import { currencyFormat, formatDuration } from "@/components/shared/service-format"
 import { ListPagination } from "@/components/shared/list-pagination"
 import { ListSearch } from "@/components/shared/list-search"
+import { ListToolbar } from "@/components/shared/list-toolbar"
 import { SortableHead } from "@/components/shared/sortable-head"
 import { CreateServiceSheet, ServiceActions } from "@/components/workspace/[workspaceId]/services/service-sheets"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Service } from "@/models/Service"
+import { PageHeader } from "@/components/shared/page-header"
 
 export default async function UnitServicesPage({
   params,
@@ -39,13 +41,10 @@ export default async function UnitServicesPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-4">
-        <h3 className="text-lg font-semibold tracking-tight">Serviços</h3>
-        {canManage && <CreateServiceSheet workspaceId={workspaceId} unitId={unitId} />}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <PageHeader title="Serviços" />
+      <ListToolbar actions={canManage && <CreateServiceSheet workspaceId={workspaceId} unitId={unitId} />}>
         <ListSearch query={listQuery} placeholder="Buscar serviço..." />
-      </div>
+      </ListToolbar>
       <div className="@container border">
         <Table>
           <TableHeader>

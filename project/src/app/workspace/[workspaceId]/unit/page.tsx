@@ -9,8 +9,10 @@ import { unitMemberOptionsStages } from "@/service/workspace/[workspaceId]/unit/
 import { Workspace } from "@/models/Workspace"
 import { NewUnitButton } from "@/components/workspace/[workspaceId]/unit/units-empty"
 import { ListSearch } from "@/components/shared/list-search"
+import { ListToolbar } from "@/components/shared/list-toolbar"
 import { UnitCards } from "@/components/workspace/[workspaceId]/unit/unit-cards"
 import { UnitsEmpty } from "@/components/workspace/[workspaceId]/unit/units-empty"
+import { PageHeader } from "@/components/shared/page-header"
 
 export default async function UnitsPage({
   params,
@@ -68,15 +70,14 @@ export default async function UnitsPage({
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-2xl font-semibold tracking-tight">Unidades</h2>
-        {canManage && unitCount > 0 && <NewUnitButton workspaceId={workspaceId} />}
-      </div>
+      <PageHeader title="Unidades" />
       {unitCount === 0 ? (
         <UnitsEmpty workspaceId={workspaceId} canManage={canManage} />
       ) : (
         <>
-          <ListSearch query={query} placeholder="Buscar unidade..." />
+          <ListToolbar actions={canManage && <NewUnitButton workspaceId={workspaceId} />}>
+            <ListSearch query={query} placeholder="Buscar unidade..." />
+          </ListToolbar>
           <UnitCards
             units={units}
             options={options}

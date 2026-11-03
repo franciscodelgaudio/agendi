@@ -5,11 +5,9 @@ import {
   deleteStatement,
   netCents,
   passOnCents,
-  payStatement,
   pendingInPeriod,
   settleReceivable,
   suggestedPeriod,
-  unpayStatement,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/statement";
 import { ADMIN, STAFF, actorWith } from "@/lib/tests/actors";
 
@@ -192,9 +190,16 @@ describe("closeStatement", () => {
     };
   }
   const ctx = { workspaceId: WORKSPACE_ID, actor: MANAGER };
-  const VALID = { name: " Hotel Fasano · outubro ", paidAt: "", period: "range", from: "2026-10-01", to: "2026-10-31" };
+  const VALID = {
+    name: " Hotel Fasano · outubro ",
+    paidAt: "2026-11-02",
+    received: "20800,00",
+    period: "range",
+    from: "2026-10-01",
+    to: "2026-10-31",
+  };
 
-  it("de/até: fecha os pendentes da unidade do parceiro no período, com o bruto e a faixa alcançada, ainda sem pagamento", async () => {
+  it("de/até: confere o repasse dos pendentes da unidade do parceiro no período, com o bruto e a faixa alcançada, e lança o valor recebido", async () => {
     const deps = makeDeps();
 
     const result = await closeStatement(VALID, PARTNER_ID, ctx, deps);
@@ -214,7 +219,15 @@ describe("closeStatement", () => {
         workspaceId: WORKSPACE_ID,
         receivableIds: [RECEIVABLE_A, RECEIVABLE_B],
       },
-      transaction: null,
+      transaction: {
+        name: "Hotel Fasano · outubro",
+        totalCents: 2_080_000,
+        type: "incoming",
+        paidAt: PAID_AT,
+        walletId: WALLET_ID,
+        unitId: UNIT_ID,
+        workspaceId: WORKSPACE_ID,
+      },
     });
   });
 
@@ -286,24 +299,25 @@ describe("closeStatement", () => {
     });
   });
 
-  it("com dia de pagamento, já gera a entrada com o bruto menos a parte do parceiro, na unidade dele", async () => {
+  it("valor recebido diferente do esperado: lança o que entrou de fato e o repasse guarda bruto e faixa para mostrar a diferença", async () => {
     const deps = makeDeps();
 
-    await closeStatement({ ...VALID, paidAt: "2026-11-02" }, PARTNER_ID, ctx, deps);
+    await closeStatement({ ...VALID, received: "20300,00" }, PARTNER_ID, ctx, deps);
 
-    expect(deps.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        transaction: {
-          name: "Hotel Fasano · outubro",
-          totalCents: 2_080_000,
-          type: "incoming",
-          paidAt: PAID_AT,
-          walletId: WALLET_ID,
-          unitId: UNIT_ID,
-          workspaceId: WORKSPACE_ID,
-        },
-      }),
-    );
+    expect(deps.save).toHaveBeenCalledWith({
+      statement: expect.objectContaining({ grossCents: 3_200_000, shareBps: 3500 }),
+      transaction: expect.objectContaining({ totalCents: 2_030_000 }),
+    });
+  });
+
+  it("aceita valor recebido com ponto ou sem centavos", async () => {
+    const deps = makeDeps();
+
+    await closeStatement({ ...VALID, received: "20800" }, PARTNER_ID, ctx, deps);
+    await closeStatement({ ...VALID, received: "20800.50" }, PARTNER_ID, ctx, deps);
+
+    expect(deps.save).toHaveBeenNthCalledWith(1, expect.objectContaining({ transaction: expect.objectContaining({ totalCents: 2_080_000 }) }));
+    expect(deps.save).toHaveBeenNthCalledWith(2, expect.objectContaining({ transaction: expect.objectContaining({ totalCents: 2_080_050 }) }));
   });
 
   it("sem pendentes no período, não fecha nada", async () => {
@@ -329,7 +343,12 @@ describe("closeStatement", () => {
     ["input nulo", null, "invalid_input"],
     ["nome vazio", { ...VALID, name: " " }, "invalid_name"],
     ["nome com mais de 80 caracteres", { ...VALID, name: "a".repeat(81) }, "name_too_long"],
-    ["dia de pagamento inválido", { ...VALID, paidAt: "2026-02-30" }, "invalid_paid_at"],
+    ["sem dia de recebimento", { ...VALID, paidAt: "" }, "invalid_paid_at"],
+    ["dia de recebimento inválido", { ...VALID, paidAt: "2026-02-30" }, "invalid_paid_at"],
+    ["sem valor recebido", { ...VALID, received: "" }, "invalid_received"],
+    ["valor recebido zero", { ...VALID, received: "0,00" }, "invalid_received"],
+    ["valor recebido negativo", { ...VALID, received: "-100,00" }, "invalid_received"],
+    ["valor recebido que não é número", { ...VALID, received: "abc" }, "invalid_received"],
     ["sem modo de período", { ...VALID, period: undefined }, "invalid_period"],
     ["modo de período desconhecido", { ...VALID, period: "month" }, "invalid_period"],
     ["até uma data sem a data", { ...VALID, period: "until", to: "" }, "invalid_period_end"],
@@ -474,163 +493,32 @@ describe("settleReceivable", () => {
   });
 });
 
-describe("payStatement", () => {
-  const STATEMENT = {
-    name: "Hotel Fasano · outubro",
-    walletId: WALLET_ID,
-    unitId: UNIT_ID as string | null,
-    workspaceId: WORKSPACE_ID,
-    shareBps: 3000,
-    grossCents: 40_000,
-    paid: false,
-  };
-
-  function makeDeps(statement: typeof STATEMENT | null = STATEMENT, paid = true) {
-    return { findStatement: vi.fn().mockResolvedValue(statement), pay: vi.fn().mockResolvedValue(paid) };
-  }
-
-  it("gera a entrada do fechamento com o bruto menos a parte do parceiro", async () => {
-    const deps = makeDeps();
-
-    const result = await payStatement({ paidAt: "2026-11-02" }, STATEMENT_ID, { actor: MANAGER }, deps);
-
-    expect(result).toEqual({ ok: true });
-    expect(deps.pay).toHaveBeenCalledWith(STATEMENT_ID, {
-      name: "Hotel Fasano · outubro",
-      totalCents: 28_000,
-      type: "incoming",
-      paidAt: PAID_AT,
-      walletId: WALLET_ID,
-      unitId: UNIT_ID,
-      workspaceId: WORKSPACE_ID,
-    });
-  });
-
-  it("parceiro que ficou sem unidade gera a entrada sem unidade", async () => {
-    const deps = makeDeps({ ...STATEMENT, unitId: null });
-
-    await payStatement({ paidAt: "2026-11-02" }, STATEMENT_ID, { actor: MANAGER }, deps);
-
-    expect(deps.pay).toHaveBeenCalledWith(STATEMENT_ID, expect.objectContaining({ unitId: null }));
-  });
-
-  it("não paga duas vezes", async () => {
-    const deps = makeDeps({ ...STATEMENT, paid: true });
-
-    expect(await payStatement({ paidAt: "2026-11-02" }, STATEMENT_ID, { actor: ADMIN }, deps)).toEqual({
-      ok: false,
-      error: "statement_paid",
-    });
-    expect(deps.pay).not.toHaveBeenCalled();
-  });
-
-  it.each(["", "2026-02-30", null])("recusa dia de pagamento %j", async (paidAt) => {
-    const deps = makeDeps();
-
-    expect(await payStatement({ paidAt }, STATEMENT_ID, { actor: ADMIN }, deps)).toEqual({
-      ok: false,
-      error: "invalid_paid_at",
-    });
-    expect(deps.pay).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ["sem id", "", makeDeps()],
-    ["fechamento que não é do workspace", STATEMENT_ID, makeDeps(null)],
-    ["fechamento pago ou excluído antes de gravar", STATEMENT_ID, makeDeps(STATEMENT, false)],
-  ])("%s devolve não encontrado", async (_label, statementId, deps) => {
-    expect(await payStatement({ paidAt: "2026-11-02" }, statementId, { actor: ADMIN }, deps)).toEqual({
-      ok: false,
-      error: "statement_not_found",
-    });
-  });
-
-  it("sem a permissão de gerenciar o caixa, não paga", async () => {
-    const deps = makeDeps();
-
-    expect(await payStatement({ paidAt: "2026-11-02" }, STATEMENT_ID, { actor: STAFF }, deps)).toEqual({
-      ok: false,
-      error: "forbidden",
-    });
-    expect(deps.pay).not.toHaveBeenCalled();
-  });
-});
-
 describe("deleteStatement", () => {
-  function makeDeps(statement: { paid: boolean } | null = { paid: false }, removed = true) {
-    return { findStatement: vi.fn().mockResolvedValue(statement), remove: vi.fn().mockResolvedValue(removed) };
+  function makeDeps(removed = true) {
+    return { remove: vi.fn().mockResolvedValue(removed) };
   }
 
-  it("desfaz o bloco ainda não pago, devolvendo os recebíveis para pendentes", async () => {
+  it("desfaz a conferência: apaga o repasse e a entrada dele, devolvendo os atendimentos para pendentes", async () => {
     const deps = makeDeps();
 
     expect(await deleteStatement(STATEMENT_ID, { actor: MANAGER }, deps)).toEqual({ ok: true });
     expect(deps.remove).toHaveBeenCalledWith(STATEMENT_ID);
   });
 
-  it("não desfaz o bloco pago", async () => {
-    const deps = makeDeps({ paid: true });
-
-    expect(await deleteStatement(STATEMENT_ID, { actor: ADMIN }, deps)).toEqual({ ok: false, error: "statement_paid" });
-    expect(deps.remove).not.toHaveBeenCalled();
-  });
-
   it.each([
     ["sem id", "", makeDeps()],
-    ["bloco que não é do workspace", STATEMENT_ID, makeDeps(null)],
-    ["bloco pago ou excluído antes de remover", STATEMENT_ID, makeDeps({ paid: false }, false)],
+    ["repasse que não é do workspace ou já desfeito", STATEMENT_ID, makeDeps(false)],
   ])("%s devolve não encontrado", async (_label, statementId, deps) => {
     expect(await deleteStatement(statementId, { actor: ADMIN }, deps)).toEqual({ ok: false, error: "statement_not_found" });
   });
 
-  it("sem acesso ao workspace, não desfaz", async () => {
-    const deps = makeDeps();
-
-    expect(await deleteStatement(STATEMENT_ID, { actor: null }, deps)).toEqual({ ok: false, error: "workspace_not_found" });
-    expect(deps.remove).not.toHaveBeenCalled();
-  });
-});
-
-describe("unpayStatement", () => {
-  function makeDeps(statement: { paid: boolean } | null = { paid: true }, unpaid = true) {
-    return { findStatement: vi.fn().mockResolvedValue(statement), unpay: vi.fn().mockResolvedValue(unpaid) };
-  }
-
-  it("estorna o pagamento, tirando a entrada da carteira e voltando o fechamento para aguardando pagamento", async () => {
-    const deps = makeDeps();
-
-    expect(await unpayStatement(STATEMENT_ID, { actor: MANAGER }, deps)).toEqual({ ok: true });
-    expect(deps.findStatement).toHaveBeenCalledWith(STATEMENT_ID);
-    expect(deps.unpay).toHaveBeenCalledWith(STATEMENT_ID);
-  });
-
-  it("não estorna fechamento que ainda não foi pago", async () => {
-    const deps = makeDeps({ paid: false });
-
-    expect(await unpayStatement(STATEMENT_ID, { actor: ADMIN }, deps)).toEqual({ ok: false, error: "statement_not_paid" });
-    expect(deps.unpay).not.toHaveBeenCalled();
-  });
-
   it.each([
-    ["sem id", "", makeDeps()],
-    ["fechamento que não é do workspace", STATEMENT_ID, makeDeps(null)],
-    ["fechamento estornado ou excluído antes de gravar", STATEMENT_ID, makeDeps({ paid: true }, false)],
-  ])("%s devolve não encontrado", async (_label, statementId, deps) => {
-    expect(await unpayStatement(statementId, { actor: ADMIN }, deps)).toEqual({ ok: false, error: "statement_not_found" });
-  });
-
-  it("sem a permissão de gerenciar o caixa, não estorna", async () => {
+    ["sem acesso ao workspace", null, "workspace_not_found"],
+    ["sem a permissão de gerenciar o caixa", STAFF, "forbidden"],
+  ] as const)("%s, não desfaz", async (_label, actor, error) => {
     const deps = makeDeps();
 
-    expect(await unpayStatement(STATEMENT_ID, { actor: STAFF }, deps)).toEqual({ ok: false, error: "forbidden" });
-    expect(deps.findStatement).not.toHaveBeenCalled();
-    expect(deps.unpay).not.toHaveBeenCalled();
-  });
-
-  it("sem acesso ao workspace, não estorna", async () => {
-    const deps = makeDeps();
-
-    expect(await unpayStatement(STATEMENT_ID, { actor: null }, deps)).toEqual({ ok: false, error: "workspace_not_found" });
-    expect(deps.unpay).not.toHaveBeenCalled();
+    expect(await deleteStatement(STATEMENT_ID, { actor }, deps)).toEqual({ ok: false, error });
+    expect(deps.remove).not.toHaveBeenCalled();
   });
 });

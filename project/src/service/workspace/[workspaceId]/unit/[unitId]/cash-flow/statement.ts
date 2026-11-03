@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { issueCode } from "@/service/_shared/validation";
+import { parseMoneyCents } from "@/service/_shared/money";
 import { BRT_OFFSET_HOURS, parseDay } from "@/service/_shared/timezone";
 import { checkAccess, type AccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check";
 import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
@@ -23,7 +24,7 @@ export type ClosePeriod = { unitId: string | null; period: (typeof CLOSE_PERIODS
 
 type PendingDayTotal = { unitId: string | null; day: string; count: number; cents: number };
 
-function daysInPeriod<Day extends PendingDayTotal>(days: Day[], filter: ClosePeriod) {
+export function daysInPeriod<Day extends PendingDayTotal>(days: Day[], filter: ClosePeriod) {
   if (!parseDay(filter.to)) return [];
   const from = filter.period === "range" ? filter.from : "";
   if (filter.period === "range" && (!parseDay(from) || from > filter.to)) return [];
@@ -75,14 +76,6 @@ const requiredPaidAtField = z
   .refine((value) => parseDay(value) !== null, { error: "invalid_paid_at" })
   .transform(dayStart);
 
-const optionalPaidAtField = z
-  .string({ error: "invalid_input" })
-  .trim()
-  .nullish()
-  .transform((value) => value || null)
-  .refine((value) => value === null || parseDay(value) !== null, { error: "invalid_paid_at" })
-  .transform((value) => (value ? dayStart(value) : null));
-
 const closeSchema = z
   .object(
     {
@@ -91,7 +84,11 @@ const closeSchema = z
         .trim()
         .min(1, { error: "invalid_name" })
         .max(MAX_NAME_LENGTH, { error: "name_too_long" }),
-      paidAt: optionalPaidAtField,
+      paidAt: requiredPaidAtField,
+      received: z
+        .string({ error: "invalid_received" })
+        .transform((value) => parseMoneyCents(value) ?? 0)
+        .refine((cents) => cents > 0, { error: "invalid_received" }),
       period: z.enum(CLOSE_PERIODS, { error: "invalid_period" }),
       from: z.string({ error: "invalid_period_start" }).trim().nullish(),
       to: z
@@ -108,8 +105,6 @@ const closeSchema = z
   });
 
 const settleSchema = z.object({ paidAt: requiredPaidAtField }, { error: "invalid_input" });
-
-const paySchema = z.object({ paidAt: requiredPaidAtField }, { error: "invalid_input" });
 
 export type StatementData = {
   name: string;
@@ -135,23 +130,7 @@ export type StatementTransaction = {
 
 export type ReceivableTransaction = StatementTransaction & { receivableId: string };
 
-type SaveStatement = (data: { statement: StatementData; transaction: StatementTransaction | null }) => Promise<{ id: string }>;
-
-function statementTransaction(
-  source: { name: string; shareBps: number; walletId: string; unitId: string | null; workspaceId: string },
-  grossCents: number,
-  paidAt: Date,
-): StatementTransaction {
-  return {
-    name: source.name,
-    totalCents: netCents(grossCents, source.shareBps),
-    type: "incoming",
-    paidAt,
-    walletId: source.walletId,
-    unitId: source.unitId,
-    workspaceId: source.workspaceId,
-  };
-}
+type SaveStatement = (data: { statement: StatementData; transaction: StatementTransaction }) => Promise<{ id: string }>;
 
 async function unlessSettled(save: () => Promise<{ id: string }>) {
   try {
@@ -167,6 +146,7 @@ type StatementInputError =
   | "invalid_name"
   | "name_too_long"
   | "invalid_paid_at"
+  | "invalid_received"
   | "invalid_period"
   | "invalid_period_start"
   | "invalid_period_end"
@@ -214,7 +194,7 @@ export async function closeStatement(
   const { id: unitId, walletId } = partner.unit;
   if (!walletId) return { ok: false, error: "unit_without_wallet" };
 
-  const { name, paidAt, period } = parsed.data;
+  const { name, paidAt, received, period } = parsed.data;
   const from = period === "range" && parsed.data.from ? dayStart(parsed.data.from) : null;
   const to = dayStart(parsed.data.to);
   const pending = await deps.findPending({ walletId, unitId, from, before: new Date(to.getTime() + DAY_MS) });
@@ -232,7 +212,15 @@ export async function closeStatement(
     workspaceId: ctx.workspaceId,
     receivableIds: pending.map((receivable) => receivable.id),
   };
-  const transaction = paidAt ? statementTransaction({ ...statement, unitId }, grossCents, paidAt) : null;
+  const transaction: StatementTransaction = {
+    name,
+    totalCents: received,
+    type: "incoming",
+    paidAt,
+    walletId,
+    unitId,
+    workspaceId: ctx.workspaceId,
+  };
 
   const saved = await unlessSettled(() => deps.save({ statement, transaction }));
   if (!saved.ok) return saved;
@@ -292,83 +280,19 @@ export async function settleReceivable(
   return { ok: true, transactionId: saved.id };
 }
 
-export type PayStatementError = AccessError | "invalid_input" | "invalid_paid_at" | "statement_not_found" | "statement_paid";
-
 export type StatementResult<E extends string> = { ok: true } | { ok: false; error: E };
 
-export async function payStatement(
-  input: unknown,
-  statementId: string | null | undefined,
-  ctx: { actor: Actor | null },
-  deps: {
-    findStatement: (statementId: string) => Promise<{
-      name: string;
-      walletId: string;
-      unitId: string | null;
-      workspaceId: string;
-      shareBps: number;
-      grossCents: number;
-      paid: boolean;
-    } | null>;
-    pay: (statementId: string, transaction: StatementTransaction) => Promise<boolean>;
-  },
-): Promise<StatementResult<PayStatementError>> {
-  const accessError = checkAccess(ctx.actor, "cash_flow.manage");
-  if (accessError) return { ok: false, error: accessError };
-  if (!statementId) return { ok: false, error: "statement_not_found" };
-
-  const parsed = paySchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: issueCode<"invalid_input" | "invalid_paid_at">(parsed.error) };
-
-  const statement = await deps.findStatement(statementId);
-  if (!statement) return { ok: false, error: "statement_not_found" };
-  if (statement.paid) return { ok: false, error: "statement_paid" };
-
-  const transaction = statementTransaction(statement, statement.grossCents, parsed.data.paidAt);
-  if (!(await deps.pay(statementId, transaction))) return { ok: false, error: "statement_not_found" };
-  return { ok: true };
-}
-
-export type DeleteStatementError = AccessError | "statement_not_found" | "statement_paid";
+export type DeleteStatementError = AccessError | "statement_not_found";
 
 export async function deleteStatement(
   statementId: string | null | undefined,
   ctx: { actor: Actor | null },
-  deps: {
-    findStatement: (statementId: string) => Promise<{ paid: boolean } | null>;
-    remove: (statementId: string) => Promise<boolean>;
-  },
+  deps: { remove: (statementId: string) => Promise<boolean> },
 ): Promise<StatementResult<DeleteStatementError>> {
   const accessError = checkAccess(ctx.actor, "cash_flow.manage");
   if (accessError) return { ok: false, error: accessError };
   if (!statementId) return { ok: false, error: "statement_not_found" };
 
-  const statement = await deps.findStatement(statementId);
-  if (!statement) return { ok: false, error: "statement_not_found" };
-  if (statement.paid) return { ok: false, error: "statement_paid" };
-
   if (!(await deps.remove(statementId))) return { ok: false, error: "statement_not_found" };
-  return { ok: true };
-}
-
-export type UnpayStatementError = AccessError | "statement_not_found" | "statement_not_paid";
-
-export async function unpayStatement(
-  statementId: string | null | undefined,
-  ctx: { actor: Actor | null },
-  deps: {
-    findStatement: (statementId: string) => Promise<{ paid: boolean } | null>;
-    unpay: (statementId: string) => Promise<boolean>;
-  },
-): Promise<StatementResult<UnpayStatementError>> {
-  const accessError = checkAccess(ctx.actor, "cash_flow.manage");
-  if (accessError) return { ok: false, error: accessError };
-  if (!statementId) return { ok: false, error: "statement_not_found" };
-
-  const statement = await deps.findStatement(statementId);
-  if (!statement) return { ok: false, error: "statement_not_found" };
-  if (!statement.paid) return { ok: false, error: "statement_not_paid" };
-
-  if (!(await deps.unpay(statementId))) return { ok: false, error: "statement_not_found" };
   return { ok: true };
 }

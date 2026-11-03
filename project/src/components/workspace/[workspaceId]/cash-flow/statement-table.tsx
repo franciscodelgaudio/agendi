@@ -1,17 +1,26 @@
-import { money, percent } from "@/components/workspace/[workspaceId]/cash-flow/partner-format"
+import { CheckIcon } from "lucide-react"
+import { money } from "@/components/workspace/[workspaceId]/cash-flow/partner-format"
 import { StatementActions } from "@/components/workspace/[workspaceId]/cash-flow/statement-sheets"
+import { ExportMenu } from "@/components/shared/export-menu"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { StatementListItem } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivable-list"
-import { netCents, passOnCents } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/statement"
+import { netCents } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/statement"
 
-const dayFormat = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Sao_Paulo" })
-
-function statementPeriod({ from, to }: Pick<StatementListItem, "from" | "to">) {
-  const last = dayFormat.format(new Date(to))
-  if (!from) return `até ${last}`
-  const first = dayFormat.format(new Date(from))
-  return first === last ? first : `${first} – ${last}`
+function ReconcileBadge({ diffCents }: { diffCents: number }) {
+  if (diffCents === 0) {
+    return (
+      <Badge variant="secondary">
+        <CheckIcon />
+        Bateu
+      </Badge>
+    )
+  }
+  return (
+    <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300">
+      {money(Math.abs(diffCents))} {diffCents < 0 ? "a menos" : "a mais"}
+    </Badge>
+  )
 }
 
 type Props = {
@@ -22,68 +31,60 @@ type Props = {
 }
 
 export function StatementTable({ workspaceId, statements, showPartner, canManage }: Props) {
-  const columns = 6 + Number(showPartner) + Number(canManage)
+  const columns = 5 + Number(showPartner)
 
   return (
     <div className="@container border">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-full px-4">Fechamento</TableHead>
+            <TableHead className="w-full px-4">Repasse</TableHead>
             {showPartner && <TableHead className="px-4 @max-3xl:hidden">Parceiro</TableHead>}
-            <TableHead className="px-4 @max-2xl:hidden">Período</TableHead>
-            <TableHead className="px-4 text-right @max-xl:hidden">Bruto</TableHead>
-            <TableHead className="px-4 text-right @max-xl:hidden">Parte do parceiro</TableHead>
-            <TableHead className="px-4 text-right">Você recebe</TableHead>
-            <TableHead className="px-4 @max-md:hidden">Situação</TableHead>
-            {canManage && <TableHead className="w-0 px-4" />}
+            <TableHead className="px-4 text-right @max-xl:hidden">Esperado</TableHead>
+            <TableHead className="px-4 text-right">Recebido</TableHead>
+            <TableHead className="px-4 @max-md:hidden">Conferência</TableHead>
+            <TableHead className="w-0 px-4" />
           </TableRow>
         </TableHeader>
         <TableBody>
           {statements.length === 0 && (
             <TableRow>
               <TableCell colSpan={columns} className="h-24 px-4 text-center text-muted-foreground">
-                Nenhum fechamento ainda.
+                Nenhum repasse conferido ainda.
               </TableCell>
             </TableRow>
           )}
-          {statements.map((statement) => (
-            <TableRow key={statement.id}>
-              <TableCell className="max-w-0 px-4">
-                <span className="block truncate font-medium">{statement.name}</span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {statement.count} {statement.count === 1 ? "atendimento" : "atendimentos"} · fechado em{" "}
-                  {dayFormat.format(new Date(statement.createdAt))}
-                </span>
-              </TableCell>
-              {showPartner && (
-                <TableCell className="px-4 whitespace-nowrap @max-3xl:hidden">
-                  {statement.partnerName ?? <span className="text-muted-foreground">—</span>}
+          {statements.map((statement) => {
+            const expectedCents = netCents(statement.grossCents, statement.shareBps)
+            return (
+              <TableRow key={statement.id}>
+                <TableCell className="max-w-0 px-4">
+                  <span className="block truncate font-medium">{statement.name}</span>
                 </TableCell>
-              )}
-              <TableCell className="px-4 whitespace-nowrap tabular-nums @max-2xl:hidden">{statementPeriod(statement)}</TableCell>
-              <TableCell className="px-4 text-right tabular-nums @max-xl:hidden">{money(statement.grossCents)}</TableCell>
-              <TableCell className="px-4 text-right whitespace-nowrap tabular-nums @max-xl:hidden">
-                −{money(passOnCents(statement.grossCents, statement.shareBps))}
-                <span className="block text-xs text-muted-foreground">{percent(statement.shareBps)}</span>
-              </TableCell>
-              <TableCell className="px-4 text-right font-medium tabular-nums">
-                {money(statement.totalCents ?? netCents(statement.grossCents, statement.shareBps))}
-              </TableCell>
-              <TableCell className="px-4 whitespace-nowrap @max-md:hidden">
-                {statement.paidAt ? (
-                  <Badge variant="secondary">Pago em {dayFormat.format(new Date(statement.paidAt))}</Badge>
-                ) : (
-                  <Badge variant="outline">Aguardando pagamento</Badge>
+                {showPartner && (
+                  <TableCell className="px-4 whitespace-nowrap @max-3xl:hidden">
+                    {statement.partnerName ?? <span className="text-muted-foreground">—</span>}
+                  </TableCell>
                 )}
-              </TableCell>
-              {canManage && (
-                <TableCell className="px-4 text-right">
-                  <StatementActions workspaceId={workspaceId} statement={statement} />
+                <TableCell className="px-4 text-right whitespace-nowrap tabular-nums @max-xl:hidden">
+                  {money(expectedCents)}
                 </TableCell>
-              )}
-            </TableRow>
-          ))}
+                <TableCell className="px-4 text-right font-medium tabular-nums">{money(statement.totalCents)}</TableCell>
+                <TableCell className="px-4 whitespace-nowrap @max-md:hidden">
+                  <ReconcileBadge diffCents={statement.totalCents - expectedCents} />
+                </TableCell>
+                <TableCell className="px-4 text-right">
+                  <div className="flex justify-end gap-1">
+                    <ExportMenu
+                      href={`/api/workspace/${workspaceId}/cash-flow/statements/${statement.id}/export`}
+                      label={`Exportar ${statement.name}`}
+                    />
+                    {canManage && <StatementActions workspaceId={workspaceId} statement={statement} />}
+                  </div>
+                </TableCell>
+              </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
     </div>

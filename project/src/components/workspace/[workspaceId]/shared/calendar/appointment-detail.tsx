@@ -92,7 +92,7 @@ function AppointmentDetail({ workspaceId, appointment, permissions, options, onC
               <DropdownMenuTrigger render={<Button variant="outline" size="icon-sm" aria-label="Mais ações" disabled={pending} />}>
                 <EllipsisIcon />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-auto min-w-44">
                 {cancels && (
                   <DropdownMenuItem onClick={() => change(appointment, "cancelled")}>
                     <CircleXIcon />
@@ -110,7 +110,7 @@ function AppointmentDetail({ workspaceId, appointment, permissions, options, onC
                     {(cancels || reopens) && <DropdownMenuSeparator />}
                     <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
                       <Trash2Icon />
-                      Excluir agendamento
+                      Excluir
                     </DropdownMenuItem>
                   </>
                 )}

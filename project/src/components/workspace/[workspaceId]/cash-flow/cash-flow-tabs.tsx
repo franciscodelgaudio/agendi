@@ -8,8 +8,8 @@ export function CashFlowTabs({ base, showStatements }: { base: string; showState
   const pathname = usePathname()
   const items = [
     { title: "A receber", href: base },
-    ...(showStatements ? [{ title: "Fechamentos", href: `${base}/statements` }] : []),
-    { title: "Transações", href: `${base}/transactions` },
+    ...(showStatements ? [{ title: "Repasses", href: `${base}/statements` }] : []),
+    { title: "Extrato", href: `${base}/transactions` },
   ]
 
   return (

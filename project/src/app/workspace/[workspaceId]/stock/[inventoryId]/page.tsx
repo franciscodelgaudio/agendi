@@ -12,6 +12,7 @@ import { loadInventoryScreen } from "@/service/workspace/[workspaceId]/stock/[in
 import { currencyFormat } from "@/components/shared/service-format"
 import { ListPagination } from "@/components/shared/list-pagination"
 import { ListSearch } from "@/components/shared/list-search"
+import { ListToolbar } from "@/components/shared/list-toolbar"
 import { SortableHead } from "@/components/shared/sortable-head"
 import { InventoryHeader } from "@/components/workspace/[workspaceId]/stock/inventory-header"
 import { MovementSheet, TransferSheet } from "@/components/workspace/[workspaceId]/stock/movement-sheets"
@@ -41,22 +42,26 @@ export default async function InventoryPage({
 
   return (
     <>
-      <InventoryHeader workspaceId={workspaceId} inventory={screen.inventory}>
-        {can(actor, "stock.transfer") && screen.inventories.length > 0 && (
-          <TransferSheet
-            workspaceId={workspaceId}
-            inventoryId={inventoryId}
-            products={screen.products}
-            inventories={screen.inventories}
-          />
-        )}
-        {can(actor, "stock.manage") && (
-          <MovementSheet workspaceId={workspaceId} inventoryId={inventoryId} products={screen.products} />
-        )}
-      </InventoryHeader>
-      <div className="flex flex-wrap items-center gap-2">
+      <InventoryHeader workspaceId={workspaceId} inventory={screen.inventory} />
+      <ListToolbar
+        actions={
+          <>
+            {can(actor, "stock.transfer") && screen.inventories.length > 0 && (
+              <TransferSheet
+                workspaceId={workspaceId}
+                inventoryId={inventoryId}
+                products={screen.products}
+                inventories={screen.inventories}
+              />
+            )}
+            {can(actor, "stock.manage") && (
+              <MovementSheet workspaceId={workspaceId} inventoryId={inventoryId} products={screen.products} />
+            )}
+          </>
+        }
+      >
         <ListSearch query={listQuery} placeholder="Buscar produto..." />
-      </div>
+      </ListToolbar>
       <div className="@container border">
         <Table>
           <TableHeader>

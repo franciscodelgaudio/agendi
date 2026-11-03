@@ -17,6 +17,7 @@ const partnerSchema = new Schema(
       required: true,
       validate: { validator: (tiers: unknown[]) => tiers.length > 0 },
     },
+    imageUrl: { type: String, default: null, trim: true },
     unitId: { type: Schema.Types.ObjectId, ref: "Unit", default: null },
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true, index: true },
   },

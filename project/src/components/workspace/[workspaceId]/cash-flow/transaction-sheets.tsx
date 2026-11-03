@@ -33,9 +33,9 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { TRANSACTION_TYPE_LABELS } from "@/components/workspace/[workspaceId]/cash-flow/transaction-format"
 import type { TransactionListItem } from "@/service/workspace/[workspaceId]/cash-flow/wallets/[walletId]/transaction-list"
 
-export const TRANSACTION_TYPE_LABELS = { incoming: "Entrada", expense: "Saída" } as const
 
 const TYPE_ITEMS = [
   { value: "expense", label: TRANSACTION_TYPE_LABELS.expense },
@@ -144,7 +144,7 @@ export function CreateTransactionSheet({ workspaceId, ...target }: { workspaceId
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger render={<Button />}>
         <PlusIcon />
-        Nova transação
+        Entrada ou saída
       </SheetTrigger>
       <SheetContent>
         <form action={formAction} className="flex min-h-0 flex-1 flex-col">
@@ -154,7 +154,7 @@ export function CreateTransactionSheet({ workspaceId, ...target }: { workspaceId
               {target.unitId ? "Uma entrada ou saída de dinheiro desta unidade, na carteira dela." : "Uma entrada ou saída de dinheiro desta carteira."}
             </SheetDescription>
           </SheetHeader>
-          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
             {state.error && <FieldError>{state.error}</FieldError>}
             <TransactionFields idPrefix="create-transaction" />
             {target.units && target.units.length > 0 && <UnitField units={target.units} />}
@@ -194,7 +194,7 @@ export function TransactionActions({ workspaceId, transaction }: { workspaceId: 
           {transaction.fromStatement && (
             <>
               <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                Veio do pagamento de um fechamento. Para alterar, estorne o pagamento em Fechamentos.
+                Veio de um repasse conferido. Para alterar, desfaça a conferência em Repasses conferidos.
               </p>
               <DropdownMenuSeparator />
             </>
@@ -218,7 +218,7 @@ export function TransactionActions({ workspaceId, transaction }: { workspaceId: 
               <SheetTitle>Editar transação</SheetTitle>
               <SheetDescription>Altere os dados desta transação.</SheetDescription>
             </SheetHeader>
-            <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+            <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
               {state.error && <FieldError>{state.error}</FieldError>}
               <TransactionFields idPrefix={`edit-transaction-${transaction.id}`} transaction={transaction} />
             </FieldGroup>

@@ -12,10 +12,12 @@ import {
 } from "@/service/workspace/[workspaceId]/customers/customer-list"
 import { ListPagination } from "@/components/shared/list-pagination"
 import { ListSearch } from "@/components/shared/list-search"
+import { ListToolbar } from "@/components/shared/list-toolbar"
 import { SortableHead } from "@/components/shared/sortable-head"
 import { CreateCustomerSheet, CustomerActions } from "@/components/workspace/[workspaceId]/customers/customer-sheets"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Customer } from "@/models/Customer"
+import { PageHeader } from "@/components/shared/page-header"
 
 const dateFormat = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Sao_Paulo" })
 
@@ -43,13 +45,10 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-2xl font-semibold tracking-tight">Clientes</h2>
-        {canManage && <CreateCustomerSheet workspaceId={workspaceId} />}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <PageHeader title="Clientes" />
+      <ListToolbar actions={canManage && <CreateCustomerSheet workspaceId={workspaceId} />}>
         <ListSearch query={listQuery} placeholder="Buscar por nome ou celular..." />
-      </div>
+      </ListToolbar>
       <div className="@container border">
         <Table>
           <TableHeader>

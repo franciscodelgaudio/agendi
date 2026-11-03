@@ -3,6 +3,7 @@ import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser } from "@/service/(auth)/session"
 import { loadCalendarAppointments, loadCalendarOptions } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/calendar-options-store"
 import { AppointmentCalendar } from "@/components/workspace/[workspaceId]/shared/calendar/appointment-calendar"
+import { PageHeader } from "@/components/shared/page-header"
 
 export default async function CalendarPage({ params, searchParams }: PageProps<"/workspace/[workspaceId]/calendar">) {
   const { workspaceId } = await params
@@ -15,7 +16,7 @@ export default async function CalendarPage({ params, searchParams }: PageProps<"
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
-      <h2 className="text-2xl font-semibold tracking-tight">Agenda</h2>
+      <PageHeader title="Agenda" />
       <AppointmentCalendar
         workspaceId={workspaceId}
         canSchedule={can(actor, "bookings.manage")}

@@ -9,6 +9,7 @@ import {
 } from "@/service/workspace/[workspaceId]/cash-flow/wallets/[walletId]/transaction-list"
 import { ListPagination } from "@/components/shared/list-pagination"
 import { ListSearch } from "@/components/shared/list-search"
+import { ListToolbar } from "@/components/shared/list-toolbar"
 import { ListTotals } from "@/components/shared/list-totals"
 import { QuerySelect } from "@/components/shared/query-select"
 import { CreateTransactionSheet } from "@/components/workspace/[workspaceId]/cash-flow/transaction-sheets"
@@ -39,9 +40,8 @@ export default async function WalletPage({
       workspaceId={workspaceId}
       wallet={wallet}
       partners={partners}
-      actions={canManage && <CreateTransactionSheet workspaceId={workspaceId} walletId={walletId} units={wallet.units} />}
     >
-      <div className="flex flex-wrap items-center gap-2">
+      <ListToolbar actions={canManage && <CreateTransactionSheet workspaceId={workspaceId} walletId={walletId} units={wallet.units} />}>
         <ListSearch query={listQuery} placeholder="Buscar transação..." />
         <QuerySelect
           query={listQuery}
@@ -60,7 +60,7 @@ export default async function WalletPage({
             { label: "Saldo", cents: wallet.balanceCents },
           ]}
         />
-      </div>
+      </ListToolbar>
       <TransactionTable
         workspaceId={workspaceId}
         transactions={result.rows}

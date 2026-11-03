@@ -1,6 +1,7 @@
 "use client"
 
 import { useActionState, useState } from "react"
+import { useRouter } from "next/navigation"
 import { EllipsisIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
 import { createPartnerAction, updatePartnerAction, type PartnerFormState } from "@/lib/actions/partner"
 import { Button } from "@/components/ui/button"
@@ -62,7 +63,7 @@ function PartnerSheet({
               com uma parte.
             </SheetDescription>
           </SheetHeader>
-          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
             {state.error && <FieldError>{state.error}</FieldError>}
             <Field>
               <FieldLabel htmlFor="partner-unit">Unidade</FieldLabel>
@@ -78,9 +79,9 @@ function PartnerSheet({
                   ))}
                 </SelectContent>
               </Select>
-              <FieldDescription>Cada unidade tem no máximo um parceiro. Sem unidade, o parceiro guarda o histórico de fechamentos.</FieldDescription>
+              <FieldDescription>Cada unidade tem no máximo um parceiro. Sem unidade, o parceiro guarda o histórico de repasses.</FieldDescription>
             </Field>
-            <PartnerFields partner={partner} />
+            <PartnerFields partner={partner} workspaceId={workspaceId} />
           </FieldGroup>
           <SheetFooter>
             <Button type="submit" loading={pending}>
@@ -113,7 +114,18 @@ export function CreatePartnerButton({ workspaceId, units }: { workspaceId: strin
   )
 }
 
-export function PartnerActions({ workspaceId, partner, units }: { workspaceId: string; partner: PartnerRow; units: UnitOption[] }) {
+export function PartnerActions({
+  workspaceId,
+  partner,
+  units,
+  deletedHref,
+}: {
+  workspaceId: string
+  partner: PartnerRow
+  units: UnitOption[]
+  deletedHref?: string
+}) {
+  const router = useRouter()
   const [editOpen, setEditOpen] = useState(false)
   const [editKey, setEditKey] = useState(0)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -147,7 +159,10 @@ export function PartnerActions({ workspaceId, partner, units }: { workspaceId: s
         partner={partner}
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        onDeleted={() => setDeleteOpen(false)}
+        onDeleted={() => {
+          setDeleteOpen(false)
+          if (deletedHref) router.replace(deletedHref)
+        }}
       />
     </>
   )

@@ -96,7 +96,7 @@ export function CreateServiceSheet({ workspaceId, unitId }: { workspaceId: strin
             <SheetTitle>Cadastrar serviço</SheetTitle>
             <SheetDescription>O serviço fica disponível só nesta unidade, com o preço dela.</SheetDescription>
           </SheetHeader>
-          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
             {state.error && <FieldError>{state.error}</FieldError>}
             <ServiceFields idPrefix="create-service" />
           </FieldGroup>
@@ -151,7 +151,7 @@ export function ServiceActions({ workspaceId, service }: { workspaceId: string; 
               <SheetTitle>Editar serviço</SheetTitle>
               <SheetDescription>A mudança vale para os próximos agendamentos.</SheetDescription>
             </SheetHeader>
-            <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+            <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
               {state.error && <FieldError>{state.error}</FieldError>}
               <ServiceFields idPrefix={`edit-service-${service.id}`} service={service} />
             </FieldGroup>

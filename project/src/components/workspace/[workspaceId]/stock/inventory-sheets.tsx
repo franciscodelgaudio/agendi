@@ -61,7 +61,7 @@ export function CreateInventorySheet({ workspaceId }: { workspaceId: string }) {
             <SheetTitle>Novo estoque</SheetTitle>
             <SheetDescription>Lugar onde ficam os produtos de uma ou mais unidades.</SheetDescription>
           </SheetHeader>
-          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
             {state.error && <FieldError>{state.error}</FieldError>}
             <NameField id="create-inventory-name" />
           </FieldGroup>
@@ -116,7 +116,7 @@ export function InventoryActions({ workspaceId, inventory }: { workspaceId: stri
               <SheetTitle>Renomear estoque</SheetTitle>
               <SheetDescription>O nome aparece nas unidades e nas movimentações.</SheetDescription>
             </SheetHeader>
-            <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+            <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
               {state.error && <FieldError>{state.error}</FieldError>}
               <NameField id={`edit-inventory-${inventory.id}`} defaultValue={inventory.name} />
             </FieldGroup>

@@ -4,6 +4,8 @@ import { useActionState, useState, useTransition } from "react"
 import { HandshakeIcon, PlusIcon, Trash2Icon, UnlinkIcon, XIcon } from "lucide-react"
 import { createPartnerAction, deletePartnerAction, updatePartnerAction, type PartnerFormState } from "@/lib/actions/partner"
 import { AmountInput } from "@/components/shared/amount-input"
+import { ImageUploadField } from "@/components/shared/image-upload-field"
+import { OptionalMark } from "@/components/shared/field-hints"
 import { money, percent, THRESHOLD_RULE_LABELS } from "@/components/workspace/[workspaceId]/cash-flow/partner-format"
 import {
   AlertDialog,
@@ -64,7 +66,7 @@ function PartnerExample({ name, thresholdRule, drafts }: { name: string; thresho
   )
 }
 
-export function PartnerFields({ partner }: { partner: UnitPartner | null }) {
+export function PartnerFields({ partner, workspaceId }: { partner: UnitPartner | null; workspaceId?: string }) {
   const [name, setName] = useState(partner?.name ?? "")
   const [thresholdRule, setThresholdRule] = useState<ThresholdRule>(partner?.thresholdRule ?? "above")
   const [drafts, setDrafts] = useState(() => draftsOf(partner))
@@ -93,6 +95,20 @@ export function PartnerFields({ partner }: { partner: UnitPartner | null }) {
           required
         />
       </Field>
+      {workspaceId && (
+        <ImageUploadField
+          id="partner-image"
+          label={
+            <>
+              Imagem <OptionalMark />
+            </>
+          }
+          name="imageUrl"
+          workspaceId={workspaceId}
+          target="partner"
+          defaultValue={partner?.imageUrl}
+        />
+      )}
       <Field>
         <input type="hidden" name="thresholdRule" value={thresholdRule} />
         <FieldLabel htmlFor="partner-threshold-rule">O limite de cada faixa conta como</FieldLabel>
@@ -189,7 +205,7 @@ function SourceField({ unlinked, value, onChange }: { unlinked: UnitPartner[]; v
           ))}
         </SelectContent>
       </Select>
-      <FieldDescription>Parceiros sem unidade podem ser vinculados de novo, com o histórico de fechamentos.</FieldDescription>
+      <FieldDescription>Parceiros sem unidade podem ser vinculados de novo, com o histórico de repasses.</FieldDescription>
     </Field>
   )
 }
@@ -286,10 +302,10 @@ export function UnitPartnerSheet({ workspaceId, unitId, partner, unlinked }: Pro
                 ficando com uma parte.
               </SheetDescription>
             </SheetHeader>
-            <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+            <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
               {state.error && <FieldError>{state.error}</FieldError>}
               {!partner && unlinked.length > 0 && <SourceField unlinked={unlinked} value={sourceId} onChange={setSourceId} />}
-              <PartnerFields key={source?.id ?? NEW} partner={source} />
+              <PartnerFields key={source?.id ?? NEW} partner={source} workspaceId={workspaceId} />
             </FieldGroup>
             <SheetFooter>
               <Button type="submit" loading={pending}>

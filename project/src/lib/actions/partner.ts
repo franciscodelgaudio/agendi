@@ -25,6 +25,7 @@ const errorMessages: Record<Exclude<PartnerError, "forbidden"> | "unauthenticate
   invalid_name: "Informe o nome do parceiro.",
   name_too_long: "O nome pode ter no máximo 60 caracteres.",
   invalid_threshold_rule: "Escolha se o limite conta como \"acima de\" ou \"a partir de\".",
+  invalid_image_url: "Informe uma URL válida começando com http:// ou https://.",
   invalid_tiers: "Cadastre de 1 a 10 faixas.",
   invalid_tier_threshold: "Informe o valor de cada limite, como 30.000,00.",
   invalid_tier_share: "Informe cada percentual entre 0% e 99,99%.",
@@ -33,7 +34,7 @@ const errorMessages: Record<Exclude<PartnerError, "forbidden"> | "unauthenticate
   unit_not_found: "Unidade não encontrada neste workspace.",
   unit_has_partner: "Esta unidade já tem um parceiro.",
   partner_not_found: "Parceiro não encontrado. Recarregue a página.",
-  partner_has_statements: "Este parceiro já tem fechamentos. Desvincule da unidade em vez de excluir.",
+  partner_has_statements: "Este parceiro já tem repasses conferidos. Desvincule da unidade em vez de excluir.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
@@ -64,6 +65,7 @@ function partnerInput(formData: FormData, unitId: string | null) {
     thresholdRule: formData.get("thresholdRule"),
     tiers: thresholds.map((threshold, index) => ({ threshold, share: shares[index] })),
     unitId,
+    imageUrl: formData.get("imageUrl"),
   }
 }
 

@@ -111,7 +111,7 @@ export function CreateCustomerSheet({
             <SheetTitle>Cadastrar cliente</SheetTitle>
             <SheetDescription>O cliente fica disponível para agendar em qualquer unidade.</SheetDescription>
           </SheetHeader>
-          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
             {state.error && <FieldError>{state.error}</FieldError>}
             <CustomerFields idPrefix="create-customer" />
           </FieldGroup>
@@ -166,7 +166,7 @@ export function CustomerActions({ workspaceId, customer }: { workspaceId: string
               <SheetTitle>Editar cliente</SheetTitle>
               <SheetDescription>Altere os dados deste cliente.</SheetDescription>
             </SheetHeader>
-            <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+            <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
               {state.error && <FieldError>{state.error}</FieldError>}
               <CustomerFields idPrefix={`edit-customer-${customer.id}`} customer={customer} />
             </FieldGroup>

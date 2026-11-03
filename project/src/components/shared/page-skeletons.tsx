@@ -24,24 +24,27 @@ export function PageSkeleton({ section = false, children }: { section?: boolean;
   )
 }
 
-// Título da página (h2) ou da seção da unidade (h3), com o botão de ação opcional.
-export function HeadingSkeleton({ section = false, action = false }: { section?: boolean; action?: boolean }) {
+// Título da página, com o botão de ação opcional.
+export function HeadingSkeleton({ action = false }: { action?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <Skeleton className={section ? "h-7 w-32" : "h-8 w-48"} />
+    <div className="flex min-h-9 items-center justify-between gap-4">
+      <Skeleton className="h-8 w-48" />
       {action && <Skeleton className="h-9 w-28" />}
     </div>
   )
 }
 
-// Busca + selects de filtro.
-export function FiltersSkeleton({ selects = 0 }: { selects?: number }) {
+// Busca + selects de filtro, com o botão de ação opcional à direita.
+export function FiltersSkeleton({ selects = 0, action = false }: { selects?: number; action?: boolean }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Skeleton className="h-9 w-full max-w-sm" />
-      {Array.from({ length: selects }, (_, i) => (
-        <Skeleton key={i} className="h-9 w-full sm:w-44" />
-      ))}
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex min-w-0 grow flex-wrap items-center gap-2">
+        <Skeleton className="h-9 w-full max-w-sm" />
+        {Array.from({ length: selects }, (_, i) => (
+          <Skeleton key={i} className="h-9 w-full sm:w-44" />
+        ))}
+      </div>
+      {action && <Skeleton className="ml-auto h-9 w-28" />}
     </div>
   )
 }
@@ -113,8 +116,8 @@ export function ListPageSkeleton({
 }) {
   return (
     <PageSkeleton section={section}>
-      <HeadingSkeleton section={section} action={action} />
-      <FiltersSkeleton selects={selects} />
+      <HeadingSkeleton />
+      <FiltersSkeleton selects={selects} action={action} />
       <TableSkeleton columns={columns} avatar={avatar} />
       {pagination && <PaginationSkeleton />}
     </PageSkeleton>
@@ -125,8 +128,8 @@ export function ListPageSkeleton({
 export function UnitCardsPageSkeleton() {
   return (
     <PageSkeleton>
-      <HeadingSkeleton action />
-      <FiltersSkeleton />
+      <HeadingSkeleton />
+      <FiltersSkeleton action />
       <div className="@container">
         <div className="grid gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3">
           {Array.from({ length: 3 }, (_, i) => (
@@ -239,8 +242,12 @@ export function CalendarSkeleton({ unitFilter = true }: { unitFilter?: boolean }
 }
 
 // Seletor Calendário/Lista ao lado do título.
-export function CalendarHeadingSkeleton({ section = false }: { section?: boolean }) {
-  return <Skeleton className={section ? "h-7 w-32" : "h-8 w-48"} />
+export function CalendarHeadingSkeleton() {
+  return (
+    <div className="flex min-h-9 items-center">
+      <Skeleton className="h-8 w-48" />
+    </div>
+  )
 }
 
 // Abas sublinhadas (unidade, usuários), uma por largura de rótulo.

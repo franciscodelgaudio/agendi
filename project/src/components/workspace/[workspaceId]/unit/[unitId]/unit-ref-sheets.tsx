@@ -59,9 +59,9 @@ const inventory: Kind = {
   withBalance: false,
 }
 
-type Props = { workspaceId: string; unitId: string; options: RefOption[]; currentId: string | null }
+type Props = { workspaceId: string; unitId: string; options: RefOption[]; currentId: string | null; standalone?: boolean }
 
-function UnitRefSheet({ kind, workspaceId, unitId, options, currentId }: Props & { kind: Kind }) {
+function UnitRefSheet({ kind, workspaceId, unitId, options, currentId, standalone = false }: Props & { kind: Kind }) {
   const [open, setOpen] = useState(false)
   const [formKey, setFormKey] = useState(0)
 
@@ -73,9 +73,9 @@ function UnitRefSheet({ kind, workspaceId, unitId, options, currentId }: Props &
         setOpen(next)
       }}
     >
-      <SheetTrigger render={<Button variant="ghost" size="sm" />}>
+      <SheetTrigger render={<Button variant={standalone ? "outline" : "ghost"} size={standalone ? "default" : "sm"} />}>
         {currentId ? <ArrowLeftRightIcon /> : <LinkIcon />}
-        {currentId ? "Trocar" : "Vincular"}
+        {standalone ? (currentId ? `Trocar ${kind.label.toLowerCase()}` : `Vincular ${kind.label.toLowerCase()}`) : currentId ? "Trocar" : "Vincular"}
       </SheetTrigger>
       <SheetContent>
         <UnitRefForm
@@ -115,7 +115,7 @@ function UnitRefForm({ kind, workspaceId, unitId, options, currentId, onDone }: 
         <SheetTitle>{kind.title}</SheetTitle>
         <SheetDescription>{kind.description}</SheetDescription>
       </SheetHeader>
-      <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+      <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {state.error && <FieldError>{state.error}</FieldError>}
         <Field>
           <FieldLabel htmlFor={id}>{kind.label}</FieldLabel>

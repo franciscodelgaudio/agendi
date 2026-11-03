@@ -21,8 +21,6 @@ import { Statement } from "@/models/Statement"
 import { Transaction } from "@/models/Transaction"
 import { Unit } from "@/models/Unit"
 
-class StatementAlreadyPaidError extends Error {}
-
 async function inTransaction(work: (session: ClientSession) => Promise<void>) {
   await connectDB()
   const session = await mongoose.startSession()
@@ -142,11 +140,11 @@ export async function saveStatement({
   transaction,
 }: {
   statement: StatementData
-  transaction: StatementTransaction | null
+  transaction: StatementTransaction
 }) {
   const statementId = new Types.ObjectId()
   await inTransaction(async (session) => {
-    const [created] = transaction ? await Transaction.create([transactionDoc(transaction)], { session }) : [null]
+    const [created] = await Transaction.create([transactionDoc(transaction)], { session })
     await Statement.create(
       [
         {
@@ -156,7 +154,7 @@ export async function saveStatement({
           walletId: new Types.ObjectId(statement.walletId),
           workspaceId: new Types.ObjectId(statement.workspaceId),
           receivableIds: statement.receivableIds.map((id) => new Types.ObjectId(id)),
-          transactionId: created?._id ?? null,
+          transactionId: created._id,
         },
       ],
       { session },
@@ -189,90 +187,16 @@ function statementFilter(workspaceId: string, statementId: string) {
   return { _id: new Types.ObjectId(statementId), workspaceId: new Types.ObjectId(workspaceId) }
 }
 
-export async function findStatementToPay(workspaceId: string, statementId: string) {
-  const filter = statementFilter(workspaceId, statementId)
-  if (!filter) return null
-  const [statement] = await Statement.aggregate<{
-    name: string
-    walletId: string
-    unitId: string | null
-    workspaceId: string
-    shareBps: number
-    grossCents: number
-    paid: boolean
-  }>([
-    { $match: filter },
-    {
-      $lookup: {
-        from: "partners",
-        localField: "partnerId",
-        foreignField: "_id",
-        as: "partner",
-        pipeline: [{ $project: { _id: 0, unitId: 1 } }],
-      },
-    },
-    {
-      $project: {
-        _id: 0,
-        name: 1,
-        shareBps: 1,
-        grossCents: 1,
-        walletId: { $toString: "$walletId" },
-        unitId: NULLABLE_ID({ $first: "$partner.unitId" }),
-        workspaceId: { $toString: "$workspaceId" },
-        paid: { $ne: [{ $ifNull: ["$transactionId", null] }, null] },
-      },
-    },
-  ])
-  return statement ?? null
-}
-
-export async function findStatementPaid(workspaceId: string, statementId: string) {
-  const filter = statementFilter(workspaceId, statementId)
-  const statement = filter && (await Statement.findOne(filter).select({ transactionId: 1 }).lean())
-  return statement ? { paid: !!statement.transactionId } : null
-}
-
-export async function payStatementWith(workspaceId: string, statementId: string, transaction: StatementTransaction) {
+export async function removeStatement(workspaceId: string, statementId: string) {
   const filter = statementFilter(workspaceId, statementId)
   if (!filter) return false
-  try {
-    await inTransaction(async (session) => {
-      const [created] = await Transaction.create([transactionDoc(transaction)], { session })
-      const { matchedCount } = await Statement.updateOne(
-        { ...filter, transactionId: null },
-        { $set: { transactionId: created._id } },
-        { session },
-      )
-      if (matchedCount === 0) throw new StatementAlreadyPaidError()
-    })
-    return true
-  } catch (e) {
-    if (e instanceof StatementAlreadyPaidError) return false
-    throw e
-  }
-}
-
-export async function unpayStatementWith(workspaceId: string, statementId: string) {
-  const filter = statementFilter(workspaceId, statementId)
-  if (!filter) return false
-  let unpaid = false
+  let removed = false
   await inTransaction(async (session) => {
-    const statement = await Statement.findOneAndUpdate(
-      { ...filter, transactionId: { $type: "objectId" } },
-      { $set: { transactionId: null } },
-      { session, projection: { transactionId: 1 } },
-    ).lean()
-    unpaid = !!statement?.transactionId
-    if (unpaid) await Transaction.deleteOne({ _id: statement!.transactionId, workspaceId: filter.workspaceId }, { session })
+    const statement = await Statement.findOneAndDelete(filter, { session, projection: { transactionId: 1 } }).lean()
+    removed = !!statement
+    if (statement) await Transaction.deleteOne({ _id: statement.transactionId, workspaceId: filter.workspaceId }, { session })
   })
-  return unpaid
-}
-
-export async function removeUnpaidStatement(workspaceId: string, statementId: string) {
-  const filter = statementFilter(workspaceId, statementId)
-  if (!filter) return false
-  return (await Statement.deleteOne({ ...filter, transactionId: null })).deletedCount > 0
+  return removed
 }
 
 export async function findReceivableToConfirm(appointmentId: string) {

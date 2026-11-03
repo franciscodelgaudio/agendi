@@ -3,7 +3,7 @@ import { HeadingSkeleton, OverviewSkeleton, PageSkeleton } from "@/components/sh
 export default function Loading() {
   return (
     <PageSkeleton section>
-      <HeadingSkeleton section />
+      <HeadingSkeleton />
       <OverviewSkeleton />
     </PageSkeleton>
   )

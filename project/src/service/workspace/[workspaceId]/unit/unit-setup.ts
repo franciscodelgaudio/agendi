@@ -18,7 +18,7 @@ export type UnitSetupPlan = {
   wallet: WalletRef;
   inventory: InventoryRef | null;
   services: ServiceData[];
-  partner: Omit<PartnerData, "unitId"> | null;
+  partner: Omit<PartnerData, "unitId" | "imageUrl"> | null;
   unit: UnitData;
 };
 

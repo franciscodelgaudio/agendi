@@ -11,7 +11,8 @@ import {
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivable-list"
 import { findPartnerPeriods } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivable-store"
 import { ListPagination } from "@/components/shared/list-pagination"
-import { CloseStatementSheet } from "@/components/workspace/[workspaceId]/cash-flow/statement-sheets"
+import { ListToolbar } from "@/components/shared/list-toolbar"
+import { ReconcileStatementSheet } from "@/components/workspace/[workspaceId]/cash-flow/statement-sheets"
 import { StatementTable } from "@/components/workspace/[workspaceId]/cash-flow/statement-table"
 import { WalletShell } from "@/components/workspace/[workspaceId]/cash-flow/wallet-shell"
 import { Receivable } from "@/models/Receivable"
@@ -40,17 +41,18 @@ export default async function WalletStatementsPage({
       workspaceId={workspaceId}
       wallet={wallet}
       partners={partners}
-      actions={
-        canManage &&
-        partners.length > 0 && (
-          <CloseStatementSheet
-            workspaceId={workspaceId}
-            partners={partners.map((partner) => ({ ...partner, periods: periods[partner.id] ?? [] }))}
-            days={days}
-          />
-        )
-      }
     >
+      {canManage && partners.length > 0 && (
+        <ListToolbar
+          actions={
+            <ReconcileStatementSheet
+              workspaceId={workspaceId}
+              partners={partners.map((partner) => ({ ...partner, periods: periods[partner.id] ?? [] }))}
+              days={days}
+            />
+          }
+        />
+      )}
       <StatementTable workspaceId={workspaceId} statements={result.rows} showPartner canManage={canManage} />
       <ListPagination
         query={{}}
@@ -58,7 +60,7 @@ export default async function WalletStatementsPage({
         pageSize={RECEIVABLE_PAGE_SIZE}
         total={result.total}
         pathname={pathname}
-        itemLabel="fechamentos"
+        itemLabel="repasses"
       />
     </WalletShell>
   )

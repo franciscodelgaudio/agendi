@@ -166,7 +166,7 @@ export function AppointmentForm({
         <Title className="font-heading font-medium text-foreground">{copy[mode].title}</Title>
         <Description>{copy[mode].description}</Description>
       </SheetHeader>
-      <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4">
+      <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {state.error && <FieldError>{state.error}</FieldError>}
         {choosesUnit ? (
           <Field>

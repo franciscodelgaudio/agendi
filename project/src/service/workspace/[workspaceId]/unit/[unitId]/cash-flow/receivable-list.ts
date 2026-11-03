@@ -1,5 +1,6 @@
 import { Types, type PipelineStage } from "mongoose";
 import { first, type SearchParams } from "@/service/workspace/[workspaceId]/unit/unit-list";
+import { accentInsensitivePattern } from "@/service/workspace/[workspaceId]/users/user-list";
 
 export const RECEIVABLE_PAGE_SIZE = 20;
 
@@ -16,8 +17,8 @@ export type StatementListItem = {
   shareBps: number;
   count: number;
   partnerName: string | null;
-  paidAt: Date | null;
-  totalCents: number | null;
+  paidAt: Date;
+  totalCents: number;
 };
 export type StatementPeriod = { name: string; from: string | null; to: string };
 export type StatementListPage = { rows: StatementListItem[]; total: number };
@@ -26,6 +27,40 @@ export type PendingDay = { unitId: string | null; day: string; count: number; ce
 export function parseListPage(params: SearchParams) {
   const page = first(params.page);
   return page && /^[1-9]\d*$/.test(page) ? Number(page) : 1;
+}
+
+const STATEMENT_CHECKS = ["match", "diff"] as const;
+export type StatementCheck = (typeof STATEMENT_CHECKS)[number];
+export type StatementFilters = { q: string; check: StatementCheck | "" };
+
+export function parseStatementListQuery(params: SearchParams): StatementFilters & { page: number } {
+  const check = first(params.check);
+  return {
+    q: first(params.q)?.trim() ?? "",
+    check: STATEMENT_CHECKS.includes(check as StatementCheck) ? (check as StatementCheck) : "",
+    page: parseListPage(params),
+  };
+}
+
+const EXPECTED_NET = {
+  $subtract: ["$grossCents", { $floor: { $add: [{ $divide: [{ $multiply: ["$grossCents", "$shareBps"] }, 10_000] }, 0.5] } }],
+};
+
+function checkStages(check: StatementCheck | ""): PipelineStage[] {
+  if (!check) return [];
+  const received = { $first: "$transaction.totalCents" };
+  return [
+    {
+      $lookup: {
+        from: "transactions",
+        localField: "transactionId",
+        foreignField: "_id",
+        as: "transaction",
+        pipeline: [{ $project: { _id: 0, totalCents: 1 } }],
+      },
+    },
+    { $match: { $expr: { [check === "match" ? "$eq" : "$ne"]: [received, EXPECTED_NET] } } },
+  ];
 }
 
 function scopeMatch(walletId: string, unitId: string | null) {
@@ -101,10 +136,17 @@ function brasiliaDay(field: string) {
   return { $dateToString: { format: "%Y-%m-%d", date: field, timezone: "-03:00" } };
 }
 
-export function statementListPipeline(scope: { partnerId: string } | { walletId: string }, page: number): PipelineStage[] {
-  const match = "partnerId" in scope ? { partnerId: new Types.ObjectId(scope.partnerId) } : { walletId: new Types.ObjectId(scope.walletId) };
+export function statementListPipeline(
+  scope: { partnerId: string } | { walletId: string },
+  page: number,
+  { q, check }: StatementFilters = { q: "", check: "" },
+): PipelineStage[] {
+  const match: Record<string, unknown> =
+    "partnerId" in scope ? { partnerId: new Types.ObjectId(scope.partnerId) } : { walletId: new Types.ObjectId(scope.walletId) };
+  if (q) match.name = { $regex: accentInsensitivePattern(q), $options: "i" };
   return [
     { $match: match },
+    ...checkStages(check),
     { $sort: { to: -1, _id: -1 } },
     {
       $facet: {

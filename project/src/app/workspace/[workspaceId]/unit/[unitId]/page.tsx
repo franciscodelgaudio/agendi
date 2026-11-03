@@ -31,6 +31,7 @@ import type { TherapistOption } from "@/components/workspace/[workspaceId]/share
 import { CardEmpty, CardLink, CardLinkButton, money, plural, StatTile, TodaySchedule, type TodayBooking } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-overview"
 import { UnitInventorySheet, type RefOption } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-ref-sheets"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PageHeader } from "@/components/shared/page-header"
 
 type UnitInventory = { id: string; name: string; productCount: number; quantity: number }
 
@@ -38,7 +39,6 @@ const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
 // Os dias são do calendário, então são formatados em UTC para não deslocar.
 const monthFormat = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" })
-const todayFormat = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })
 
 function toDate(day: string) {
   const [year, month, date] = day.split("-").map(Number)
@@ -158,10 +158,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="text-lg font-semibold tracking-tight">Início</h3>
-        <span className="text-sm text-muted-foreground first-letter:uppercase">{todayFormat.format(toDate(today))}</span>
-      </div>
+      <PageHeader title="Início" />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile

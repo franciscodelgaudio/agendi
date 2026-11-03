@@ -11,9 +11,10 @@ import {
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivable-list"
 import { findPartnerPeriods } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/receivable-store"
 import { ListPagination } from "@/components/shared/list-pagination"
+import { ListToolbar } from "@/components/shared/list-toolbar"
 import { ListTotals } from "@/components/shared/list-totals"
 import { ReceivableTable } from "@/components/workspace/[workspaceId]/cash-flow/receivable-table"
-import { CloseStatementSheet } from "@/components/workspace/[workspaceId]/cash-flow/statement-sheets"
+import { ReconcileStatementSheet } from "@/components/workspace/[workspaceId]/cash-flow/statement-sheets"
 import { WalletShell } from "@/components/workspace/[workspaceId]/cash-flow/wallet-shell"
 import { Receivable } from "@/models/Receivable"
 
@@ -42,24 +43,25 @@ export default async function WalletReceivablesPage({
       workspaceId={workspaceId}
       wallet={wallet}
       partners={partners}
-      actions={
-        closes && (
-          <CloseStatementSheet
-            workspaceId={workspaceId}
-            partners={partners.map((partner) => ({ ...partner, periods: periods[partner.id] ?? [] }))}
-            days={days}
-          />
-        )
-      }
     >
-      <div className="flex flex-wrap items-center gap-2">
+      <ListToolbar
+        actions={
+          closes && (
+            <ReconcileStatementSheet
+              workspaceId={workspaceId}
+              partners={partners.map((partner) => ({ ...partner, periods: periods[partner.id] ?? [] }))}
+              days={days}
+            />
+          )
+        }
+      >
         <p className="text-sm text-muted-foreground">
           {partners.length > 0
-            ? "Atendimentos concluídos que ainda não foram recebidos. Os das unidades com parceiro entram no próximo fechamento."
+            ? "Atendimentos concluídos que ainda não foram recebidos. Os das unidades com parceiro entram no próximo repasse."
             : "Atendimentos concluídos que ainda não foram recebidos."}
         </p>
         <ListTotals items={[{ label: "A receber", cents: result.totalCents }]} />
-      </div>
+      </ListToolbar>
       <ReceivableTable workspaceId={workspaceId} receivables={result.rows} showUnit canSettle={canManage && partners.length === 0} />
       <ListPagination
         query={{}}

@@ -1,9 +1,7 @@
 import { PiggyBankIcon } from "lucide-react"
 import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import type { UnitCashFlow } from "@/service/workspace/[workspaceId]/unit/[unitId]/cash-flow/unit-cash-flow-store"
-import Link from "@/components/shared/link"
-import { CashFlowTabs } from "@/components/workspace/[workspaceId]/cash-flow/cash-flow-tabs"
-import { tiersSummary } from "@/components/workspace/[workspaceId]/cash-flow/partner-format"
+import { PageHeader } from "@/components/shared/page-header"
 import { UnitPartnerSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-partner-sheet"
 import { UnitWalletSheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-ref-sheets"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
@@ -12,7 +10,6 @@ type Props = {
   workspaceId: string
   unitId: string
   data: UnitCashFlow
-  actions?: React.ReactNode
   children?: React.ReactNode
 }
 
@@ -20,18 +17,17 @@ export function UnitCashFlowShell({
   workspaceId,
   unitId,
   data: { actor, wallet, wallets, partner, unlinkedPartners },
-  actions,
   children,
 }: Props) {
   const canManageUnit = can(actor, "units.manage")
   const walletSheet = canManageUnit && (
-    <UnitWalletSheet workspaceId={workspaceId} unitId={unitId} options={wallets} currentId={wallet?.id ?? null} />
+    <UnitWalletSheet workspaceId={workspaceId} unitId={unitId} options={wallets} currentId={wallet?.id ?? null} standalone />
   )
 
   if (!wallet) {
     return (
       <div className="flex flex-col gap-4">
-        <h3 className="text-lg font-semibold tracking-tight">Caixa</h3>
+        <PageHeader title="Caixa" />
         <Empty className="border">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -51,27 +47,18 @@ export function UnitCashFlowShell({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="grid min-w-0">
-          <h3 className="text-lg font-semibold tracking-tight">Caixa</h3>
-          <span className="truncate text-sm text-muted-foreground">
-            Carteira{" "}
-            <Link href={`/workspace/${workspaceId}/cash-flow/wallets/${wallet.id}`} className="font-medium text-foreground hover:underline">
-              {wallet.name}
-            </Link>
-            {partner && ` · Recebe por ${partner.name} (${tiersSummary(partner)})`}
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {walletSheet}
-          {can(actor, "partners.manage") && (
-            <UnitPartnerSheet workspaceId={workspaceId} unitId={unitId} partner={partner} unlinked={unlinkedPartners} />
-          )}
-          {actions}
-        </div>
-      </div>
-      <CashFlowTabs base={`/workspace/${workspaceId}/unit/${unitId}/cash-flow`} showStatements={!!partner} />
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Caixa"
+        actions={
+          <>
+            {walletSheet}
+            {can(actor, "partners.manage") && (
+              <UnitPartnerSheet workspaceId={workspaceId} unitId={unitId} partner={partner} unlinked={unlinkedPartners} />
+            )}
+          </>
+        }
+      />
       {children}
     </div>
   )

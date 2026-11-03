@@ -3,6 +3,7 @@ import { issueCode } from "@/service/_shared/validation";
 import { parseMoneyCents } from "@/service/_shared/money";
 import { checkAccess, type AccessError } from "@/service/workspace/[workspaceId]/users/permissions/access-check";
 import type { Actor } from "@/service/workspace/[workspaceId]/users/permissions/permissions";
+import { isHttpUrl } from "@/service/workspace/[workspaceId]/unit/unit";
 
 export const THRESHOLD_RULES = ["above", "from"] as const;
 export const MAX_PARTNER_NAME_LENGTH = 60;
@@ -68,6 +69,12 @@ const partnerSchema = z.object(
         error: "tiers_not_increasing",
       }),
     unitId: z.string({ error: "invalid_input" }).nullish().transform((value) => value || null),
+    imageUrl: z
+      .string({ error: "invalid_input" })
+      .trim()
+      .nullish()
+      .transform((value) => value || null)
+      .refine((value) => value === null || isHttpUrl(value), { error: "invalid_image_url" }),
   },
   { error: "invalid_input" },
 );
@@ -77,13 +84,20 @@ export type PartnerInputError =
   | "invalid_name"
   | "name_too_long"
   | "invalid_threshold_rule"
+  | "invalid_image_url"
   | "invalid_tiers"
   | "invalid_tier_threshold"
   | "invalid_tier_share"
   | "first_tier_not_zero"
   | "tiers_not_increasing";
 
-export type PartnerData = { name: string; thresholdRule: ThresholdRule; tiers: PartnerTier[]; unitId: string | null };
+export type PartnerData = {
+  name: string;
+  thresholdRule: ThresholdRule;
+  tiers: PartnerTier[];
+  unitId: string | null;
+  imageUrl: string | null;
+};
 
 export type PartnerSaveError = PartnerInputError | "unit_not_found" | "unit_has_partner";
 

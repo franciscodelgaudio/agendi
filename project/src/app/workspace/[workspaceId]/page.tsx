@@ -31,13 +31,13 @@ import type { TherapistOption } from "@/components/workspace/[workspaceId]/share
 import { CardEmpty, CardLink, money, plural, RankList, StatTile, TodaySchedule, type TodayBooking } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-overview"
 import { NewUnitButton, UnitsEmpty } from "@/components/workspace/[workspaceId]/unit/units-empty"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PageHeader } from "@/components/shared/page-header"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const TOP_ITEMS = 5
 
 // Os dias são do calendário, então são formatados em UTC para não deslocar.
 const monthFormat = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" })
-const todayFormat = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })
 
 function toDate(day: string) {
   const [year, month, date] = day.split("-").map(Number)
@@ -176,15 +176,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="grid gap-0.5">
-          <h2 className="text-2xl font-semibold tracking-tight">{workspace.name}</h2>
-          <span className="text-sm text-muted-foreground first-letter:uppercase">
-            {todayFormat.format(toDate(today))} · {plural(units.length, "unidade", "unidades")}
-          </span>
-        </div>
-        {canManage && <NewUnitButton workspaceId={workspace.id} />}
-      </div>
+      <PageHeader title={workspace.name} actions={canManage && <NewUnitButton workspaceId={workspace.id} />} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile

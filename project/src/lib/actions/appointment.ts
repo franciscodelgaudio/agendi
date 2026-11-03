@@ -66,7 +66,7 @@ const errorMessages: Record<Exclude<AppointmentError, "forbidden"> | "unauthenti
   station_busy: "A estação já tem um agendamento nesse horário.",
   appointment_not_found: "Agendamento não encontrado ou sem permissão.",
   appointment_not_scheduled: "Só é possível alterar agendamentos que ainda não foram concluídos nem cancelados.",
-  appointment_settled: "Este atendimento já está num fechamento. Desfaça o fechamento antes.",
+  appointment_settled: "Este atendimento já está num repasse conferido. Desfaça a conferência antes.",
   unit_not_found: "Escolha uma unidade válida deste workspace.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
