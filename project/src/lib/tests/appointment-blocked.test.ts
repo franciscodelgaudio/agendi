@@ -29,7 +29,10 @@ function at(time: string) {
   return new Date(`2026-09-24T${time}:00.000-03:00`);
 }
 
-function makeLookups({ members = [ANA_ID, BIA_ID], busy = false } = {}) {
+function makeLookups({
+  members = [ANA_ID, BIA_ID],
+  busy = false,
+}: { members?: readonly string[]; busy?: boolean } = {}) {
   return {
     findMember: vi.fn(async (id: string) => (members.includes(id) ? { id } : null)),
     hasAppointments: vi.fn(async () => busy),

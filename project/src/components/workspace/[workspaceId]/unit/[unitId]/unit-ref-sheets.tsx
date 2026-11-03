@@ -1,13 +1,21 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useActionState, useRef, useState } from "react"
 import { ArrowLeftRightIcon, LinkIcon, PlusIcon } from "lucide-react"
 import { setUnitInventoryAction, setUnitWalletAction, type UnitFormState } from "@/lib/actions/unit"
 import { OpeningBalanceFields } from "@/components/workspace/[workspaceId]/cash-flow/opening-balance-fields"
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+} from "@/components/ui/combobox"
 import {
   Sheet,
   SheetContent,
@@ -19,6 +27,7 @@ import {
 } from "@/components/ui/sheet"
 
 export type RefOption = { id: string; name: string }
+type RefItem = { value: string; label: string }
 
 const NEW = "new"
 const NONE = "none"
@@ -122,11 +131,13 @@ function UnitRefForm({
     { error: null },
   )
   const id = `unit-${unitId}-${kind.name}`
-  const items = [
+  const items: RefItem[] = [
     ...options.map((option) => ({ value: option.id, label: option.name })),
     { value: NEW, label: kind.newLabel },
     ...(currentId ? [{ value: NONE, label: kind.noneLabel }] : []),
   ]
+  const selectedItem = items.find((item) => item.value === value) ?? null
+  const anchorRef = useRef<HTMLDivElement>(null)
 
   return (
     <form action={formAction} className="flex min-h-0 flex-1 flex-col">
@@ -149,19 +160,38 @@ function UnitRefForm({
           <input type="hidden" name={`${kind.name}Id`} value={NEW} />
         ) : (
           <Field>
-            <FieldLabel htmlFor={id}>{kind.label}</FieldLabel>
-            <Select name={`${kind.name}Id`} items={items} value={value} onValueChange={(next) => setValue(next as string)} required>
-              <SelectTrigger id={id} className="w-full">
-                <SelectValue placeholder="Escolha" />
-              </SelectTrigger>
-              <SelectContent>
-                {items.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <FieldLabel>{kind.label}</FieldLabel>
+            <input type="hidden" name={`${kind.name}Id`} value={value ?? ""} />
+            <Combobox
+              items={items}
+              value={selectedItem}
+              onValueChange={(next: RefItem | null) => setValue(next?.value ?? null)}
+              itemToStringLabel={(item: RefItem) => item.label}
+              isItemEqualToValue={(a: RefItem, b: RefItem) => a.value === b.value}
+            >
+              <div ref={anchorRef}>
+                <ComboboxTrigger render={<Button variant="outline" className="w-full justify-between font-normal" />}>
+                  <span className={selectedItem ? "truncate" : "truncate text-muted-foreground"}>
+                    {selectedItem?.label ?? `Escolha o ${kind.label.toLowerCase()}`}
+                  </span>
+                </ComboboxTrigger>
+              </div>
+              <ComboboxContent anchor={anchorRef}>
+                <ComboboxInput showTrigger={false} placeholder={`Buscar ${kind.label.toLowerCase()}...`} />
+                <ComboboxEmpty>Nada encontrado.</ComboboxEmpty>
+                <ComboboxList>
+                  {(item: RefItem) => (
+                    <ComboboxItem key={item.value} value={item}>
+                      <span className="flex min-w-0 items-center gap-2">
+                        {item.value === NEW && <PlusIcon className="size-4 shrink-0" />}
+                        <span className="truncate">{item.label}</span>
+                        {item.value === currentId && <span className="text-xs text-muted-foreground">em uso</span>}
+                      </span>
+                    </ComboboxItem>
+                  )}
+                </ComboboxList>
+              </ComboboxContent>
+            </Combobox>
           </Field>
         )}
         {value === NEW && (
@@ -175,7 +205,7 @@ function UnitRefForm({
         )}
       </FieldGroup>
       <SheetFooter>
-        <Button type="submit" loading={pending}>
+        <Button type="submit" loading={pending} disabled={!value}>
           {pending ? "Salvando..." : "Salvar"}
         </Button>
       </SheetFooter>

@@ -53,11 +53,11 @@ function OptionSelect({
   )
 }
 
-function QuantityField({ id }: { id: string }) {
+function QuantityField({ id, max = 1_000_000 }: { id: string; max?: number }) {
   return (
     <Field>
       <FieldLabel htmlFor={id}>Quantidade</FieldLabel>
-      <Input id={id} name="quantity" type="number" inputMode="numeric" min={1} max={1_000_000} step={1} required />
+      <Input id={id} name="quantity" type="number" inputMode="numeric" min={1} max={max} step={1} required />
     </Field>
   )
 }
@@ -218,6 +218,65 @@ export function MovementSheet({
           <SheetFooter>
             <Button type="submit" loading={pending}>
               {pending ? "Registrando..." : "Registrar"}
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+export function ProductMovementSheet({
+  workspaceId,
+  inventoryId,
+  product,
+  type,
+  open,
+  onOpenChange,
+}: {
+  workspaceId: string
+  inventoryId: string
+  product: { id: string; name: string; quantity: number }
+  type: "in" | "out"
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const [state, formAction, pending] = useActionState(
+    async (prev: InventoryFormState, formData: FormData) => {
+      const next = await registerMovementAction(workspaceId, inventoryId, prev, formData)
+      if (!next.error) onOpenChange(false)
+      return next
+    },
+    { error: null },
+  )
+  const prefix = `movement-${type}-${product.id}`
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent>
+        <form action={formAction} className="flex min-h-0 flex-1 flex-col">
+          <input type="hidden" name="type" value={type} />
+          <input type="hidden" name="productId" value={product.id} />
+          <SheetHeader>
+            <SheetTitle>{type === "in" ? `Entrada de ${product.name}` : `Dar baixa em ${product.name}`}</SheetTitle>
+            <SheetDescription>Em estoque agora: {product.quantity}</SheetDescription>
+          </SheetHeader>
+          <FieldGroup className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+            {state.error && <FieldError>{state.error}</FieldError>}
+            <QuantityField id={`${prefix}-quantity`} max={type === "out" ? product.quantity : undefined} />
+            <Field>
+              <FieldLabel htmlFor={`${prefix}-name`}>Descrição (opcional)</FieldLabel>
+              <Input
+                id={`${prefix}-name`}
+                name="name"
+                placeholder={type === "in" ? "Compra do fornecedor" : "Usado em atendimento"}
+                maxLength={80}
+              />
+            </Field>
+          </FieldGroup>
+          <SheetFooter>
+            <Button type="submit" loading={pending}>
+              {pending ? "Registrando..." : type === "in" ? "Registrar entrada" : "Dar baixa"}
             </Button>
           </SheetFooter>
         </form>
