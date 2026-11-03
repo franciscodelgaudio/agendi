@@ -18,19 +18,27 @@ import {
   type RegisterMovementError,
   type TransferProductError,
 } from "@/service/workspace/[workspaceId]/stock/[inventoryId]/stock-movement"
+import { setInventoryUnits, type SetInventoryUnitsError } from "@/service/workspace/[workspaceId]/stock/inventory-units"
 import {
+  applyInventoryUnits,
   applyMovement,
   applyTransfer,
   currentQuantity,
   InsufficientStockError,
   inventoryExists,
   productExists,
+  unitsExist,
 } from "@/service/workspace/[workspaceId]/stock/[inventoryId]/inventory-store"
 import { Inventory } from "@/models/Inventory"
 import { StockMovement } from "@/models/StockMovement"
 import { Unit } from "@/models/Unit"
 
-type InventoryError = UpdateInventoryError | DeleteInventoryError | RegisterMovementError | TransferProductError
+type InventoryError =
+  | UpdateInventoryError
+  | DeleteInventoryError
+  | RegisterMovementError
+  | TransferProductError
+  | SetInventoryUnitsError
 
 const errorMessages: Record<Exclude<InventoryError, "forbidden"> | "unauthenticated", string> = {
   invalid_input: "Preencha todos os campos.",
@@ -43,13 +51,14 @@ const errorMessages: Record<Exclude<InventoryError, "forbidden"> | "unauthentica
   inventory_in_use: "Alguma unidade ainda usa este estoque. Troque o estoque dela antes.",
   insufficient_stock: "Não há essa quantidade do produto no estoque.",
   same_inventory: "Escolha outro estoque de destino.",
+  invalid_unit: "Escolha apenas unidades deste workspace.",
   workspace_not_found: "Workspace não encontrado ou sem permissão.",
   unauthenticated: "Sua sessão expirou. Entre novamente.",
 }
 
 export type InventoryFormState = { error: string | null }
 
-function messageOf(error: InventoryError | "unauthenticated", permission: "stock.manage" | "stock.transfer" = "stock.manage") {
+function messageOf(error: InventoryError | "unauthenticated", permission: "stock.manage" | "stock.transfer" | "units.manage" = "stock.manage") {
   return error === "forbidden" ? forbiddenMessage(permission) : errorMessages[error]
 }
 
@@ -192,6 +201,27 @@ export async function transferProductAction(
   })
 
   if (!result.ok) return { error: messageOf(result.error, "stock.transfer") }
+
+  refresh()
+  return { error: null }
+}
+
+export async function setInventoryUnitsAction(
+  workspaceId: string,
+  inventoryId: string,
+  _prev: InventoryFormState,
+  formData: FormData,
+): Promise<InventoryFormState> {
+  const session = await sessionAccess(workspaceId)
+  if (!session) return { error: messageOf("unauthenticated") }
+  const filter = inventoryFilter(session.workspaceId, inventoryId)
+
+  const result = await setInventoryUnits({ unitIds: formData.getAll("unitIds") }, filter && inventoryId, session, {
+    unitsExist: (unitIds) => unitsExist(session.workspaceId, unitIds),
+    update: (id, unitIds) => applyInventoryUnits(session.workspaceId, id, unitIds),
+  })
+
+  if (!result.ok) return { error: messageOf(result.error, "units.manage") }
 
   refresh()
   return { error: null }

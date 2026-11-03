@@ -4,6 +4,7 @@ import type { MovementData, TransferData } from "@/service/workspace/[workspaceI
 import { Inventory } from "@/models/Inventory"
 import { Product } from "@/models/Product"
 import { StockMovement } from "@/models/StockMovement"
+import { Unit } from "@/models/Unit"
 
 export class InsufficientStockError extends Error {}
 
@@ -84,4 +85,26 @@ export async function applyTransfer({ workspaceId, fromInventoryId, toInventoryI
       { session, ordered: true },
     )
   })
+}
+
+export async function unitsExist(workspaceId: string, unitIds: string[]) {
+  return (await Unit.countDocuments({ _id: { $in: unitIds }, workspaceId })) === unitIds.length
+}
+
+export async function applyInventoryUnits(workspaceId: string, inventoryId: string, unitIds: string[]) {
+  const workspace = new Types.ObjectId(workspaceId)
+  const inventory = new Types.ObjectId(inventoryId)
+  const units = unitIds.map((id) => new Types.ObjectId(id))
+  let found = false
+  await inTransaction(async (session) => {
+    found = !!(await Inventory.exists({ _id: inventory, workspaceId: workspace }).session(session))
+    if (!found) return
+    await Unit.updateMany(
+      { workspaceId: workspace, inventoryId: inventory, _id: { $nin: units } },
+      { $set: { inventoryId: null } },
+      { session },
+    )
+    await Unit.updateMany({ workspaceId: workspace, _id: { $in: units } }, { $set: { inventoryId: inventory } }, { session })
+  })
+  return found
 }

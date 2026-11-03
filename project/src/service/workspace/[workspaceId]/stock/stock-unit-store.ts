@@ -28,3 +28,30 @@ export const loadStockUnit = cache(async (workspaceId: string): Promise<StockUni
     inventories: inventories.map((inventory) => ({ id: inventory._id.toString(), name: inventory.name })),
   }
 })
+
+export type InventoryUnitOption = { id: string; name: string; inventoryId: string | null; inventoryName: string | null }
+
+export async function loadInventoryUnitOptions(workspaceId: string): Promise<InventoryUnitOption[]> {
+  return Unit.aggregate<InventoryUnitOption>([
+    { $match: { workspaceId: new Types.ObjectId(workspaceId) } },
+    { $sort: { name: 1, _id: 1 } },
+    {
+      $lookup: {
+        from: "inventories",
+        localField: "inventoryId",
+        foreignField: "_id",
+        as: "inventory",
+        pipeline: [{ $project: { _id: 0, name: 1 } }],
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        id: { $toString: "$_id" },
+        name: 1,
+        inventoryId: { $cond: [{ $ifNull: ["$inventoryId", false] }, { $toString: "$inventoryId" }, null] },
+        inventoryName: { $ifNull: [{ $first: "$inventory.name" }, null] },
+      },
+    },
+  ])
+}

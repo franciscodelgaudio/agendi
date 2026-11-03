@@ -9,7 +9,7 @@ import {
   type InventoryProductsPage,
 } from "@/service/workspace/[workspaceId]/stock/[inventoryId]/inventory-products"
 import { loadInventoryScreen } from "@/service/workspace/[workspaceId]/stock/[inventoryId]/inventory-screen-store"
-import { loadStockUnit } from "@/service/workspace/[workspaceId]/stock/stock-unit-store"
+import { loadInventoryUnitOptions, loadStockUnit } from "@/service/workspace/[workspaceId]/stock/stock-unit-store"
 import { UnitInventorySheet } from "@/components/workspace/[workspaceId]/unit/[unitId]/unit-ref-sheets"
 import { currencyFormat } from "@/components/shared/service-format"
 import { ListPagination } from "@/components/shared/list-pagination"
@@ -17,6 +17,7 @@ import { ListSearch } from "@/components/shared/list-search"
 import { ListToolbar } from "@/components/shared/list-toolbar"
 import { SortableHead } from "@/components/shared/sortable-head"
 import { InventoryHeader } from "@/components/workspace/[workspaceId]/stock/inventory-header"
+import { InventoryUnitsSheet } from "@/components/workspace/[workspaceId]/stock/inventory-units-sheet"
 import { MovementSheet, TransferSheet } from "@/components/workspace/[workspaceId]/stock/movement-sheets"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Inventory } from "@/models/Inventory"
@@ -29,10 +30,12 @@ export default async function InventoryPage({
   const query = parseInventoryProductsQuery(await searchParams)
   const user = await requireUser()
   const { actor } = await requirePage(workspaceId, user.id, { workspace: "stock" })
+  const canLinkUnits = can(actor, "units.manage")
   const [screen, unit] = await Promise.all([loadInventoryScreen(workspaceId, inventoryId), loadStockUnit(workspaceId)])
   if (!screen) notFound()
+  const unitOptions = !unit && canLinkUnits ? await loadInventoryUnitOptions(workspaceId) : null
   const linkUnit =
-    unit && can(actor, "units.manage") && (unit.inventoryId === null || unit.inventoryId === inventoryId) ? unit : null
+    unit && canLinkUnits && (unit.inventoryId === null || unit.inventoryId === inventoryId) ? unit : null
 
   const [result = { rows: [], total: 0 }] = await Inventory.aggregate<InventoryProductsPage>(
     inventoryProductsPipeline(inventoryId, query),
@@ -50,6 +53,9 @@ export default async function InventoryPage({
       <ListToolbar
         actions={
           <>
+            {unitOptions && (
+              <InventoryUnitsSheet workspaceId={workspaceId} inventory={screen.inventory} units={unitOptions} trigger />
+            )}
             {linkUnit && (
               <UnitInventorySheet
                 workspaceId={workspaceId}

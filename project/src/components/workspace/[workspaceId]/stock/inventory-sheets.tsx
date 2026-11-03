@@ -1,7 +1,7 @@
 "use client"
 
 import { useActionState, useState, useTransition } from "react"
-import { EllipsisIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
+import { EllipsisIcon, MapPinIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
 import {
   createInventoryAction,
   deleteInventoryAction,
@@ -28,6 +28,10 @@ import {
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import {
+  InventoryUnitsSheet,
+  type InventoryUnitOption,
+} from "@/components/workspace/[workspaceId]/stock/inventory-units-sheet"
 
 function NameField({ id, defaultValue }: { id: string; defaultValue?: string }) {
   return (
@@ -76,7 +80,18 @@ export function CreateInventorySheet({ workspaceId }: { workspaceId: string }) {
   )
 }
 
-export function InventoryActions({ workspaceId, inventory }: { workspaceId: string; inventory: { id: string; name: string } }) {
+export function InventoryActions({
+  workspaceId,
+  inventory,
+  canEdit,
+  units,
+}: {
+  workspaceId: string
+  inventory: { id: string; name: string }
+  canEdit: boolean
+  units: InventoryUnitOption[] | null
+}) {
+  const [unitsOpen, setUnitsOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -96,18 +111,38 @@ export function InventoryActions({ workspaceId, inventory }: { workspaceId: stri
         <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Ações de ${inventory.name}`} />}>
           <EllipsisIcon />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => setEditOpen(true)}>
-            <PencilIcon />
-            Renomear
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-            <Trash2Icon />
-            Excluir
-          </DropdownMenuItem>
+        <DropdownMenuContent align="end" className="w-auto min-w-44">
+          {units && (
+            <DropdownMenuItem onClick={() => setUnitsOpen(true)}>
+              <MapPinIcon />
+              Unidades
+            </DropdownMenuItem>
+          )}
+          {canEdit && (
+            <>
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                <PencilIcon />
+                Renomear
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
+                <Trash2Icon />
+                Excluir
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {units && (
+        <InventoryUnitsSheet
+          workspaceId={workspaceId}
+          inventory={inventory}
+          units={units}
+          open={unitsOpen}
+          onOpenChange={setUnitsOpen}
+        />
+      )}
 
       <Sheet open={editOpen} onOpenChange={setEditOpen}>
         <SheetContent>

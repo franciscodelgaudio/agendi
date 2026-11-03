@@ -3,7 +3,7 @@ import { BoxesIcon } from "lucide-react"
 import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { requirePage } from "@/service/workspace/[workspaceId]/page-guard"
 import { requireUser } from "@/service/(auth)/session"
-import { loadStockUnit } from "@/service/workspace/[workspaceId]/stock/stock-unit-store"
+import { loadInventoryUnitOptions, loadStockUnit } from "@/service/workspace/[workspaceId]/stock/stock-unit-store"
 import {
   INVENTORY_PAGE_SIZE,
   inventoryListPipeline,
@@ -76,7 +76,12 @@ export default async function InventoriesPage({ params, searchParams }: PageProp
     )
   }
 
-  const [result] = await Inventory.aggregate<InventoryListPage>(inventoryListPipeline(workspaceId, query))
+  const canLinkUnits = can(actor, "units.manage")
+  const [[result], unitOptions] = await Promise.all([
+    Inventory.aggregate<InventoryListPage>(inventoryListPipeline(workspaceId, query)),
+    canLinkUnits ? loadInventoryUnitOptions(workspaceId) : null,
+  ])
+  const hasActions = canManage || canLinkUnits
   const listQuery = { q: query.q, unit: query.unit, sort: query.sort, dir: query.dir }
   const pages = Math.ceil(result.total / INVENTORY_PAGE_SIZE)
   if (pages > 0 && query.page > pages) {
@@ -112,13 +117,13 @@ export default async function InventoriesPage({ params, searchParams }: PageProp
                 className="text-right @max-md:hidden"
               />
               <SortableHead field="quantity" label="Itens" query={listQuery} pathname={pathname} className="text-right" />
-              {canManage && <TableHead className="w-0 px-4" />}
+              {hasActions && <TableHead className="w-0 px-4" />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {result.rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={canManage ? 5 : 4} className="h-24 px-4 text-center text-muted-foreground">
+                <TableCell colSpan={hasActions ? 5 : 4} className="h-24 px-4 text-center text-muted-foreground">
                   Nenhum estoque encontrado.
                 </TableCell>
               </TableRow>
@@ -146,9 +151,14 @@ export default async function InventoriesPage({ params, searchParams }: PageProp
                 </TableCell>
                 <TableCell className="px-4 text-right tabular-nums @max-md:hidden">{inventory.productCount}</TableCell>
                 <TableCell className="px-4 text-right tabular-nums">{inventory.quantity}</TableCell>
-                {canManage && (
+                {hasActions && (
                   <TableCell className="px-4 text-right">
-                    <InventoryActions workspaceId={workspaceId} inventory={inventory} />
+                    <InventoryActions
+                      workspaceId={workspaceId}
+                      inventory={inventory}
+                      canEdit={canManage}
+                      units={unitOptions}
+                    />
                   </TableCell>
                 )}
               </TableRow>
