@@ -34,6 +34,7 @@ const permissionActions: Record<Permission, string> = {
   "services.manage": "gerenciar serviços",
   "bookings.manage": "gerenciar agendamentos",
   "appointments.manage": "gerenciar atendimentos",
+  "schedule.block_others": "bloquear a agenda de outras profissionais",
   "customers.manage": "gerenciar clientes",
   "stock.manage": "gerenciar o estoque",
   "stock.transfer": "transferir produtos entre inventários",

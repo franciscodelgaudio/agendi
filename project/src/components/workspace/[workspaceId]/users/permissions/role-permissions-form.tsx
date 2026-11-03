@@ -25,6 +25,7 @@ const permissionLabels: Record<Action, string> = {
   "services.manage": "Gerenciar serviços",
   "bookings.manage": "Gerenciar agendamentos",
   "appointments.manage": "Gerenciar atendimentos",
+  "schedule.block_others": "Bloquear a agenda de outras profissionais",
   "customers.manage": "Cadastrar, editar e remover clientes",
   "stock.manage": "Gerenciar estoque",
   "stock.transfer": "Transferir produtos entre estoques",
@@ -35,7 +36,7 @@ const permissionLabels: Record<Action, string> = {
 }
 
 const actionGroups: { name: string; actions: Action[] }[] = [
-  { name: "Agenda", actions: ["bookings.manage", "appointments.manage"] },
+  { name: "Agenda", actions: ["bookings.manage", "appointments.manage", "schedule.block_others"] },
   { name: "Clientes", actions: ["customers.manage"] },
   { name: "Serviços", actions: ["services.manage"] },
   { name: "Unidades", actions: ["units.manage"] },

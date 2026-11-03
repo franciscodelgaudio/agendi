@@ -47,9 +47,11 @@ function makeLookups({
   member = ANA as typeof ANA | null,
   station = STATION as typeof STATION | null,
   busy = false,
+  blocked = false,
   stationAppointments = [] as readonly { startsAt: Date; endsAt: Date }[],
 } = {}) {
   return {
+    isBlocked: vi.fn(async () => blocked),
     findService: vi.fn(async (id: string) => (service?.id === id ? service : null)),
     findCustomer: vi.fn(async (id: string) => (customer?.id === id ? customer : null)),
     findMember: vi.fn(async (id: string) => (member?.id === id ? member : null)),
@@ -207,6 +209,16 @@ describe("createAppointment", () => {
     expect(deps.insert).not.toHaveBeenCalled();
   });
 
+  it("não agenda no horário em que a agenda da profissional está bloqueada", async () => {
+    const deps = makeDeps({ blocked: true });
+
+    const result = await createAppointment(VALID, ctx, deps);
+
+    expect(result).toEqual({ ok: false, error: "member_blocked" });
+    expect(deps.isBlocked).toHaveBeenCalledWith({ workspaceMemberId: ANA_ID, startsAt: at("14:30"), endsAt: at("15:30") });
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
   it("agendamentos colados antes e depois não ocupam a estação", async () => {
     const deps = makeDeps({
       stationAppointments: [
@@ -285,6 +297,15 @@ describe("updateAppointment", () => {
     expect(result).toEqual({ ok: false, error: "appointment_not_found" });
   });
 
+  it("não move o agendamento para um horário bloqueado da profissional", async () => {
+    const deps = makeDeps({ blocked: true });
+
+    const result = await updateAppointment(VALID, APPOINTMENT_ID, ctx, deps);
+
+    expect(result).toEqual({ ok: false, error: "member_blocked" });
+    expect(deps.update).not.toHaveBeenCalled();
+  });
+
   it("sem a permissão de gerenciar agendamentos, não edita", async () => {
     const deps = makeDeps();
 
@@ -302,12 +323,14 @@ describe("rescheduleAppointment", () => {
   function makeDeps({
     found = { status: "scheduled", workspaceMemberId: ANA_ID, station: { id: STATION_ID } } as Found | null,
     busy = false,
+    blocked = false,
     stationAppointments = [] as readonly { startsAt: Date; endsAt: Date }[],
     updated = true,
   } = {}) {
     return {
       findAppointment: vi.fn().mockResolvedValue(found),
       hasConflict: vi.fn().mockResolvedValue(busy),
+      isBlocked: vi.fn().mockResolvedValue(blocked),
       findStationAppointments: vi.fn().mockResolvedValue(stationAppointments),
       update: vi.fn().mockResolvedValue(updated),
     };
@@ -352,6 +375,30 @@ describe("rescheduleAppointment", () => {
 
     expect(result).toEqual({ ok: false, error });
     expect(deps.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("rescheduleAppointment em horário bloqueado", () => {
+  it("não arrasta o agendamento para um horário bloqueado da profissional", async () => {
+    const update = vi.fn().mockResolvedValue(true);
+    const isBlocked = vi.fn().mockResolvedValue(true);
+
+    const result = await rescheduleAppointment(
+      { startsAt: "2026-09-24T15:00", endsAt: "2026-09-24T16:30" },
+      APPOINTMENT_ID,
+      { actor: SCHEDULER },
+      {
+        findAppointment: vi.fn().mockResolvedValue({ status: "scheduled", workspaceMemberId: ANA_ID, station: { id: STATION_ID } }),
+        hasConflict: vi.fn().mockResolvedValue(false),
+        isBlocked,
+        findStationAppointments: vi.fn().mockResolvedValue([]),
+        update,
+      },
+    );
+
+    expect(result).toEqual({ ok: false, error: "member_blocked" });
+    expect(isBlocked).toHaveBeenCalledWith({ workspaceMemberId: ANA_ID, startsAt: at("15:00"), endsAt: at("16:30") });
+    expect(update).not.toHaveBeenCalled();
   });
 });
 

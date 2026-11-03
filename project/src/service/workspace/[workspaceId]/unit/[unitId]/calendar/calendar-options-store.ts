@@ -1,14 +1,16 @@
 import { Types } from "mongoose"
 import { therapistOptionsStages } from "@/service/workspace/[workspaceId]/team/therapist"
 import {
+  blockedCalendarPipeline,
   calendarPipeline,
   parseCalendarQuery,
+  type AppointmentBlockedRow,
   type AppointmentRow,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list"
 import { stationName } from "@/service/workspace/[workspaceId]/unit/[unitId]/station"
 import type { SearchParams } from "@/service/workspace/[workspaceId]/unit/unit-list"
 import { BRT_OFFSET_HOURS } from "@/service/_shared/timezone"
-import { Appointment } from "@/models/Appointment"
+import { Appointment, AppointmentBlocked } from "@/models/Appointment"
 import { Service } from "@/models/Service"
 import { Unit } from "@/models/Unit"
 import { Workspace } from "@/models/Workspace"
@@ -25,11 +27,12 @@ const HOUR_MS = 60 * 60 * 1000
 export async function loadCalendarAppointments(workspaceId: string, params: SearchParams, unitId?: string) {
   const today = new Date(Date.now() - BRT_OFFSET_HOURS * HOUR_MS).toISOString().slice(0, 10)
   const query = parseCalendarQuery(unitId ? { ...params, unit: unitId } : params, today)
-  const appointments = await Appointment.aggregate<AppointmentRow>([
-    { $match: { workspaceId: new Types.ObjectId(workspaceId) } },
-    ...calendarPipeline(query),
+  const workspaceMatch = { $match: { workspaceId: new Types.ObjectId(workspaceId) } }
+  const [appointments, blocked] = await Promise.all([
+    Appointment.aggregate<AppointmentRow>([workspaceMatch, ...calendarPipeline(query)]),
+    AppointmentBlocked.aggregate<AppointmentBlockedRow>([workspaceMatch, ...blockedCalendarPipeline(query)]),
   ])
-  return { query, appointments }
+  return { query, appointments, blocked }
 }
 
 export async function loadCalendarOptions(workspaceId: string, unitId?: string): Promise<CalendarOptionsData> {

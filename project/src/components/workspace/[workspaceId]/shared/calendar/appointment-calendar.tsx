@@ -10,11 +10,13 @@ import interactionPlugin from "@fullcalendar/react/interaction"
 import ptBrLocale from "@fullcalendar/react/locales/pt-br"
 import "@fullcalendar/react/skeleton.css"
 import "@fullcalendar/react/themes/monarch/theme.css"
-import { CheckIcon, PlusIcon, XIcon } from "lucide-react"
+import { BanIcon, CheckIcon, PlusIcon, XIcon } from "lucide-react"
 import { toast } from "sonner"
 import { createAppointmentAction, rescheduleAppointmentAction } from "@/lib/actions/appointment"
+import { createAppointmentBlockedAction } from "@/lib/actions/appointment-blocked"
 import { BOOKING_COLORS } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/booking-colors"
 import type {
+  AppointmentBlockedRow,
   AppointmentRow,
   CalendarQuery,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment-list"
@@ -31,6 +33,8 @@ import {
 } from "@/components/workspace/[workspaceId]/shared/calendar/appointment-form"
 import type { AppointmentPermissions } from "@/components/workspace/[workspaceId]/shared/calendar/appointment-actions"
 import { AppointmentDetailSheet } from "@/components/workspace/[workspaceId]/shared/calendar/appointment-detail"
+import { AppointmentBlockedForm } from "@/components/workspace/[workspaceId]/shared/calendar/appointment-blocked-form"
+import { AppointmentBlockedDetailSheet } from "@/components/workspace/[workspaceId]/shared/calendar/appointment-blocked-detail"
 import {
   MissingTherapistIcon,
   TherapistAvatar,
@@ -46,6 +50,9 @@ type Props = CalendarOptions &
     unitId?: string
     query: CalendarQuery
     appointments: AppointmentRow[]
+    blocked: AppointmentBlockedRow[]
+    canBlockOthers: boolean
+    selfMemberId: string | null
   }
 
 const ALL = "all"
@@ -81,7 +88,13 @@ function brtNow() {
 
 type SheetState = { appointment: AppointmentRow; key: number }
 
-type Draft = { values: AppointmentFormValues; key: number; fallbackAnchor: Element | null }
+type DraftKind = "appointment" | "blocked"
+
+type Draft = { kind: DraftKind; values: AppointmentFormValues; key: number; fallbackAnchor: Element | null }
+
+type BlockedSheetState = { blocked: AppointmentBlockedRow; key: number }
+
+const BLOCKED_COLOR = "#94a3b8"
 
 export function AppointmentCalendar({
   workspaceId,
@@ -94,6 +107,9 @@ export function AppointmentCalendar({
   stations,
   query,
   appointments,
+  blocked,
+  canBlockOthers,
+  selfMemberId,
 }: Props) {
   const calendarRef = useRef<CalendarRef>(null)
   const router = useRouter()
@@ -106,6 +122,8 @@ export function AppointmentCalendar({
   const [error, setError] = useState<string | null>(null)
   const [sheet, setSheet] = useState<SheetState | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [blockedSheet, setBlockedSheet] = useState<BlockedSheetState | null>(null)
+  const [blockedSheetOpen, setBlockedSheetOpen] = useState(false)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [draftEl, setDraftEl] = useState<HTMLElement | null>(null)
   const [hydrated, setHydrated] = useState(false)
@@ -117,6 +135,9 @@ export function AppointmentCalendar({
   const permissions = { canSchedule, canAttend }
   const therapistsById = new Map(therapists.map((option) => [option.id, option]))
   const canCreate = canSchedule && units.length > 0 && services.length > 0
+  const blockTherapists = canBlockOthers ? therapists : therapists.filter((option) => option.id === selfMemberId)
+  const canBlock = blockTherapists.length > 0
+  const canManageBlocked = (row: AppointmentBlockedRow) => canBlockOthers || row.workspaceMemberId === selfMemberId
   const options = { units: unitId ? undefined : units, therapists, services, stations }
 
   function navigate(changes: Partial<Pick<CalendarQuery, "view" | "start" | "end" | "unit" | "member">>) {
@@ -130,8 +151,19 @@ export function AppointmentCalendar({
     setSheetOpen(true)
   }
 
-  function openCreate(startsAt: string, durationMinutes: number, fallbackAnchor: Element | null = null) {
+  function openBlockedSheet(row: AppointmentBlockedRow) {
+    setBlockedSheet({ blocked: row, key: (blockedSheet?.key ?? 0) + 1 })
+    setBlockedSheetOpen(true)
+  }
+
+  function openCreate(
+    startsAt: string,
+    durationMinutes: number,
+    fallbackAnchor: Element | null = null,
+    kind: DraftKind = draft?.kind ?? (canCreate ? "appointment" : "blocked"),
+  ) {
     setDraft({
+      kind,
       key: (draft?.key ?? 0) + 1,
       fallbackAnchor,
       values: {
@@ -176,9 +208,19 @@ export function AppointmentCalendar({
         ...(appointment.status !== "scheduled" && { editable: false, className: "opacity-55" }),
         extendedProps: { appointment },
       })),
+      ...blocked.map((row) => ({
+        id: `blocked-${row.id}`,
+        title: row.reason ?? "Bloqueado",
+        start: row.startsAt,
+        end: row.endsAt,
+        color: BLOCKED_COLOR,
+        editable: false,
+        className: "bg-[repeating-linear-gradient(135deg,transparent_0_6px,rgb(255_255_255/0.25)_6px_12px)]",
+        extendedProps: { blocked: row },
+      })),
       ...draftEvents,
     ]
-  }, [shown, therapists, draftEvents])
+  }, [shown, blocked, therapists, draftEvents])
   const draftAnchor = draftEl ?? draft?.fallbackAnchor ?? null
 
   const [{ queue, whenIdle }] = useState(() => {
@@ -268,18 +310,36 @@ export function AppointmentCalendar({
             true,
           )}
         </div>
-        {canCreate && (
-          <Button
-            {...{ [KEEPS_DRAFT]: "" }}
-            onClick={(e) => {
-              const start = new Date(Math.ceil(brtNow().getTime() / HOUR_MS) * HOUR_MS)
-              calendarRef.current?.getApi().gotoDate(start)
-              openCreate(toWallTime(start), 60, e.currentTarget)
-            }}
-          >
-            <PlusIcon />
-            Novo agendamento
-          </Button>
+        {(canCreate || canBlock) && (
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {canBlock && (
+              <Button
+                variant="outline"
+                {...{ [KEEPS_DRAFT]: "" }}
+                onClick={(e) => {
+                  const start = new Date(Math.ceil(brtNow().getTime() / HOUR_MS) * HOUR_MS)
+                  calendarRef.current?.getApi().gotoDate(start)
+                  openCreate(toWallTime(start), 60, e.currentTarget, "blocked")
+                }}
+              >
+                <BanIcon />
+                Bloquear horário
+              </Button>
+            )}
+            {canCreate && (
+              <Button
+                {...{ [KEEPS_DRAFT]: "" }}
+                onClick={(e) => {
+                  const start = new Date(Math.ceil(brtNow().getTime() / HOUR_MS) * HOUR_MS)
+                  calendarRef.current?.getApi().gotoDate(start)
+                  openCreate(toWallTime(start), 60, e.currentTarget, "appointment")
+                }}
+              >
+                <PlusIcon />
+                Novo agendamento
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
@@ -332,10 +392,35 @@ export function AppointmentCalendar({
             columnEventInnerClass={({ isShort }) => (isShort ? undefined : "h-full")}
             eventContent={({ event, timeText, view, isShort }) => {
               const appointment = event.extendedProps.appointment as AppointmentRow | undefined
+              const blockedRow = event.extendedProps.blocked as AppointmentBlockedRow | undefined
+              if (blockedRow) {
+                const memberOption = therapistsById.get(blockedRow.workspaceMemberId)
+                return (
+                  <div className="@container h-full w-full min-w-0">
+                    <div className="flex h-full min-w-0 flex-col gap-0.5 overflow-hidden px-1.5 py-1 text-xs leading-snug">
+                      <div className="flex w-full min-w-0 items-center gap-1.5 font-semibold">
+                        <BanIcon className="size-3 shrink-0" aria-label="Bloqueado" />
+                        <span className="truncate">{blockedRow.reason ?? "Bloqueado"}</span>
+                      </div>
+                      {!view.type.startsWith("dayGrid") && !isShort && (
+                        <div className="flex w-full min-w-0 items-center gap-1.5 opacity-85">
+                          {memberOption && <TherapistAvatar therapist={memberOption} className="size-4 shrink-0 @max-[4.5rem]:hidden" />}
+                          <span className="truncate tabular-nums">
+                            {timeText}
+                            {blockedRow.memberName && <span className="@max-[8rem]:hidden"> · {blockedRow.memberName}</span>}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              }
               if (!appointment) {
                 return (
                   <div className="overflow-hidden px-1.5 py-1 text-xs leading-snug">
-                    {event.extendedProps.draft && <div className="truncate font-semibold">Novo agendamento</div>}
+                    {event.extendedProps.draft && (
+                      <div className="truncate font-semibold">{draft?.kind === "blocked" ? "Novo bloqueio" : "Novo agendamento"}</div>
+                    )}
                     <div className="truncate tabular-nums">{timeText}</div>
                   </div>
                 )
@@ -378,7 +463,7 @@ export function AppointmentCalendar({
                 </div>
               )
             }}
-            selectable={canCreate}
+            selectable={canCreate || canBlock}
             selectMirror
             select={(info) => {
               info.view.calendar.unselect()
@@ -389,6 +474,12 @@ export function AppointmentCalendar({
             eventDrop={handleChange}
             eventResize={handleChange}
             eventClick={({ event }) => {
+              const blockedRow = event.extendedProps.blocked as AppointmentBlockedRow | undefined
+              if (blockedRow) {
+                setDraft(null)
+                openBlockedSheet(blockedRow)
+                return
+              }
               const appointment = event.extendedProps.appointment as AppointmentRow | undefined
               if (!appointment || (!canSchedule && !canAttend)) return
               setDraft(null)
@@ -415,7 +506,28 @@ export function AppointmentCalendar({
           collisionPadding={16}
           className="max-h-[min(36rem,var(--available-height))] w-[min(24rem,calc(100vw-2rem))] gap-0 p-0"
         >
-          {draft && (
+          {draft && canCreate && canBlock && (
+            <div role="radiogroup" aria-label="Tipo" className="flex gap-1 px-4 pt-4 pr-14">
+              {(
+                [
+                  ["appointment", "Agendamento"],
+                  ["blocked", "Bloqueio"],
+                ] as const
+              ).map(([kind, label]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  role="radio"
+                  aria-checked={draft.kind === kind}
+                  onClick={() => setDraft({ ...draft, kind })}
+                  className="h-8 border px-3 text-sm transition-colors aria-checked:border-primary aria-checked:bg-accent aria-checked:font-medium aria-checked:text-accent-foreground"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {draft && draft.kind === "appointment" && canCreate && (
             <AppointmentForm
               key={draft.key}
               workspaceId={workspaceId}
@@ -424,6 +536,25 @@ export function AppointmentCalendar({
               variant="popover"
               defaultValues={draft.values}
               action={(prev, formData) => createAppointmentAction(workspaceId, prev, formData)}
+              onDone={() => setDraft(null)}
+            />
+          )}
+          {draft && draft.kind === "blocked" && canBlock && (
+            <AppointmentBlockedForm
+              key={draft.key}
+              mode="create"
+              variant="popover"
+              unitId={unitId ?? null}
+              therapists={blockTherapists}
+              defaultValues={{
+                workspaceMemberId: blockTherapists.some((option) => option.id === draft.values.workspaceMemberId)
+                  ? draft.values.workspaceMemberId
+                  : null,
+                startsAt: draft.values.startsAt,
+                durationMinutes: draft.values.durationMinutes,
+                reason: null,
+              }}
+              action={(prev, formData) => createAppointmentBlockedAction(workspaceId, prev, formData)}
               onDone={() => setDraft(null)}
             />
           )}
@@ -442,6 +573,17 @@ export function AppointmentCalendar({
         options={options}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
+      />
+
+      <AppointmentBlockedDetailSheet
+        workspaceId={workspaceId}
+        blocked={blockedSheet?.blocked ?? null}
+        contentKey={blockedSheet?.key ?? 0}
+        units={units}
+        therapists={blockTherapists}
+        canManage={!!blockedSheet && canManageBlocked(blockedSheet.blocked)}
+        open={blockedSheetOpen}
+        onOpenChange={setBlockedSheetOpen}
       />
     </div>
   )

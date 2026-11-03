@@ -21,6 +21,7 @@ import {
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/calendar/appointment"
 import {
   appointmentLookups,
+  blockChecker,
   conflictChecker,
   findUnitStation,
   stationAppointmentsFinder,
@@ -63,6 +64,7 @@ const errorMessages: Record<Exclude<AppointmentError, "forbidden"> | "unauthenti
   member_not_found: "A profissional escolhida não atende nesta unidade. Recarregue a página.",
   station_not_found: "A estação escolhida não é desta unidade. Recarregue a página.",
   member_busy: "A profissional já tem um agendamento nesse horário.",
+  member_blocked: "A agenda da profissional está bloqueada nesse horário.",
   station_busy: "A estação já tem um agendamento nesse horário.",
   appointment_not_found: "Agendamento não encontrado ou sem permissão.",
   appointment_not_scheduled: "Só é possível alterar agendamentos que ainda não foram concluídos nem cancelados.",
@@ -215,6 +217,7 @@ export async function rescheduleAppointmentAction(
       }
     },
     hasConflict: conflictChecker(session.workspaceId),
+    isBlocked: blockChecker(session.workspaceId, current?.unitId ?? new Types.ObjectId()),
     findStationAppointments: stationAppointmentsFinder(current?.unitId ?? new Types.ObjectId()),
     update: async (_id, data) =>
       (await Appointment.updateOne({ ...filter!, status: "scheduled" }, { $set: data })).matchedCount > 0,

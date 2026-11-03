@@ -22,7 +22,7 @@ import {
   type WalletRef,
 } from "@/service/workspace/[workspaceId]/unit/[unitId]/unit-refs"
 import { insertWallet } from "@/service/workspace/[workspaceId]/cash-flow/wallet-store"
-import { Appointment } from "@/models/Appointment"
+import { Appointment, AppointmentBlocked } from "@/models/Appointment"
 import { Inventory } from "@/models/Inventory"
 import { Partner } from "@/models/Partner"
 import { Service } from "@/models/Service"
@@ -252,6 +252,7 @@ export async function deleteUnitAction(workspaceId: string, unitId: string): Pro
       if (deletedCount === 0) return false
       await Promise.all([
         Appointment.deleteMany({ unitId: id }),
+        AppointmentBlocked.deleteMany({ unitId: id }),
         Service.deleteMany({ unitId: id }),
         Partner.updateOne({ unitId: id }, { $set: { unitId: null } }),
       ])

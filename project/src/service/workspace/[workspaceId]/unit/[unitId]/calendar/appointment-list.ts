@@ -30,6 +30,17 @@ export type AppointmentRow = {
   color: string | null;
 };
 
+export type AppointmentBlockedRow = {
+  id: string;
+  unitId: string | null;
+  workspaceMemberId: string;
+  memberName: string | null;
+  reason: string | null;
+  startsAt: string;
+  endsAt: string;
+  durationMinutes: number;
+};
+
 function objectIdOrEmpty(value: unknown) {
   return typeof value === "string" && /^[0-9a-f]{24}$/i.test(value) ? value : "";
 }
@@ -45,6 +56,19 @@ function brtDateTime(path: string) {
   return { $dateToString: { date: path, format: "%Y-%m-%dT%H:%M", timezone: BRT_TIMEZONE } };
 }
 
+const MEMBER_LOOKUP: PipelineStage.FacetPipelineStage = {
+  $lookup: {
+    from: "workspace_members",
+    localField: "workspaceMemberId",
+    foreignField: "_id",
+    as: "member",
+    pipeline: [
+      { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
+      { $project: { _id: 0, name: { $ifNull: [{ $first: "$user.name" }, { $first: "$user.email" }] } } },
+    ],
+  },
+};
+
 export const APPOINTMENT_VIEW: PipelineStage.FacetPipelineStage[] = [
   {
     $lookup: {
@@ -55,18 +79,7 @@ export const APPOINTMENT_VIEW: PipelineStage.FacetPipelineStage[] = [
       pipeline: [{ $project: { _id: 0, name: 1 } }],
     },
   },
-  {
-    $lookup: {
-      from: "workspace_members",
-      localField: "workspaceMemberId",
-      foreignField: "_id",
-      as: "member",
-      pipeline: [
-        { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
-        { $project: { _id: 0, name: { $ifNull: [{ $first: "$user.name" }, { $first: "$user.email" }] } } },
-      ],
-    },
-  },
+  MEMBER_LOOKUP,
   {
     $lookup: {
       from: "units",
@@ -166,4 +179,28 @@ export function calendarPipeline(range: CalendarRange): PipelineStage.FacetPipel
   if (range.unit) match.unitId = new Types.ObjectId(range.unit);
   if (range.member) match.workspaceMemberId = new Types.ObjectId(range.member);
   return [{ $match: match }, { $sort: { startsAt: 1, _id: 1 } }, ...APPOINTMENT_VIEW];
+}
+
+export function blockedCalendarPipeline(range: CalendarRange): PipelineStage.FacetPipelineStage[] {
+  const match: Record<string, unknown> = rangeMatch(range);
+  if (range.unit) match.unitId = { $in: [new Types.ObjectId(range.unit), null] };
+  if (range.member) match.workspaceMemberId = new Types.ObjectId(range.member);
+  return [
+    { $match: match },
+    { $sort: { startsAt: 1, _id: 1 } },
+    MEMBER_LOOKUP,
+    {
+      $project: {
+        _id: 0,
+        id: { $toString: "$_id" },
+        unitId: { $cond: [{ $eq: [{ $ifNull: ["$unitId", null] }, null] }, null, { $toString: "$unitId" }] },
+        workspaceMemberId: { $toString: "$workspaceMemberId" },
+        memberName: { $ifNull: [{ $first: "$member.name" }, null] },
+        reason: { $ifNull: ["$reason", null] },
+        startsAt: brtDateTime("$startsAt"),
+        endsAt: brtDateTime("$endsAt"),
+        durationMinutes: 1,
+      },
+    },
+  ];
 }
