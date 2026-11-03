@@ -115,6 +115,7 @@ export function UnitSetupWizard({ workspaceId, wallets, inventories, options, ca
   function go(next: number) {
     setStep(next)
     window.scrollTo({ top: 0 })
+    document.querySelector("[data-slot=sidebar-inset]")?.scrollTo({ top: 0 })
   }
 
   function finish() {

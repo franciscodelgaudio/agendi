@@ -3,7 +3,7 @@ import Image from "next/image"
 // Moldura de duas colunas do bloco login-02, compartilhada por /login e /signup.
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid min-h-svh lg:grid-cols-2">
+    <div className="grid min-h-svh grid-cols-1 lg:grid-cols-2">
       <div className="flex flex-col gap-4 p-6 md:p-10">
         <div className="flex justify-center gap-2 md:justify-start">
           <a href="#" className="flex items-center gap-2 text-lg font-semibold tracking-tight">

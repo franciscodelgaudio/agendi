@@ -178,7 +178,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
     <div className="flex flex-1 flex-col gap-4 p-4">
       <PageHeader title={workspace.name} actions={canManage && <NewUnitButton workspaceId={workspace.id} />} />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           icon={TrendingUpIcon}
           label={`Faturamento de ${monthName}`}
@@ -216,7 +216,7 @@ export default async function WorkspacePage({ params }: PageProps<"/workspace/[w
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Agenda de hoje</CardTitle>

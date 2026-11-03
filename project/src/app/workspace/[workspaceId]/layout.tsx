@@ -32,9 +32,9 @@ export default async function WorkspaceLayout({
 
   return (
     <NavigationProgressProvider>
-      <SidebarProvider defaultOpen={defaultOpen}>
+      <SidebarProvider defaultOpen={defaultOpen} className="max-md:fixed max-md:inset-0 max-md:min-h-0 max-md:flex-col max-md:overflow-hidden">
         {sidebar}
-        <SidebarInset className="pb-(--bottom-nav-height)">
+        <SidebarInset className="max-md:min-h-0 max-md:overflow-x-hidden max-md:overflow-y-auto max-md:overscroll-contain md:overflow-x-clip">
           <NavigationProgressBar />
           {children}
         </SidebarInset>

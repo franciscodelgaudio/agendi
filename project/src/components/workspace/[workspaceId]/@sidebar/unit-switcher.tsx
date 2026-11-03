@@ -28,7 +28,7 @@ function saveUnit(workspaceId: string, unitId: string | null) {
     : `${unitCookieName(workspaceId)}=; path=/; max-age=0; samesite=lax`
 }
 
-function UnitMark({ unit, className }: { unit: SidebarUnit | null; className?: string }) {
+export function UnitMark({ unit, className }: { unit: SidebarUnit | null; className?: string }) {
   if (!unit) {
     return (
       <span className="flex size-8 shrink-0 items-center justify-center bg-sidebar-accent text-sidebar-accent-foreground">
@@ -51,10 +51,10 @@ type Props = {
   canCreate: boolean
 }
 
-export function UnitSwitcher({ workspaceId, units, selected, canCreate }: Props) {
+export function useUnitPick(workspaceId: string) {
   const pathname = usePathname()
   const router = useRouter()
-  const { isMobile, setOpenMobile } = useSidebar()
+  const { setOpenMobile } = useSidebar()
   const base = `/workspace/${workspaceId}`
   const pathUnit = unitFromPath(pathname, base)
 
@@ -62,12 +62,18 @@ export function UnitSwitcher({ workspaceId, units, selected, canCreate }: Props)
     if (pathUnit) saveUnit(workspaceId, pathUnit)
   }, [workspaceId, pathUnit])
 
-  function pick(unit: SidebarUnit | null) {
+  return function pick(unit: SidebarUnit | null) {
     saveUnit(workspaceId, unit?.id ?? null)
     setOpenMobile(false)
     router.push(switchUnitHref(pathname, base, unit))
     router.refresh()
   }
+}
+
+export function UnitSwitcher({ workspaceId, units, selected, canCreate }: Props) {
+  const { isMobile, setOpenMobile } = useSidebar()
+  const base = `/workspace/${workspaceId}`
+  const pick = useUnitPick(workspaceId)
 
   return (
     <SidebarGroup className="py-0">

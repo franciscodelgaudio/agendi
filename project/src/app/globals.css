@@ -121,8 +121,15 @@
 }
 
 /* Altura da tela menos a barra de abas do celular, para as páginas que ocupam a tela inteira. */
+@media (width < 48rem) {
+  html:has([data-slot="sidebar-wrapper"]) {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
+
 @utility h-app-screen {
-  height: calc(100svh - var(--bottom-nav-height));
+  height: calc(100dvh - var(--bottom-nav-height));
 }
 
 .dark {

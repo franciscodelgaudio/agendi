@@ -161,7 +161,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
     <div className="flex flex-col gap-4">
       <PageHeader title="Início" />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           icon={TrendingUpIcon}
           label={`Faturamento de ${monthName}`}
@@ -199,7 +199,7 @@ export default async function UnitOverviewPage({ params }: PageProps<"/workspace
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Agenda de hoje</CardTitle>

@@ -340,7 +340,7 @@ export function RolePermissionsForm({ workspaceId, roles }: { workspaceId: strin
           </p>
 
           {dirtyRoles.length > 0 && (
-            <div className="sticky bottom-[calc(var(--bottom-nav-height)+1rem)] z-5 flex flex-wrap items-center justify-between gap-3 bg-foreground py-2.5 pr-3 pl-4 text-background shadow-[0_8px_24px_rgb(0_0_0/0.18)]">
+            <div className="sticky bottom-4 z-5 flex flex-wrap items-center justify-between gap-3 bg-foreground py-2.5 pr-3 pl-4 text-background shadow-[0_8px_24px_rgb(0_0_0/0.18)]">
               <span className="text-sm">
                 {dirtyRoles.length === 1
                   ? `Alterações não salvas em ${dirtyRoles[0].name}`

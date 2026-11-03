@@ -32,7 +32,7 @@ export function MobileNav({ workspaceId, pages }: { workspaceId: string; pages: 
   return (
     <nav
       aria-label="Navegação principal"
-      className="fixed inset-x-0 bottom-0 z-20 flex h-(--bottom-nav-height) border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+      className="relative z-20 flex h-(--bottom-nav-height) shrink-0 border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
     >
       {tabs.map((tab) => {
         const active = !openMobile && current === tab.section

@@ -2,6 +2,8 @@ import { Suspense } from "react"
 import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
 import { AppSidebar } from "@/components/workspace/[workspaceId]/@sidebar/app-sidebar"
+import { MobileUnitBar } from "@/components/workspace/[workspaceId]/@sidebar/mobile-unit-bar"
+import { can } from "@/service/workspace/[workspaceId]/users/permissions/permissions"
 import { logoutAction } from "@/lib/actions/auth"
 import { visiblePages } from "@/service/workspace/[workspaceId]/page-access"
 import { unitCookieName } from "@/service/workspace/[workspaceId]/unit-context"
@@ -76,14 +78,22 @@ async function WorkspaceSidebar({ workspaceId }: { workspaceId: string }) {
   const { actor, units, ...header } = workspace
   const savedUnitId = (await cookies()).get(unitCookieName(workspace.id))?.value ?? null
   return (
-    <AppSidebar
-      workspace={header}
-      units={units}
-      savedUnitId={savedUnitId}
-      pages={visiblePages(actor)}
-      actor={actor}
-      user={user}
-      logoutAction={logoutAction}
-    />
+    <>
+      <MobileUnitBar
+        workspaceId={workspace.id}
+        units={units}
+        savedUnitId={savedUnitId}
+        canCreate={can(actor, "units.manage") && can(actor, "services.manage")}
+      />
+      <AppSidebar
+        workspace={header}
+        units={units}
+        savedUnitId={savedUnitId}
+        pages={visiblePages(actor)}
+        actor={actor}
+        user={user}
+        logoutAction={logoutAction}
+      />
+    </>
   )
 }

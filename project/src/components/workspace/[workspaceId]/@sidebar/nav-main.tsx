@@ -33,19 +33,36 @@ import {
 
 type NavItem = { section: NavSection; title: string; icon: LucideIcon }
 
-const MAIN: NavItem[] = [
-  { section: "inicio", title: "Início", icon: HomeIcon },
-  { section: "agenda", title: "Agenda", icon: CalendarIcon },
-  { section: "clientes", title: "Clientes", icon: ContactIcon },
-  { section: "caixa", title: "Caixa", icon: WalletIcon },
-  { section: "parceiros", title: "Parceiros", icon: HandshakeIcon },
-  { section: "servicos", title: "Serviços", icon: LeafIcon },
-  { section: "estoque", title: "Estoque", icon: ArchiveIcon },
-]
-
-const SETTINGS: NavItem[] = [
-  { section: "unidades", title: "Unidades", icon: MapPinIcon },
-  { section: "usuarios", title: "Usuários", icon: UsersIcon },
+const GROUPS: { label: string | null; items: NavItem[] }[] = [
+  { label: null, items: [{ section: "inicio", title: "Início", icon: HomeIcon }] },
+  {
+    label: "Atendimento",
+    items: [
+      { section: "agenda", title: "Agenda", icon: CalendarIcon },
+      { section: "clientes", title: "Clientes", icon: ContactIcon },
+    ],
+  },
+  {
+    label: "Financeiro",
+    items: [
+      { section: "caixa", title: "Caixa", icon: WalletIcon },
+      { section: "parceiros", title: "Parceiros", icon: HandshakeIcon },
+    ],
+  },
+  {
+    label: "Catálogo",
+    items: [
+      { section: "servicos", title: "Serviços", icon: LeafIcon },
+      { section: "estoque", title: "Estoque", icon: ArchiveIcon },
+    ],
+  },
+  {
+    label: "Configurações",
+    items: [
+      { section: "unidades", title: "Unidades", icon: MapPinIcon },
+      { section: "usuarios", title: "Usuários", icon: UsersIcon },
+    ],
+  },
 ]
 
 export function canSee(section: NavSection, pages: RolePages, inUnit: boolean) {
@@ -93,10 +110,7 @@ export function NavMain({ workspaceId, pages, units, savedUnitId, canCreateUnit 
   const selected = units.find((unit) => unit.id === unitId) ?? null
   const current = sectionOf(pathname, base)
 
-  const groups = [
-    { label: null, items: MAIN },
-    { label: "Configurações", items: SETTINGS },
-  ].map((group) => ({
+  const groups = GROUPS.map((group) => ({
     ...group,
     items: group.items.flatMap((item) => {
       const href = canSee(item.section, pages, !!selected) && sectionHref(item.section, base, selected)

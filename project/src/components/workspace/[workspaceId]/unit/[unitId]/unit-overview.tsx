@@ -145,12 +145,12 @@ export function TodaySchedule({
                     {booking.unitName && `${booking.unitName} · `}{booking.serviceName}
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-1">
                   <BookingStatus booking={booking} now={now} isNext={booking === next} />
                   {therapist && (
-                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <TherapistAvatar therapist={therapist} className="size-6" />
-                      <span className="max-w-28 truncate">{booking.therapistName}</span>
+                    <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                      <TherapistAvatar therapist={therapist} className="size-6 shrink-0" />
+                      <span className="min-w-0 max-w-28 truncate">{booking.therapistName}</span>
                     </span>
                   )}
                 </div>
